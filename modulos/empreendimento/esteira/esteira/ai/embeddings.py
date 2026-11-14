@@ -13,7 +13,7 @@ import time
 import requests
 
 from esteira.ai import llama
-from esteira.projeto import CACHE
+from esteira.project import CACHE
 
 MODEL = os.environ.get("EMBEDDINGS_MODEL", "embeddinggemma-300m-q8_0")
 HOST = os.environ.get("EMBEDDINGS_HOST", "http://127.0.0.1:8082")

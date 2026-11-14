@@ -21,7 +21,7 @@ decidiu e por quê. O Claude recebe um dossiê compacto gerado pelo código, nun
 - Áudio: WAV exportado em `~/Music/Youtube/<Canal>/Roteiros/<NNN - título>/`, casado pelo número NNN.
 - Artigos: PDFs em `obsidian/Referências/Artigos/` ou baixados pelo DOI (Unpaywall/acesso aberto).
 
-## Gráficos (`esteira/graficos/`)
+## Gráficos (`esteira/graphics/`)
 
 Modelos HTML/CSS (Jinja2) renderizados quadro a quadro pelo Chromium (Playwright) → ProRes 4444 com alfa,
 colocados na V2 do FilmCraft. Determinístico (`seek(t)` congela as animações). ~2–3x tempo real.
@@ -63,7 +63,7 @@ etapa de criação com variantes e avaliação.
 
 ```
 esteira/nucleo/    eventos (jsonl + SSE), estado (SQLite), cache, fila (worker único)
-esteira/fontes/    obsidian (md → roteiro + fontes), gravacoes (NNN → WAV)
+esteira/sources/    obsidian (md → roteiro + fontes), gravacoes (NNN → WAV)
 esteira/ia/        local (Ollama), visao (CLIP/VLM), claude (escalonamento + teto), prompts/
 esteira/etapas/    cortes, cenas, curadoria, midia, graficos, efeitos, montagem, thumb
 esteira/craft/     filmcraft, effectcraft, photocraft, soundcraft
@@ -92,8 +92,8 @@ tests/             casos dourados (cortes do ep003)
       FilmCraft instrumentado, batimento na exportação)
 - [x] 2 Fontes: `./dark roteiros`, `./dark importar canal:NNN` (vault → roteiro.txt, roteiro.json com
       capítulos/notas/fontes; WAV achado pelo número da sessão)
-- [x] 3 Cortes: `esteira/cortes.py` (alinhamento local, último recomeço, retakes partidos, duplicados,
-      reformulações, continuações, 2ª passada para retakes ocultos) + `tests/test_cortes.py`
+- [x] 3 Cortes: `esteira/cuts.py` (alinhamento local, último recomeço, retakes partidos, duplicados,
+      reformulações, continuações, 2ª passada para retakes ocultos) + `tests/test_cuts.py`
 - [x] 4 LLM local: cortes ambíguos e pares, curadoria (`./dark curar`), plano gráfico; cache em `cache/llm.jsonl`
 - [x] 5 Gráficos integrados (V4) + citações com PDF (vault/OpenAlex); avaliação visual (`./dark avaliar`);
       downloads paralelos
@@ -124,12 +124,12 @@ tests/             casos dourados (cortes do ep003)
 
 ## Modos de produção e acervo de mídia (26/10/2026)
 
-- `esteira/producao.py`: `dark` (narração + bancos de imagens) e `apresentador` (câmera na V1 com os mesmos
+- `esteira/production.py`: `dark` (narração + bancos de imagens) e `apresentador` (câmera na V1 com os mesmos
   cortes da narração via `timeline.place sourceIn/duration`, sem recodificar; WAV sincronizado com o som da
   câmera por correlação cruzada de envelopes; B-roll na V2 em `[producao] broll` do tempo; regras: nota de
   cena pedindo câmera → câmera, nota visual → B-roll, abertura de cada Parte → câmera). Cenas de câmera não
   buscam mídia. Câmera escalada para preencher o quadro (4K, 720p, 9:16).
-- `esteira/acervo.py`: originais guardados em `acervo/<provedor>/<id>`, metadados (crédito, licença, tags e
+- `esteira/library.py`: originais guardados em `acervo/<provedor>/<id>`, metadados (crédito, licença, tags e
   título do banco, dimensões, orientação, duração, termos que acharam, descrição/tags do VLM local, notas por
   termo, usos por episódio/canal) em SQLite + FTS5. Busca: acervo → Pexels/Pixabay/Openverse. Filtros: tipo,
   orientação, duração, `max_usos_canal`, nota ≤ 2 para o mesmo termo. Avaliação visual reaproveita notas.

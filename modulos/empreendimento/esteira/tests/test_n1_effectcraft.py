@@ -6,8 +6,8 @@ import subprocess
 import pytest
 from pydantic import ValidationError
 
-from esteira.estudio import ec
-from esteira.estudio import peca as P
+from esteira.studio import ec
+from esteira.studio import piece as P
 from esteira.n1 import effectcraft as N1
 
 N1_EXEMPLO = P.PASTA / "_ec" / "exemplo_caixas.n1.json"

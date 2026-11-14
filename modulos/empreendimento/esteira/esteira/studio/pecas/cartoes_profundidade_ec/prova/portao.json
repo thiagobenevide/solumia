@@ -1,0 +1,11 @@
+{
+ "ok": false,
+ "erros": [
+  "peca.n1.json usa encaixes que a ficha não declara: ['item']"
+ ],
+ "avisos": [],
+ "quadros": [],
+ "versao": 1,
+ "motor": "effectcraft",
+ "render_s": null
+}

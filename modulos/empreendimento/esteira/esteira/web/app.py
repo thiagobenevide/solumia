@@ -15,9 +15,9 @@ from pathlib import Path
 
 from esteira.core import status
 from esteira.core.display import NoDisplay
-from esteira.fontes import gravacoes, obsidian
-from esteira.projeto import PROJETOS, RAIZ, Projeto, ep_id, pasta_ep
-from esteira.web import fila
+from esteira.sources import recordings, obsidian
+from esteira.project import PROJETOS, RAIZ, Projeto, ep_id, pasta_ep
+from esteira.web import queue
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import (
     FileResponse,
@@ -65,8 +65,8 @@ def _sem_tela(_pedido, erro):
 
 
 app.mount("/static", StaticFiles(directory=AQUI / "static"), name="static")
-app.mount("/fontes", StaticFiles(directory=AQUI.parent / "graficos" / "fontes"), name="fontes")
-app.mount("/graf", StaticFiles(directory=AQUI.parent / "graficos"), name="graf")  # prévia do editor (fontes dos modelos)
+app.mount("/fontes", StaticFiles(directory=AQUI.parent / "graphics" / "fontes"), name="fontes")
+app.mount("/graf", StaticFiles(directory=AQUI.parent / "graphics"), name="graf")  # prévia do editor (fontes dos modelos)
 tpl = Jinja2Templates(directory=AQUI / "templates")
 # Quem faz cada operação: Python puro, LLM local (Ollama na GPU), outro modelo na GPU ou Claude (assinatura).
 MOTORES = {
@@ -148,7 +148,7 @@ def _resumo_ep(ep):
 
 @app.on_event("startup")
 def _iniciar():
-    fila.iniciar()
+    queue.iniciar()
     from esteira import monitor
     monitor.iniciar(_cfg())
 
@@ -162,7 +162,7 @@ def biblioteca(request: Request, canal: str = "", status_r: str = ""):
     for r in obsidian.listar(cfg["vault"], canal):
         if status_r and r["status"] != status_r:
             continue
-        audio = gravacoes.candidatos(cfg["gravacoes"], canal, r["numero"], r["titulo"], n=1, short=bool(r["short"]))
+        audio = recordings.candidatos(cfg["gravacoes"], canal, r["numero"], r["titulo"], n=1, short=bool(r["short"]))
         ep = _projeto_do_roteiro(r["caminho"])
         itens.append(dict(r, audio=audio[0] if audio and audio[0]["nota"] >= 0.5 else None,
                           ep=ep, prog=_resumo_ep(ep) if ep else None))
@@ -170,7 +170,7 @@ def biblioteca(request: Request, canal: str = "", status_r: str = ""):
         r["citacoes"] = len(re.findall(r"^>\s*\[!cite\]", Path(r["caminho"]).read_text(), re.M))  # só blocos
     contagem = {c: sum(len(list((obsidian.pasta_canais(cfg["vault"]) / c / sub).glob("*.md")))
                        for sub in ("Roteiros", "Shorts")) for c in canais}
-    from esteira.projeto import Projeto
+    from esteira.project import Projeto
     perfil_modo = {}
     for r in itens:  # modo: do roteiro, senão do projeto/perfil do canal
         r["modo_definido"] = r["modo"] in ("dark", "apresentador")
@@ -194,11 +194,11 @@ def _modo_do_perfil(canal):
 
 @app.post("/produzir")
 async def produzir(request: Request):
-    from esteira.fontes.importar import importar
+    from esteira.sources.importer import importar
     form = await request.form()
     for caminho in form.getlist("roteiro"):
         ep = _projeto_do_roteiro(caminho) or ep_id(importar(Path(caminho)))
-        fila.adicionar(ep, "all")
+        queue.adicionar(ep, "all")
     return RedirectResponse("/fila", status_code=303)
 
 
@@ -210,7 +210,7 @@ def pagina_fila(request: Request):
 @app.get("/_fila", response_class=HTMLResponse)
 def fragmento_fila(request: Request):
     from esteira.core import locks, processes
-    tarefas = list(reversed(fila.listar()))
+    tarefas = list(reversed(queue.listar()))
     proc = {r.get("queue"): r["id"] for r in processes.list_recent(400) if r.get("queue")}
     for t in tarefas:
         t["prog"] = _resumo_ep(t["ep"]) if ":" not in t["ep"] and pasta_ep(t["ep"]).is_dir() else None
@@ -224,19 +224,19 @@ def fila_roteiro(alvo: str = Form(...), ate: str = Form(""), motor: str = Form("
     """Roteiro(s) do plano do canal na fila (`./dark script canal:N [--to M] [--engine claude]`)."""
     if not re.fullmatch(r"[a-z0-9_-]+:\d+", alvo.strip()):
         raise HTTPException(400, "use canal:N, ex.: finlumia:51")
-    fila.adicionar(alvo.strip(), "script", ["--to", ate.strip()] if ate.strip().isdigit() else [], motor)
+    queue.adicionar(alvo.strip(), "script", ["--to", ate.strip()] if ate.strip().isdigit() else [], motor)
     return RedirectResponse("/fila", status_code=303)
 
 
 @app.post("/fila/{tid}/cancelar")
 def cancelar(tid: int):
-    fila.cancelar(tid)
+    queue.cancelar(tid)
     return RedirectResponse("/fila", status_code=303)
 
 
 @app.post("/fila/limpar")
 def limpar_fila():
-    fila.limpar_concluidas()
+    queue.limpar_concluidas()
     return RedirectResponse("/fila", status_code=303)
 
 
@@ -244,13 +244,13 @@ def limpar_fila():
 def episodio(request: Request, ep: str):
     pasta = _pasta(ep)
     rot = json.loads((pasta / "roteiro.json").read_text()) if (pasta / "roteiro.json").exists() else {}
-    from esteira.projeto import Projeto
+    from esteira.project import Projeto
     cfg = Projeto(pasta).cfg
     vertical = cfg["video"].get("formato", "16:9") == "9:16"
-    from esteira import producao
+    from esteira import production
     proj = Projeto(pasta)
-    modo = producao.modo(proj)
-    camera = producao.info_camera(proj) if producao.camera(proj) else None
+    modo = production.modo(proj)
+    camera = production.info_camera(proj) if production.camera(proj) else None
     return tpl.TemplateResponse(request, "episodio.html", {"ep": ep, "rot": rot, "pipeline": PIPELINE,
                                                            "final": (pasta / "final.mp4").exists(),
                                                            "thumb": (pasta / "thumb.png").exists(),
@@ -266,7 +266,7 @@ def episodio(request: Request, ep: str):
 def _recorte_citacao(pasta, k, c):
     """PNG do pedaço da página do PDF com o trecho (cache em graficos/) e os retângulos do marca-texto em %."""
     import pymupdf
-    from esteira.graficos import pdf as P
+    from esteira.graphics import pdf as P
     destino = pasta / "graficos" / f"cite_{k}.png"
     meta = destino.with_suffix(".json")
     if destino.exists() and meta.exists() and meta.stat().st_mtime >= Path(c["arquivo"]).stat().st_mtime:
@@ -346,7 +346,7 @@ def graficos(request: Request, ep: str):
     arq = pasta / "graficos.json"
     if not arq.exists():
         return tpl.TemplateResponse(request, "vazio.html", {"ep": ep, "msg": "Os gráficos ainda não foram planejados."})
-    from esteira.projeto import Projeto
+    from esteira.project import Projeto
     v = Projeto(pasta).cfg["video"]
     lista = json.loads(arq.read_text())
     for g in lista:
@@ -369,8 +369,8 @@ def previa_grafico(ep: str, nome: str):
         raise HTTPException(404)
     png = mov.with_suffix(".previa.jpg")
     if not png.exists():
-        from esteira.midia import duracao_midia
-        from esteira.projeto import Projeto
+        from esteira.media import duracao_midia
+        from esteira.project import Projeto
         v = Projeto(pasta).cfg["video"]
         n = int(duracao_midia(mov) * v["fps"] * 0.65)  # quadro escolhido por índice: -ss perde o alfa perto do fim
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-i", str(mov),
@@ -409,21 +409,21 @@ def parar_processo(pid_id: str):
     from esteira.core import processes
     r = processes.get(pid_id)
     if r and r["state"] == "running":
-        t = next((t for t in fila.listar() if str(t["id"]) == str(r.get("queue"))), None)
+        t = next((t for t in queue.listar() if str(t["id"]) == str(r.get("queue"))), None)
         if t:
-            fila.cancelar(t["id"])
+            queue.cancelar(t["id"])
         else:
-            fila._encerrar({"pid": r["pid"], "comando": r["command"], "ep": r["target"], "args": r["args"]})
+            queue._encerrar({"pid": r["pid"], "comando": r["command"], "ep": r["target"], "args": r["args"]})
     return RedirectResponse(f"/processos/{pid_id}", status_code=303)
 
 
 @app.get("/api/processos/{pid_id}")
 def api_processo(pid_id: str):
-    from esteira import monitor, monitor_processo
-    d = monitor_processo.detalhe(pid_id, monitor.estado(0.0).get("atual"))
+    from esteira import monitor, process_monitor
+    d = process_monitor.detalhe(pid_id, monitor.estado(0.0).get("atual"))
     if not d:
         raise HTTPException(404, "processo não encontrado")
-    d["tarefa_fila"] = next((t for t in fila.listar() if str(t["id"]) == str(d["processo"].get("fila"))), None)
+    d["tarefa_fila"] = next((t for t in queue.listar() if str(t["id"]) == str(d["processo"].get("fila"))), None)
     return JSONResponse(d)
 
 
@@ -431,32 +431,32 @@ def api_processo(pid_id: str):
 def api_monitor():
     from esteira import monitor
     e = monitor.estado(_cfg().get("monitor", {}).get("tarifa_kwh", 0.85))
-    e["fila"] = [t for t in fila.listar() if t["estado"] in ("rodando", "na fila")]
+    e["fila"] = [t for t in queue.listar() if t["estado"] in ("rodando", "na fila")]
     return JSONResponse(e)
 
 
 @app.get("/api/grafo")
 def api_grafo():
-    from esteira import grafo, monitor
-    from esteira.grafo import NOS, SEQ, USA
+    from esteira import graph, monitor
+    from esteira.graph import NOS, SEQ, USA
     atual = monitor.estado(0)["atual"]
-    return JSONResponse(dict(grafo.estado(atual), def_nos=[{"id": i, "rotulo": r, "faixa": f, "motor": m} for i, r, f, m, _ in NOS],
+    return JSONResponse(dict(graph.estado(atual), def_nos=[{"id": i, "rotulo": r, "faixa": f, "motor": m} for i, r, f, m, _ in NOS],
                              seq=SEQ, usa=USA))
 
 
 @app.get("/api/grafo/no/{id_no}")
 def api_grafo_no(id_no: str):
-    from esteira import grafo, monitor
-    if id_no not in grafo.IDS:
+    from esteira import graph, monitor
+    if id_no not in graph.IDS:
         raise HTTPException(404)
     e = monitor.estado(0)
-    return JSONResponse(grafo.detalhe(id_no, e["atual"], e["hist"]))
+    return JSONResponse(graph.detalhe(id_no, e["atual"], e["hist"]))
 
 
 # ---------- Editor manual: gráficos e thumbnails ----------
 
 def _projeto(ep):
-    from esteira.projeto import Projeto
+    from esteira.project import Projeto
     return Projeto(_pasta(ep))
 
 
@@ -543,7 +543,7 @@ async def editor_salvar_grafico(request: Request, ep: str, i: int):
         novo = editor.salvar_grafico(p, i, await request.json())
     except (ValueError, KeyError, TypeError, IndexError) as e:
         return _erro(e)
-    fila.adicionar(ep, "graphics", ["--render-only"])  # só a peça editada é renderizada; o resto está em cache
+    queue.adicionar(ep, "graphics", ["--render-only"])  # só a peça editada é renderizada; o resto está em cache
     return {"i": novo}
 
 
@@ -608,15 +608,15 @@ async def editor_ia(request: Request, ep: str):
 
 @app.post("/ep/{ep}/abrir")
 def abrir_filmcraft(ep: str):
-    from esteira.montar import abrir
-    from esteira.projeto import Projeto
+    from esteira.assemble import abrir
+    from esteira.project import Projeto
     abrir(Projeto(_pasta(ep)))
     return RedirectResponse(f"/ep/{ep}", status_code=303)
 
 
 def garantir_ecproj(ep: str, i: int):
     """.ecproj da peça (cria agora se a peça é de antes do EffectCraft); None se a citação não achou o trecho."""
-    from esteira.graficos import effectcraft, plano
+    from esteira.graphics import effectcraft, plan
     p = _projeto(ep)
     lista = p.carregar_json("graficos.json")
     if not 0 <= i < len(lista):
@@ -627,7 +627,7 @@ def garantir_ecproj(ep: str, i: int):
         w, h = p.cfg["video"]["largura"], p.cfg["video"]["altura"]
         pasta = p.caminho("graficos")
         base = Path(c["arquivo"]).stem if c.get("arquivo") else f"{c['modelo']}_{int(c['inicio'] * 1000)}"
-        pc = plano.peca(c, pasta, w, h, pasta / f"pag_{base}.png")
+        pc = plan.peca(c, pasta, w, h, pasta / f"pag_{base}.png")
         if not pc:
             return None
         ecp = effectcraft.construir(*pc, c["dur"], pasta / f"{base}.ecproj", w, h,
@@ -640,7 +640,7 @@ def garantir_ecproj(ep: str, i: int):
 @app.post("/ep/{ep}/graficos/{i}/effectcraft")
 def abrir_effectcraft(ep: str, i: int):
     """Abre o .ecproj da peça no EffectCraft (cria agora se a peça é de antes do EffectCraft)."""
-    from esteira.graficos import effectcraft
+    from esteira.graphics import effectcraft
     ecp = garantir_ecproj(ep, i)
     if not ecp:
         return _erro("a citação não achou o trecho no PDF")
@@ -693,7 +693,7 @@ def rodar(ep: str, etapa: str, refazer: str = Form(""), motor: str = Form(""), s
     args = ["--redo"] if refazer and etapa in ("clean", "curate", "fetch", "all") else []
     if so_render and etapa == "graphics":
         args = ["--render-only"]
-    fila.adicionar(ep, etapa, args, motor)
+    queue.adicionar(ep, etapa, args, motor)
     return RedirectResponse(f"/ep/{ep}/graficos" if so_render else f"/ep/{ep}", status_code=303)
 
 
@@ -823,7 +823,7 @@ def trocar_midia(ep: str, cid: int, busca_en: str = Form("")):
             if c["id"] == cid:
                 c["busca_en"] = busca_en.strip()
         arq.write_text(json.dumps(plano, ensure_ascii=False, indent=2))
-    fila.adicionar(ep, "fetch", ["--redo", "--scenes", str(cid)])
+    queue.adicionar(ep, "fetch", ["--redo", "--scenes", str(cid)])
     return RedirectResponse(f"/ep/{ep}/cenas#c{cid}", status_code=303)
 
 
@@ -853,18 +853,18 @@ def arquivo(ep: str, caminho: str):
 
 @app.get("/acervo", response_class=HTMLResponse)
 def pagina_acervo(request: Request, q: str = "", tipo: str = ""):
-    from esteira import acervo
-    return tpl.TemplateResponse(request, "acervo.html", {"itens": acervo.listar(q, tipo, limite=180), "q": q,
-                                                         "tipo": tipo, "e": acervo.estatisticas()})
+    from esteira import library
+    return tpl.TemplateResponse(request, "acervo.html", {"itens": library.listar(q, tipo, limite=180), "q": q,
+                                                         "tipo": tipo, "e": library.estatisticas()})
 
 
 @app.get("/acervo/mini/{mid}")
 def miniatura_acervo(mid: str):
-    from esteira import acervo
-    it = acervo.item(mid)
+    from esteira import library
+    it = library.item(mid)
     if not it:
         raise HTTPException(404)
-    arq = acervo.miniatura(it)
+    arq = library.miniatura(it)
     if not arq.exists():
         raise HTTPException(404)
     return FileResponse(arq)
@@ -874,8 +874,8 @@ def miniatura_acervo(mid: str):
 
 from esteira.web.api import router as _api  # noqa: E402  (no fim: a API usa os auxiliares acima)
 from esteira.web.api_editor import router as _api_editor  # noqa: E402
-from esteira.web.api_estudio import router as _api_estudio  # noqa: E402
-from esteira.web.api_sistema import router as _api_sistema  # noqa: E402
+from esteira.web.api_studio import router as _api_estudio  # noqa: E402
+from esteira.web.api_system import router as _api_sistema  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 app.add_middleware(CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",

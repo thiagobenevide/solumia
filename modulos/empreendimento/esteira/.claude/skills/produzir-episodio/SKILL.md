@@ -38,7 +38,7 @@ Rodar em segundo plano e esperar a notificação; nunca ficar consultando o prog
   `./dark review <ep> --scenes 3,7` → Read em `revisao_01.jpg` (uma vez).
 - Cortes: o usuário revisa no painel (aba Cortes) e clica Aplicar; `./dark clean <ep>` reaproveita
   `cortes.json`, `--redo` decide de novo. Casos dourados em `tests/test_cortes.py` (rodar após mexer em
-  `esteira/cortes.py`: `.venv/bin/python -m pytest -q tests`).
+  `esteira/cuts.py`: `.venv/bin/python -m pytest -q tests`).
 - Gráficos: `./dark graphics <ep>` replaneja + renderiza (cache por hash; só o que mudou é refeito).
 - Conferir o vídeo: `./dark frames <ep>` → Read em `quadros.jpg`. Thumbs: Read em `thumbs/folha_escolha.jpg`.
 

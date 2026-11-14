@@ -19,7 +19,7 @@ vault/<canal>/Roteiros/NNN.md + ~/Music/Youtube/<Canal>/.../*.wav
 
 ## Começar
 
-Dados fora do repositório: `projetos/`, `acervo/` e `cache/` ficam em `$AGENT_DATA/empreendimento/` (padrão `~/agent-data`, ver `esteira/projeto.py`); todo caminho `projetos/...` ou `cache/...` deste README é relativo a ela.
+Dados fora do repositório: `projetos/`, `acervo/` e `cache/` ficam em `$AGENT_DATA/empreendimento/` (padrão `~/agent-data`, ver `esteira/project.py`); todo caminho `projetos/...` ou `cache/...` deste README é relativo a ela.
 
 
 ```sh

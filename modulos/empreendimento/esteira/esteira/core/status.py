@@ -3,7 +3,7 @@ import json
 import os
 from datetime import datetime
 
-from esteira.projeto import ep_id
+from esteira.project import ep_id
 
 ORDER = ["transcribe", "clean", "scenes", "curate", "fetch", "evaluate", "graphics", "assemble", "frames", "thumb"]
 _MARKS = {"ok": "✓", "error": "✗", "running": "▶", "aborted": "⚠", "?": "?"}

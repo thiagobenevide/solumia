@@ -1,7 +1,7 @@
 """API JSON do painel (`/api/v1`), consumida pelo app Flutter (módulo Empreendimento da plataforma).
 
 Mesma regra do painel htmx: nenhuma lógica própria de produção. Leituras usam as mesmas funções das páginas
-e toda ação de etapa entra na fila (`esteira.web.fila`), que roda os comandos do `./dark`. Arquivos do
+e toda ação de etapa entra na fila (`esteira.web.queue`), que roda os comandos do `./dark`. Arquivos do
 episódio (thumbs, vídeo, áudio, quadros) são servidos por `/arq/{ep}/{caminho}`; PDFs do vault por `/pdf`.
 
 Este módulo: biblioteca, episódio (geral, roteiro, cortes, cenas, gráficos, thumbs) e fila. O editor está
@@ -13,10 +13,10 @@ from pathlib import Path
 from urllib.parse import quote
 
 from esteira.core import status
-from esteira.fontes import gravacoes, obsidian
-from esteira.projeto import Projeto, ep_id, episodios, pasta_ep
+from esteira.sources import recordings, obsidian
+from esteira.project import Projeto, ep_id, episodios, pasta_ep
 from esteira.web import app as painel
-from esteira.web import fila
+from esteira.web import queue
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
@@ -46,7 +46,7 @@ def _video_leve(ep, final):
     previa, pasta = final.with_name("previa.mp4"), pasta_ep(ep)
     if previa.exists() and previa.stat().st_mtime >= final.stat().st_mtime:
         return f"/arq/{ep}/{previa.relative_to(pasta)}?v={_v(previa)}"
-    from esteira.web.api_estudio import _previa_ao_fundo
+    from esteira.web.api_studio import _previa_ao_fundo
     _previa_ao_fundo(final)
     return f"/arq/{ep}/{final.relative_to(pasta)}?v={_v(final)}"
 
@@ -95,8 +95,8 @@ def canais():
 def _template(ep):
     if not ep:
         return None
-    from esteira import estudio
-    return estudio.template(Projeto(pasta_ep(ep)))
+    from esteira import studio
+    return studio.template(Projeto(pasta_ep(ep)))
 
 
 @router.get("/canais/{canal}/roteiros")
@@ -107,7 +107,7 @@ def roteiros(canal: str):
     modo_perfil = None
     itens = []
     for r in obsidian.listar(cfg["vault"], canal):
-        audio = gravacoes.candidatos(cfg["gravacoes"], canal, r["numero"], r["titulo"], n=1, short=bool(r["short"]))
+        audio = recordings.candidatos(cfg["gravacoes"], canal, r["numero"], r["titulo"], n=1, short=bool(r["short"]))
         audio = audio[0] if audio and audio[0]["nota"] >= 0.5 else None
         ep = painel._projeto_do_roteiro(r["caminho"])
         definido = r["modo"] in ("dark", "apresentador")
@@ -138,7 +138,7 @@ def gerar_roteiro(corpo: GerarRoteiro):
     if not re.fullmatch(r"[a-z0-9_-]+:\d+", alvo):
         raise HTTPException(400, "use canal:N, ex.: finlumia:51")
     ate = corpo.ate.strip()
-    return fila.adicionar(alvo, "script", ["--to", ate] if ate.isdigit() else [], corpo.motor)
+    return queue.adicionar(alvo, "script", ["--to", ate] if ate.isdigit() else [], corpo.motor)
 
 
 class Produzir(BaseModel):
@@ -149,13 +149,13 @@ class Produzir(BaseModel):
 @router.post("/produzir")
 def produzir(corpo: Produzir):
     """Importa os roteiros do vault (se ainda não viraram episódio), grava o template escolhido e põe `tudo` na fila."""
-    from esteira import estudio
-    from esteira.estudio import estilo
-    from esteira.fontes.importar import importar
+    from esteira import studio
+    from esteira.studio import style
+    from esteira.sources.importer import importar
     vault = Path(painel._cfg()["fontes"]["vault"]).expanduser().resolve()
     for ref in corpo.templates.values():
         try:
-            estilo.carregar(ref)
+            style.carregar(ref)
         except (KeyError, ValueError):
             raise HTTPException(400, f"template inexistente: {ref}") from None
     tarefas = []
@@ -164,8 +164,8 @@ def produzir(corpo: Produzir):
             raise HTTPException(400, f"roteiro fora do vault: {caminho}")
         ep = painel._projeto_do_roteiro(caminho) or ep_id(importar(Path(caminho)))
         if ref := corpo.templates.get(caminho):
-            estudio.escolher_template(Projeto(pasta_ep(ep)), ref)
-        tarefas.append(fila.adicionar(ep, "all"))
+            studio.escolher_template(Projeto(pasta_ep(ep)), ref)
+        tarefas.append(queue.adicionar(ep, "all"))
     return tarefas
 
 
@@ -178,7 +178,7 @@ def lista_episodios(canal: str = ""):
 
 @router.get("/episodios/{ep}")
 def episodio(ep: str):
-    from esteira import producao
+    from esteira import production
     from esteira.ai import claude
     pasta = painel._pasta(ep)
     proj = Projeto(pasta)
@@ -188,8 +188,8 @@ def episodio(ep: str):
     etapas = [{"id": e, "nome": painel.NOMES.get(e, e), **(est.get(e) or {"status": "pending"})} for e in nomes]
     evs = [e for e in status.events(pasta) if e["kind"] in ("output", "warning", "error", "claude", "start", "end")]
     final, thumb = painel.final_do_ep(pasta), pasta / "thumb.png"
-    modo = producao.modo(proj)
-    camera = producao.info_camera(proj) if modo == "apresentador" and producao.camera(proj) else None
+    modo = production.modo(proj)
+    camera = production.info_camera(proj) if modo == "apresentador" and production.camera(proj) else None
     return {**_resumo(pasta), "etapas": etapas, "eventos": evs[-40:][::-1], "gasto_claude": claude.spent(ep)[0],
             "video": _video_leve(ep, final),
             "thumb": f"/arq/{ep}/thumb.png?v={_v(thumb)}" if thumb.exists() else None,
@@ -218,13 +218,13 @@ def rodar(ep: str, etapa: str, corpo: Rodar | None = None):
     args = ["--redo"] if corpo.refazer and etapa in ("clean", "curate", "fetch", "all") else []
     if corpo.so_render and etapa == "graphics":
         args = ["--render-only"]
-    return fila.adicionar(ep, etapa, args, corpo.motor or options.read()["engine"])
+    return queue.adicionar(ep, etapa, args, corpo.motor or options.read()["engine"])
 
 
 @router.post("/episodios/{ep}/abrir")
 def abrir_filmcraft(ep: str):
     """Abre o projeto do vídeo no FilmCraft (na máquina onde o painel roda)."""
-    from esteira.montar import abrir
+    from esteira.assemble import abrir
     abrir(_projeto(ep))
     return {"ok": True}
 
@@ -344,7 +344,7 @@ def trocar_midia(ep: str, cid: int, corpo: Trocar):
             if c["id"] == cid:
                 c["busca_en"] = corpo.busca_en.strip()
         arq.write_text(json.dumps(plano, ensure_ascii=False, indent=2))
-    return fila.adicionar(ep, "fetch", ["--redo", "--scenes", str(cid)])
+    return queue.adicionar(ep, "fetch", ["--redo", "--scenes", str(cid)])
 
 
 # ---------- Episódio: gráficos animados ----------
@@ -461,21 +461,21 @@ def _alvo_edicao(ep, editor, i=None, arquivo=""):
 
 
 def _baixar(ep, editor, i=None, arquivo=""):
-    from esteira import pacote
+    from esteira import package
     from fastapi.responses import FileResponse, StreamingResponse
     p, alvo = _alvo_edicao(ep, editor, i, arquivo)
     if alvo.suffix == ".pcraft":
         return FileResponse(alvo, filename=f"{ep}-{alvo.name}", media_type="application/octet-stream")
     nome = f"{ep}-{alvo.stem}"
-    return StreamingResponse(pacote.empacotar(alvo, p.pasta, nome), media_type="application/zip",
+    return StreamingResponse(package.empacotar(alvo, p.pasta, nome), media_type="application/zip",
                              headers={"Content-Disposition": f'attachment; filename="{nome}.zip"'})
 
 
 async def _enviar(ep, editor, envio, i=None, arquivo=""):
-    from esteira import pacote
+    from esteira import package
     p, alvo = _alvo_edicao(ep, editor, i, arquivo)
     try:
-        return pacote.receber(await envio.read(), alvo, p.pasta)
+        return package.receber(await envio.read(), alvo, p.pasta)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 
@@ -519,7 +519,7 @@ async def enviar_thumb(ep: str, thumb: str, arquivo: UploadFile = File(...)):
 @router.get("/fila")
 def lista_fila():
     from esteira.core import locks, processes
-    tarefas = list(reversed(fila.listar()))
+    tarefas = list(reversed(queue.listar()))
     proc = {r.get("queue"): r["id"] for r in processes.list_recent(400) if r.get("queue")}
     for t in tarefas:
         p = pasta_ep(t["ep"]) if ":" not in t["ep"] else None
@@ -530,13 +530,13 @@ def lista_fila():
 
 @router.post("/fila/{tid}/cancelar")
 def cancelar(tid: int):
-    fila.cancelar(tid)
+    queue.cancelar(tid)
     return {"ok": True}
 
 
 @router.post("/fila/limpar")
 def limpar_fila():
-    fila.limpar_concluidas()
+    queue.limpar_concluidas()
     return {"ok": True}
 
 
@@ -550,18 +550,18 @@ class RodarBancada(BaseModel):
 @router.get("/bancada")
 def ver_bancada():
     """Gabarito (casos por tarefa), modelos do roteador e o último resultado da bancada."""
-    from esteira import bancada
+    from esteira import bench
     from esteira.ai import llama
-    return {"gabarito": {t: len(bancada.casos(t)) for t in bancada.TAREFAS},
-            "modelos": [m["id"] for m in llama.models() or []], "resultado": bancada.ultimo()}
+    return {"gabarito": {t: len(bench.casos(t)) for t in bench.TAREFAS},
+            "modelos": [m["id"] for m in llama.models() or []], "resultado": bench.ultimo()}
 
 
 @router.post("/bancada/rodar")
 def rodar_bancada(corpo: RodarBancada):
     """Põe `./dark bench run` na fila (vaga da máquina: usa a GPU)."""
-    from esteira import bancada
-    if any(t not in bancada.TAREFAS for t in corpo.tarefas):
-        raise HTTPException(400, f"tarefas válidas: {', '.join(bancada.TAREFAS)}")
+    from esteira import bench
+    if any(t not in bench.TAREFAS for t in corpo.tarefas):
+        raise HTTPException(400, f"tarefas válidas: {', '.join(bench.TAREFAS)}")
     args = (["--models", ",".join(corpo.modelos)] if corpo.modelos else []) + (
         ["--tasks", ",".join(corpo.tarefas)] if corpo.tarefas else [])
-    return fila.adicionar("run", "bench", args)
+    return queue.adicionar("run", "bench", args)

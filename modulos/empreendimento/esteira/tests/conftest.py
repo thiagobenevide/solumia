@@ -1,7 +1,7 @@
 import pytest
 
-from esteira.dataset import indice
-from esteira.dataset import registro as R
+from esteira.dataset import index
+from esteira.dataset import registry as R
 
 
 @pytest.fixture(autouse=True)
@@ -11,7 +11,7 @@ def dataset_temporario(tmp_path, monkeypatch):
     for nome, valor in {"PASTA": base, "REGISTRO": base / "registro", "ARTEFATOS": base / "artefatos",
                         "EVENTOS": base / "registro" / "_eventos"}.items():
         monkeypatch.setattr(R, nome, valor)
-    monkeypatch.setattr(indice, "ARQUIVO", base / "indice.db")
+    monkeypatch.setattr(index, "ARQUIVO", base / "indice.db")
     from esteira.ai import claude
     monkeypatch.setattr(claude, "quota_limit", lambda: claude.QUOTA_LIMIT)  # as Opções reais não entram nos testes
     return base

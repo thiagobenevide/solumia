@@ -17,7 +17,7 @@ from pathlib import Path
 from pydantic import BaseModel, ValidationError
 
 from esteira.core import events, trace
-from esteira.projeto import CACHE
+from esteira.project import CACHE
 
 LEDGER = CACHE / "claude.jsonl"
 QUOTA_FILE = CACHE / "claude_quota.json"

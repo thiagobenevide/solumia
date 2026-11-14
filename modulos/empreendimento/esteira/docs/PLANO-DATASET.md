@@ -121,7 +121,7 @@ mais precisa de LoRA e pode continuar com o Claude na fábrica se o local não a
 
 **O que já existe** (nunca rodou: não há `.venv-treino` nem `agente-*.gguf`; houve 2 exportações em 2026-11-02):
 
-- `estudio/treino.py`: `exportar` (chat, 90/10), `situacao`, `ambiente`, `treinar` (copia o GGUF para o roteador).
+- `studio/training.py`: `exportar` (chat, 90/10), `situacao`, `ambiente`, `treinar` (copia o GGUF para o roteador).
 - `ia/treinar_lora.py`: QLoRA 4 bits com unsloth + `SFTTrainer` (r=16, treina só a resposta), base
   `unsloth/gemma-4-12b-it`, salva o LoRA e um **GGUF mesclado** `q4_k_m`.
 
@@ -199,12 +199,12 @@ F8 (app) acompanha F1, F4 e F6
 
 ### F2 · Registro canônico
 
-- `esteira/dataset/registro.py`: `gravar(app, tarefa, grupo, contexto, saida, …)` → linha JSONL em
+- `esteira/dataset/registry.py`: `gravar(app, tarefa, grupo, contexto, saida, …)` → linha JSONL em
   `registro/<app>/<tarefa>/AAAA-MM.jsonl` (ULID, escrita de linha inteira com `fsync`); `artefatos.py` por sha256;
   `atualizar_veredito(id, …)` como nova linha de evento (o registro não é reescrito).
-- `esteira/dataset/indice.py`: SQLite reconstruível (`./dark dataset reindexar`), consultas por app, tarefa,
+- `esteira/dataset/index.py`: SQLite reconstruível (`./dark dataset reindexar`), consultas por app, tarefa,
   grupo, veredito e versão; `./dark dataset situacao` (contagem × mínimo por tarefa).
-- Fábrica (`estudio/fabrica.py`): cada rodada grava contexto + resposta do Claude + portão; a revisão grava o
+- Fábrica (`studio/factory.py`): cada rodada grava contexto + resposta do Claude + portão; a revisão grava o
   veredito; `fabrica/registro.jsonl` passa a citar o `id`.
 - Thumbs: `thumbs/ranking.json` (já salvo) vira pares `escolhida`/`preterida` no registro.
 - **Pronto:** uma rodada da fábrica e uma geração de thumbs aparecem no índice com contexto, saída e veredito.
@@ -239,7 +239,7 @@ F8 (app) acompanha F1, F4 e F6
 
 ### F6 · Bancada sem fine-tuning (linha de base)
 
-- `ouro/` por tarefa (separado à mão a partir do registro); exportação `sft/`, `eval/` em `esteira/dataset/exportar.py`
+- `ouro/` por tarefa (separado à mão a partir do registro); exportação `sft/`, `eval/` em `esteira/dataset/export.py`
   (substitui o `treino.exportar` para as tarefas novas; as de decisão continuam).
 - Inferência: esquema N1 como gramática no llama-server + 3–5 exemplos aprovados parecidos (embeddings na :8082).
 - Tarefas novas na bancada (`bancada.py`): JSON válido, portão do render, nota da visão, diferença para a referência.

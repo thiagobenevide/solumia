@@ -13,7 +13,7 @@ import time
 
 import psutil
 
-from esteira.projeto import CACHE
+from esteira.project import CACHE
 
 DIR = CACHE / "locks"
 CLAUDE_OK = {"curate", "script", "studio-style", "studio-factory"}  # stages whose only heavy work is the LLM; the others use GPU/ffmpeg/render

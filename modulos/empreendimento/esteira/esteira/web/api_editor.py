@@ -1,13 +1,13 @@
 """API do editor manual (gráficos e thumbnails) para o app Flutter.
 
 O estado é o mesmo do editor do painel (`esteira/editor.py`). A diferença é a prévia: o app pede o quadro
-pronto em PNG (`/editor/quadro`, renderizado por `web/quadros.py`) em vez de embutir o HTML do modelo.
+pronto em PNG (`/editor/quadro`, renderizado por `web/frames.py`) em vez de embutir o HTML do modelo.
 """
 import asyncio
 import json
 
 from esteira import editor
-from esteira.web import api, fila, quadros
+from esteira.web import api, queue, frames
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -65,7 +65,7 @@ def quadro(ep: str, corpo: Quadro):
             html, w, h = editor.html_grafico(p, corpo.estado)
     except (ValueError, KeyError, TypeError) as e:
         raise HTTPException(400, str(e))
-    png = quadros.quadro(html, w, h, corpo.t, transparente=corpo.tipo != "thumb")
+    png = frames.quadro(html, w, h, corpo.t, transparente=corpo.tipo != "thumb")
     return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
@@ -77,7 +77,7 @@ def salvar_grafico(ep: str, i: int, estado: dict):
         novo = editor.salvar_grafico(p, i, estado)
     except (ValueError, KeyError, TypeError, IndexError) as e:
         raise HTTPException(400, str(e))
-    fila.adicionar(ep, "graphics", ["--render-only"])
+    queue.adicionar(ep, "graphics", ["--render-only"])
     return {"i": novo}
 
 

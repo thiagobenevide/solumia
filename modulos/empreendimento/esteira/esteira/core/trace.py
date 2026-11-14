@@ -11,7 +11,7 @@ import json
 import os
 import time
 
-from esteira.projeto import CACHE
+from esteira.project import CACHE
 
 DIR = CACHE / "live"
 LOG = CACHE / "trace.jsonl"

@@ -10,7 +10,7 @@ import time
 
 import psutil
 
-from esteira.projeto import CACHE
+from esteira.project import CACHE
 
 FILE = CACHE / "processes.jsonl"
 _me = {}

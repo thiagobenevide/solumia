@@ -1,0 +1,17 @@
+{
+ "ok": false,
+ "erros": [
+  "escura 9:16: sai da área segura com o texto máximo: ['Marco 2 · rótulo', 'Marco 2 · ano']",
+  "clara 9:16: sai da área segura com o texto máximo: ['Marco 2 · rótulo', 'Marco 2 · ano']"
+ ],
+ "avisos": [],
+ "quadros": [
+  "escura_16x9.jpg",
+  "escura_9x16.jpg",
+  "clara_16x9.jpg",
+  "clara_9x16.jpg"
+ ],
+ "versao": 1,
+ "motor": "effectcraft",
+ "render_s": 4.78
+}

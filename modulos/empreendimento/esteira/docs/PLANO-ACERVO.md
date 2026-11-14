@@ -5,7 +5,7 @@ implementado. Este arquivo é a referência para começar a codificar em outro c
 
 ## O que estava errado
 
-O Estúdio nasceu com **um template por canal**: o estilo (`estudio/estilo.py`) traz a lista fixa de cenas
+O Estúdio nasceu com **um template por canal**: o estilo (`studio/style.py`) traz a lista fixa de cenas
 (`regras.cenas`) e o modo (`modo: apresentador`) vale para o estilo inteiro. O cardápio é pequeno (17 cenas em
 `bancada.CENAS`, cada uma descrita por uma frase só) e mora num arquivo único (`kit/estudio.js`, ~700 linhas).
 Consequência: a IA local tende a repetir as mesmas peças, o vídeo fica com a mesma cara do começo ao fim e uma
@@ -13,10 +13,10 @@ animação feita para um canal não serve a outro.
 
 ## O que fica (já funciona e continua)
 
-- Corte pelo som + portão do corte (`estudio/corte.py`), câmera cortada igual ao áudio (`estudio/camera.py`).
+- Corte pelo som + portão do corte (`studio/cut.py`), câmera cortada igual ao áudio (`studio/camera.py`).
 - Compilação HyperFrames + render NVENC + −14 LUFS + conferência (`compilar.py`, `motor.py`, `verificar`).
 - Fontes por papel e catálogo OFL (`fontes.py`), legenda e intensidade (`estilo.NIVEIS`), gatilhos (`gatilhos.py`).
-- Bancada de LLM (`esteira/bancada.py`), apontamento manual (`apontamento.py`), versões do estilo, prévia leve.
+- Bancada de LLM (`esteira/bench.py`), apontamento manual (`apontamento.py`), versões do estilo, prévia leve.
 - Claude só cria (Fluxo A); a produção de cada vídeo é IA local + código.
 
 ## Decisões
@@ -37,14 +37,14 @@ animação feita para um canal não serve a outro.
      código só como último recurso, com validação automática e volta à original se falhar.
      *(Recomendação aceita como padrão; confirmar no início da implementação.)*
 4. **Configuração do canal ≠ repertório.** O "template" deixa de existir como template e vira a
-   **configuração geral do canal**, que já existe hoje no estilo (`estudio/estilo.py`): paleta, fontes por papel,
+   **configuração geral do canal**, que já existe hoje no estilo (`studio/style.py`): paleta, fontes por papel,
    legenda, nível de motion/som/efeitos (padrão do usuário: **alto**), tom e o que o canal **não** usa (filtro).
    Não carrega lista de cenas. É **padrão fixo**: a IA local (e o Claude ao criar peças) sempre respeita e
    **nunca altera** a configuração; as peças é que se adaptam a ela. Mudança só pela pessoa, na tela do canal,
    gerando nova versão (`id@N`, como hoje). Isso evita conflito entre peça e canal.
 5. **Modo por vídeo, marcado no roteiro.** Ao escrever o roteiro (pessoa + IA) já se define se o vídeo é
    **dark** (entra áudio) ou **apresentador** (entra MP4 da câmera). O mesmo canal pode ter os dois. A esteira já
-   lê `modo:` do roteiro (`[producao] modo`, `esteira/producao.py`); o Estúdio passa a usar esse mesmo campo em
+   lê `modo:` do roteiro (`[producao] modo`, `esteira/production.py`); o Estúdio passa a usar esse mesmo campo em
    vez de `estilo.modo`.
 6. **Direção por bloco (parágrafo), não por frase.** O bloco é a unidade de decisão; dentro dele a peça pode
    ter batidas sincronizadas às palavras.
@@ -69,31 +69,31 @@ dos cortes, não a IA local: a IA decide quais trechos ficam (tomada, retake, v�
 é decidido por limiares de energia e pelos tempos de palavra do Whisper. Revisão do código em 01/11/2026:
 
 ### Como o corte funciona hoje (dois cortes em série)
-1. **Esteira** (`esteira/cortes.py`): escolhe as tomadas pelo texto e corta a gravação bruta; cada borda procura
+1. **Esteira** (`esteira/cuts.py`): escolhe as tomadas pelo texto e corta a gravação bruta; cada borda procura
    silêncio no envelope de energia (`envelope`, `_silencio`, `_borda_ini/_borda_fim`, `_vale`).
-2. **Estúdio** (`esteira/estudio/corte.py`): sobre a narração já editada, corta de novo pelo som (`fala` →
+2. **Estúdio** (`esteira/studio/cut.py`): sobre a narração já editada, corta de novo pelo som (`fala` →
    máscara de fala, `vicios`, `segmentos`), com outro detector e outros limiares.
 
 ### Falhas encontradas
 | # | Onde | Falha | Efeito |
 |---|---|---|---|
-| 1 | `estudio/corte.py:67` (`fala`) | Só conta como fala quadro com `tilt > 0` (mais energia nos graves que nos agudos). Consoantes surdas (**s, x, f, ch, t, k, p**) têm energia nos agudos (tilt negativo) e saem da máscara. | "mais", "isso", "fez", "dois" perdem o fim; "s" final em português é muito comum. |
-| 2 | `estudio/corte.py:124` (`segmentos`) | A proteção só devolve a palavra se **menos de 10%** dela ficou na máscara. Palavra cortada pela metade (50% dentro) não é protegida. | É exatamente o "casa" → "ca". |
-| 3 | `estudio/corte.py:67` e `cortes.py:574` | Limiar de fala/silêncio é **global** (percentil do arquivo inteiro). Em vídeo de 15–45 min o volume varia (distância do microfone, cansaço). | Nos trechos mais baixos, finais de palavra fracos viram "silêncio". |
+| 1 | `studio/cut.py:67` (`fala`) | Só conta como fala quadro com `tilt > 0` (mais energia nos graves que nos agudos). Consoantes surdas (**s, x, f, ch, t, k, p**) têm energia nos agudos (tilt negativo) e saem da máscara. | "mais", "isso", "fez", "dois" perdem o fim; "s" final em português é muito comum. |
+| 2 | `studio/cut.py:124` (`segmentos`) | A proteção só devolve a palavra se **menos de 10%** dela ficou na máscara. Palavra cortada pela metade (50% dentro) não é protegida. | É exatamente o "casa" → "ca". |
+| 3 | `studio/cut.py:67` e `cortes.py:574` | Limiar de fala/silêncio é **global** (percentil do arquivo inteiro). Em vídeo de 15–45 min o volume varia (distância do microfone, cansaço). | Nos trechos mais baixos, finais de palavra fracos viram "silêncio". |
 | 4 | `cortes.py:582` (`_silencio`) + `SILENCIO_MIN = 0.12` | "Silêncio" = 120 ms abaixo de p60 − 28 dB, só por energia. Final átono ("casa", "muito") e fricativa final ficam abaixo disso. | A busca acha um falso silêncio **dentro** do fim da palavra e a borda cai nele (`:611`). |
 | 5 | `cortes.py:614-617` (`_borda_ini`) | A busca para trás começa **40 ms dentro** da palavra (`ini_w + 0.04`); um "s"/"f" inicial fraco é lido como silêncio. | Some o começo: "sempre" → "empre". |
 | 6 | `cortes.py:611/617` e `:646` (`_vale`) | Sem silêncio à vista, corta no ponto de **menor energia** da janela, que muitas vezes é o fecho de um "p/t/k" **dentro** da palavra. As exclusões de retake (`:646`) usam janela de 350 ms em volta de um tempo do Whisper. | Corte no meio da palavra vizinha ao retake. |
-| 7 | `estudio/corte.py:98` (`vicios`) | "e", "a", "um", "o" com 0,45–1,6 s viram vício e são cortados de `ini + 0,14` até o fim **pelo tempo do Whisper**, que erra 0,1–0,3 s e costuma esticar a palavra por cima da seguinte. | Leva junto o começo da próxima palavra. |
-| 8 | `estudio/corte.py:142` (`ISLAND`) | Trechos de fala < 70 ms isolados são descartados. | O estouro final de "t/k/p" ("fiz**t**", "pac**to**") separado por um vale curto some. |
+| 7 | `studio/cut.py:98` (`vicios`) | "e", "a", "um", "o" com 0,45–1,6 s viram vício e são cortados de `ini + 0,14` até o fim **pelo tempo do Whisper**, que erra 0,1–0,3 s e costuma esticar a palavra por cima da seguinte. | Leva junto o começo da próxima palavra. |
+| 8 | `studio/cut.py:142` (`ISLAND`) | Trechos de fala < 70 ms isolados são descartados. | O estouro final de "t/k/p" ("fiz**t**", "pac**to**") separado por um vale curto some. |
 | 9 | os dois | **Nenhuma regra impede borda dentro de uma palavra**: as bordas nunca são conferidas contra os intervalos das palavras. | Todas as falhas acima passam sem alarme. |
-| 10 | `estudio/corte.py:246` (`conferir`) | A conferência compara só o **texto**. O Whisper "completa" palavra truncada pelo contexto ("ca…" transcrito como "casa"). | Palavra comida passa como certa. |
+| 10 | `studio/cut.py:246` (`conferir`) | A conferência compara só o **texto**. O Whisper "completa" palavra truncada pelo contexto ("ca…" transcrito como "casa"). | Palavra comida passa como certa. |
 | 11 | arquitetura | Dois cortadores em série, com detectores diferentes; o segundo corta áudio que o primeiro já cortou. | Erros se somam; difícil saber qual etapa comeu a palavra. |
-| — | `estudio/corte.py:165-166` | `return` duplicado (código morto). | Só limpeza. |
+| — | `studio/cut.py:165-166` | `return` duplicado (código morto). | Só limpeza. |
 
 ### Correção (implementar antes da fábrica)
 
-**Feito em 01/11/2026** (itens 1–7): `esteira/bordas.py`, `esteira/alinhamento.py` + `ia/alinhar_ctc.py`,
-`tests/test_bordas.py`. Pendente: WAVs reais gravados pela pessoa nos testes (item 7) e corte único (item 4: os dois
+**Feito em 01/11/2026** (itens 1–7): `esteira/edges.py`, `esteira/alignment.py` + `ia/alinhar_ctc.py`,
+`tests/test_edges.py`. Pendente: WAVs reais gravados pela pessoa nos testes (item 7) e corte único (item 4: os dois
 cortadores já usam o mesmo validador e detector, mas o Estúdio ainda corta pausas e vícios por conta própria).
 1. **Tempos de palavra precisos por alinhamento forçado.** O texto é conhecido (roteiro + transcrição), então
    alinhar fonema a fonema (CTC, ex.: `torchaudio` MMS_FA, que cobre português) dá início/fim de palavra com
@@ -123,7 +123,7 @@ e virar casos de teste.
 
 ## Peça do acervo (unidade)
 
-Uma pasta por peça em `esteira/estudio/pecas/<id>/` (o nome `acervo/` já é do acervo de mídia, `esteira/acervo.py`):
+Uma pasta por peça em `esteira/studio/pecas/<id>/` (o nome `acervo/` já é do acervo de mídia, `esteira/library.py`):
 - `peca.js` / `peca.css`: a animação, lendo só variáveis de pele e os encaixes/botões recebidos.
 - `ficha.json`: os metadados (abaixo). É o que a IA lê; tem de ser tão cuidada quanto o código.
 - `prova/`: quadros renderizados com **duas peles diferentes** × **9:16 e 16:9** (portão de entrada).
@@ -216,7 +216,7 @@ As peças podem ser escritas de duas formas. As duas são testadas e comparadas 
 ## Peça de referência: a citação de PDF
 
 A citação do fluxo anterior é a régua de qualidade: a página do artigo em tela, zoom no trecho, grifo nas
-palavras da frase citada e a tradução (`graficos/pdf.py` acha o trecho e gera a página com os retângulos; peça
+palavras da frase citada e a tradução (`graphics/pdf.py` acha o trecho e gera a página com os retângulos; peça
 de citação em `graficos/modelos/citacao.html` e em `graficos/effectcraft.jsx`). É a **primeira peça da
 fábrica**, refeita nos dois motores e com mais efeitos: página em perspectiva 2,5D, câmera que percorre a
 página, grifo que acompanha a fala palavra a palavra, desfoque no resto da página e tradução entrando em
@@ -251,7 +251,7 @@ Na aba Estúdio:
 
 | Hoje | Passa a ser |
 |---|---|
-| estilo como template (`estudio/estilo.py`) | configuração geral do canal, padrão fixo |
+| estilo como template (`studio/style.py`) | configuração geral do canal, padrão fixo |
 | `estilo.regras.cenas` (cardápio por estilo) | filtro do canal sobre o acervo |
 | Fluxo A: Claude propõe só dados do estilo (`identidade.py`) | fábrica: Claude gera peças + fichas, pessoa revisa |
 | `estilo.modo` (apresentador/dark) | `modo:` do roteiro (já existe na esteira) |
@@ -268,13 +268,13 @@ Na aba Estúdio:
 1. Configuração do canal (estilo atual sem lista de cenas e sem modo; nível padrão alto) + esquema da ficha +
    formato da peça (variáveis de pele, encaixes, botões) + portão de entrada.
    **Feito em 01/11/2026:** `regras.filtro` no lugar de `regras.cenas` (migração automática), níveis padrão alto,
-   produção com o `modo:` do episódio (`estilo.com_modo`), `estudio/peca.py` (ficha, `validar_dados`, portão: código +
+   produção com o `modo:` do episódio (`estilo.com_modo`), `studio/piece.py` (ficha, `validar_dados`, portão: código +
    prova no Chromium em 2 peles × formatos com texto máximo e área segura), `ESTUDIO.peca` no kit, `pecas/GUIA.md`,
    peça de referência `pecas/numero_impacto`, API `/estudio/pecas`. O campo `modo` do estilo ficou só para amostra/teste
    (as telas de layout do app ainda dependem dele; sai junto com as telas, na etapa 8).
 2. Fábrica de peças no motor HTML: fila de geração do Claude, portão, fila de revisão no app, modo contínuo e
    guia de escrita de peças. Primeira peça: citação de PDF.
-   **Feito em 01/11/2026:** `estudio/fabrica.py` (pedidos livre/referência/lacunas, `./dark estudio-fabrica` na vaga
+   **Feito em 01/11/2026:** `studio/factory.py` (pedidos livre/referência/lacunas, `./dark estudio-fabrica` na vaga
    "claude", correção única pelo portão + visão local, revisão com aprovar/ajuste/variação/reprovar e lições no
    `GUIA.md`, teto do dia), encaixe `pagina`, prévia animada (`./dark estudio-peca-previa`), tela Fábrica no app e
    pedido pronto da citação de PDF (anexa `graficos/modelos/citacao.html`). A citação ainda não foi gerada: é o
@@ -291,7 +291,7 @@ Na aba Estúdio:
    (hoje o SFX já vai por categoria na ficha, mas fundo e transições continuam no núcleo do kit).
 4. Fábrica também no motor EffectCraft; comparação com o mesmo lote de pedidos e decisão de motor por tipo de peça.
    **Feito em 01/11/2026:** peça EffectCraft = `peca.jsx` + a mesma ficha; script = DADOS + `pecas/_ec/nucleo.jsx`
-   (pele por papel, utilitários) + peça + `_ec/fim.jsx` (saída e medição da área segura); `estudio/ec.py` (fontes da
+   (pele por papel, utilitários) + peça + `_ec/fim.jsx` (saída e medição da área segura); `studio/ec.py` (fontes da
    pele copiadas para `~/.local/share/fonts`, portão com prova nas 2 peles × formatos, prévia MP4, WebM VP9 com alfa
    por cena na compilação, escrito no HTML na camada `#ec` porque o HyperFrames só extrai quadros dos vídeos que
    estão no HTML estático); referência `numero_impacto_ec`; `GUIA_EC.md`. Fábrica: motor por pedido (html,
@@ -301,7 +301,7 @@ Na aba Estúdio:
    critério "acerto da IA local ao preencher" entra com a direção nova (etapa 6).
 5. Perfis de ritmo longo/curto; o Estúdio passa a ler o `modo:` do roteiro.
    **Feito em 01/11/2026:** `estudio/ritmos/{longo,curto}.json` (dado; cópia editável em `$AGENT_DATA`, API
-   `/estudio/ritmos`) e `estudio/ritmo.py`. Perfil = `ritmo:` do roteiro, senão curto para o Short (9:16) e longo
+   `/estudio/ritmos`) e `studio/rhythm.py`. Perfil = `ritmo:` do roteiro, senão curto para o Short (9:16) e longo
    para o resto; na produção ajusta o estilo (regras de ritmo, teto de motion do longo, presença, legenda forte do
    curto) e o diretor aplica sem capítulos (curto), anti-repetição (troca pela peça parecida; só tira quando repete
    colada e sem dado), gancho nos 2 s do curto e conferência (sem virada, gancho, peça longa, repetição, duração)
@@ -309,7 +309,7 @@ Na aba Estúdio:
    Blocos de 20–60 s (`bloco_s`) ficam no perfil para a direção por bloco (etapa 6).
 6. Direção nova (blocos → candidatas por embeddings → escolha → preenchimento) + anti-repetição; nova tarefa
    na bancada.
-   **Feito em 01/11/2026:** `estudio/direcao.py` (padrão; Opções → `direcao = "frases"` volta ao diretor antigo):
+   **Feito em 01/11/2026:** `studio/direction.py` (padrão; Opções → `direcao = "frases"` volta ao diretor antigo):
    blocos = falas do roteiro, momentos do tamanho da virada do perfil (número dito abre momento), leitura por bloco
    (IA local), tratamento corrigido pelo modo, 5 candidatas por embeddings (EmbeddingGemma 300M num llama-server
    próprio na CPU, porta 8082, `ia/embeddings.py`; sem ele, palavras em comum) + intenção − repetição + cotas,
@@ -335,7 +335,7 @@ Na aba Estúdio:
    (`peca.juntar`, `__THREE__` no template); `k.cena3d` no kit (canvas na caixa da peça, desenhado pela timeline, nunca
    por requestAnimationFrame: determinístico no HyperFrames) e `k.cor3d` (cor da pele por papel); peça de referência
    `barras_3d` (em revisão). Cota: `cota_3d_s` no perfil de ritmo (no máximo uma 3D por janela; a direção pune a
-   segunda). Fine-tune: `estudio/treino.py` transforma o gabarito da bancada (`bloco_peca`, `preencher`, `corte`,
+   segunda). Fine-tune: `studio/training.py` transforma o gabarito da bancada (`bloco_peca`, `preencher`, `corte`,
    `legenda`) em conversas de chat 90/10 em `$AGENT_DATA/.../treino/<data>/`, com mínimo por tarefa;
    `ia/treinar_lora.py` (unsloth no `.venv-treino`) treina só nas respostas e exporta GGUF para o roteador
    (`agente-<data>.gguf`, escolhido em Opções). CLI `./dark treino <alvo> exportar|treinar`, API `/estudio/treino`, app

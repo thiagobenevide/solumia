@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 /// Prévia ao vivo de uma peça do kit do Estúdio (aproximação desenhada no app, sem render): mesma paleta, fontes e
-/// layout do estilo, em laço. O vídeo de verdade sai do kit (`esteira/estudio/kit/estudio.js`).
+/// layout do estilo, em laço. O vídeo de verdade sai do kit (`esteira/studio/kit/estudio.js`).
 class PreviaPeca extends StatefulWidget {
   const PreviaPeca({
     super.key,

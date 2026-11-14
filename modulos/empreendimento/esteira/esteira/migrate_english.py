@@ -10,7 +10,7 @@ unit of the migration adds its files and values here.
 import argparse
 import json
 
-from esteira.projeto import CACHE, PROJETOS
+from esteira.project import CACHE, PROJETOS
 
 EVENT_KEYS = {"etapa": "stage", "tipo": "kind", "msg": "message", "dur": "duration", "resta": "remaining",
               "custo": "cost", "seg": "seconds"}

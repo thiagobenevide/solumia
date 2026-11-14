@@ -13,7 +13,7 @@ import shutil
 
 from pydantic import BaseModel, Field
 
-from esteira.graficos import plano, render
+from esteira.graphics import plan, render
 from esteira.thumbs import dados_thumb
 
 MODELOS = ("caixas", "frase", "numero", "lista", "comparacao", "capitulo", "fonte", "citacao")
@@ -64,7 +64,7 @@ def previa_grafico(projeto, ep, estado):
     w, h = _dim(projeto)
     pasta = projeto.caminho("graficos")
     pasta.mkdir(exist_ok=True)
-    pc = plano.peca(e, pasta, w, h, pasta / "pag_editor.png")
+    pc = plan.peca(e, pasta, w, h, pasta / "pag_editor.png")
     if not pc:
         raise ValueError("o trecho da citação não foi achado no PDF")
     return render.previa(*pc, e["dur"], w, h, projeto.cfg.get("graficos", {}).get("cor", "#ffd400"),
@@ -72,12 +72,12 @@ def previa_grafico(projeto, ep, estado):
 
 
 def html_grafico(projeto, estado):
-    """(HTML com caminhos file://, w, h) da peça: o que o app pede como quadro PNG (`web/quadros.py`)."""
+    """(HTML com caminhos file://, w, h) da peça: o que o app pede como quadro PNG (`web/frames.py`)."""
     e = _limpo(estado)
     w, h = _dim(projeto)
     pasta = projeto.caminho("graficos")
     pasta.mkdir(exist_ok=True)
-    pc = plano.peca(e, pasta, w, h, pasta / "pag_editor.png")
+    pc = plan.peca(e, pasta, w, h, pasta / "pag_editor.png")
     if not pc:
         raise ValueError("o trecho da citação não foi achado no PDF")
     return render.html(*pc, e["dur"], w, h, projeto.cfg.get("graficos", {}).get("cor", "#ffd400")), w, h
@@ -180,7 +180,7 @@ def usar_thumb(projeto, arquivo, k):
     if k == 1:
         shutil.copy2(origem, projeto.caminho("thumb.png"))
     try:  # escolha da pessoa → veredito no dataset (candidata gerada pela etapa thumbs)
-        from esteira.dataset import registro as R
+        from esteira.dataset import registry as R
         rg = R.ultimo(f"thumb:{projeto.ep}", "thumb_compor", arquivo=arquivo)
         if rg:
             R.avaliar(rg["id"], "escolhida", comentario=f"vaga {k}")

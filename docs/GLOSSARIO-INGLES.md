@@ -103,9 +103,26 @@ Variáveis de ambiente: `ESTEIRA_MOTOR` → `ESTEIRA_ENGINE`, `ESTEIRA_MOTOR_FIX
 Os prompts (`ai/prompts/*.md`: nome do arquivo, texto, campos e o esquema da resposta) migram junto com o módulo
 dono de cada um, porque os campos e as chaves do JSON de resposta são do módulo.
 
+## Esteira — módulos (nomes de arquivo)
+
+Raiz do pacote: acervo → library, alinhamento → alignment, avaliar → evaluate, bancada → bench, bordas → edges,
+cenas → scenes, claquete → clapper, cortes → cuts, curadoria → curation, descricao → description, fotos → photos,
+grafo → graph, grafo_dados → graph_data, midia → media, monitor_processo → process_monitor, montar → assemble,
+pacote → package, producao → production, projeto → project, resumo → summary, roteirista → scriptwriter,
+transcrever → transcribe. Pacotes: fontes → sources (gravacoes → recordings, importar → importer), graficos →
+graphics (artigos → articles, chaves → keywords, pecas → pieces, plano → plan), imagem → image (gerar_sdxl →
+generate_sdxl), estudio → studio (amostra → sample, apontamento → marking, compilar → compiler, corte → cut,
+direcao → direction, diretor → director, estilo → style, fabrica → factory, fontes → fonts, gatilhos → triggers,
+identidade → identity, moldes → molds, motor → engine, peca → piece, ritmo → rhythm, treino → training), dataset
+(edicoes → edits, exportar → export, indice → index, inferir → infer, registro → registry, traduzir → translate,
+treino_app → app_training), web (fila → queue, quadros → frames, api_estudio → api_studio, api_sistema →
+api_system). Testes seguem o módulo (`test_cortes` → `test_cuts`, `test_etapaN` → `test_stageN`).
+Pastas de dados do pacote ainda com o nome antigo: `graphics/fontes`, `graphics/modelos`, `studio/pecas`,
+`studio/kit`, `studio/estilos`, `studio/ritmos`, `ai/prompts/*.md`, `tests/dados`.
+
 Estado da migração da esteira: `core/`, `ai/` e a CLI (`esteira.py`: comandos, flags, ids das etapas e das operações)
 feitos, com painel, fila, grafo do monitor e app usando os nomes novos. Ainda em português, cada um no seu passo:
-os módulos fora de `core/` (nomes de arquivo, funções, mensagens), as etapas internas do Estúdio (`dirigir`,
+o interior dos módulos fora de `core/` e `ai/` (funções, variáveis, mensagens; os nomes de arquivo já estão em inglês), as etapas internas do Estúdio (`dirigir`,
 `compilar`… e os eventos `estudio-<etapa>`), rótulos de alvo da fila (`fabrica:`, `peca:`, `treino:`, `roteiro:`),
 valores de `--mode`/`--intensity`, chaves próprias da API web (`processos`, `vagas`, `etapas`…) e da fila
 (`comando`, `vaga`, `estado`), chaves do `config.toml`, os prompts de `ai/prompts/` e o nome do pacote `esteira`. O script `artigo` do vault ainda grava a barra externa com

@@ -14,8 +14,8 @@ from pathlib import Path
 
 import psutil
 
-from esteira import acervo
-from esteira.projeto import CACHE, PROJETOS
+from esteira import library
+from esteira.project import CACHE, PROJETOS
 
 INTERVALO = 2.0
 HIST = deque(maxlen=300)
@@ -195,7 +195,7 @@ def iniciar(cfg):
     vault = Path(f.get("vault", "~/Documents/github/obsidian")).expanduser()
     raizes = [(PROJETOS, 3), (vault / "Notas" / "Empreendimento" / "YouTube", 3),
               (Path(f.get("artigos", vault / "Referências" / "Artigos")).expanduser(), 1), (CACHE, 1),
-              (acervo.pasta(), 1)]
+              (library.pasta(), 1)]
     threading.Thread(target=_amostrar, args=(raizes,), daemon=True).start()
 
 

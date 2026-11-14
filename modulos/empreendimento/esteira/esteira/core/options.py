@@ -12,7 +12,7 @@ The operation ids are the stage names and the labels/descriptions are panel text
 import contextlib
 import json
 
-from esteira.projeto import CACHE
+from esteira.project import CACHE
 
 FILE = CACHE / "options.json"
 MODELS = [("claude-sonnet-5-5", "Sonnet 5.5", "equilíbrio entre qualidade e custo"),

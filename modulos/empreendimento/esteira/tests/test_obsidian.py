@@ -1,5 +1,5 @@
 """Leitura dos roteiros do vault: falas, notas de cena e blocos [!cite] (citação com PDF, página e trecho)."""
-from esteira.fontes import obsidian
+from esteira.sources import obsidian
 
 ROTEIRO = '''---
 tipo: roteiro

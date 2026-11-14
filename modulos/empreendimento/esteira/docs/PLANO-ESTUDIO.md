@@ -81,7 +81,7 @@ Canais) e abre o Fluxo A para a estrutura personalizada dele.
 - Falta para a ferramenta: checagem/instalação dessas dependências por botão na aba Estúdio; `opencv` (rastreio
   da boca) só quando entrar o apresentador.
 
-**Fase 1 · bancada (29/10/2026)**: `esteira/bancada.py` + gabarito (64 intenções/cenas rotuladas, 120 cortes revisados,
+**Fase 1 · bancada (29/10/2026)**: `esteira/bench.py` + gabarito (64 intenções/cenas rotuladas, 120 cortes revisados,
 18 legendas, 16 quadros de visão). Resultado (nota 0–1 / ms; corte = acurácia balanceada):
 
 | modelo | intenção | cena | legenda | corte | visão |
@@ -96,14 +96,14 @@ Canais) e abre o Fluxo A para a estrutura personalizada dele.
 Decisão: padrão de texto e visão = Gemma 4 12B (um modelo só na VRAM); diretor do Estúdio (`estudio_cena`) =
 Qwen3.8-27B pelas Opções (~7,5 s por cena). `--fit on` no llama-server (modelos grandes com parte na RAM).
 
-**Fases 3–7 · primeira versão (29–30/10/2026)**: pacote `esteira/estudio/` (estilo como dado, kit de 13 cenas 16:9/9:16,
+**Fases 3–7 · primeira versão (29–30/10/2026)**: pacote `esteira/studio/` (estilo como dado, kit de 13 cenas 16:9/9:16,
 diretor local com validação e escalação, compilar/render NVENC/áudio/verificar), API `/api/v1/estudio`, aba Estúdio no
 app (canais + Adicionar canal, estilos + referências + proposta do Claude, produções com portões, motor e bancada).
 Teste de ponta a ponta no episódio de teste `finlumia-990` (1º minuto do 004): 19 trechos, 17 decididos pela IA local,
 2 pela regra; −14,03 LUFS / −1,01 dBTP nos dois formatos; render de 60 s em ~45 s (NVENC).
 Pendente: fase 9 (fine-tune).
 
-**Fase 2 · corte unificado (30/10/2026)**: `esteira/estudio/corte.py` = motor da skill (`3-corte.py`) sobre a
+**Fase 2 · corte unificado (30/10/2026)**: `esteira/studio/cut.py` = motor da skill (`3-corte.py`) sobre a
 narração editada pela esteira (as tomadas continuam escolhidas pelo texto em `cortes.aplicar`). Fala pelo som (volume +
 inclinação espectral), vícios pelo faster-whisper com o prompt de vícios (não precisou do whisper.cpp), palavra comida
 protegida (só a audível: o Whisper estica a 1ª palavra da frase por cima do silêncio), respiro de 0,15 s em fim de frase,
@@ -113,7 +113,7 @@ lê os tempos remapeados (`corte.palavras/frases/novo/audio`). Portão 1 só apr
 atualizado. CLI `./dark estudio-corte <ep>`; API `GET/POST /producoes/{ep}/corte`, `PUT .../corte/emenda`; app
 `estudio/corte_tela.dart`. Teste no 990: 60,0 s → 54,6 s, 17 emendas, 0 trechos a conferir, texto 97% igual.
 
-**Modo apresentador (30/10/2026)**: `esteira/estudio/camera.py`. A câmera do episódio (importada em modo
+**Modo apresentador (30/10/2026)**: `esteira/studio/camera.py`. A câmera do episódio (importada em modo
 apresentador, sincronizada com o WAV em `camera.json`) segue os dois cortes (tomadas da esteira + corte pelo som):
 cada quadro de saída aponta para o quadro certo da câmera (sem deriva) → `estudio/corte/camera.mp4` (NVENC). Rosto
 pelo OpenCV 4 (Haar, mediana de 24 quadros) → `object-position` e origem do punch-in. Layouts por trecho
@@ -124,7 +124,7 @@ Teste no 990 com o vídeo de referência da skill como câmera: FULL 65% · SPLI
 56,4 s exatos, −14,04 LUFS nos dois formatos.
 
 **Controles do template (30/10/2026)**: o estilo é o template. Fontes por papel (títulos, texto, rótulos, legenda),
-escolhidas num catálogo OFL do kit (`estudio/fontes.py`: 16 famílias) ou enviadas pelo app (.ttf/.otf em
+escolhidas num catálogo OFL do kit (`studio/fonts.py`: 16 famílias) ou enviadas pelo app (.ttf/.otf em
 `$AGENT_DATA/.../estudio/fontes/`); o compilador copia só as usadas e gera `assets/fontes.css`; fonte fora do
 catálogo vira aviso. Legenda (`regras.legenda` por formato + `regras.legenda_visual`: tamanho, posição
 baixo/meio/abaixo do rosto, 1–3 palavras, caixa alta, sombra/contorno/fundo, palavras-chave em destaque).
@@ -140,7 +140,7 @@ num molde só (pílulas pequenas) e ficou abaixo das peças do EffectCraft. As c
 contando com unidade na cor de destaque, capítulo em serifa itálica letra a letra, "vs" em serifa, etiquetas de terço
 inferior com faixa, cartões numerados, véu que escurece e desfoca a mídia, entradas com desfoque. Papel de fonte novo
 `fonte_editorial` (Playfair Display, com itálico). Prova: página com as 12 cenas nos dois formatos.
-Apontamento (`estudio/apontamento.py`): depois do corte, a pessoa marca por trecho a cena (ou "auto"/"nenhuma");
+Apontamento (`studio/marking.py`): depois do corte, a pessoa marca por trecho a cena (ou "auto"/"nenhuma");
 confirmar libera o diretor e põe a produção na fila (`GET/PUT /producoes/{ep}/apontamento`, app
 `estudio/apontamento_tela.dart`). Na cena marcada a IA local só preenche âncora/título/valores (`por: "voce"`), e
 variedade/orçamento não a trocam. 

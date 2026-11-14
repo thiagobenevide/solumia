@@ -18,10 +18,10 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from esteira.core import events
-from esteira.curadoria import ESTILOS
-from esteira.graficos import render
+from esteira.curation import ESTILOS
+from esteira.graphics import render
 from esteira.ai import local
-from esteira.projeto import RAIZ
+from esteira.project import RAIZ
 
 PY_IMG = RAIZ / ".venv-img" / "bin" / "python"
 
@@ -121,7 +121,7 @@ def _gerar_fundos(pedidos):
     local.free_gpu()
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(pedidos, f)
-    p = subprocess.Popen([str(PY_IMG), str(RAIZ / "esteira/imagem/gerar_sdxl.py"), f.name],
+    p = subprocess.Popen([str(PY_IMG), str(RAIZ / "esteira/image/generate_sdxl.py"), f.name],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     n = 0
     for linha in p.stdout:
@@ -149,7 +149,7 @@ def _avaliar(arq, c, ctx):
 
 def _escolher_com_claude(projeto, ranking, ctx):
     from esteira.ai import claude
-    from esteira.midia import folha
+    from esteira.media import folha
 
     class Escolha(BaseModel):
         escolhidas: list[int] = Field(min_length=1, max_length=3)
@@ -187,7 +187,7 @@ def _dataset(projeto, ctx, ranking, escolhidas):
     A ordem do Claude e a nota da visão entram como métricas; nunca derruba a etapa."""
     try:
         from esteira import photocraft
-        from esteira.dataset import registro as R
+        from esteira.dataset import registry as R
         from esteira.n1 import photocraft as N1
         ordem = [e["arquivo"].name for e in escolhidas]
         for x in ranking:

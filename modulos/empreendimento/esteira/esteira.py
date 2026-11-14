@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 
 from esteira.core import events
-from esteira.projeto import RAIZ, Projeto, episodios, pasta_ep
+from esteira.project import RAIZ, Projeto, episodios, pasta_ep
 
 
 def resolve(name):
@@ -57,53 +57,53 @@ def stage(name):
 
 def _run(name, p, a):
     if name == "transcribe":
-        from esteira.transcrever import transcrever
+        from esteira.transcribe import transcrever
         transcrever(p, p.cfg)
     elif name == "clean":
-        from esteira.cortes import aplicar
+        from esteira.cuts import aplicar
         aplicar(p, refazer=a.redo)
     elif name == "scenes":
-        from esteira.cenas import gerar_cenas
+        from esteira.scenes import gerar_cenas
         gerar_cenas(p)
     elif name == "fetch":
-        from esteira.midia import buscar
+        from esteira.media import buscar
         buscar(p, refazer=a.redo, cenas=_scene_ids(a.scenes))
     elif name == "review":
-        from esteira.midia import revisar
+        from esteira.media import revisar
         revisar(p, cenas=_scene_ids(a.scenes))
     elif name == "frames":
-        from esteira.midia import quadros
+        from esteira.media import quadros
         quadros(p, a.n)
     elif name == "curate":
-        from esteira.curadoria import curar
+        from esteira.curation import curar
         curar(p, refazer=a.redo)
     elif name == "evaluate":
-        from esteira.avaliar import avaliar
+        from esteira.evaluate import avaliar
         avaliar(p)
     elif name == "graphics":
-        from esteira.graficos import plano
+        from esteira.graphics import plan
         if not a.render_only:
-            from esteira.graficos import chaves
-            chaves.planejar(p, plano.planejar(p), refazer=True)  # animated keywords in the gaps between graphics
-        plano.renderizar(p)
+            from esteira.graphics import keywords
+            keywords.planejar(p, plan.planejar(p), refazer=True)  # animated keywords in the gaps between graphics
+        plan.renderizar(p)
     elif name == "assemble":
-        from esteira.montar import montar
+        from esteira.assemble import montar
         montar(p, exportar=not a.no_export)
     elif name == "studio":  # only through `all`: the order to produce everything stands in for the cut and marking gates
-        from esteira import estudio
-        from esteira.descricao import gerar as gerar_descricao
-        from esteira.estudio import corte
-        corte.analisar(p)
-        if n := corte.estado(p).get("cortadas"):
+        from esteira import studio
+        from esteira.description import gerar as gerar_descricao
+        from esteira.studio import cut
+        cut.analisar(p)
+        if n := cut.estado(p).get("cortadas"):
             raise SystemExit(f"the sound cut clipped {n} word(s): revert the splices around them "
                              "(Studio tab → Cut) and produce through the Studio")
-        estudio.produzir(a.project, sem_portao=True)
+        studio.produzir(a.project, sem_portao=True)
         print(f"  description with the source links: {gerar_descricao(p).name}")
     elif name == "thumb":
         from esteira.thumbs import thumbs
         thumbs(p)
     elif name == "export":
-        from esteira.montar import exportar_manual
+        from esteira.assemble import exportar_manual
         exportar_manual(p)
 
 
@@ -118,7 +118,7 @@ def _scene_ids(text):
 
 def cmd_compact(a):
     # No "▶ stage" line: the output is read by Claude, every line costs tokens.
-    from esteira import resumo as r
+    from esteira import summary as r
     p = resolve(a.project)
     if a.cmd == "summary":
         r.resumo(p, a.scenes, a.no_text)
@@ -129,23 +129,23 @@ def cmd_compact(a):
 
 
 def cmd_parts(a):
-    from esteira import claquete
+    from esteira import clapper
     p = resolve(a.project)
     if not p.roteiro():
         raise SystemExit("the project has no roteiro.txt")
-    parts = claquete.do_projeto(p)
+    parts = clapper.do_projeto(p)
     target = p.caminho("partes.txt")
-    target.write_text(claquete.texto_para_leitura(parts))
+    target.write_text(clapper.texto_para_leitura(parts))
     print(f"{len(parts)} parts → {target}")
 
 
 def cmd_all(a):
     from_scratch = getattr(a, "redo", False)
     a.no_export, a.scenes, a.render_only = False, None, False
-    from esteira import estudio
+    from esteira import studio
     # channel with a Studio style: the edit comes from the piece library (per-block direction), not from FilmCraft
     last = ("graphics", "assemble", "thumb")
-    if estudio.estilo_padrao(resolve(a.project)):
+    if studio.estilo_padrao(resolve(a.project)):
         last = ("studio", "thumb")
     for name in ("clean", "scenes", "curate", "fetch", "evaluate", *last):
         # from scratch: cuts and curation are decided again; the fetch keeps good media of scenes that did not change
@@ -201,15 +201,15 @@ def _sources_config():
 
 
 def cmd_scripts(a):
-    from esteira.fontes import obsidian
+    from esteira.sources import obsidian
     for r in obsidian.listar(_sources_config()["vault"], a.channel):
         if not a.status or r["status"] == a.status:
             print(f"{r['canal']:15} {str(r['numero'] or '-') + r['short']:>5} {r['formato']:5} {r['status']:10} {r['titulo'][:66]}")
 
 
 def cmd_import(a):
-    from esteira.fontes import obsidian
-    from esteira.fontes.importar import importar
+    from esteira.sources import obsidian
+    from esteira.sources.importer import importar
     md = Path(a.script)
     if not md.exists():  # "finlumia:3" → script number 3 of the channel
         channel, _, number = a.script.partition(":")
@@ -224,17 +224,17 @@ def cmd_import(a):
 
 
 def cmd_library(a):
-    from esteira import acervo
+    from esteira import library
     if a.action == "import":
-        print(f"  {acervo.importar_projetos()} episode media files registered in the library")
+        print(f"  {library.importar_projetos()} episode media files registered in the library")
     elif a.action == "describe":
-        print(f"  {acervo.descrever(a.n)} items described by the local vision model")
+        print(f"  {library.descrever(a.n)} items described by the local vision model")
     elif a.action == "search":
-        for r in acervo.listar(" ".join(a.terms), limite=a.n):
+        for r in library.listar(" ".join(a.terms), limite=a.n):
             print(f"{r['id']:28} {r['tipo']:6} {r['orientacao']:8} {len(r['usos'])} uses  {', '.join(r['termos'])[:60]}")
     else:
-        e = acervo.estatisticas()
-        print(f"  library {acervo.pasta()}: {e['itens']} items ({e['videos']} videos, {e['imagens']} images), "
+        e = library.estatisticas()
+        print(f"  library {library.pasta()}: {e['itens']} items ({e['videos']} videos, {e['imagens']} images), "
               f"{e['gb']} GB; {e['descritos']} described; {e['usos']} uses ({e['reusados']} media files used)")
         for k, v in sorted(e["por_provedor"].items()):
             print(f"    {k:20} {v}")
@@ -251,9 +251,9 @@ def _csv(text):
 
 
 def cmd_bench(a):
-    from esteira import bancada
+    from esteira import bench
     if a.action == "generate":
-        print(f"  answer key: {bancada.gerar()}")
+        print(f"  answer key: {bench.gerar()}")
         return
     if a.action == "run":
         from esteira.ai import llama
@@ -262,125 +262,125 @@ def cmd_bench(a):
             models = []
             for m in llama.models() or []:
                 models.append(m["id"])
-        bancada.rodar(models, _csv(a.tasks), a.n, progresso=_print_line)
-    print("\n".join(bancada.tabela()))
+        bench.rodar(models, _csv(a.tasks), a.n, progresso=_print_line)
+    print("\n".join(bench.tabela()))
 
 
 def cmd_studio(a):
-    from esteira import estudio
-    stages = _csv(a.stages) or estudio.ETAPAS
+    from esteira import studio
+    stages = _csv(a.stages) or studio.ETAPAS
     intensity = None
     if a.intensity:
         intensity = {}
         for pair in a.intensity.split(","):
             key, value = pair.split("=", 1)
             intensity[key] = value
-    estudio.produzir(a.project, a.style, _csv(a.formats), stages, a.no_gate, intensity)
+    studio.produzir(a.project, a.style, _csv(a.formats), stages, a.no_gate, intensity)
 
 
 def cmd_studio_cut(a):
-    from esteira.estudio import corte
-    from esteira.projeto import Projeto, pasta_ep
-    corte.analisar(Projeto(pasta_ep(a.project)))
+    from esteira.studio import cut
+    from esteira.project import Projeto, pasta_ep
+    cut.analisar(Projeto(pasta_ep(a.project)))
 
 
 def cmd_studio_install(a):
-    from esteira.estudio import motor
-    print(f"  {motor.instalar(_print_line)}")
+    from esteira.studio import engine
+    print(f"  {engine.instalar(_print_line)}")
 
 
 def cmd_studio_style(a):
-    from esteira.estudio import identidade
-    e = identidade.propor(a.target, a.niche or "")
+    from esteira.studio import identity
+    e = identity.propor(a.target, a.niche or "")
     print(f"  style {e.id} v{e.versao}: {e.pele.destaque} · {len(e.exemplos)} examples")
 
 
 def cmd_studio_factory(a):
-    from esteira.estudio import fabrica
+    from esteira.studio import factory
     order_id = a.target.removeprefix("fabrica:")
-    p = fabrica.rodar(order_id, visual=not a.no_vision)
+    p = factory.rodar(order_id, visual=not a.no_vision)
     print(f"  factory {order_id}: {p.situacao} · {len(p.pecas)} piece(s) · {p.descartadas} discarded · US$ {p.gasto_usd:.2f}")
 
 
 def cmd_studio_piece_preview(a):
-    from esteira.estudio import peca
+    from esteira.studio import piece
     piece_id = a.target
     if ":" in a.target:
         piece_id = a.target.split(":")[1]
-    print(f"  preview: {peca.previa(piece_id, a.style, a.format)}")
+    print(f"  preview: {piece.previa(piece_id, a.style, a.format)}")
 
 
 def cmd_studio_channel_proof(a):
-    from esteira.estudio import peca
-    r = peca.prova_canais(a.styles)
+    from esteira.studio import piece
+    r = piece.prova_canais(a.styles)
     print(f"  skin proof: {len(r['pecas'])} piece(s) × {len(a.styles)} style(s) · {len(r['problemas'])} problem(s)")
     for x in r["problemas"]:
         print(f"    {x['peca']} · {x['estilo']} · {x['formato']}: {x['erro']}")
 
 
 def cmd_studio_block(a):
-    from esteira import estudio
-    estudio.renderizar_bloco(a.ep, a.block, a.formats or None)
+    from esteira import studio
+    studio.renderizar_bloco(a.ep, a.block, a.formats or None)
 
 
 def cmd_training(a):
-    from esteira.estudio import treino
+    from esteira.studio import training
     if a.action == "export":
-        r = treino.exportar()
+        r = training.exportar()
         counts = []
         for task, x in r["tarefas"].items():
             counts.append(f"{task} {x['treino']}+{x['validacao']}")
         print(f"  training base in {r['pasta']}: " + ", ".join(counts))
     else:
-        print(f"  trained model: {treino.treinar(a.base, a.epochs)} (pick it in Options)")
+        print(f"  trained model: {training.treinar(a.base, a.epochs)} (pick it in Options)")
 
 
 def cmd_dataset(a):
-    from esteira.dataset import indice
+    from esteira.dataset import index
     if a.action == "reindex":
-        print(f"  {indice.reindexar()} records in the index")
+        print(f"  {index.reindexar()} records in the index")
         return
     if a.action == "export":
-        from esteira.dataset import exportar
-        r = exportar.exportar(_csv(a.tasks))
+        from esteira.dataset import export
+        r = export.exportar(_csv(a.tasks))
         counts = []
         for task, x in r["tarefas"].items():
             counts.append(f"{task} {x['sft']}+{x['val']} sft, {x['dpo']} dpo, {x['eval']} eval")
         print(f"  export in {r['pasta']}: " + ", ".join(counts))
         return
     if a.action == "translate":
-        from esteira.dataset import traduzir
-        for line in traduzir.tudo():
+        from esteira.dataset import translate
+        for line in translate.tudo():
             print(f"  {line}")
         return
     if a.action == "edits":
-        from esteira.dataset import edicoes
-        for line in edicoes.varrer():
+        from esteira.dataset import edits
+        for line in edits.varrer():
             print(f"  {line}")
         return
     if a.action == "train":
-        from esteira.dataset import treino_app
-        m = treino_app.treinar(a.app, a.base, a.epochs, forcar=a.force)
+        from esteira.dataset import app_training
+        m = app_training.treinar(a.app, a.base, a.epochs, forcar=a.force)
         print(f"  adapter {m['nome']} ({m['casos_treino']} cases, loss {m['perda']}); promote: "
               f"./dark dataset promote --app {a.app} --name {m['nome']}")
         return
     if a.action == "promote":
-        from esteira.dataset import treino_app
-        r = treino_app.promover(a.app, a.name, a.n)
+        from esteira.dataset import app_training
+        r = app_training.promover(a.app, a.name, a.n)
         print(f"  {r['nome']}: {'PROMOTED' if r['promovido'] else 'not promoted'} · scores {r['notas']}")
         return
-    for task, x in indice.situacao().items():
+    for task, x in index.situacao().items():
         print(f"  {task:18} {x['total']:5} records · sft {x.get('sft', 0):4}/{x['minimo']:<5} · dpo {x.get('dpo_ruim', 0):4}"
               f" · pending {x.get('pendente', 0):4}{'  READY' if x['pronta'] else ''}")
 
 
 def cmd_studio_sample(a):
-    from esteira.estudio import amostra
-    amostra.gerar(a.target)
+    from esteira.studio import sample
+    sample.gerar(a.target)
 
 
 def cmd_script(a):
-    from esteira.roteirista import gerar
+    from esteira.scriptwriter import gerar
     gerar(a.target, a.to)
 
 
@@ -391,7 +391,7 @@ def cmd_panel(a):
 
 
 def cmd_open(a):
-    from esteira.montar import abrir
+    from esteira.assemble import abrir
     abrir(resolve(a.project))
 
 

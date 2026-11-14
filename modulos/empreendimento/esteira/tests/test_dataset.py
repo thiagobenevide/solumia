@@ -1,8 +1,8 @@
 """Registro canônico e índice do dataset (docs/PLANO-DATASET.md §4)."""
 import pytest
 
-from esteira.dataset import indice
-from esteira.dataset import registro as R
+from esteira.dataset import index
+from esteira.dataset import registry as R
 
 
 def test_ulid_ordenavel_e_unico():
@@ -49,7 +49,7 @@ def test_indice_reconstroi_e_conta():
         rg = R.gravar("foto_tratar", grupo=f"foto:{k}", contexto={}, saida={"foco": "sujeito"}, origem="local:t")
         if k:
             R.avaliar(rg, "aprovada")
-    assert indice.reindexar() == 3
-    s = indice.situacao()["foto_tratar"]
+    assert index.reindexar() == 3
+    s = index.situacao()["foto_tratar"]
     assert s["total"] == 3 and s["sft"] == 2 and s["pendente"] == 1 and not s["pronta"]
-    assert len(indice.consultar(tarefa="foto_tratar", uso="sft")) == 2
+    assert len(index.consultar(tarefa="foto_tratar", uso="sft")) == 2

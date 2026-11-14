@@ -1,0 +1,14 @@
+{
+ "ok": true,
+ "erros": [],
+ "avisos": [],
+ "quadros": [
+  "escura_16x9.jpg",
+  "escura_9x16.jpg",
+  "clara_16x9.jpg",
+  "clara_9x16.jpg"
+ ],
+ "versao": 1,
+ "motor": "html",
+ "render_s": 10.36
+}

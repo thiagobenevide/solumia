@@ -18,7 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 from esteira.ai import llama
 from esteira.core import events, trace
-from esteira.projeto import CACHE, RAIZ
+from esteira.project import CACHE, RAIZ
 
 # ids in the llama.cpp router (file/folder in ~/agent-data/modelos)
 # Gemma 4 12B: better than or equal to qwen3-14b/qwen2.5vl-7b on every bench task (Oct 2026) and reads images,
@@ -211,7 +211,7 @@ def _root_config():
 def _via_claude(text, schema, name, images):
     """Process with `--engine claude`: the same question goes to Claude (no GPU), under the [claude] cap."""
     from esteira.ai import claude
-    from esteira.projeto import Projeto, pasta_ep
+    from esteira.project import Projeto, pasta_ep
     ep = os.environ.get("ESTEIRA_EP")
     try:
         cfg = Projeto(pasta_ep(ep)).cfg if ep else _root_config()
