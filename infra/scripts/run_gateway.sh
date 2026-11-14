@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Sobe o Gateway localmente (fora do Docker) para desenvolvimento.
+# Starts the Gateway locally (outside Docker) for development.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$repo_root"
 
 if [ ! -d ".venv" ]; then
-    echo "Criando virtualenv em .venv ..."
+    echo "Creating virtualenv in .venv ..."
     python3 -m venv .venv
 fi
 
@@ -18,10 +18,10 @@ pip install --quiet -e "./plataforma/shared"
 pip install --quiet -e "./plataforma/backend[dev]"
 
 if [ ! -f "plataforma/backend/.env" ]; then
-    echo "plataforma/backend/.env não encontrado, copiando de plataforma/backend/.env.example"
+    echo "plataforma/backend/.env not found, copying plataforma/backend/.env.example"
     cp plataforma/backend/.env.example plataforma/backend/.env
 fi
 
-# Settings.env_file é relativo ao cwd, por isso rodamos a partir de plataforma/backend/.
+# Settings.env_file is relative to the cwd, so we run from plataforma/backend/.
 cd "$repo_root/plataforma/backend"
 exec python -m backend.main

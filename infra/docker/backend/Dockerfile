@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# /api/arquivos: LibreOffice converte DOCX/PPTX em PDF; poppler gera as miniaturas.
+# /api/arquivos: LibreOffice converts DOCX/PPTX to PDF; poppler generates the thumbnails.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libreoffice-writer libreoffice-impress libreoffice-calc poppler-utils fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
@@ -41,7 +41,7 @@ RUN pip install --no-cache-dir ./shared ./saude ./estudos ./rotinas ./design ./e
 
 RUN useradd --create-home --uid 1000 gateway
 USER gateway
-# Criada pelo usuário do app: o volume agent-data herda o dono (senão nasce do root e não grava).
+# Created by the app user: the agent-data volume inherits the owner (otherwise it is born as root and cannot write).
 RUN mkdir -p /home/gateway/agent-data
 
 EXPOSE 48080
@@ -49,5 +49,5 @@ EXPOSE 48080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:48080/health', timeout=3)" || exit 1
 
-# --proxy-headers: o IP real (bloqueio de login) vem do nginx; a porta só é publicada em 127.0.0.1.
+# --proxy-headers: the real IP (login lockout) comes from nginx; the port is only published on 127.0.0.1.
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "48080", "--proxy-headers", "--forwarded-allow-ips", "*", "--no-server-header"]

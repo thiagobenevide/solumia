@@ -1,47 +1,47 @@
 #!/usr/bin/env bash
-# Backup do agent-data e do vault no Google Drive (remote rclone `gdrive`, raiz = pasta backup_agent).
-# Por módulo: `<modulo>/atual` é o espelho navegável; `<modulo>/versoes/<data>` guarda o que mudou ou saiu
-# naquele dia. O Drive é só leitura: edição feita lá é desfeita no envio seguinte (vai para versoes/).
-#   infra/scripts/backup                       # todos os módulos
-#   infra/scripts/backup financas notas        # só esses
-#   infra/scripts/backup --restaurar <modulo> --destino <pasta> [--data AAAA-MM-DD]
-#   infra/scripts/backup --testar [<modulo>]   # restaura numa pasta temporária e confere (teste mensal)
-#   infra/scripts/backup --instalar            # timer diário (systemd --user, 03:30)
-# Opcional em ~/.config/agent/backup.env: BACKUP_VPS=usuario@host (copia o volume agent-data da VPS).
+# Backup of agent-data and the vault to Google Drive (rclone remote `gdrive`, root = backup_agent folder).
+# Per module: `<module>/atual` is the browsable mirror; `<module>/versoes/<date>` keeps what changed or left
+# that day. The Drive is read-only: an edit made there is undone by the next upload (it goes to versoes/).
+#   infra/scripts/backup                       # all modules
+#   infra/scripts/backup financas notas        # only these
+#   infra/scripts/backup --restaurar <module> --destino <folder> [--data YYYY-MM-DD]
+#   infra/scripts/backup --testar [<module>]   # restores into a temporary folder and checks it (monthly test)
+#   infra/scripts/backup --instalar            # daily timer (systemd --user, 03:30)
+# Optional in ~/.config/agent/backup.env: BACKUP_VPS=user@host (copies the VPS agent-data volume).
 set -euo pipefail
 
-DADOS="${AGENT_DATA:-$HOME/agent-data}"
+DATA="${AGENT_DATA:-$HOME/agent-data}"
 VAULT="${VAULT:-$HOME/Documents/github/obsidian}"
-REMOTO="${BACKUP_REMOTO:-gdrive:}"
-ESTADO="$DADOS/plataforma/backup.json"
+REMOTE="${BACKUP_REMOTO:-gdrive:}"
+STATE="$DATA/plataforma/backup.json"
 RCLONE=$(command -v rclone || echo "$HOME/.local/bin/rclone")
-HOJE=$(date +%F)
-raiz="$(cd "$(dirname "$0")/../.." && pwd)"
+TODAY=$(date +%F)
+root="$(cd "$(dirname "$0")/../.." && pwd)"
 [ -f "$HOME/.config/agent/backup.env" ] && . "$HOME/.config/agent/backup.env"
 
-# Fora de todo módulo: o que se refaz sozinho.
-EXCLUIR=(--filter '- cache/**' --filter '- __pycache__/**' --filter '- *.log' --filter '- .venv*/**'
+# Excluded from every module: what rebuilds itself.
+EXCLUDE=(--filter '- cache/**' --filter '- __pycache__/**' --filter '- *.log' --filter '- .venv*/**'
          --filter '- node_modules/**' --filter '- *.tmp' --filter '- .~lock*')
-OPCOES=(--fast-list --transfers 8 --checkers 16 --drive-chunk-size 64M --retries 5 --low-level-retries 20 -q)
+OPTIONS=(--fast-list --transfers 8 --checkers 16 --drive-chunk-size 64M --retries 5 --low-level-retries 20 -q)
 
-origem() {  # origem <modulo> → pasta local
+source_dir() {  # source_dir <module> → local folder
   case "$1" in
     vault) echo "$VAULT" ;;
-    vps) echo "$DADOS/.vps" ;;
-    *) echo "$DADOS/$1" ;;
+    vps) echo "$DATA/.vps" ;;
+    *) echo "$DATA/$1" ;;
   esac
 }
 
-filtro() {  # filtros extras por módulo → array FILTRO (antes dos gerais)
+module_filter() {  # extra filters per module → MODULE_FILTER array (before the general ones)
   case "$1" in
-    modelos) FILTRO=(--filter '+ adaptadores/**' --filter '- *') ;;   # GGUF base e vozes se baixam de novo
-    vault) FILTRO=(--filter '- .obsidian/workspace*.json' --filter '- .trash/**') ;;
-    *) FILTRO=() ;;
+    modelos) MODULE_FILTER=(--filter '+ adaptadores/**' --filter '- *') ;;   # base GGUF and voices are downloaded again
+    vault) MODULE_FILTER=(--filter '- .obsidian/workspace*.json' --filter '- .trash/**') ;;
+    *) MODULE_FILTER=() ;;
   esac
 }
 
-modulos() {
-  for d in "$DADOS"/*/; do
+list_modules() {
+  for d in "$DATA"/*/; do
     m=$(basename "$d")
     case "$m" in plataforma|.vps) continue ;; esac
     echo "$m"
@@ -51,14 +51,14 @@ modulos() {
   return 0
 }
 
-registrar() {  # registrar <modulo> <inicio> <ok|erro> <msg>
-  python3 - "$ESTADO" "$@" <<'EOF'
+record() {  # record <module> <start> <ok|erro> <msg>
+  python3 - "$STATE" "$@" <<'EOF'
 import json, sys, time
 from pathlib import Path
-p, m, ini, st, msg = Path(sys.argv[1]), *sys.argv[2:]
+p, m, start, st, msg = Path(sys.argv[1]), *sys.argv[2:]
 d = json.loads(p.read_text()) if p.exists() else {"modulos": {}}
 r = d["modulos"].setdefault(m, {})
-r.update({"inicio": ini, "fim": time.strftime("%Y-%m-%dT%H:%M:%S"), "estado": st, "erro": msg or None})
+r.update({"inicio": start, "fim": time.strftime("%Y-%m-%dT%H:%M:%S"), "estado": st, "erro": msg or None})
 if st == "ok":
     r["ultimo_ok"] = r["fim"]
 d["ultimo"] = r["fim"]
@@ -67,89 +67,89 @@ p.write_text(json.dumps(d, ensure_ascii=False, indent=1))
 EOF
 }
 
-copiar_vps() {  # traz o volume agent-data da VPS para $DADOS/.vps (tar), antes de enviar
-  mkdir -p "$DADOS/.vps"
+copy_vps() {  # brings the VPS agent-data volume to $DATA/.vps (tar), before uploading
+  mkdir -p "$DATA/.vps"
   ssh -o BatchMode=yes "$BACKUP_VPS" \
     'v=$(docker volume ls -q | grep -m1 "agent-data$"); docker run --rm -v "$v":/d:ro alpine tar cz -C /d .' \
-    > "$DADOS/.vps/agent-data.tar.gz.parcial"
-  mv "$DADOS/.vps/agent-data.tar.gz.parcial" "$DADOS/.vps/agent-data.tar.gz"
+    > "$DATA/.vps/agent-data.tar.gz.partial"
+  mv "$DATA/.vps/agent-data.tar.gz.partial" "$DATA/.vps/agent-data.tar.gz"
 }
 
-limpar_versoes() {  # retenção: 7 diários, 4 domingos, 12 dias 01
-  local m=$1 hoje_s d s idade
-  hoje_s=$(date +%s)
-  "$RCLONE" lsf --dirs-only "$REMOTO$m/versoes" 2>/dev/null | tr -d / | while read -r d; do
+prune_versions() {  # retention: 7 daily, 4 Sundays, 12 first-of-month
+  local m=$1 today_s d s age_days
+  today_s=$(date +%s)
+  "$RCLONE" lsf --dirs-only "$REMOTE$m/versoes" 2>/dev/null | tr -d / | while read -r d; do
     s=$(date -d "$d" +%s 2>/dev/null) || continue
-    idade=$(( (hoje_s - s) / 86400 ))
-    if [ $idade -le 7 ]; then continue; fi
-    if [ "$(date -d "$d" +%u)" = 7 ] && [ $idade -le 28 ]; then continue; fi
-    if [ "$(date -d "$d" +%d)" = 01 ] && [ $idade -le 366 ]; then continue; fi
-    "$RCLONE" purge "$REMOTO$m/versoes/$d" -q
+    age_days=$(( (today_s - s) / 86400 ))
+    if [ $age_days -le 7 ]; then continue; fi
+    if [ "$(date -d "$d" +%u)" = 7 ] && [ $age_days -le 28 ]; then continue; fi
+    if [ "$(date -d "$d" +%d)" = 01 ] && [ $age_days -le 366 ]; then continue; fi
+    "$RCLONE" purge "$REMOTE$m/versoes/$d" -q
   done
 }
 
-enviar() {  # enviar <modulo>
-  local m=$1 ini src
-  ini=$(date +%Y-%m-%dT%H:%M:%S)
-  src=$(origem "$m")
-  if [ "$m" = vps ] && ! copiar_vps 2>/tmp/backup-vps.err; then
-    registrar "$m" "$ini" erro "$(tail -n 3 /tmp/backup-vps.err)"; return 1
+upload() {  # upload <module>
+  local m=$1 start src
+  start=$(date +%Y-%m-%dT%H:%M:%S)
+  src=$(source_dir "$m")
+  if [ "$m" = vps ] && ! copy_vps 2>/tmp/backup-vps.err; then
+    record "$m" "$start" erro "$(tail -n 3 /tmp/backup-vps.err)"; return 1
   fi
-  [ -d "$src" ] || { registrar "$m" "$ini" erro "pasta ausente: $src"; return 1; }
-  filtro "$m"
-  if saida=$("$RCLONE" sync "$src" "$REMOTO$m/atual" --backup-dir "$REMOTO$m/versoes/$HOJE" \
-              "${EXCLUIR[@]}" "${FILTRO[@]}" "${OPCOES[@]}" 2>&1); then
-    limpar_versoes "$m"
-    registrar "$m" "$ini" ok ""
+  [ -d "$src" ] || { record "$m" "$start" erro "missing folder: $src"; return 1; }
+  module_filter "$m"
+  if output=$("$RCLONE" sync "$src" "$REMOTE$m/atual" --backup-dir "$REMOTE$m/versoes/$TODAY" \
+              "${EXCLUDE[@]}" "${MODULE_FILTER[@]}" "${OPTIONS[@]}" 2>&1); then
+    prune_versions "$m"
+    record "$m" "$start" ok ""
     echo "ok     $m"
   else
-    registrar "$m" "$ini" erro "$(echo "$saida" | tail -n 3)"
-    echo "ERRO   $m: $(echo "$saida" | tail -n 1)"
+    record "$m" "$start" erro "$(echo "$output" | tail -n 3)"
+    echo "ERROR  $m: $(echo "$output" | tail -n 1)"
     return 1
   fi
 }
 
-restaurar() {  # restaurar <modulo> <destino> [data]: atual, ou o estado daquele dia (atual + versões posteriores)
-  local m=$1 dst=$2 data=${3:-}
+restore() {  # restore <module> <target> [date]: current, or that day's state (current + later versions)
+  local m=$1 dst=$2 date=${3:-}
   mkdir -p "$dst"
-  "$RCLONE" copy "$REMOTO$m/atual" "$dst" "${OPCOES[@]}"
-  if [ -n "$data" ]; then  # o que mudou depois de <data> volta à versão guardada, da mais nova para a mais antiga
-    "$RCLONE" lsf --dirs-only "$REMOTO$m/versoes" | tr -d / | sort -r | while read -r d; do
-      [[ "$d" > "$data" ]] && "$RCLONE" copy "$REMOTO$m/versoes/$d" "$dst" "${OPCOES[@]}"
+  "$RCLONE" copy "$REMOTE$m/atual" "$dst" "${OPTIONS[@]}"
+  if [ -n "$date" ]; then  # what changed after <date> goes back to the kept version, newest to oldest
+    "$RCLONE" lsf --dirs-only "$REMOTE$m/versoes" | tr -d / | sort -r | while read -r d; do
+      [[ "$d" > "$date" ]] && "$RCLONE" copy "$REMOTE$m/versoes/$d" "$dst" "${OPTIONS[@]}"
     done
   fi
-  echo "restaurado $m em $dst"
+  echo "restored $m into $dst"
 }
 
-testar() {  # restaura um módulo numa pasta temporária e confere contra o Drive
-  local m=${1:-financas} tmp ini
-  ini=$(date +%Y-%m-%dT%H:%M:%S)
+self_test() {  # restores a module into a temporary folder and checks it against the Drive
+  local m=${1:-financas} tmp start
+  start=$(date +%Y-%m-%dT%H:%M:%S)
   tmp=$(mktemp -d)
-  restaurar "$m" "$tmp" >/dev/null
-  if "$RCLONE" check "$tmp" "$REMOTO$m/atual" --one-way -q 2>/dev/null; then
-    registrar "teste:$m" "$ini" ok ""; echo "teste de restauração ok: $m"
+  restore "$m" "$tmp" >/dev/null
+  if "$RCLONE" check "$tmp" "$REMOTE$m/atual" --one-way -q 2>/dev/null; then
+    record "teste:$m" "$start" ok ""; echo "restore test ok: $m"
   else
-    registrar "teste:$m" "$ini" erro "arquivos diferentes"; echo "teste de restauração FALHOU: $m"
+    record "teste:$m" "$start" erro "files differ"; echo "restore test FAILED: $m"
   fi
   rm -rf "$tmp"
 }
 
-instalar() {
+install() {
   local u="$HOME/.config/systemd/user"
   mkdir -p "$u"
   cat > "$u/agent-backup.service" <<EOF
 [Unit]
-Description=Backup do agent-data no Google Drive
+Description=agent-data backup to Google Drive
 
 [Service]
 Type=oneshot
 Nice=10
 IOSchedulingClass=idle
-ExecStart=$raiz/infra/scripts/backup
+ExecStart=$root/infra/scripts/backup
 EOF
   cat > "$u/agent-backup.timer" <<EOF
 [Unit]
-Description=Backup diário do agent-data
+Description=Daily agent-data backup
 
 [Timer]
 OnCalendar=*-*-* 03:30
@@ -161,15 +161,15 @@ WantedBy=timers.target
 EOF
   cat > "$u/agent-backup-teste.service" <<EOF
 [Unit]
-Description=Teste mensal de restauração do backup
+Description=Monthly backup restore test
 
 [Service]
 Type=oneshot
-ExecStart=$raiz/infra/scripts/backup --testar financas
+ExecStart=$root/infra/scripts/backup --testar financas
 EOF
   cat > "$u/agent-backup-teste.timer" <<EOF
 [Unit]
-Description=Teste mensal de restauração do backup
+Description=Monthly backup restore test
 
 [Timer]
 OnCalendar=*-*-01 05:00
@@ -180,23 +180,23 @@ WantedBy=timers.target
 EOF
   systemctl --user daemon-reload
   systemctl --user enable --now agent-backup.timer agent-backup-teste.timer
-  echo "timers instalados: $(systemctl --user list-timers 'agent-backup*' --no-legend | wc -l)"
+  echo "timers installed: $(systemctl --user list-timers 'agent-backup*' --no-legend | wc -l)"
 }
 
 case "${1:-}" in
-  --instalar) instalar; exit ;;
-  --testar) testar "${2:-}"; exit ;;
+  --instalar) install; exit ;;
+  --testar) self_test "${2:-}"; exit ;;
   --restaurar)
-    m=${2:?uso: backup --restaurar <modulo> --destino <pasta> [--data D]}; shift 2
-    dst=""; data=""
-    while [ $# -gt 0 ]; do case "$1" in --destino) dst=$2; shift 2 ;; --data) data=$2; shift 2 ;; *) shift ;; esac; done
-    restaurar "$m" "${dst:?--destino obrigatório}" "$data"; exit ;;
+    m=${2:?usage: backup --restaurar <module> --destino <folder> [--data D]}; shift 2
+    dst=""; date=""
+    while [ $# -gt 0 ]; do case "$1" in --destino) dst=$2; shift 2 ;; --data) date=$2; shift 2 ;; *) shift ;; esac; done
+    restore "$m" "${dst:?--destino is required}" "$date"; exit ;;
 esac
 
 exec 9>"${XDG_RUNTIME_DIR:-/tmp}/agent-backup.lock"
-flock -n 9 || { echo "backup já em andamento"; exit 0; }
+flock -n 9 || { echo "backup already running"; exit 0; }
 
-if [ $# -gt 0 ]; then alvos=("$@"); else mapfile -t alvos < <(modulos); fi
-falhas=0
-for m in "${alvos[@]}"; do enviar "$m" || falhas=$((falhas + 1)); done
-[ $falhas -eq 0 ] || { echo "$falhas módulo(s) com erro (ver $ESTADO)"; exit 1; }
+if [ $# -gt 0 ]; then targets=("$@"); else mapfile -t targets < <(list_modules); fi
+failures=0
+for m in "${targets[@]}"; do upload "$m" || failures=$((failures + 1)); done
+[ $failures -eq 0 ] || { echo "$failures module(s) failed (see $STATE)"; exit 1; }

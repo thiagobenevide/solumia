@@ -1,8 +1,8 @@
 # Solumia app release: push a tag vX.Y.Z and this builds, signs and publishes the files the
 # configurator downloads (configurador/core/src/solumia_configurador/solumia_apps.py):
-#   solumia-X.Y.Z-android.apk, solumia-X.Y.Z-linux-x86_64.AppImage,
+#   solumia-X.Y.Z-android.apk, solumia-X.Y.Z-wear.apk, solumia-X.Y.Z-linux-x86_64.AppImage,
 #   SHA256SUMS.txt, SHA256SUMS.txt.asc (detached GPG signature) and release-signing-key.asc.
-# Wear OS and Windows are not built yet: the app has no watch target nor windows/ folder.
+# Windows is not built yet: the app has no windows/ folder.
 #
 # Repository secrets:
 #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
@@ -24,6 +24,8 @@ concurrency:
 
 env:
   FLUTTER_VERSION: "3.47.8"
+  # Server the apps connect to (repository variable SOLUMIA_URL overrides it).
+  SOLUMIA_URL: ${{ vars.SOLUMIA_URL || 'https://solumialocal.thiagobenevide.com' }}
 
 jobs:
   android:
@@ -69,12 +71,22 @@ jobs:
       - name: Build APK
         working-directory: plataforma/app
         run: |
-          flutter build apk --release --build-name "$VERSION" --build-number "$BUILD_NUMBER"
+          flutter build apk --release --build-name "$VERSION" --build-number "$BUILD_NUMBER" \
+            --dart-define=API_URL="$SOLUMIA_URL" --dart-define=BUILD="$BUILD_NUMBER"
           mkdir -p "$GITHUB_WORKSPACE/dist"
           cp build/app/outputs/flutter-apk/app-release.apk "$GITHUB_WORKSPACE/dist/solumia-$VERSION-android.apk"
+      - name: Build watch APK
+        working-directory: modulos/saude/wear
+        run: |
+          cp ../../../plataforma/app/android/key.properties key.properties
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          ./gradlew -q assembleRelease -Pbuild="$BUILD_NUMBER" -PversionName="$VERSION"
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/dist/solumia-$VERSION-wear.apk"
       - name: Remove keystore
         if: always()
-        run: rm -f "$RUNNER_TEMP/release.jks" plataforma/app/android/key.properties
+        run: |
+          rm -f "$RUNNER_TEMP/release.jks" plataforma/app/android/key.properties \
+            modulos/saude/wear/key.properties
       - uses: actions/upload-artifact@v4
         with:
           name: android
@@ -107,7 +119,9 @@ jobs:
       - run: flutter pub get
       - name: Build Linux bundle
         working-directory: plataforma/app
-        run: flutter build linux --release --build-name "$VERSION" --build-number "$BUILD_NUMBER"
+        run: |
+          flutter build linux --release --build-name "$VERSION" --build-number "$BUILD_NUMBER" \
+            --dart-define=API_URL="$SOLUMIA_URL" --dart-define=BUILD="$BUILD_NUMBER"
       - name: Package AppImage
         run: |
           appdir="$RUNNER_TEMP/Solumia.AppDir"

@@ -1,52 +1,52 @@
-# Conta de serviço Google
+# Google service account
 
-Pasta para a chave JSON da conta de serviço usada para acessar planilhas (Google Sheets) e documentos (Google Docs).
+Folder for the JSON key of the service account used to access spreadsheets (Google Sheets) and documents (Google Docs).
 
-> Nenhuma chave desta pasta vai para o Git (`google/*.json` está no `.gitignore`), nem com o repositório privado. Se precisar dela na VPS, copie direto (`scp`), com permissão 600.
+> No key in this folder goes to Git (`google/*.json` is in `.gitignore`), not even with the private repository. If you need it on the VPS, copy it directly (`scp`), with permission 600.
 
-## 1. Colocar a chave
+## 1. Place the key
 
-Salve o arquivo baixado do Google Cloud aqui com o nome:
+Save the file downloaded from Google Cloud here with the name:
 
 ```
-.credenciais/google/service-account.json
+google/service-account.json
 ```
 
-E restrinja a permissão de leitura:
+And restrict read permission:
 
 ```bash
-chmod 600 .credenciais/google/service-account.json
+chmod 600 google/service-account.json
 ```
 
-## 2. Pré-requisitos no Google Cloud
+## 2. Google Cloud prerequisites
 
-No projeto onde a conta de serviço foi criada, ative as APIs:
+In the project where the service account was created, enable the APIs:
 
 - Google Sheets API
 - Google Docs API
-- Google Drive API (para listar/encontrar arquivos)
+- Google Drive API (to list/find files)
 
-## 3. Dar acesso aos arquivos
+## 3. Grant access to the files
 
-A conta de serviço **não** enxerga seus arquivos automaticamente. Para cada planilha ou documento (ou pasta do Drive):
+The service account does **not** see your files automatically. For each spreadsheet or document (or Drive folder):
 
-1. Abra o JSON e copie o campo `client_email` (algo como `nome@projeto.iam.gserviceaccount.com`).
-2. No Google Drive, clique em **Compartilhar** no arquivo/pasta.
-3. Cole o e-mail da conta de serviço e dê permissão de **Leitor** (ou **Editor**, se precisar escrever).
+1. Open the JSON and copy the `client_email` field (something like `name@project.iam.gserviceaccount.com`).
+2. In Google Drive, click **Share** on the file/folder.
+3. Paste the service account e-mail and grant **Viewer** permission (or **Editor**, if it needs to write).
 
-Compartilhar uma **pasta** dá acesso a tudo que estiver dentro dela.
+Sharing a **folder** grants access to everything inside it.
 
-## 4. Testar a conexão
+## 4. Test the connection
 
 ```bash
-python3 -m venv .credenciais/google/.venv
-.credenciais/google/.venv/bin/pip install google-auth google-api-python-client
-.credenciais/google/.venv/bin/python .credenciais/google/testar_conexao.py
+python3 -m venv google/.venv
+google/.venv/bin/pip install google-auth google-api-python-client
+google/.venv/bin/python google/test_connection.py
 ```
 
-O script lista os arquivos que a conta de serviço consegue ver.
+The script lists the files the service account can see.
 
-## Se a chave vazar
+## If the key leaks
 
-1. Google Cloud Console > IAM > Contas de serviço > a conta > **Chaves** > excluir a chave.
-2. Gerar uma nova chave e substituir o arquivo aqui.
+1. Google Cloud Console > IAM > Service accounts > the account > **Keys** > delete the key.
+2. Generate a new key and replace the file here.

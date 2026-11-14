@@ -1,40 +1,40 @@
 #!/usr/bin/env bash
-# Compila o APK, o app Linux e o app do relógio com um build novo e publica na VPS: o botão "Atualizar app" (ícone no
-# topo do app) baixa e instala. Domínio e VPS vêm do .env.prd (DOMINIO, TUNEL_HOST).
+# Builds the APK, the Linux app and the watch app with a new build number and publishes them to the VPS: the
+# "Atualizar app" button (icon at the top of the app) downloads and installs. Domain and VPS come from .env.prd (DOMINIO, TUNEL_HOST).
 #
-#   infra/scripts/publicar_app [usuario@vps]
+#   infra/scripts/publicar_app [user@vps]
 set -euo pipefail
 
-raiz="$(cd "$(dirname "$0")/../.." && pwd)"
-app="$raiz/plataforma/app"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+app="$root/plataforma/app"
 flutter="$(command -v flutter || echo "$HOME/development/flutter/bin/flutter")"
-ler() { grep -E "^$1=" "$raiz/.env.prd" 2>/dev/null | tail -n1 | cut -d= -f2-; }
-dominio="$(ler DOMINIO)"; dominio="${dominio:-agent.thiagobenevide.com}"
-host="$(ler TUNEL_HOST)"; vps="${1:-root@${host:-$dominio}}"
-url="https://$dominio"
-# Minutos desde 1970: sempre cresce e cabe no versionCode do Android (< 2.1 bilhões).
+read_env() { grep -E "^$1=" "$root/.env.prd" 2>/dev/null | tail -n1 | cut -d= -f2-; }
+domain="$(read_env DOMINIO)"; domain="${domain:-agent.thiagobenevide.com}"
+host="$(read_env TUNEL_HOST)"; vps="${1:-root@${host:-$domain}}"
+url="https://$domain"
+# Minutes since 1970: always grows and fits Android's versionCode (< 2.1 billion).
 build=$(( $(date +%s) / 60 ))
-versao="$(sed -n 's/^version: *\([^+]*\).*/\1/p' "$app/pubspec.yaml")"
+version="$(sed -n 's/^version: *\([^+]*\).*/\1/p' "$app/pubspec.yaml")"
 
-echo "▶ Build $build ($versao) para $url"
-BUILD=$build "$raiz/infra/scripts/empacotar_linux" "$url"
+echo "▶ Build $build ($version) for $url"
+BUILD=$build "$root/infra/scripts/empacotar_linux" "$url"
 (cd "$app" && "$flutter" build apk --release --dart-define=API_URL="$url" \
     --dart-define=BUILD=$build --build-number=$build)
-# App do relógio com o mesmo build: o "Atualizar app" do relógio compara com o versionCode dele.
-wear="$raiz/modulos/saude/wear"
+# Watch app with the same build: the watch's "Atualizar app" compares against its versionCode.
+wear="$root/modulos/saude/wear"
 [[ -f "$wear/local.properties" ]] || echo "sdk.dir=${ANDROID_HOME:-$HOME/Android/Sdk}" > "$wear/local.properties"
 (cd "$wear" && ./gradlew -q assembleRelease -Pbuild=$build)
 
-echo "▶ Publicando em $vps"
+echo "▶ Publishing to $vps"
 volume="$(ssh "$vps" "docker volume inspect -f '{{.Mountpoint}}' \$(docker volume ls -q | grep agent-data)")"
-destino="$volume/atualizacoes"
-ssh "$vps" "mkdir -p '$destino'"
-scp -q "$app/build/app/outputs/flutter-apk/app-release.apk" "$vps:$destino/agent.apk.novo"
-scp -q "$app/build/agent-linux.tar.gz" "$vps:$destino/agent-linux.tar.gz.novo"
-scp -q "$wear/app/build/outputs/apk/release/app-release.apk" "$vps:$destino/relogio.apk.novo"
-# versao.json por último: o app só vê o build novo quando os dois pacotes já estão no lugar.
-ssh "$vps" "cd '$destino' && mv agent.apk.novo agent.apk && mv agent-linux.tar.gz.novo agent-linux.tar.gz \
-    && mv relogio.apk.novo relogio.apk \
-    && printf '{\"build\": %s, \"versao\": \"%s\", \"publicado\": \"%s\"}\n' $build '$versao' '$(date -Iseconds)' > versao.json \
-    && chown -R 1000:1000 '$destino'"
-echo "Publicado: build $build. No app, toque no ícone de atualização (topo) para instalar."
+target="$volume/atualizacoes"
+ssh "$vps" "mkdir -p '$target'"
+scp -q "$app/build/app/outputs/flutter-apk/app-release.apk" "$vps:$target/agent.apk.new"
+scp -q "$app/build/agent-linux.tar.gz" "$vps:$target/agent-linux.tar.gz.new"
+scp -q "$wear/app/build/outputs/apk/release/app-release.apk" "$vps:$target/relogio.apk.new"
+# versao.json last: the app only sees the new build once both packages are in place.
+ssh "$vps" "cd '$target' && mv agent.apk.new agent.apk && mv agent-linux.tar.gz.new agent-linux.tar.gz \
+    && mv relogio.apk.new relogio.apk \
+    && printf '{\"build\": %s, \"versao\": \"%s\", \"publicado\": \"%s\"}\n' $build '$version' '$(date -Iseconds)' > versao.json \
+    && chown -R 1000:1000 '$target'"
+echo "Published: build $build. In the app, tap the update icon (top) to install."

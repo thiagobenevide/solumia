@@ -1,77 +1,77 @@
 # LLM Gateway
 
-## Objetivo
+## Goal
 
-Muita gente tem uma máquina pessoal (desktop com GPU, notebook) rodando
-modelos de LLM localmente via **LM Studio**, **Ollama**, `vLLM` ou
-`llama.cpp`. O problema: essa máquina fica na sua rede doméstica, sem IP
-público fixo, atrás de NAT/firewall — então ferramentas que rodam fora dela
-(Claude Code, Cursor, Continue.dev, Open WebUI, um SDK OpenAI em outro
-computador) não conseguem falar com ela diretamente.
+Many people have a personal machine (desktop with a GPU, laptop) running
+LLMs locally through **LM Studio**, **Ollama**, `vLLM` or
+`llama.cpp`. The problem: that machine sits on your home network, with no fixed
+public IP, behind NAT/firewall — so tools running outside it
+(Claude Code, Cursor, Continue.dev, Open WebUI, an OpenAI SDK on another
+computer) cannot talk to it directly.
 
-O **LLM Gateway** resolve isso com uma VPS pública no meio do caminho:
+The **LLM Gateway** solves this with a public VPS in the middle:
 
-- A VPS expõe uma API **100% compatível com a API da OpenAI**
-  (`/v1/chat/completions`, `/v1/models`, etc.), então qualquer cliente que já
-  sabe falar com a OpenAI funciona aqui só trocando a URL base e a chave de
-  API — sem plugin nem SDK específico.
-- A máquina pessoal roda um **Worker** que se conecta *de dentro para fora*
-  na VPS (WebSocket), autentica, e fica esperando requisições chegarem por
-  essa conexão.
-- **A VPS nunca inicia conexão com a máquina pessoal.** Isso é o princípio
-  central do desenho: a máquina pessoal não precisa abrir nenhuma porta no
-  roteador nem ter IP público — ela só precisa conseguir *sair* para a
-  internet, o que qualquer rede doméstica já permite.
+- The VPS exposes an API **100% compatible with the OpenAI API**
+  (`/v1/chat/completions`, `/v1/models`, etc.), so any client that already
+  talks to OpenAI works here by just changing the base URL and the API
+  key — no plugin or specific SDK.
+- The personal machine runs a **Worker** that connects *inside-out*
+  to the VPS (WebSocket), authenticates, and waits for requests to arrive over
+  that connection.
+- **The VPS never starts a connection to the personal machine.** This is the central
+  principle of the design: the personal machine does not need to open any port on the
+  router or have a public IP — it only needs to be able to *reach out* to the
+  internet, which any home network already allows.
 
 ```
-Cliente OpenAI-compatible (Claude Code, Cursor, Continue.dev, ...)
+OpenAI-compatible client (Claude Code, Cursor, Continue.dev, ...)
         │  HTTPS
         ▼
-      Nginx (VPS)  ← certificado TLS (Let's Encrypt/certbot), opcionalmente atrás do Cloudflare
+      Nginx (VPS)  ← TLS certificate (Let's Encrypt/certbot), optionally behind Cloudflare
         │
         ▼
-  LLM Gateway (VPS)  ← este repositório
-        │  WebSocket (conexão iniciada pelo Worker, não pela VPS)
+  LLM Gateway (VPS)  ← this repository
+        │  WebSocket (connection opened by the Worker, not by the VPS)
         ▼
-   Worker (máquina pessoal)
+   Worker (personal machine)
         │
         ▼
      LM Studio / Ollama / vLLM / llama.cpp
 ```
 
-Veja [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para o detalhamento da
-arquitetura (Clean Architecture, Provider Pattern, protocolo Worker↔Gateway)
-e o roadmap completo de etapas.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the architecture details
+(Clean Architecture, Provider Pattern, Worker↔Gateway protocol)
+and the full stage roadmap.
 
-> **Status atual:** Etapa 3 (+ fatia de 4/5) — Worker real conectado via
-> WebSocket. O Gateway expõe `/health`, `GET /v1/models` (mock, substituído
-> pelos modelos reais assim que um Worker conecta) e `POST
-> /v1/chat/completions` roteado de ponta a ponta até o LM Studio da sua
-> máquina pessoal. Autenticação de worker usa a lista estática
-> `GATEWAY_WORKER_API_KEYS`; balanceamento entre múltiplos workers,
-> streaming incremental de verdade, persistência (Postgres/Redis) e
-> autenticação de cliente/JWT ainda não existem — ficam para as próximas
-> etapas do roadmap.
+> **Current status:** Stage 3 (+ a slice of 4/5) — real Worker connected over
+> WebSocket. The Gateway exposes `/health`, `GET /v1/models` (mock, replaced
+> by the real models as soon as a Worker connects) and `POST
+> /v1/chat/completions` routed end to end to the LM Studio on your
+> personal machine. Worker authentication uses the static list
+> `GATEWAY_WORKER_API_KEYS`; balancing across multiple workers,
+> real incremental streaming, persistence (Postgres/Redis) and
+> client/JWT authentication do not exist yet — they are left for the next
+> roadmap stages.
 
-## Onde cada peça roda
+## Where each piece runs
 
-| Peça | Máquina | O que é hoje |
+| Piece | Machine | What it is today |
 |------|---------|--------------|
-| `gateway/` (este código) | VPS | Funciona — API FastAPI com `/health`, `/v1/models` e `/v1/chat/completions` roteando para workers conectados |
-| Nginx + certbot | VPS | Config pronta neste repo — reverse proxy/TLS na frente do Gateway |
-| `worker/` (este código) | Máquina pessoal (onde roda o LM Studio/Ollama) | Funciona — conecta no Gateway via WebSocket, autentica, reconecta com backoff, e encaminha chat completions para o LM Studio local |
-| LM Studio / Ollama | Máquina pessoal | Você já roda por conta própria, hoje, independente deste projeto |
+| `gateway/` (this code) | VPS | Works — FastAPI API with `/health`, `/v1/models` and `/v1/chat/completions` routing to connected workers |
+| Nginx + certbot | VPS | Config ready in this repo — reverse proxy/TLS in front of the Gateway |
+| `worker/` (this code) | Personal machine (where LM Studio/Ollama runs) | Works — connects to the Gateway over WebSocket, authenticates, reconnects with backoff, and forwards chat completions to the local LM Studio |
+| LM Studio / Ollama | Personal machine | You already run it on your own, today, independently of this project |
 
-## Requisitos
+## Requirements
 
 - Python 3.12+
-- Docker + Docker Compose (opcional, para rodar via container ou fazer o
-  deploy na VPS)
+- Docker + Docker Compose (optional, to run in a container or to deploy
+  to the VPS)
 
-## Rodando localmente (sem Docker)
+## Running locally (without Docker)
 
-Para desenvolver o Gateway na sua própria máquina (não é o deploy de
-produção — é só subir o servidor localmente para testar/editar código):
+To develop the Gateway on your own machine (this is not the production
+deploy — it only starts the server locally to test/edit code):
 
 **Linux/macOS:**
 
@@ -85,142 +85,142 @@ produção — é só subir o servidor localmente para testar/editar código):
 .\scripts\run_gateway.ps1
 ```
 
-Os scripts criam um virtualenv em `.venv`, instalam os pacotes `shared` e
-`gateway` em modo editável, copiam `gateway/.env.example` para
-`gateway/.env` (se ainda não existir) e sobem o servidor em
+The scripts create a virtualenv in `.venv`, install the `shared` and
+`gateway` packages in editable mode, copy `gateway/.env.example` to
+`gateway/.env` (if it does not exist yet) and start the server at
 `http://localhost:48080`.
 
-Confira que está no ar:
+Check that it is up:
 
 ```bash
 curl http://localhost:48080/health
 curl http://localhost:48080/v1/models
 ```
 
-Resposta esperada do `/health`:
+Expected `/health` response:
 
 ```json
 {"status": "ok", "app_name": "LLM Gateway", "version": "0.1.0", "environment": "development"}
 ```
 
-A documentação interativa (Swagger) fica em `http://localhost:48080/docs`.
+The interactive documentation (Swagger) is at `http://localhost:48080/docs`.
 
-## Rodando via Docker (local)
+## Running with Docker (local)
 
 ```bash
 cp gateway/.env.example gateway/.env
 docker compose -f docker/docker-compose.yml up --build gateway
 ```
 
-Ou, usando o script de conveniência (faz a mesma coisa, em segundo plano):
+Or, with the convenience script (does the same thing, in the background):
 
 ```bash
-./scripts/llm_gateway.sh -home -up      # sobe
-./scripts/llm_gateway.sh -home -down    # derruba
+./scripts/llm_gateway.sh -home -up      # start
+./scripts/llm_gateway.sh -home -down    # stop
 ```
 
 ```powershell
-.\scripts\llm_gateway.ps1 -home -up     # sobe
-.\scripts\llm_gateway.ps1 -home -down   # derruba
+.\scripts\llm_gateway.ps1 -home -up     # start
+.\scripts\llm_gateway.ps1 -home -down   # stop
 ```
 
-O Gateway sobe em `http://localhost:48080`, com healthcheck automático
-configurado no container. Repare que aqui subimos só o serviço `gateway` —
-os serviços `nginx`/`certbot` do mesmo compose file são para o deploy em
-produção (próxima seção) e não fazem sentido rodando localmente.
+The Gateway comes up at `http://localhost:48080`, with an automatic healthcheck
+configured in the container. Note that only the `gateway` service starts here —
+the `nginx`/`certbot` services in the same compose file are for the production
+deploy (next section) and make no sense running locally.
 
-## Deploy em produção (VPS)
+## Production deploy (VPS)
 
-O `docker/docker-compose.yml` já traz três serviços:
+`docker/docker-compose.yml` already ships three services:
 
-- **`gateway`** — a API. Publica a porta 48080 só em `127.0.0.1` (não é
-  acessível direto da internet) — quem recebe tráfego externo é sempre o
-  nginx, nunca o gateway diretamente.
-- **`nginx`** — reverse proxy que termina TLS (HTTPS) e encaminha para o
+- **`gateway`** — the API. Publishes port 48080 only on `127.0.0.1` (it is not
+  reachable directly from the internet) — external traffic always goes to
+  nginx, never to the gateway directly.
+- **`nginx`** — reverse proxy that terminates TLS (HTTPS) and forwards to the
   gateway.
-- **`certbot`** — emite e renova automaticamente o certificado Let's
-  Encrypt usado pelo nginx.
+- **`certbot`** — issues and automatically renews the Let's Encrypt
+  certificate used by nginx.
 
-Existem **dois cenários** de VPS, dependendo se ela é dedicada a este
-projeto ou já hospeda outras coisas. Escolha o seu.
+There are **two VPS scenarios**, depending on whether it is dedicated to this
+project or already hosts other things. Pick yours.
 
-### Cenário A — VPS dedicada só a este projeto
+### Scenario A — VPS dedicated to this project
 
-Ninguém mais está usando as portas 80/443 dessa VPS. Nesse caso, o nginx
-deste repo pode assumir as duas portas.
+Nobody else uses ports 80/443 on this VPS. In this case, this repo's nginx
+can take both ports.
 
-**1. Copie o gateway e o exemplo de config do nginx para a VPS**, e gere o
-`nginx.conf` real a partir do exemplo (mesma lógica do `.env`/`.env.example`
-— o exemplo é genérico e vai para o git, o real tem seu domínio e fica só na
+**1. Copy the gateway and the nginx config example to the VPS**, and generate the
+real `nginx.conf` from the example (same logic as `.env`/`.env.example`
+— the example is generic and goes to git, the real one has your domain and stays only on the
 VPS):
 
 ```bash
 cp docker/nginx/nginx.conf.example docker/nginx/nginx.conf
-# edite docker/nginx/nginx.conf e troque "seu-dominio.exemplo.com" pelo
-# domínio real da sua VPS
+# edit docker/nginx/nginx.conf and replace "seu-dominio.exemplo.com" with
+# your VPS's real domain
 ```
 
-**2. Configure o DNS** do domínio apontando o registro A para o IP da VPS.
-Se for usar Cloudflare, veja a seção **Cloudflare** logo abaixo antes de
-continuar — a ordem dos passos importa para a primeira emissão do
-certificado.
+**2. Configure DNS** for the domain, pointing the A record to the VPS IP.
+If you use Cloudflare, read the **Cloudflare** section below before
+going on — the order of the steps matters for the first certificate
+issuance.
 
-**3. Suba o gateway e o nginx (o bloco HTTPS do nginx começa comentado,
-porque o certificado ainda não existe — só o bloco HTTP/80 sobe agora):**
+**3. Start the gateway and nginx (the nginx HTTPS block starts commented out,
+because the certificate does not exist yet — only the HTTP/80 block comes up now):**
 
 ```bash
 docker compose -f docker/docker-compose.yml up -d gateway nginx
 ```
 
-**4. Emita o certificado** (o nginx já está de pé na porta 80 respondendo
-o desafio HTTP-01 do Let's Encrypt via webroot):
+**4. Issue the certificate** (nginx is already up on port 80 answering
+the Let's Encrypt HTTP-01 challenge through webroot):
 
 ```bash
 docker compose -f docker/docker-compose.yml run --rm certbot \
   certonly --webroot -w /var/www/certbot \
-  -d seu-dominio.exemplo.com --email SEU_EMAIL --agree-tos
+  -d seu-dominio.exemplo.com --email YOUR_EMAIL --agree-tos
 ```
 
-**5. Descomente o server block HTTPS (443)** em `docker/nginx/nginx.conf` e
-reinicie o nginx para ele passar a servir HTTPS:
+**5. Uncomment the HTTPS (443) server block** in `docker/nginx/nginx.conf` and
+restart nginx so it serves HTTPS:
 
 ```bash
 docker compose -f docker/docker-compose.yml restart nginx
 ```
 
-**6. Deixe a renovação automática rodando** (loop que roda `certbot renew`
-a cada 12h — os certificados do Let's Encrypt expiram em 90 dias):
+**6. Leave automatic renewal running** (a loop that runs `certbot renew`
+every 12h — Let's Encrypt certificates expire in 90 days):
 
 ```bash
 docker compose -f docker/docker-compose.yml up -d certbot
 ```
 
-Pronto: `https://seu-dominio.exemplo.com/health` deve responder.
+Done: `https://seu-dominio.exemplo.com/health` should respond.
 
-A partir daqui, o dia a dia (reiniciar a VPS, subir depois de um `git pull`,
-etc.) pode usar o script de conveniência em vez de repetir os comandos acima
-— veja [Scripts de conveniência](#scripts-de-conveniência) mais abaixo.
+From here on, day-to-day work (restarting the VPS, starting after a `git pull`,
+etc.) can use the convenience script instead of repeating the commands above
+— see [Convenience scripts](#convenience-scripts) below.
 
-### Cenário B — VPS compartilhada (já tem outros domínios/serviços)
+### Scenario B — shared VPS (already has other domains/services)
 
-Se a VPS já roda outro nginx (instalado direto no host, fora de Docker) —
-ou outro reverse proxy — nas portas 80/443, **não suba o serviço `nginx`
-deste repo**: ele tentaria ocupar as mesmas portas e não subiria (`bind:
-address already in use`). Em vez disso, você adiciona `seu-dominio.exemplo.com`
-como mais um site no nginx que já existe.
+If the VPS already runs another nginx (installed directly on the host, outside Docker) —
+or another reverse proxy — on ports 80/443, **do not start this repo's `nginx`
+service**: it would try to take the same ports and would not start (`bind:
+address already in use`). Instead, you add `seu-dominio.exemplo.com`
+as one more site in the existing nginx.
 
-**1. Suba só o gateway** (continua publicando `127.0.0.1:48080`, é só isso
-que o nginx do host vai precisar enxergar):
+**1. Start only the gateway** (it keeps publishing `127.0.0.1:48080`, which is all
+the host nginx needs to see):
 
 ```bash
 docker compose -f docker/docker-compose.yml up -d gateway
 ```
 
-**2. Adicione um novo site no nginx do host**, usando
+**2. Add a new site to the host nginx**, using
 [docker/nginx/host-nginx-site.conf.example](docker/nginx/host-nginx-site.conf.example)
-como modelo (a diferença para o `nginx.conf.example` padrão é só o
-`proxy_pass`, que aponta para `127.0.0.1:48080` em vez do hostname interno
-`gateway` da rede Docker deste projeto):
+as a template (the only difference from the default `nginx.conf.example` is the
+`proxy_pass`, which points to `127.0.0.1:48080` instead of the internal
+`gateway` hostname of this project's Docker network):
 
 ```bash
 sudo cp docker/nginx/host-nginx-site.conf.example \
@@ -230,129 +230,128 @@ sudo ln -s /etc/nginx/sites-available/seu-dominio.exemplo.com.conf \
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-**3. Emita o certificado com o certbot já instalado nessa VPS** (a mesma
-instalação que já cuida dos outros domínios — não precisa do serviço
-`certbot` deste repo nesse cenário):
+**3. Issue the certificate with the certbot already installed on this VPS** (the same
+installation that already handles the other domains — this repo's `certbot`
+service is not needed in this scenario):
 
 ```bash
 sudo certbot --nginx -d seu-dominio.exemplo.com
 ```
 
-O plugin `--nginx` do certbot edita o arquivo de site sozinho, adicionando
-os caminhos do certificado e o redirect HTTP→HTTPS. Ele também já cuida da
-renovação automática via um timer/cron que o pacote `certbot` instala no
-sistema — não precisa criar outro loop de renovação.
+certbot's `--nginx` plugin edits the site file on its own, adding
+the certificate paths and the HTTP→HTTPS redirect. It also handles
+automatic renewal through a timer/cron that the `certbot` package installs on the
+system — no need to create another renewal loop.
 
 ### Cloudflare (proxy + HTTPS)
 
-Se o domínio estiver no Cloudflare, ele fica entre o cliente e a sua VPS
-como um proxy reverso adicional: `Cliente → Cloudflare → nginx (VPS) →
-Gateway`. Isso muda duas coisas:
+If the domain is on Cloudflare, it sits between the client and your VPS
+as an extra reverse proxy: `Client → Cloudflare → nginx (VPS) →
+Gateway`. This changes two things:
 
-**1. Modo de SSL/TLS do Cloudflare — use "Full (strict)".**
-No painel Cloudflare, em *SSL/TLS → Overview*, tem 4 modos:
+**1. Cloudflare SSL/TLS mode — use "Full (strict)".**
+In the Cloudflare dashboard, under *SSL/TLS → Overview*, there are 4 modes:
 
-- ❌ **Flexible** — Cloudflare fala HTTPS com o visitante, mas HTTP puro com
-  a sua VPS. Evite: além de deixar o tráfego Cloudflare→VPS sem
-  criptografia, costuma causar **loop de redirecionamento infinito**, porque
-  o nginx deste repo redireciona toda requisição HTTP (80) para HTTPS (443)
-  — e o Cloudflare, em modo Flexible, insiste em falar HTTP com a origem.
-- ⚠️ **Full** — criptografa Cloudflare→VPS, mas aceita certificado
-  autoassinado na origem (não valida). Funciona, mas não valida se é
-  realmente a sua VPS do outro lado.
-- ✅ **Full (strict)** — criptografa Cloudflare→VPS **e** valida o
-  certificado da origem contra uma CA pública. **Recomendado**, e já
-  funciona com o certificado Let's Encrypt que o certbot emite nos dois
-  cenários acima — não precisa gerar um "Origin Certificate" especial do
-  Cloudflare.
-- **Strict (SSL-Only Origin Pull)** — variante ainda mais restrita; não é
-  necessária aqui.
+- ❌ **Flexible** — Cloudflare speaks HTTPS with the visitor, but plain HTTP with
+  your VPS. Avoid it: besides leaving the Cloudflare→VPS traffic
+  unencrypted, it usually causes an **infinite redirect loop**, because
+  this repo's nginx redirects every HTTP (80) request to HTTPS (443)
+  — and Cloudflare, in Flexible mode, keeps speaking HTTP to the origin.
+- ⚠️ **Full** — encrypts Cloudflare→VPS, but accepts a self-signed
+  certificate at the origin (does not validate it). It works, but does not check that it
+  really is your VPS on the other side.
+- ✅ **Full (strict)** — encrypts Cloudflare→VPS **and** validates the
+  origin certificate against a public CA. **Recommended**, and it already
+  works with the Let's Encrypt certificate that certbot issues in both
+  scenarios above — no need to generate a special Cloudflare "Origin Certificate".
+- **Strict (SSL-Only Origin Pull)** — an even stricter variant; not
+  needed here.
 
-**2. Emissão do primeiro certificado: deixe o DNS em "DNS only" antes.**
-O desafio HTTP-01 do Let's Encrypt (`/.well-known/acme-challenge/...`)
-precisa alcançar a sua VPS diretamente na primeira vez. Se o registro DNS já
-estiver "Proxied" (nuvem laranja) com "Always Use HTTPS" ligado, a
-validação pode ser redirecionada e falhar. Passo seguro:
+**2. First certificate issuance: set DNS to "DNS only" first.**
+The Let's Encrypt HTTP-01 challenge (`/.well-known/acme-challenge/...`)
+has to reach your VPS directly the first time. If the DNS record is already
+"Proxied" (orange cloud) with "Always Use HTTPS" on, the
+validation can be redirected and fail. Safe steps:
 
-1. Crie o registro A do domínio no Cloudflare como **"DNS only"** (nuvem
-   cinza).
-2. Rode a emissão do certificado (passo 4 do Cenário A, ou o `certbot
-   --nginx` do Cenário B).
-3. Depois do certificado emitido com sucesso, mude o registro para
-   **"Proxied"** (nuvem laranja) e o modo SSL/TLS para **Full (strict)**.
+1. Create the domain's A record on Cloudflare as **"DNS only"** (grey
+   cloud).
+2. Run the certificate issuance (step 4 of Scenario A, or the `certbot
+   --nginx` of Scenario B).
+3. Once the certificate is issued, switch the record to
+   **"Proxied"** (orange cloud) and the SSL/TLS mode to **Full (strict)**.
 
-Renovações automáticas seguintes funcionam normalmente com o domínio já
-proxied, porque só a rota `/.well-known/acme-challenge/` fica fora do
-redirect para HTTPS na config deste repo.
+Later automatic renewals work normally with the domain already
+proxied, because only the `/.well-known/acme-challenge/` route stays outside the
+HTTPS redirect in this repo's config.
 
-**3. (Opcional/avançado) IP real do visitante.** Com o Cloudflare como
-proxy, o nginx enxerga o IP do Cloudflare como se fosse o do cliente, não o
-IP real de quem fez a requisição — relevante quando o Gateway tiver rate
-limit por IP (roadmap). Para recuperar o IP real, o nginx precisa confiar
-nos ranges de IP do Cloudflare (lista oficial e estável em
-https://www.cloudflare.com/ips/) e ler o header `CF-Connecting-IP` via as
-diretivas `set_real_ip_from` / `real_ip_header` — isso ainda não está no
-`nginx.conf.example` deste repo porque a lista de IPs muda com o tempo;
-adicione quando a Etapa de rate limit chegar.
+**3. (Optional/advanced) Visitor's real IP.** With Cloudflare as a
+proxy, nginx sees Cloudflare's IP as if it were the client's, not the
+real IP of whoever made the request — relevant once the Gateway has per-IP rate
+limiting (roadmap). To recover the real IP, nginx has to trust
+Cloudflare's IP ranges (official, stable list at
+https://www.cloudflare.com/ips/) and read the `CF-Connecting-IP` header through the
+`set_real_ip_from` / `real_ip_header` directives — this is not yet in this repo's
+`nginx.conf.example` because the IP list changes over time;
+add it when the rate-limit stage arrives.
 
-## Scripts de conveniência
+## Convenience scripts
 
-Os scripts `scripts/llm_gateway.sh` (Linux/macOS/VPS) e
-`scripts/llm_gateway.ps1` (Windows) encapsulam os comandos `docker compose`
-usados acima, para não precisar decorá-los:
+The `scripts/llm_gateway.sh` (Linux/macOS/VPS) and
+`scripts/llm_gateway.ps1` (Windows) scripts wrap the `docker compose` commands
+used above, so you do not have to memorize them:
 
 ```bash
-./scripts/llm_gateway.sh -vps -up        # VPS: sobe gateway + nginx + certbot
-./scripts/llm_gateway.sh -vps -down      # VPS: derruba os três serviços
-./scripts/llm_gateway.sh -home -up       # máquina local: sobe só o gateway
-./scripts/llm_gateway.sh -home -down     # máquina local: derruba o gateway
+./scripts/llm_gateway.sh -vps -up        # VPS: starts gateway + nginx + certbot
+./scripts/llm_gateway.sh -vps -down      # VPS: stops the three services
+./scripts/llm_gateway.sh -home -up       # local machine: starts only the gateway
+./scripts/llm_gateway.sh -home -down     # local machine: stops the gateway
 ```
 
 ```powershell
-.\scripts\llm_gateway.ps1 -vps -up       # VPS: sobe gateway + nginx + certbot
-.\scripts\llm_gateway.ps1 -vps -down     # VPS: derruba os três serviços
-.\scripts\llm_gateway.ps1 -home -up      # máquina local: sobe só o gateway
-.\scripts\llm_gateway.ps1 -home -down    # máquina local: derruba o gateway
+.\scripts\llm_gateway.ps1 -vps -up       # VPS: starts gateway + nginx + certbot
+.\scripts\llm_gateway.ps1 -vps -down     # VPS: stops the three services
+.\scripts\llm_gateway.ps1 -home -up      # local machine: starts only the gateway
+.\scripts\llm_gateway.ps1 -home -down    # local machine: stops the gateway
 ```
 
-Os dois copiam `gateway/.env.example` para `gateway/.env` automaticamente se
-ainda não existir. O modo `-vps` também exige que `docker/nginx/nginx.conf`
-já exista (gerado a partir do `.example` — veja **Deploy em produção**
-acima); sem ele, o script para com um aviso em vez de subir o nginx
-quebrado. Esses scripts assumem que o bootstrap inicial do certificado
-(passos 1–4 do Cenário A, ou o `certbot --nginx` do Cenário B) já foi feito
-— eles só automatizam o subir/derrubar do dia a dia.
+Both copy `gateway/.env.example` to `gateway/.env` automatically if it
+does not exist yet. The `-vps` mode also requires `docker/nginx/nginx.conf`
+to exist already (generated from the `.example` — see **Production deploy**
+above); without it, the script stops with a warning instead of starting a broken
+nginx. These scripts assume the initial certificate bootstrap
+(steps 1–4 of Scenario A, or the `certbot --nginx` of Scenario B) is already done
+— they only automate the day-to-day start/stop.
 
-## Máquina pessoal (Worker + LM Studio / Ollama)
+## Personal machine (Worker + LM Studio / Ollama)
 
-Essa é a máquina onde os modelos realmente rodam. O Worker conecta *para
-fora* na VPS via WebSocket, autentica com uma `WORKER_API_KEY`, e fica
-encaminhando chat completions para o servidor OpenAI-compatible local
-(LM Studio por padrão). Nenhuma porta precisa ser aberta no roteador nem
-exposta à internet — a VPS nunca inicia conexão com essa máquina.
+This is the machine where the models actually run. The Worker connects *outward*
+to the VPS over WebSocket, authenticates with a `WORKER_API_KEY`, and keeps
+forwarding chat completions to the local OpenAI-compatible server
+(LM Studio by default). No port has to be opened on the router or
+exposed to the internet — the VPS never starts a connection to this machine.
 
-**1. Suba o servidor local do provider:**
+**1. Start the provider's local server:**
 
-- **LM Studio**: aba *Developer* → *Start Server*, normalmente em
+- **LM Studio**: *Developer* tab → *Start Server*, usually at
   `http://localhost:1234`.
-- **Ollama**: `ollama serve` (ou já roda como serviço), normalmente em
-  `http://localhost:11434/v1` no modo de compatibilidade OpenAI.
+- **Ollama**: `ollama serve` (or it already runs as a service), usually at
+  `http://localhost:11434/v1` in OpenAI compatibility mode.
 
-**2. Configure o Worker:**
+**2. Configure the Worker:**
 
 ```bash
 cp worker/.env.example worker/.env
 ```
 
-Edite `worker/.env`:
-- `WORKER_GATEWAY_URL` — endereço WebSocket do seu Gateway (ex.:
+Edit `worker/.env`:
+- `WORKER_GATEWAY_URL` — WebSocket address of your Gateway (e.g.
   `wss://llm.seu-dominio.com/ws/worker`).
-- `WORKER_API_KEY` — precisa ser um dos valores em `GATEWAY_WORKER_API_KEYS`
-  no `.env` do Gateway (na VPS).
-- `WORKER_PROVIDER_BASE_URL` — `http://localhost:1234/v1` (LM Studio) por
-  padrão; troque se estiver usando Ollama ou outra porta.
+- `WORKER_API_KEY` — must be one of the values in `GATEWAY_WORKER_API_KEYS`
+  in the Gateway `.env` (on the VPS).
+- `WORKER_PROVIDER_BASE_URL` — `http://localhost:1234/v1` (LM Studio) by
+  default; change it if you use Ollama or another port.
 
-**3. Suba o Worker:**
+**3. Start the Worker:**
 
 ```bash
 ./scripts/run_worker.sh
@@ -362,13 +361,13 @@ Edite `worker/.env`:
 .\scripts\run_worker.ps1
 ```
 
-O script cria o virtualenv, instala `shared` e `worker` em modo editável, e
-conecta ao Gateway — reconectando automaticamente (com backoff exponencial)
-se a conexão cair. Com o Worker conectado, `GET /v1/models` no Gateway passa
-a listar os modelos reais do LM Studio, e `POST /v1/chat/completions` já
-roteia de ponta a ponta.
+The script creates the virtualenv, installs `shared` and `worker` in editable mode, and
+connects to the Gateway — reconnecting automatically (with exponential backoff)
+if the connection drops. With the Worker connected, `GET /v1/models` on the Gateway
+lists the real LM Studio models, and `POST /v1/chat/completions` already
+routes end to end.
 
-## Rodando os testes
+## Running the tests
 
 ```bash
 python -m venv .venv
@@ -378,49 +377,49 @@ pip install -e "./shared" -e "./gateway[dev]" -e "./worker[dev]"
 pytest
 ```
 
-Lint e type-check:
+Lint and type-check:
 
 ```bash
 ruff check .
 mypy gateway/src worker/src shared/src
 ```
 
-## Configuração
+## Configuration
 
-Todas as variáveis de ambiente do Gateway usam o prefixo `GATEWAY_` e estão
-documentadas em [gateway/.env.example](gateway/.env.example). Esse arquivo é
-genérico de propósito — sem domínio ou chaves de nenhuma instalação
-específica — para que qualquer pessoa possa usar este Gateway em seu próprio
-projeto. O arquivo real `gateway/.env` (com seus segredos) nunca é
-commitado. Veja [SECURITY.md](SECURITY.md) para como gerar suas próprias
-chaves com segurança.
+Every Gateway environment variable uses the `GATEWAY_` prefix and is
+documented in [gateway/.env.example](gateway/.env.example). That file is
+generic on purpose — no domain or keys from any specific
+install — so anyone can use this Gateway in their own
+project. The real `gateway/.env` file (with your secrets) is never
+committed. See [SECURITY.md](SECURITY.md) for how to generate your own
+keys safely.
 
-A mesma convenção vale para o nginx: `docker/nginx/nginx.conf.example` e
-`docker/nginx/host-nginx-site.conf.example` são genéricos e vão para o git;
-os arquivos reais (`docker/nginx/nginx.conf`, os sites em
-`/etc/nginx/sites-available` da VPS) têm o domínio de verdade e nunca são
-commitados.
+The same convention applies to nginx: `docker/nginx/nginx.conf.example` and
+`docker/nginx/host-nginx-site.conf.example` are generic and go to git;
+the real files (`docker/nginx/nginx.conf`, the sites in the VPS's
+`/etc/nginx/sites-available`) have the real domain and are never
+committed.
 
-> Os campos de segredo (`GATEWAY_CLIENT_API_KEYS`, `GATEWAY_WORKER_API_KEYS`,
-> `GATEWAY_JWT_SECRET_KEY`) já existem na configuração, mas ainda não são
-> validados por nenhum endpoint — a lógica de autenticação chega na Etapa 3
-> do roadmap.
+> The secret fields (`GATEWAY_CLIENT_API_KEYS`, `GATEWAY_WORKER_API_KEYS`,
+> `GATEWAY_JWT_SECRET_KEY`) already exist in the configuration, but are not
+> validated by any endpoint yet — the authentication logic arrives in roadmap
+> Stage 3.
 
-## Estrutura do monorepo
+## Monorepo layout
 
 ```
 llm-gateway/
-├── gateway/     # API OpenAI-compatible (roda na VPS)
-├── docker/      # Dockerfiles, docker-compose e configs de nginx
-├── tests/       # Testes automatizados
-├── scripts/     # Scripts de desenvolvimento e operação
-└── docs/        # Documentação de arquitetura
+├── gateway/     # OpenAI-compatible API (runs on the VPS)
+├── docker/      # Dockerfiles, docker-compose and nginx configs
+├── tests/       # Automated tests
+├── scripts/     # Development and operations scripts
+└── docs/        # Architecture documentation
 ```
 
-Os diretórios `worker/`, `providers/`, `shared/`, `dashboard/`,
-`sdk-python/` e `sdk-js/` serão adicionados nas próximas etapas, conforme o
-roadmap em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The `worker/`, `providers/`, `shared/`, `dashboard/`,
+`sdk-python/` and `sdk-js/` directories will be added in the next stages, following the
+roadmap in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Licença
+## License
 
 [MIT](LICENSE)

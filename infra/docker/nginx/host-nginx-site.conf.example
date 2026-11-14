@@ -1,30 +1,30 @@
-# Variante para VPS COMPARTILHADA — quando a VPS já roda outros
-# sites/serviços num nginx instalado direto no host (fora de Docker), em vez
-# do nginx dockerizado deste repo (infra/docker/nginx/nginx.conf).
+# Variant for a SHARED VPS — when the VPS already runs other
+# sites/services on an nginx installed directly on the host (outside Docker), instead
+# of this repo's dockerized nginx (infra/docker/nginx/nginx.conf).
 #
-# Diferença principal para o nginx.conf.example "padrão": aqui o proxy_pass
-# aponta para 127.0.0.1:48080 (a porta que o container `gateway` já publica
-# só em localhost), e não para o hostname interno `gateway` da rede Docker
-# deste projeto — porque este arquivo roda fora do docker-compose.
+# Main difference from the "default" nginx.conf.example: here proxy_pass
+# points to 127.0.0.1:48080 (the port the `gateway` container already publishes
+# on localhost only), not to the internal `gateway` hostname of this project's
+# Docker network — because this file runs outside docker-compose.
 #
-# Uso:
-#   1. NÃO suba o serviço `nginx`/`certbot` deste repo — só o gateway:
+# Usage:
+#   1. Do NOT start this repo's `nginx`/`certbot` service — only the gateway:
 #        docker compose -f infra/docker/docker-compose.yml up -d gateway
-#   2. Copie este arquivo (com o domínio já trocado) para o nginx do host:
+#   2. Copy this file (with the domain already replaced) to the host nginx:
 #        sudo cp infra/docker/nginx/host-nginx-site.conf.example \
 #          /etc/nginx/sites-available/seu-dominio.exemplo.com.conf
 #        sudo ln -s /etc/nginx/sites-available/seu-dominio.exemplo.com.conf \
 #          /etc/nginx/sites-enabled/
 #        sudo nginx -t && sudo systemctl reload nginx
-#   3. Emita o certificado com o certbot já instalado no host (reaproveita o
-#      que já emite certificado para os outros domínios da VPS):
+#   3. Issue the certificate with the certbot already installed on the host (reuses the
+#      one that already issues certificates for the VPS's other domains):
 #        sudo certbot --nginx -d seu-dominio.exemplo.com
-#      (o plugin --nginx edita este arquivo sozinho, adicionando os
-#      caminhos de ssl_certificate/ssl_certificate_key e o redirect 80→443)
+#      (the --nginx plugin edits this file on its own, adding the
+#      ssl_certificate/ssl_certificate_key paths and the 80→443 redirect)
 #
-# Veja o README ("Deploy em produção — Cenário B") para o passo a passo
-# completo, incluindo a ressalva sobre Cloudflare (DNS-only durante a
-# primeira emissão do certificado).
+# See the README ("Deploy em produção — Cenário B") for the full
+# steps, including the Cloudflare caveat (DNS-only during the
+# first certificate issuance).
 
 map $http_upgrade $connection_upgrade {
     default upgrade;
@@ -37,10 +37,10 @@ server {
     listen 80;
     server_name seu-dominio.exemplo.com;
 
-    # Uploads da biblioteca (/api/arquivos).
+    # Library uploads (/api/arquivos).
     client_max_body_size 200m;
 
-    # Login com limite por IP real (zona agent_login em seguranca-http.conf).
+    # Login rate-limited by real IP (agent_login zone in seguranca-http.conf).
     location = /api/auth/login {
         limit_req zone=agent_login burst=5 nodelay;
         proxy_pass http://127.0.0.1:48080;
@@ -50,7 +50,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Console de administração do Collabora: não é usado e não fica na internet.
+    # Collabora admin console: not used and kept off the internet.
     location ^~ /browser/dist/admin { return 404; }
     location ^~ /cool/adminws { return 404; }
 
@@ -68,8 +68,8 @@ server {
         proxy_read_timeout 300s;
     }
 
-    # Esteira do PC pelo túnel (serviço `tunel`): só com o token de sessão do app, no cabeçalho ou
-    # em ?token= (imagem e vídeo). O log sai sem a query para o token não ficar gravado.
+    # The PC's esteira through the tunnel (`tunel` service): only with the app session token, in the header or
+    # in ?token= (image and video). The log omits the query so the token is not recorded.
     location /esteira/ {
         auth_request /_auth_esteira;
         access_log /var/log/nginx/access.log agent_sem_token;
@@ -83,8 +83,8 @@ server {
         proxy_read_timeout 300s;
     }
 
-    # Collabora Online (serviço `collabora`, publicado em 127.0.0.1:9980). Token na URL (WOPI):
-    # log sem a query.
+    # Collabora Online (`collabora` service, published on 127.0.0.1:9980). Token in the URL (WOPI):
+    # log without the query.
     location ^~ /browser {
         access_log /var/log/nginx/access.log agent_sem_token;
         proxy_pass http://127.0.0.1:9980;
@@ -120,6 +120,6 @@ server {
     }
 }
 
-# Depois do "certbot --nginx", um server block "listen 443 ssl" equivalente
-# a este é adicionado automaticamente aqui embaixo pelo certbot — não
-# precisa escrever à mão.
+# After "certbot --nginx", a "listen 443 ssl" server block equivalent
+# to this one is added automatically below by certbot — no need
+# to write it by hand.

@@ -608,7 +608,7 @@ Checklist before the first public commit:
 
 - [ ] Remove `docs/wireframes-nd/` (describes a third party's systems).
 - [ ] Do not copy untracked work files (`modulo-verbas-atual.drawio (2)`, `docs/Mapeamento de Conteúdo.xlsx`).
-- [ ] Remove `modulos/concursos/backend/src/concursos/curriculo_modelo.md` (personal e-mail and city) or replace
+- [ ] Remove `modulos/concursos/backend/src/exams/curriculo_modelo.md` (personal e-mail and city) or replace
       it with a neutral template.
 - [ ] Remove the MAC address default and the owner's domain defaults (section 17.7).
 - [ ] Review `google/` (README and test script only; no credentials).
