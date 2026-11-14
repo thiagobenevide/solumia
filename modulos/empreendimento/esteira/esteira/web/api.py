@@ -25,9 +25,9 @@ router = APIRouter(prefix="/api/v1", tags=["app"])
 ACTIONS = painel.PIPELINE + ["all", "frames", "transcribe", "export"]
 
 
-def _episodes(canal=""):
+def _episodes(channel=""):
     """Episódios de verdade (com roteiro.json), do canal pedido ou de todos."""
-    return [p for p in episodes() if (p / "roteiro.json").exists() and (not canal or p.parent.name == canal)]
+    return [p for p in episodes() if (p / "roteiro.json").exists() and (not channel or p.parent.name == channel)]
 
 
 def _json(file, default=None):
@@ -56,16 +56,16 @@ def _v(file):
     return int(file.stat().st_mtime)
 
 
-def _thumbs(pasta, ep):
+def _thumbs(folder, ep):
     return [{"vaga": k, "url": f"/arq/{ep}/thumb_{k}.png?v={_v(a)}"}
-            for k in (1, 2, 3) if (a := pasta / f"thumb_{k}.png").exists()]
+            for k in (1, 2, 3) if (a := folder / f"thumb_{k}.png").exists()]
 
 
-def _summary(pasta):
-    ep = ep_id(pasta)
-    return {"id": ep, "canal": pasta.parent.name, "numero": pasta.name,
-            "titulo": (_json(pasta / "roteiro.json", {}) or {}).get("titulo", ""),
-            "prog": painel._summary_ep(ep), "thumbs": _thumbs(pasta, ep)}
+def _summary(folder):
+    ep = ep_id(folder)
+    return {"id": ep, "canal": folder.parent.name, "numero": folder.name,
+            "titulo": (_json(folder / "roteiro.json", {}) or {}).get("titulo", ""),
+            "prog": painel._summary_ep(ep), "thumbs": _thumbs(folder, ep)}
 
 
 def _project(ep):
@@ -383,11 +383,11 @@ def open_effectcraft(ep: str, i: int):
 def _list_thumbs(p):
     """Thumbs editáveis; .pcraft salvo à mão no PhotoCraft refaz o PNG antes (como a aba Thumbs do painel)."""
     from esteira import editor, photocraft
-    marks = p.caminho("thumbs/editadas_photocraft.json")
+    marks = p.path_of("thumbs/editadas_photocraft.json")
     done = set(_json(marks, []) or [])
     items = editor.thumbs(p)
     for t in items:
-        pc = p.caminho(f"thumbs/{t['arquivo']}").with_suffix(".pcraft")
+        pc = p.path_of(f"thumbs/{t['arquivo']}").with_suffix(".pcraft")
         if photocraft.edited(pc):
             photocraft.export(pc)
             done.add(t["arquivo"])
@@ -403,9 +403,9 @@ def thumbs(ep: str):
     p = _project(ep)
     items = _list_thumbs(p)
     for t in items:
-        file = p.caminho("thumbs") / t["arquivo"]
+        file = p.path_of("thumbs") / t["arquivo"]
         t["url"] = f"/arq/{ep}/thumbs/{t['arquivo']}?v={_v(file)}"
-    return {"thumbs": items, "vagas": _thumbs(p.pasta, ep),
+    return {"thumbs": items, "vagas": _thumbs(p.folder_path, ep),
             "fundos": [{"nome": f, "url": f"/arq/{ep}/thumbs/{f}"} for f in editor.backgrounds(p)]}
 
 
@@ -445,10 +445,10 @@ def open_photocraft(ep: str, corpo: FileThumb):
 
 # ---------- Pacotes de edição (baixar para editar em outra máquina e enviar de volta) ----------
 
-def _target_edit(ep, editor, i=None, arquivo=""):
+def _target_edit(ep, editor, i=None, file=""):
     p = _project(ep)
     if editor == "filmcraft":
-        target = p.caminho("projeto.fcproj")
+        target = p.path_of("projeto.fcproj")
         if not target.exists():
             raise HTTPException(400, "sem projeto.fcproj: rode o montar antes")
     elif editor == "effectcraft":
@@ -456,26 +456,26 @@ def _target_edit(ep, editor, i=None, arquivo=""):
         if not target:
             raise HTTPException(400, "a citação não achou o trecho no PDF")
     else:
-        target = painel.ensure_pcraft(ep, arquivo)
+        target = painel.ensure_pcraft(ep, file)
     return p, Path(target)
 
 
-def _download(ep, editor, i=None, arquivo=""):
+def _download(ep, editor, i=None, file=""):
     from esteira import package
     from fastapi.responses import FileResponse, StreamingResponse
-    p, target = _target_edit(ep, editor, i, arquivo)
+    p, target = _target_edit(ep, editor, i, file)
     if target.suffix == ".pcraft":
         return FileResponse(target, filename=f"{ep}-{target.name}", media_type="application/octet-stream")
     name = f"{ep}-{target.stem}"
-    return StreamingResponse(package.pack(target, p.pasta, name), media_type="application/zip",
+    return StreamingResponse(package.pack(target, p.folder_path, name), media_type="application/zip",
                              headers={"Content-Disposition": f'attachment; filename="{name}.zip"'})
 
 
-async def _send(ep, editor, envio, i=None, arquivo=""):
+async def _send(ep, editor, envio, i=None, file=""):
     from esteira import package
-    p, target = _target_edit(ep, editor, i, arquivo)
+    p, target = _target_edit(ep, editor, i, file)
     try:
-        return package.receive(await envio.read(), target, p.pasta)
+        return package.receive(await envio.read(), target, p.folder_path)
     except ValueError as e:
         raise HTTPException(400, str(e)) from e
 
@@ -505,13 +505,13 @@ async def send_graphic(ep: str, i: int, arquivo: UploadFile = File(...)):
 
 @router.get("/episodios/{ep}/thumbs/pacote")
 def download_thumb(ep: str, arquivo: str):
-    return _download(ep, "photocraft", arquivo=arquivo)
+    return _download(ep, "photocraft", file=arquivo)
 
 
 @router.post("/episodios/{ep}/thumbs/pacote")
 async def send_thumb(ep: str, thumb: str, arquivo: UploadFile = File(...)):
     """O .pcraft enviado refaz o PNG da thumb ao listar as thumbs."""
-    return await _send(ep, "photocraft", arquivo, arquivo=thumb)
+    return await _send(ep, "photocraft", arquivo, file=thumb)
 
 
 # ---------- Fila ----------

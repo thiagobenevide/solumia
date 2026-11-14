@@ -9,8 +9,8 @@ from esteira.core import events
 TICKS = 254016000000  # ticks por segundo do FilmCraft
 
 
-def ticks(segundos):
-    return int(round(segundos * TICKS))
+def ticks(seconds):
+    return int(round(seconds * TICKS))
 
 
 class ErrorFilmCraft(RuntimeError):
@@ -22,21 +22,21 @@ class FilmCraft:
         cmd = ["filmcraft-cli", "mcp"]
         if bridge:
             cmd += ["--bridge", bridge]
-        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        self.process = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
         self._id = 0
         self._rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
                                  "clientInfo": {"name": "esteira-dark", "version": "1"}})
         self._send({"jsonrpc": "2.0", "method": "notifications/initialized"})
 
     def _send(self, msg):
-        self.proc.stdin.write(json.dumps(msg) + "\n")
-        self.proc.stdin.flush()
+        self.process.stdin.write(json.dumps(msg) + "\n")
+        self.process.stdin.flush()
 
     def _rpc(self, method, params):
         self._id += 1
         self._send({"jsonrpc": "2.0", "id": self._id, "method": method, "params": params})
         while True:
-            line = self.proc.stdout.readline()
+            line = self.process.stdout.readline()
             if not line:
                 raise ErrorFilmCraft("o processo filmcraft-cli mcp terminou")
             msg = json.loads(line)
@@ -45,11 +45,11 @@ class FilmCraft:
                     raise ErrorFilmCraft(msg["error"])
                 return msg["result"]
 
-    def tool(self, nome, **args):
-        res = self._rpc("tools/call", {"name": nome, "arguments": args})
+    def tool(self, name, **args):
+        res = self._rpc("tools/call", {"name": name, "arguments": args})
         text = "".join(c.get("text", "") for c in res.get("content", []))
         if res.get("isError"):
-            raise ErrorFilmCraft(f"{nome} {args.get('id', '')}: {text}")
+            raise ErrorFilmCraft(f"{name} {args.get('id', '')}: {text}")
         try:
             return json.loads(text)
         except ValueError:
@@ -65,6 +65,6 @@ class FilmCraft:
         events.debug(f"fc {cmd_id}", ms=round((time.monotonic() - t) * 1000))
         return res
 
-    def fechar(self):
-        self.proc.stdin.close()
-        self.proc.wait(timeout=30)
+    def close(self):
+        self.process.stdin.close()
+        self.process.wait(timeout=30)

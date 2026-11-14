@@ -31,12 +31,12 @@ class Curation(BaseModel):
 
 def _notes_by_time(project):
     """[(instante, nota)] das notas de cena do roteiro, pelo tempo da fala que vem depois delas."""
-    file = project.caminho("roteiro.json")
-    if not file.exists() or not project.caminho("frases.json").exists():
+    file = project.path_of("roteiro.json")
+    if not file.exists() or not project.path_of("frases.json").exists():
         return []
     from esteira.graphics.plan import _speech_to_sentence
     rot, sentences = json.loads(file.read_text()), project.load_json("frases.json")
-    mapping = _speech_to_sentence(project.roteiro().read_text())
+    mapping = _speech_to_sentence(project.script_path().read_text())
     output = []
     for n in rot.get("notas", []):
         k = mapping[min(n["antes_da_fala"], len(mapping) - 1)] if mapping else 0
@@ -52,7 +52,7 @@ def _repeated(term, previous):
     return any(term.lower() == a.lower() or len(p & set(a.lower().split())) >= 3 for a in previous)
 
 
-def curate(project, refazer=False):
+def curate(project, redo=False):
     plan = project.load_json("plano.json")
     scenes = plan["cenas"]
     channel = getattr(project, "canal", None) or ""
@@ -60,7 +60,7 @@ def curate(project, refazer=False):
     used, done, failures = [], 0, 0
     for k, c in enumerate(scenes):
         events.progress(k + 1, len(scenes), f"cena {c['id']}")
-        if c.get("busca_definida") or (c.get("curada") and not refazer):
+        if c.get("busca_definida") or (c.get("curada") and not redo):
             used.append(c.get("busca_en") or c["busca"])
             continue
         # a direção de cena vale só para a cena em que ela começa (senão vira o mesmo fundo por 20 s)
@@ -70,10 +70,10 @@ def curate(project, refazer=False):
                       depois=scenes[k + 1]["texto"][:160] if k + 1 < len(scenes) else "",
                       nota=f'Direção de cena do roteiro: "{note}"' if note else "",
                       usados=", ".join(used[-6:]) or "nenhum")
-        r = local.ask(local.prompt("curadoria", **fields), Curation)
+        r = local.ask(local.prompt("curation", **fields), Curation)
         if r and _repeated(r.busca_en, used[-6:]):
             fields["usados"] += f'. PROIBIDO repetir "{r.busca_en}": escolha outro assunto visual da fala'
-            r = local.ask(local.prompt("curadoria", **fields), Curation, temperature=0.7) or r
+            r = local.ask(local.prompt("curation", **fields), Curation, temperature=0.7) or r
         if not r:
             failures += 1
             continue

@@ -1,12 +1,12 @@
 #!/usr/bin/env pwsh
-# Sobe o Gateway localmente (fora do Docker) para desenvolvimento no Windows.
+# Starts the Gateway locally (outside Docker) for development on Windows.
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $repoRoot
 
 if (-not (Test-Path ".venv")) {
-    Write-Host "Criando virtualenv em .venv ..."
+    Write-Host "Creating virtualenv in .venv ..."
     python -m venv .venv
 }
 
@@ -17,10 +17,10 @@ pip install --quiet -e ".\plataforma\shared"
 pip install --quiet -e ".\plataforma\backend[dev]"
 
 if (-not (Test-Path "gateway\.env")) {
-    Write-Host "gateway\.env não encontrado, copiando de gateway\.env.example"
+    Write-Host "gateway\.env not found, copying gateway\.env.example"
     Copy-Item "gateway\.env.example" "gateway\.env"
 }
 
-# Settings.env_file é relativo ao cwd, por isso rodamos a partir de gateway\.
+# Settings.env_file is relative to the cwd, so we run from gateway\.
 Set-Location "$repoRoot\plataforma\backend"
 python -m backend.main

@@ -21,13 +21,13 @@ def available():
     return shutil.which(CLI) is not None
 
 
-def _run(origem, steps, destino):
+def _run(origin, steps, destination):
     """passos: [(comando, params)]. Devolve os resultados (um dict por comando)."""
-    cmd = [CLI, "run", *(["--new", json.dumps(origem)] if isinstance(origem, dict) else [str(origem)])]
+    cmd = [CLI, "run", *(["--new", json.dumps(origin)] if isinstance(origin, dict) else [str(origin)])]
     for c, p in steps:
         cmd += ["--cmd", c, "--params", json.dumps(p, ensure_ascii=False)]
-    cmd += ["--out", str(destino)]
-    if str(origem) == str(destino):  # 2ª passagem reescreve o .pcraft: o CLI exige pedir
+    cmd += ["--out", str(destination)]
+    if str(origin) == str(destination):  # 2ª passagem reescreve o .pcraft: o CLI exige pedir
         cmd.append("--in-place")
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
     if r.returncode or "error:" in r.stderr:
@@ -45,14 +45,14 @@ def _size_image(file):
 LAST: dict[str, object] = {}  # destino → composição N1 usada (o dataset das thumbs grava)
 
 
-def compose(d, destino, w=1280, h=720):
+def compose(d, destination, w=1280, h=720):
     """`d`: dados de `thumbs.data_thumb` (com `fundo` como caminho ou file://) → N1 → `destino` (.pcraft) + PNG."""
     from esteira.n1 import photocraft as N1
     doc = N1.of_data_thumb(d, w, h)
     colors = {"texto": "#ffffff", "destaque": d["cor_d"], "alerta": d["alerta"], "preto": "#000000"}
-    N1.Executor(_run, {"fundo": d["fundo"]}, colors, _size_image).executar(doc, Path(destino))
-    LAST[str(Path(destino).with_suffix(".png"))] = doc
-    return export(destino)
+    N1.Executor(_run, {"fundo": d["fundo"]}, colors, _size_image).apply_doc(doc, Path(destination))
+    LAST[str(Path(destination).with_suffix(".png"))] = doc
+    return export(destination)
 
 
 def export(pcraft, png=None):

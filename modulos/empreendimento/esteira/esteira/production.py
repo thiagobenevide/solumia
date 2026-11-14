@@ -26,20 +26,20 @@ def mode(project):
 
 def camera(project):
     """Arquivo da câmera do episódio (camera.mp4/.mov/...), ou None."""
-    return next((p for p in sorted(project.pasta.glob("camera.*")) if p.suffix.lower() in VIDEO_EXT), None)
+    return next((p for p in sorted(project.folder_path.glob("camera.*")) if p.suffix.lower() in VIDEO_EXT), None)
 
 
 def info_camera(project):
-    file = project.caminho("camera.json")
+    file = project.path_of("camera.json")
     return json.loads(file.read_text()) if file.exists() else {"offset": 0.0}
 
 
 # ---------------------------------------------------------------- sincronização WAV × câmera
 
-def _envelope(file, segundos=240, taxa=8000, window=80):
+def _envelope(file, seconds=240, rate=8000, window=80):
     """Energia do áudio (janelas de 10 ms) dos primeiros `segundos`."""
-    pcm = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-t", str(segundos), "-i", str(file),
-                          "-vn", "-ac", "1", "-ar", str(taxa), "-f", "f32le", "-"], capture_output=True, check=True).stdout
+    pcm = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-t", str(seconds), "-i", str(file),
+                          "-vn", "-ac", "1", "-ar", str(rate), "-f", "f32le", "-"], capture_output=True, check=True).stdout
     x = np.frombuffer(pcm, dtype=np.float32)
     x = x[: len(x) // window * window].reshape(-1, window)
     env = np.sqrt((x ** 2).mean(axis=1))
@@ -58,11 +58,11 @@ def sync(wav, video):
     return round(lag * 0.01, 3), round(float(np.clip(peak, 0, 1)), 3)
 
 
-def prepare_camera(pasta, video, wav=None):
+def prepare_camera(folder, video, wav=None):
     """Liga o vídeo da câmera ao projeto (link, sem copiar gigabytes) e grava camera.json. Devolve o áudio
     a usar como narração: o WAV sincronizado ou o som extraído da câmera."""
     video = Path(video)
-    destination = pasta / f"camera{video.suffix.lower()}"
+    destination = folder / f"camera{video.suffix.lower()}"
     if not destination.exists():
         destination.symlink_to(video.resolve())
     from esteira.library import _probe
@@ -73,10 +73,10 @@ def prepare_camera(pasta, video, wav=None):
         if info["confianca_sync"] < 0.3:
             print(f"  ! sincronia WAV × câmera fraca ({info['confianca_sync']}); confira no FilmCraft")
     else:
-        wav = pasta / "narracao_camera.wav"
+        wav = folder / "narracao_camera.wav"
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-i", str(destination), "-vn", "-ac", "1",
                         "-ar", "48000", "-c:a", "pcm_s16le", str(wav)], check=True)
-    (pasta / "camera.json").write_text(json.dumps(info, indent=1))
+    (folder / "camera.json").write_text(json.dumps(info, indent=1))
     return wav
 
 
@@ -84,12 +84,12 @@ def prepare_camera(pasta, video, wav=None):
 
 def _instants_of_part(project):
     """Instante (s) em que começa cada Parte do roteiro, pela 1ª frase com tempo da fala de abertura."""
-    file = project.caminho("roteiro.json")
-    if not file.exists() or not project.caminho("frases.json").exists():
+    file = project.path_of("roteiro.json")
+    if not file.exists() or not project.path_of("frases.json").exists():
         return []
     from esteira.graphics.plan import _speech_to_sentence
     rot, sentences = json.loads(file.read_text()), project.load_json("frases.json")
-    mapping = _speech_to_sentence(project.roteiro().read_text())
+    mapping = _speech_to_sentence(project.script_path().read_text())
     output = []
     for cap in rot.get("capitulos", []):
         k = mapping[min(cap["fala"], len(mapping) - 1)] if mapping else 0
@@ -109,15 +109,15 @@ def mark_presenter(project, plan, save=True):
     target = project.cfg.get("producao", {}).get("broll", 0.45)
     notes, parts = _notes_by_time(project), _instants_of_part(project)
 
-    def dentro(c, t):
+    def inside(c, t):
         return c["inicio"] - 0.5 <= t < c["fim"]
 
     time = broll = 0.0
     for i, c in enumerate(plan["cenas"]):
-        note = next((txt for t, txt in notes if dentro(c, t)), "")
+        note = next((txt for t, txt in notes if inside(c, t)), "")
         if note:
             c["camera"] = bool(RE_CAMERA.search(note))
-        elif i == 0 or any(dentro(c, t) for t in parts):
+        elif i == 0 or any(inside(c, t) for t in parts):
             c["camera"] = True
         else:
             c["camera"] = time > 0 and broll / time >= target
@@ -133,9 +133,9 @@ def mark_presenter(project, plan, save=True):
 
 def spans_camera(project):
     """[(início na timeline, início na câmera, duração)] a partir dos intervalos mantidos pelos cortes."""
-    cuts = project.load_json("cortes.json") if project.caminho("cortes.json").exists() else {}
+    cuts = project.load_json("cortes.json") if project.path_of("cortes.json").exists() else {}
     intervals = cuts.get("intervalos")
-    if not intervals and cuts.get("trechos") and project.caminho("transcricao_bruta.json").exists():
+    if not intervals and cuts.get("trechos") and project.path_of("transcricao_bruta.json").exists():
         from esteira.cuts import _intervals  # cortes.json de antes dos intervalos: recalcula das decisões
         words = project.load_json("transcricao_bruta.json")["palavras"]
         intervals = _intervals(cuts["trechos"], words, cuts.get("excluir", []))

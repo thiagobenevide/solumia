@@ -32,10 +32,10 @@ _HELLO_TIMEOUT_SECONDS = 10.0
 
 @router.websocket("/ws/worker")
 async def worker_endpoint(websocket: WebSocket) -> None:
-    """Handshake + loop de mensagens de um Worker conectado.
+    """Handshake + message loop of a connected Worker.
 
-    Não faz parte da API OpenAI-compatible — é o transporte pelo qual o
-    Gateway encaminha chat_request/chat_response para a máquina pessoal.
+    Not part of the OpenAI-compatible API — it is the transport through which
+    the Gateway forwards chat_request/chat_response to the personal machine.
     """
     settings: Settings = websocket.app.state.settings
     registry: WorkerRegistry = websocket.app.state.worker_registry
@@ -112,8 +112,8 @@ async def worker_endpoint(websocket: WebSocket) -> None:
 
 
 def _annotate_ip_matches(settings: Settings, ip: str) -> None:
-    """Guarda o IP público de onde o worker conectou: é para ele que o "Ligar o PC" manda o
-    Wake-on-LAN. IP local/privado (worker na mesma máquina, dev) não conta."""
+    """Keeps the public IP the worker connected from: that is where "Ligar o PC" sends the
+    Wake-on-LAN. A local/private IP (worker on the same machine, dev) does not count."""
     try:
         if not ipaddress.ip_address(ip).is_global:
             return

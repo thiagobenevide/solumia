@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "agent-youtube"
 version = "0.1.0"
-description = "Backend dos canais do YouTube (Empreendimento): canais, temas, histórias, roteiros, planos e métodos como notas do cofre."
+description = "YouTube channels backend (Empreendimento): channels, themes, stories, scripts, plans and methods as vault notes."
 requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [

@@ -40,9 +40,9 @@ def test_list_models_reflects_connected_worker_and_replaces_mock() -> None:
         worker_api_keys="test-worker-key",
         client_api_keys=CLIENT_API_KEY,
     )
-    # `with` fixa o TestClient num único portal/event loop, compartilhado
-    # entre a conexão WS (fake worker) e o GET concorrente — ver comentário
-    # equivalente em test_ws_worker.py.
+    # `with` pins the TestClient to a single portal/event loop, shared by the
+    # WS connection (fake worker) and the concurrent GET — see the matching
+    # comment in test_ws_worker.py.
     with (
         TestClient(create_app(settings=settings)) as client,
         client.websocket_connect("/ws/worker") as ws,

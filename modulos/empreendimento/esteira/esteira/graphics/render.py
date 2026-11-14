@@ -34,30 +34,30 @@ BOX = dict(texto="", x=8, y=70, w=60, tam=64, fonte="Inter", peso=800, cor="#f4f
              cor_fundo="#0a1122", alinhar="left", maiusculas=False, entrada="subir", atraso=0.2, vel=0.6)
 
 
-def _mark(texto):
+def _mark(text):
     """*destaque* → cor de destaque; quebra de linha preservada."""
-    return Markup(re.sub(r"\*(.+?)\*", r'<span class="d">\1</span>', str(escape(texto))).replace("\n", "<br>"))
+    return Markup(re.sub(r"\*(.+?)\*", r'<span class="d">\1</span>', str(escape(text))).replace("\n", "<br>"))
 
 
-def html(model, dados, segundos, w=1920, h=1080, cor="#ffd400", estatico=False):
+def html(model, data, seconds, w=1920, h=1080, color="#ffd400", estatico=False):
     """`dados` pode trazer "efeito" ({entrada, saida, vel}) e "caixas" (lista de caixas de texto livres)."""
-    dados = dict(dados)
-    effect = dados.pop("efeito", None) or {}
-    boxes = [dict(BOX, **c, html=_mark(c.get("texto", ""))) for c in dados.pop("caixas", None) or []]
+    data = dict(data)
+    effect = data.pop("efeito", None) or {}
+    boxes = [dict(BOX, **c, html=_mark(c.get("texto", ""))) for c in data.pop("caixas", None) or []]
     return _jinja.get_template(f"{model}.html").render(
-        **dados, dur=segundos, w=w, h=h, vertical=h > w, cor=cor, raiz=ROOT.as_uri(), efeito=effect,
+        **data, dur=seconds, w=w, h=h, vertical=h > w, cor=color, raiz=ROOT.as_uri(), efeito=effect,
         caixas=boxes, estatico=estatico)
 
 
-def preview(model, dados, segundos, w, h, cor, swaps, estatico=False):
+def preview(model, data, seconds, w, h, color, swaps, estatico=False):
     """HTML para o editor do painel: com `seek` e caminhos file:// trocados por URLs do servidor."""
-    s = html(model, dados, segundos, w, h, cor, estatico).replace("<head>", f"<head><script>{_SEEK}</script>", 1)
-    for de, para in swaps.items():
-        s = s.replace(de, para)
+    s = html(model, data, seconds, w, h, color, estatico).replace("<head>", f"<head><script>{_SEEK}</script>", 1)
+    for de, replacement in swaps.items():
+        s = s.replace(de, replacement)
     return s
 
 
-def _frames(page_html, indexes, fps, w, h, pasta, feito=None, total=0, rotulo=""):
+def _frames(page_html, indexes, fps, w, h, folder, done=None, total=0, label=""):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
         nav = pw.chromium.launch()
@@ -67,10 +67,10 @@ def _frames(page_html, indexes, fps, w, h, pasta, feito=None, total=0, rotulo=""
         pg.evaluate("document.fonts.ready")
         for i in indexes:
             pg.evaluate(f"seek({i / fps})")
-            pg.screenshot(path=str(pasta / f"q{i:05d}.png"), omit_background=True)
-            if feito is not None:
-                feito[0] += 1
-                trace.task("render", rotulo, feito[0], total, "quadros")
+            pg.screenshot(path=str(folder / f"q{i:05d}.png"), omit_background=True)
+            if done is not None:
+                done[0] += 1
+                trace.task("render", label, done[0], total, "quadros")
         nav.close()
 
 
@@ -102,21 +102,21 @@ def render(model, dados, segundos, destino, fps=30, w=1920, h=1080, cor="#ffd400
     return destino
 
 
-def image(model, dados, destino, w=1280, h=720):
+def image(model, data, destination, w=1280, h=720):
     """Um quadro só (thumbnail): modelo HTML → PNG."""
     from playwright.sync_api import sync_playwright
     tmp = Path(tempfile.mkdtemp(prefix="img_"))
     try:
         page = tmp / "pagina.html"
-        page.write_text(html(model, dados, 1, w, h, estatico=True))
+        page.write_text(html(model, data, 1, w, h, estatico=True))
         with sync_playwright() as pw:
             nav = pw.chromium.launch()
             pg = nav.new_page(viewport={"width": w, "height": h})
             pg.goto(page.as_uri())
             pg.evaluate("document.fonts.ready")
             pg.wait_for_timeout(150)
-            pg.screenshot(path=str(destino))
+            pg.screenshot(path=str(destination))
             nav.close()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-    return destino
+    return destination

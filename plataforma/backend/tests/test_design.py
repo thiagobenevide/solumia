@@ -21,7 +21,7 @@ def test_exige_chave(tmp_path: Path) -> None:
     assert TestClient(create_app(settings=s)).get("/api/design/quadros").status_code == 401
 
 
-def test_criar_salvar_e_listar(api: TestClient) -> None:
+def test_create_save_and_list(api: TestClient) -> None:
     q = api.post("/api/design/quadros", json={"titulo": "Aula 1", "fundo": "grade"}).json()
     assert q["versao"] == 1 and q["elementos"] == []
 
@@ -34,7 +34,7 @@ def test_criar_salvar_e_listar(api: TestClient) -> None:
     assert api.get(f"/api/design/quadros/{q['id']}").json()["elementos"] == [TRACO]
 
 
-def test_versao_velha_da_conflito_com_o_atual(api: TestClient) -> None:
+def test_old_version_conflicts_with_current(api: TestClient) -> None:
     q = api.post("/api/design/quadros", json={}).json()
     url = f"/api/design/quadros/{q['id']}/elementos"
     api.put(url, json={"versao": 1, "elementos": [TRACO]})
@@ -43,7 +43,7 @@ def test_versao_velha_da_conflito_com_o_atual(api: TestClient) -> None:
     assert r.json()["quadro"]["versao"] == 2
 
 
-def test_valida_elementos_e_fundo(api: TestClient) -> None:
+def test_validates_elements_and_background(api: TestClient) -> None:
     q = api.post("/api/design/quadros", json={}).json()
     r = api.put(
         f"/api/design/quadros/{q['id']}/elementos",
@@ -53,7 +53,7 @@ def test_valida_elementos_e_fundo(api: TestClient) -> None:
     assert api.patch(f"/api/design/quadros/{q['id']}", json={"fundo": "xadrez"}).status_code == 422
 
 
-def test_editar_duplicar_e_excluir(api: TestClient) -> None:
+def test_edit_duplicate_and_delete(api: TestClient) -> None:
     q = api.post("/api/design/quadros", json={"titulo": "Esquema"}).json()
     new = api.patch(f"/api/design/quadros/{q['id']}", json={"titulo": "Novo"}).json()
     assert new["titulo"] == "Novo"
@@ -64,7 +64,7 @@ def test_editar_duplicar_e_excluir(api: TestClient) -> None:
     assert api.get("/api/design/quadros/../../etc").status_code == 404
 
 
-def test_miniatura(api: TestClient) -> None:
+def test_thumbnail(api: TestClient) -> None:
     q = api.post("/api/design/quadros", json={}).json()
     url = f"/api/design/quadros/{q['id']}/miniatura"
     assert api.get(url).status_code == 404

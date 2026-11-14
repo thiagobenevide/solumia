@@ -1,5 +1,5 @@
-# Ponta do túnel SSH reverso na VPS: o PC conecta (infra/scripts/conectar_vps) e publica a esteira
-# (:8765 dele) como tunel:8765 na rede do compose. Só aceita chave e só encaminhamento reverso.
+# VPS end of the reverse SSH tunnel: the PC connects (infra/scripts/conectar_vps) and publishes the esteira
+# (its :8765) as tunel:8765 on the compose network. Key only, reverse forwarding only.
 FROM alpine:3.20
 
 RUN apk add --no-cache openssh-server \

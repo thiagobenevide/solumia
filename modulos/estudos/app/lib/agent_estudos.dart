@@ -1,6 +1,6 @@
-/// Módulo Estudos: leituras com nota de síntese, grafo do conhecimento e idiomas A1–C2.
+/// Estudos module: readings with a synthesis note, knowledge graph and languages A1–C2.
 library;
 
-export 'src/api_estudos.dart' show ApiEstudos;
-export 'src/modulo_estudos.dart';
-export 'src/telas/projetos_tela.dart' show AbrirNoArquivo;
+export 'src/studies_api.dart' show StudiesApi;
+export 'src/studies_module.dart';
+export 'src/screens/projects_screen.dart' show OpenInFile;

@@ -1,27 +1,27 @@
 import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
 
-import 'datas.dart';
+import 'dates.dart';
 
-/// Um registro do Health Connect sem os tipos do plugin (a soma por dia fica testável).
-class PontoSaude {
-  const PontoSaude(this.tipo, this.inicio, this.fim, this.valor, {this.atividade, this.calorias, this.metros});
+/// A Health Connect record without the plugin types (the per-day sum stays testable).
+class HealthPoint {
+  const HealthPoint(this.type, this.start, this.end, this.value, {this.activity, this.calories, this.metros});
 
-  /// Nome do [HealthDataType] (ex.: `HEART_RATE`, `SLEEP_DEEP`).
-  final String tipo;
-  final DateTime inicio;
-  final DateTime fim;
-  final double valor;
+  /// Name of the [HealthDataType] (e.g. `HEART_RATE`, `SLEEP_DEEP`).
+  final String type;
+  final DateTime start;
+  final DateTime end;
+  final double value;
 
-  /// Só nos treinos (`WORKOUT`).
-  final String? atividade;
-  final double? calorias;
+  /// Only on workouts (`WORKOUT`).
+  final String? activity;
+  final double? calories;
   final double? metros;
 
-  double get minutos => fim.difference(inicio).inSeconds / 60;
+  double get minutes => end.difference(start).inSeconds / 60;
 }
 
-const _atividades = {
+const _activities = {
   'WALKING': 'caminhada', 'RUNNING': 'corrida', 'RUNNING_TREADMILL': 'esteira', 'BIKING': 'bicicleta',
   'BIKING_STATIONARY': 'bicicleta ergométrica', 'SWIMMING_POOL': 'natação', 'SWIMMING_OPEN_WATER': 'natação',
   'STRENGTH_TRAINING': 'musculação', 'WEIGHTLIFTING': 'musculação', 'BOXING': 'boxe', 'YOGA': 'ioga',
@@ -32,109 +32,109 @@ const _atividades = {
 
 String _hm(DateTime d) => '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
-double _r(double v, [int casas = 1]) => double.parse(v.toStringAsFixed(casas));
+double _r(double v, [int decimals = 1]) => double.parse(v.toStringAsFixed(decimals));
 
-/// Soma os pontos por dia local, no formato de `PUT /api/saude/relogio/dias`. O sono conta no dia em
-/// que termina; [passos] vem à parte (o agregado do Health Connect já tira a contagem dupla
-/// celular + relógio). Só entram os dias de [de] a [ate].
-List<Map<String, dynamic>> agregarDias(List<PontoSaude> pontos, Map<String, int> passos, DateTime de, DateTime ate) {
-  final porDia = <String, List<PontoSaude>>{};
-  for (final p in pontos) {
-    final sono = p.tipo.startsWith('SLEEP_');
-    porDia.putIfAbsent(iso(sono ? p.fim : p.inicio), () => []).add(p);
+/// Sums the points per local day, in the format of `PUT /api/saude/relogio/dias`. Sleep counts on the day
+/// it ends; [steps] comes separately (the Health Connect aggregate already removes the phone + watch
+/// double counting). Only the days from [from] to [to] go in.
+List<Map<String, dynamic>> aggregateDays(List<HealthPoint> points, Map<String, int> steps, DateTime de, DateTime ate) {
+  final byDay = <String, List<HealthPoint>>{};
+  for (final p in points) {
+    final sleep = p.type.startsWith('SLEEP_');
+    byDay.putIfAbsent(iso(sleep ? p.end : p.start), () => []).add(p);
   }
-  final dias = <Map<String, dynamic>>[];
-  for (var d = dia(de); !d.isAfter(ate); d = somarDias(d, 1)) {
-    final chave = iso(d);
-    final lista = porDia[chave] ?? const <PontoSaude>[];
-    List<PontoSaude> doTipo(String tipo) => [for (final p in lista) if (p.tipo == tipo) p];
-    double soma(String tipo) => doTipo(tipo).fold(0, (s, p) => s + p.valor);
-    double? media(String tipo) {
-      final l = doTipo(tipo);
-      return l.isEmpty ? null : _r(l.fold<double>(0, (s, p) => s + p.valor) / l.length);
+  final days = <Map<String, dynamic>>[];
+  for (var d = day(de); !d.isAfter(ate); d = addDays(d, 1)) {
+    final key = iso(d);
+    final items = byDay[key] ?? const <HealthPoint>[];
+    List<HealthPoint> ofType(String type) => [for (final p in items) if (p.type == type) p];
+    double sum(String type) => ofType(type).fold(0, (s, p) => s + p.value);
+    double? media(String type) {
+      final l = ofType(type);
+      return l.isEmpty ? null : _r(l.fold<double>(0, (s, p) => s + p.value) / l.length);
     }
 
-    double? ultimo(String tipo) {
-      final l = doTipo(tipo)..sort((a, b) => a.inicio.compareTo(b.inicio));
-      return l.isEmpty ? null : _r(l.last.valor);
+    double? last(String type) {
+      final l = ofType(type)..sort((a, b) => a.start.compareTo(b.start));
+      return l.isEmpty ? null : _r(l.last.value);
     }
 
-    double minutos(List<String> tipos) =>
-        lista.where((p) => tipos.contains(p.tipo)).fold(0, (s, p) => s + p.minutos);
+    double minutes(List<String> types) =>
+        items.where((p) => types.contains(p.type)).fold(0, (s, p) => s + p.minutes);
 
-    final r = <String, dynamic>{'data': chave};
-    void por(String campo, num? v) {
-      if (v != null && v > 0) r[campo] = v;
+    final r = <String, dynamic>{'data': key};
+    void by(String field, num? v) {
+      if (v != null && v > 0) r[field] = v;
     }
 
-    por('passos', passos[chave]);
-    por('distancia_km', _r(soma('DISTANCE_DELTA') / 1000, 2));
-    por('calorias_ativas', soma('ACTIVE_ENERGY_BURNED').round());
-    por('calorias_total', soma('TOTAL_CALORIES_BURNED').round());
-    por('andares', soma('FLIGHTS_CLIMBED').round());
-    por('agua_ml', (soma('WATER') * 1000).round());
+    by('passos', steps[key]);
+    by('distancia_km', _r(sum('DISTANCE_DELTA') / 1000, 2));
+    by('calorias_ativas', sum('ACTIVE_ENERGY_BURNED').round());
+    by('calorias_total', sum('TOTAL_CALORIES_BURNED').round());
+    by('andares', sum('FLIGHTS_CLIMBED').round());
+    by('agua_ml', (sum('WATER') * 1000).round());
 
-    final fc = doTipo('HEART_RATE');
+    final fc = ofType('HEART_RATE');
     if (fc.isNotEmpty) {
-      por('fc_media', media('HEART_RATE'));
-      por('fc_min', fc.map((p) => p.valor).reduce((a, b) => a < b ? a : b));
-      por('fc_max', fc.map((p) => p.valor).reduce((a, b) => a > b ? a : b));
+      by('fc_media', media('HEART_RATE'));
+      by('fc_min', fc.map((p) => p.value).reduce((a, b) => a < b ? a : b));
+      by('fc_max', fc.map((p) => p.value).reduce((a, b) => a > b ? a : b));
     }
-    por('fc_repouso', media('RESTING_HEART_RATE'));
-    por('hrv_ms', media('HEART_RATE_VARIABILITY_RMSSD'));
-    // algumas versões dão a fração (0,96) em vez do percentual
-    final spo2 = [for (final p in doTipo('BLOOD_OXYGEN')) p.valor <= 1 ? p.valor * 100 : p.valor];
-    if (spo2.isNotEmpty) por('spo2', _r(spo2.reduce((a, b) => a + b) / spo2.length));
-    por('respiracao', media('RESPIRATORY_RATE'));
-    por('pressao_sistolica', media('BLOOD_PRESSURE_SYSTOLIC'));
-    por('pressao_diastolica', media('BLOOD_PRESSURE_DIASTOLIC'));
-    por('peso_kg', ultimo('WEIGHT'));
-    por('gordura_pct', ultimo('BODY_FAT_PERCENTAGE'));
-    por('massa_magra_kg', ultimo('LEAN_BODY_MASS'));
+    by('fc_repouso', media('RESTING_HEART_RATE'));
+    by('hrv_ms', media('HEART_RATE_VARIABILITY_RMSSD'));
+    // some versions give the fraction (0.96) instead of the percentage
+    final spo2 = [for (final p in ofType('BLOOD_OXYGEN')) p.value <= 1 ? p.value * 100 : p.value];
+    if (spo2.isNotEmpty) by('spo2', _r(spo2.reduce((a, b) => a + b) / spo2.length));
+    by('respiracao', media('RESPIRATORY_RATE'));
+    by('pressao_sistolica', media('BLOOD_PRESSURE_SYSTOLIC'));
+    by('pressao_diastolica', media('BLOOD_PRESSURE_DIASTOLIC'));
+    by('peso_kg', last('WEIGHT'));
+    by('gordura_pct', last('BODY_FAT_PERCENTAGE'));
+    by('massa_magra_kg', last('LEAN_BODY_MASS'));
 
-    // sono: a sessão dá o horário; os estágios dão a composição. Dormido = sessão − acordado.
-    final acordado = minutos(['SLEEP_AWAKE', 'SLEEP_AWAKE_IN_BED', 'SLEEP_OUT_OF_BED']);
-    final sessoes = doTipo('SLEEP_SESSION')..sort((a, b) => b.minutos.compareTo(a.minutos));
-    final estagios = minutos(['SLEEP_DEEP', 'SLEEP_LIGHT', 'SLEEP_REM', 'SLEEP_ASLEEP']);
-    final dormido = sessoes.isNotEmpty
-        ? sessoes.fold<double>(0, (s, p) => s + p.minutos) - acordado
-        : estagios;
-    por('sono_min', dormido.round());
-    por('sono_profundo_min', minutos(['SLEEP_DEEP']).round());
-    por('sono_leve_min', minutos(['SLEEP_LIGHT']).round());
-    por('sono_rem_min', minutos(['SLEEP_REM']).round());
-    por('sono_acordado_min', acordado.round());
-    if (sessoes.isNotEmpty) {
-      r['sono_inicio'] = _hm(sessoes.first.inicio);
-      r['sono_fim'] = _hm(sessoes.first.fim);
+    // sleep: the session gives the times; the stages give the composition. Slept = session − awake.
+    final awake = minutes(['SLEEP_AWAKE', 'SLEEP_AWAKE_IN_BED', 'SLEEP_OUT_OF_BED']);
+    final sessions = ofType('SLEEP_SESSION')..sort((a, b) => b.minutes.compareTo(a.minutes));
+    final stages = minutes(['SLEEP_DEEP', 'SLEEP_LIGHT', 'SLEEP_REM', 'SLEEP_ASLEEP']);
+    final slept = sessions.isNotEmpty
+        ? sessions.fold<double>(0, (s, p) => s + p.minutes) - awake
+        : stages;
+    by('sono_min', slept.round());
+    by('sono_profundo_min', minutes(['SLEEP_DEEP']).round());
+    by('sono_leve_min', minutes(['SLEEP_LIGHT']).round());
+    by('sono_rem_min', minutes(['SLEEP_REM']).round());
+    by('sono_acordado_min', awake.round());
+    if (sessions.isNotEmpty) {
+      r['sono_inicio'] = _hm(sessions.first.start);
+      r['sono_fim'] = _hm(sessions.first.end);
     }
 
-    final treinos = doTipo('WORKOUT')..sort((a, b) => a.inicio.compareTo(b.inicio));
-    if (treinos.isNotEmpty) {
-      // o Samsung Health não manda "tempo ativo" ao Health Connect: usa a soma dos treinos
-      por('minutos_ativos', treinos.fold<double>(0, (s, p) => s + p.minutos).round());
+    final workouts = ofType('WORKOUT')..sort((a, b) => a.start.compareTo(b.start));
+    if (workouts.isNotEmpty) {
+      // Samsung Health does not send "active time" to Health Connect: uses the sum of the workouts
+      by('minutos_ativos', workouts.fold<double>(0, (s, p) => s + p.minutes).round());
       r['exercicios'] = [
-        for (final t in treinos)
+        for (final t in workouts)
           {
-            'tipo': _atividades[t.atividade] ?? (t.atividade ?? 'exercício').toLowerCase().replaceAll('_', ' '),
-            'inicio': _hm(t.inicio),
-            'minutos': t.minutos.round(),
-            if ((t.calorias ?? 0) > 0) 'calorias': t.calorias!.round(),
+            'tipo': _activities[t.activity] ?? (t.activity ?? 'exercício').toLowerCase().replaceAll('_', ' '),
+            'inicio': _hm(t.start),
+            'minutos': t.minutes.round(),
+            if ((t.calories ?? 0) > 0) 'calorias': t.calories!.round(),
             if ((t.metros ?? 0) > 0) 'distancia_km': _r(t.metros! / 1000, 2),
           },
       ];
     }
-    if (r.length > 1) dias.add(r);
+    if (r.length > 1) days.add(r);
   }
-  return dias;
+  return days;
 }
 
-/// Lê o Health Connect do Android, onde o Samsung Health publica os dados do Galaxy Watch.
-class LeitorHealthConnect {
+/// Reads Android's Health Connect, where Samsung Health publishes the Galaxy Watch data.
+class HealthConnectReader {
   final _health = Health();
-  bool _configurado = false;
+  bool _configured = false;
 
-  static const tipos = [
+  static const types = [
     HealthDataType.STEPS,
     HealthDataType.DISTANCE_DELTA,
     HealthDataType.ACTIVE_ENERGY_BURNED,
@@ -162,20 +162,20 @@ class LeitorHealthConnect {
     HealthDataType.WORKOUT,
   ];
 
-  static List<HealthDataAccess> get _leitura => [for (final _ in tipos) HealthDataAccess.READ];
+  static List<HealthDataAccess> get _reading => [for (final _ in types) HealthDataAccess.READ];
 
-  /// Só existe no Android (celular e tablet); no PC os dados chegam pelo backend.
+  /// Only exists on Android (phone and tablet); on the PC the data arrives through the backend.
   static bool get disponivel => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-  Future<void> _configurar() async {
-    if (_configurado) return;
+  Future<void> _configure() async {
+    if (_configured) return;
     await _health.configure();
-    _configurado = true;
+    _configured = true;
   }
 
-  /// Motivo para não dar para ler (Health Connect ausente/desatualizado), ou null.
-  Future<String?> problema() async {
-    await _configurar();
+  /// Why reading is not possible (Health Connect missing/outdated), or null.
+  Future<String?> problem() async {
+    await _configure();
     final s = await _health.getHealthConnectSdkStatus();
     return switch (s) {
       HealthConnectSdkStatus.sdkAvailable => null,
@@ -184,87 +184,87 @@ class LeitorHealthConnect {
     };
   }
 
-  Future<void> instalar() => _health.installHealthConnect();
+  Future<void> install() => _health.installHealthConnect();
 
-  Future<bool> autorizado() async {
-    await _configurar();
-    return await _health.hasPermissions(tipos, permissions: _leitura) ?? false;
+  Future<bool> authorized() async {
+    await _configure();
+    return await _health.hasPermissions(types, permissions: _reading) ?? false;
   }
 
-  /// Pede leitura de todos os tipos, do histórico anterior aos 30 dias e em segundo plano.
-  Future<bool> autorizar() async {
-    await _configurar();
-    final ok = await _health.requestAuthorization(tipos, permissions: _leitura);
+  /// Requests reading of every type, of the history older than 30 days and in the background.
+  Future<bool> authorize() async {
+    await _configure();
+    final ok = await _health.requestAuthorization(types, permissions: _reading);
     if (ok && await _health.isHealthDataHistoryAvailable() && !await _health.isHealthDataHistoryAuthorized()) {
       await _health.requestHealthDataHistoryAuthorization();
     }
-    if (ok) await autorizarSegundoPlano();
+    if (ok) await authorizeBackground();
     return ok;
   }
 
-  /// Leitura sem o app aberto (a tarefa do WorkManager); Android 14+ pede à parte.
-  Future<bool> segundoPlanoAutorizado() async {
-    await _configurar();
+  /// Reading without the app open (the WorkManager task); Android 14+ asks separately.
+  Future<bool> backgroundAuthorized() async {
+    await _configure();
     return await _health.isHealthDataInBackgroundAvailable() && await _health.isHealthDataInBackgroundAuthorized();
   }
 
-  Future<bool> autorizarSegundoPlano() async {
-    await _configurar();
+  Future<bool> authorizeBackground() async {
+    await _configure();
     if (!await _health.isHealthDataInBackgroundAvailable()) return false;
     if (await _health.isHealthDataInBackgroundAuthorized()) return true;
     return _health.requestHealthDataInBackgroundAuthorization();
   }
 
-  /// Dias de [de] a [ate] somados (o dia anterior também é lido, para o sono que começa na véspera).
-  Future<List<Map<String, dynamic>>> ler(DateTime de, DateTime ate) async {
-    await _configurar();
-    final inicio = somarDias(dia(de), -1);
-    final fim = somarDias(dia(ate), 1);
-    final pontos = <PontoSaude>[];
+  /// Days from [from] to [to] summed (the previous day is also read, for sleep starting the night before).
+  Future<List<Map<String, dynamic>>> read(DateTime de, DateTime ate) async {
+    await _configure();
+    final start = addDays(day(de), -1);
+    final end = addDays(day(ate), 1);
+    final points = <HealthPoint>[];
     for (final p in await _health.getHealthDataFromTypes(
-      types: tipos.where((t) => t != HealthDataType.STEPS).toList(),
-      startTime: inicio,
-      endTime: fim,
+      types: types.where((t) => t != HealthDataType.STEPS).toList(),
+      startTime: start,
+      endTime: end,
     )) {
       final v = p.value;
       final local = (p.dateFrom.toLocal(), p.dateTo.toLocal());
       if (v is WorkoutHealthValue) {
-        pontos.add(PontoSaude(
+        points.add(HealthPoint(
           p.type.name, local.$1, local.$2, 0,
-          atividade: v.workoutActivityType.name,
-          calorias: v.totalEnergyBurned?.toDouble(),
+          activity: v.workoutActivityType.name,
+          calories: v.totalEnergyBurned?.toDouble(),
           metros: v.totalDistance?.toDouble(),
         ));
       } else if (v is NumericHealthValue) {
-        pontos.add(PontoSaude(p.type.name, local.$1, local.$2, v.numericValue.toDouble()));
+        points.add(HealthPoint(p.type.name, local.$1, local.$2, v.numericValue.toDouble()));
       }
     }
-    final passos = <String, int>{};
-    for (var d = dia(de); !d.isAfter(ate); d = somarDias(d, 1)) {
-      final n = await _health.getTotalStepsInInterval(d, somarDias(d, 1));
-      if (n != null && n > 0) passos[iso(d)] = n;
+    final steps = <String, int>{};
+    for (var d = day(de); !d.isAfter(ate); d = addDays(d, 1)) {
+      final n = await _health.getTotalStepsInInterval(d, addDays(d, 1));
+      if (n != null && n > 0) steps[iso(d)] = n;
     }
-    return agregarDias(pontos, passos, de, ate);
+    return aggregateDays(points, steps, de, ate);
   }
 
-  /// Frequência cardíaca do relógio entre [de] e [ate] (a sessão de treino), ou null sem amostras.
-  /// O Samsung Health leva alguns minutos para passar as amostras ao Health Connect.
-  Future<Map<String, dynamic>?> frequencia(DateTime de, DateTime ate) async {
-    await _configurar();
-    final pontos = await _health.getHealthDataFromTypes(
+  /// Watch heart rate between [from] and [to] (the workout session), or null without samples.
+  /// Samsung Health takes a few minutes to pass the samples to Health Connect.
+  Future<Map<String, dynamic>?> frequency(DateTime de, DateTime ate) async {
+    await _configure();
+    final points = await _health.getHealthDataFromTypes(
       types: const [HealthDataType.HEART_RATE],
       startTime: de,
       endTime: ate,
     );
-    return resumirFrequencia([
-      for (final p in pontos)
+    return summarizeHeartRate([
+      for (final p in points)
         if (p.value is NumericHealthValue) (p.value as NumericHealthValue).numericValue.toDouble(),
     ]);
   }
 }
 
-/// Média, máxima e mínima no formato de `frequencia` da sessão de treino.
-Map<String, dynamic>? resumirFrequencia(List<double> bpm) {
+/// Average, max and min in the format of the workout session `frequencia`.
+Map<String, dynamic>? summarizeHeartRate(List<double> bpm) {
   final v = [for (final b in bpm) if (b > 20 && b < 250) b];
   if (v.isEmpty) return null;
   return {

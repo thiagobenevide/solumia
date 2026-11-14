@@ -11,7 +11,7 @@ def lancados(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, ...]]:
     return done
 
 
-async def test_abre_site_e_pesquisa(lancados: list[tuple[str, ...]]) -> None:
+async def test_opens_site_and_searches(lancados: list[tuple[str, ...]]) -> None:
     await pc.execute({"acao": "abrir_site", "url": "youtube.com/@ThiagoBenevide"})
     await pc.execute({"acao": "pesquisar", "consulta": "Flamengo hoje", "onde": "youtube"})
     assert lancados == [
@@ -20,7 +20,7 @@ async def test_abre_site_e_pesquisa(lancados: list[tuple[str, ...]]) -> None:
     ]
 
 
-async def test_recusa_fora_da_lista(lancados: list[tuple[str, ...]]) -> None:
+async def test_refuses_outside_list(lancados: list[tuple[str, ...]]) -> None:
     for request in (
         {"acao": "shell", "comando": "rm -rf ~"},
         {"acao": "abrir_programa", "nome": "bash"},

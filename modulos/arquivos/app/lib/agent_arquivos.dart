@@ -1,9 +1,9 @@
-/// Módulo Arquivos: biblioteca de PDF, DOCX e PPTX com leitor, anotação à tinta e destaques.
+/// Arquivos module: PDF, DOCX and PPTX library with reader, ink annotation and highlights.
 library;
 
-export 'src/api_arquivos.dart' show ApiArquivos;
-export 'src/leitor/previa_tela.dart' show abrirPrevia;
-export 'src/modelos.dart' show Arquivo;
-export 'src/modulo_arquivos.dart';
-export 'src/telas/biblioteca_tela.dart' show abrirArquivo, extensoesAceitas;
-export 'src/telas/projetos_leitura.dart' show projetosAtivos;
+export 'src/files_api.dart' show FilesApi;
+export 'src/reader/preview_screen.dart' show openPreview;
+export 'src/models.dart' show FileItem;
+export 'src/files_module.dart';
+export 'src/screens/library_screen.dart' show openFile, acceptedExtensions;
+export 'src/screens/reading_projects.dart' show activeProjects;

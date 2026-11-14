@@ -1,5 +1,5 @@
-"""Retrato do uso da máquina do Worker, enviado junto do heartbeat: carga de CPU, RAM e GPUs
-NVIDIA (via `nvidia-smi`, se existir). Só lê `/proc`; em outro SO os campos ficam nulos."""
+"""Snapshot of the Worker machine usage, sent with the heartbeat: CPU load, RAM and NVIDIA GPUs
+(through `nvidia-smi`, if present). Only reads `/proc`; on another OS the fields stay null."""
 
 import os
 import shutil

@@ -5,20 +5,20 @@ from esteira.dataset import edits as E
 from esteira.filmcraft import TICKS
 
 
-def _fcproj(tmp_path, clipes):
+def _fcproj(tmp_path, clips):
     items = {"1": {"kind": {"Media": {"media": {"File": {"path": "/x/midia/a.jpg"}}}}},
              "2": {"kind": {"Media": {"media": {"File": {"path": "/x/midia/b.jpg"}}}}},
              "3": {"kind": {"Media": {"media": {"File": {"path": "/x/midia/c.jpg"}}}}}}
-    track = {"name": "Video 1", "items": [{"item": i, "name": n, "start": int(em * TICKS), "duration": int(d * TICKS),
+    track = {"name": "Video 1", "items": [{"item": i, "name": n, "start": int(at * TICKS), "duration": int(d * TICKS),
                                             "source_in": int(o * TICKS), "speed": v}
-                                           for i, n, em, d, o, v in clipes]}
+                                           for i, n, at, d, o, v in clips]}
     items["9"] = {"kind": {"Sequence": {"video_tracks": [track], "audio_tracks": []}}}
     file = tmp_path / "e.fcproj"
     file.write_text(json.dumps({"project": {"items": items}}))
     return file
 
 
-def test_levantar_fc_remover_mover_aparar_velocidade_e_colocar(tmp_path):
+def test_lift_fc_remove_move_trim_speed_and_place(tmp_path):
     doc = {"ops": [{"op": "colocar", "id": "c1", "midia": "cena:1", "trilha": "base", "em": 0, "dur": 4},
                    {"op": "colocar", "id": "c2", "midia": "cena:2", "trilha": "base", "em": 4, "dur": 4},
                    {"op": "colocar", "id": "c3", "midia": "cena:3", "trilha": "base", "em": 8, "dur": 4}]}
@@ -35,7 +35,7 @@ def test_levantar_fc_remover_mover_aparar_velocidade_e_colocar(tmp_path):
     assert new["midia"] == "arquivo:a.jpg" and new["em"] == 20 and not raw
 
 
-def test_levantar_pc_traz_texto_editado_e_marca_camada_nova():
+def test_lift_pc_brings_edited_text_and_marks_new_layer():
     doc = {"elementos": [{"tipo": "titulo", "conteudo": "O *ERRO*", "tamanho": 0.2},
                          {"tipo": "caixa", "conteudo": "abc", "pos": [0, 0], "largura": 0.3, "tamanho": 0.05}]}
     info = {"height": 720, "layers": [{"name": "Título", "text": {"text": "O GRANDE ERRO", "sizePt": 144.0}},

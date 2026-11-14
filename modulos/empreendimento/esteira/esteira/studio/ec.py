@@ -28,13 +28,13 @@ def available():
     return shutil.which(CLI) is not None
 
 
-def install_fonts(pele):
+def install_fonts(skin):
     """Copia os arquivos das fontes da pele (kit ou enviadas) para as fontes do usuário. → True se copiou alguma."""
     everything = {**fonts.CATALOG, **fonts._uploaded()}
     copiou = False
     SOURCES_USER.mkdir(parents=True, exist_ok=True)
     for role in ROLES.values():
-        for file, *_ in everything.get(getattr(pele, role), ([], ""))[0]:
+        for file, *_ in everything.get(getattr(skin, role), ([], ""))[0]:
             origin = fonts.path(file)
             if origin and origin.suffix.lower() in (".ttf", ".otf") and not (SOURCES_USER / origin.name).exists():
                 shutil.copy(origin, SOURCES_USER / origin.name)
@@ -42,14 +42,14 @@ def install_fonts(pele):
     return copiou
 
 
-def data(ficha, encaixes, botoes, batidas, pele, fmt, dur, t0=0.3, instants=(), area=0.03, cauda=0.5):
+def data(card, slots, buttons, beats, skin, fmt, duration, t0=0.3, instants=(), area=0.03, tail=0.5):
     """DADOS do script. `cauda`: sobra depois da peça (prova/prévia); na produção 0 (a comp tem o tamanho da cena)."""
     from esteira.studio.piece import DIM
     W, H = DIM[fmt]
-    colors = {k: getattr(pele, k) for k in ("fundo", "fundo2", "texto", "destaque", "apoio", "acento")}
-    return {"encaixes": encaixes, "botoes": botoes, "batidas": batidas, "t0": t0, "dur": round(t0 + dur + cauda, 3),
-            "w": W, "h": H, "fps": 30, "pele": {**colors, **{k: fonts.resolve(getattr(pele, v)) for k, v in ROLES.items()}},
-            "area": area, "instantes": list(instants), "tela_cheia": ficha.tela_cheia}
+    colors = {k: getattr(skin, k) for k in ("fundo", "fundo2", "texto", "destaque", "apoio", "acento")}
+    return {"encaixes": slots, "botoes": buttons, "batidas": beats, "t0": t0, "dur": round(t0 + duration + tail, 3),
+            "w": W, "h": H, "fps": 30, "pele": {**colors, **{k: fonts.resolve(getattr(skin, v)) for k, v in ROLES.items()}},
+            "area": area, "instantes": list(instants), "tela_cheia": card.tela_cheia}
 
 
 def script(id_, d, rescan=False):
@@ -72,19 +72,19 @@ def body(id_, d):
     return (PIECES / id_ / "peca.jsx").read_text()
 
 
-def _run(cmd, timeout=300, rotulo=None):
-    if rotulo:  # render com `--progress`: alimenta a barra do Monitor (mesmo leitor dos gráficos)
+def _run(cmd, timeout=300, label=None):
+    if label:  # render com `--progress`: alimenta a barra do Monitor (mesmo leitor dos gráficos)
         from esteira.graphics.effectcraft import _run as com_progresso
-        return com_progresso(cmd, rotulo, timeout)
+        return com_progresso(cmd, label, timeout)
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if r.returncode:
         raise RuntimeError(f"EffectCraft: {(r.stderr or r.stdout).strip()[-400:]}")
     return r.stdout
 
 
-def assemble(id_, d, ecproj, pele=None):
+def assemble(id_, d, ecproj, skin=None):
     """Monta o `.ecproj` da peça. → (estouros, saída). Erro de script vira RuntimeError com a mensagem da engine."""
-    rescan = install_fonts(pele) if pele is not None else False
+    rescan = install_fonts(skin) if skin is not None else False
     with tempfile.TemporaryDirectory(prefix="ecp_") as tmp:
         file = Path(tmp) / "peca.jsx"
         file.write_text(script(id_, d, rescan))
@@ -94,32 +94,32 @@ def assemble(id_, d, ecproj, pele=None):
     return re.findall(r"^estouro (.+)$", output, re.M), output
 
 
-def frame(ecproj, t, destino, fundo, escala=0.5):
+def frame(ecproj, t, destination, background, scale=0.5):
     """Quadro da comp "Peça" no instante t sobre a cor de fundo da pele, em JPG (metade do tamanho)."""
     with tempfile.TemporaryDirectory(prefix="ecq_") as tmp:
         png = Path(tmp) / "q.png"
         _run([CLI, "render-frame", "--project", str(ecproj), "--comp", "Peça", "--time", f"{t:.3f}", "--out", str(png),
                 "--transparent"])
         subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(png), "-f", "lavfi", "-i",
-                        f"color=c={fundo.replace('#', '0x')}:s=16x16", "-filter_complex",
-                        f"[1][0]scale2ref[f][q];[f][q]overlay,scale=iw*{escala}:-2", "-frames:v", "1", "-q:v", "4",
-                        str(destino)], check=True)
-    return Path(destino)
+                        f"color=c={background.replace('#', '0x')}:s=16x16", "-filter_complex",
+                        f"[1][0]scale2ref[f][q];[f][q]overlay,scale=iw*{scale}:-2", "-frames:v", "1", "-q:v", "4",
+                        str(destination)], check=True)
+    return Path(destination)
 
 
-def render_webm(ecproj, destino):
+def render_webm(ecproj, destination):
     """WebM VP9 com alfa da comp "Peça" (o Chromium do HyperFrames toca com transparência)."""
-    _run([CLI, "render", "--project", str(ecproj), "--comp", "Peça", "--out", str(destino), "--format", "webm",
+    _run([CLI, "render", "--project", str(ecproj), "--comp", "Peça", "--out", str(destination), "--format", "webm",
             "--webm-codec", "vp9", "--channels", "rgba", "--quality", "best", "--progress"], timeout=900,
-           rotulo=f"EffectCraft: {Path(destino).name}")
-    return Path(destino)
+           label=f"EffectCraft: {Path(destination).name}")
+    return Path(destination)
 
 
-def render_mp4(ecproj, destino):
+def render_mp4(ecproj, destination):
     """MP4 da comp "Peça" (prévia da revisão: sem alfa, sobre o preto)."""
-    _run([CLI, "render", "--project", str(ecproj), "--comp", "Peça", "--out", str(destino), "--format", "h264",
-            "--quality", "draft", "--progress"], timeout=900, rotulo=f"EffectCraft: {Path(destino).name}")
-    return Path(destino)
+    _run([CLI, "render", "--project", str(ecproj), "--comp", "Peça", "--out", str(destination), "--format", "h264",
+            "--quality", "draft", "--progress"], timeout=900, label=f"EffectCraft: {Path(destination).name}")
+    return Path(destination)
 
 
 # ---------------------------------------------------------------- portão
@@ -130,12 +130,12 @@ RE_SOURCE = re.compile(r"\bfont\s*:\s*[\"']")
 FORBIDDEN = re.compile(r"\b(?:Math\.random|Date\s*\(|new\s+Date|app\.project\.items\.addComp|writeLn)\b")
 
 
-def check_code(id_, ficha):
+def check_code(id_, card):
     """Checagens estáticas do peca.jsx: existe, sintaxe (node), pele só por papel, encaixes/botões declarados."""
     from esteira.studio import piece as P
     errors, warnings = [], []
     if (PIECES / id_ / "peca.n1.json").exists():
-        return check_n1(id_, ficha)
+        return check_n1(id_, card)
     file = PIECES / id_ / "peca.jsx"
     if not file.exists():
         return ["falta peca.jsx ou peca.n1.json"], warnings
@@ -157,7 +157,7 @@ def check_code(id_, ficha):
         errors.append(f"peca.jsx: {m.group(0)} não pode (aleatório/tempo real, comp própria ou saída que o portão lê)")
     used_and = {a or b for a, b in re.findall(r"\bE\s*(?:\.\s*(\w+)|\[\s*[\"'](\w+)[\"']\s*\])", code)}
     used_b = {a or b for a, b in re.findall(r"\bB\s*(?:\.\s*(\w+)|\[\s*[\"'](\w+)[\"']\s*\])", code)}
-    names_and, names_b = {e.nome for e in ficha.encaixes}, {b.nome for b in ficha.botoes}
+    names_and, names_b = {e.nome for e in card.encaixes}, {b.nome for b in card.botoes}
     if outside := used_and - names_and:
         errors.append(f"peca.jsx usa encaixes que a ficha não declara: {sorted(outside)}")
     if outside := used_b - names_b:
@@ -169,7 +169,7 @@ def check_code(id_, ficha):
     return errors, warnings
 
 
-def check_n1(id_, ficha):
+def check_n1(id_, card):
     """Peça em N1: esquema, compila com os padrões da ficha, sintaxe do script gerado e encaixes/botões declarados."""
     from esteira.n1 import effectcraft as N1
     from esteira.studio import piece as P
@@ -191,7 +191,7 @@ def check_n1(id_, ficha):
               "posição NA TELA do primeiro item (ex.: x 0.1, y 0.3), não relativa; o `passo` anda a partir dela"
               for r in doc.elementos if r.tipo == "repetir" for x in r.elementos
               if x.x is not None and x.y is not None and x.x < 0.03 and x.y < 0.03]
-    lists = {e.nome for e in ficha.encaixes if e.tipo in ("itens", "pares")}
+    lists = {e.nome for e in card.encaixes if e.tipo in ("itens", "pares")}
     errors += [f"o encaixe-lista {n!r} da ficha não é usado: faça um `repetir` com \"encaixe\": {n!r} (sem ele os itens "
               "mostram 1, 2, 3 no lugar do texto)" for n in sorted(lists - used_and)]
     if any(e.tipo == "repetir" for e in everything):
@@ -199,9 +199,9 @@ def check_n1(id_, ficha):
     used_b = {c.botao for c in conds if c.botao}
     if doc.botao_velocidade:
         used_b.add(doc.botao_velocidade)
-    names_and, names_b = {e.nome for e in ficha.encaixes}, {b.nome for b in ficha.botoes}
+    names_and, names_b = {e.nome for e in card.encaixes}, {b.nome for b in card.botoes}
     if outside := used_and - names_and:
-        lists = [e.nome for e in ficha.encaixes if e.tipo in ("itens", "pares")]
+        lists = [e.nome for e in card.encaixes if e.tipo in ("itens", "pares")]
         hint = (f" ({{{{item}}}} só existe dentro de um elemento `repetir` com \"encaixe\": {lists[0]!r}: mova os "
                 "elementos do item para `elementos` do repetir e use `passo` para espaçar)") if "item" in outside and lists else ""
         errors.append(f"peca.n1.json usa encaixes que a ficha não declara: {sorted(outside)}{hint}")
@@ -210,9 +210,9 @@ def check_n1(id_, ficha):
     if stopped := names_and - used_and:
         warnings.append(f"encaixes declarados e não usados: {sorted(stopped)}")
     example = {"numero": "R$ 8.888", "pares": [{"rotulo": "XXXX", "valor": "8"}] * 3, "itens": ["XXXX"] * 3}
-    d = {"encaixes": {e.nome: example.get(e.tipo, "X" * min(e.max_car, 12)) for e in ficha.encaixes},
-         "botoes": {b.nome: b.padrao for b in ficha.botoes}, "batidas": {}, "t0": 0.3, "dur": 6, "w": 1920,
-         "h": 1080, "fps": 30, "tela_cheia": ficha.tela_cheia}
+    d = {"encaixes": {e.nome: example.get(e.tipo, "X" * min(e.max_car, 12)) for e in card.encaixes},
+         "botoes": {b.nome: b.padrao for b in card.botoes}, "batidas": {}, "t0": 0.3, "dur": 6, "w": 1920,
+         "h": 1080, "fps": 30, "tela_cheia": card.tela_cheia}
     try:
         js = N1.build(doc, d)
     except N1.ErrorN1 as e:
@@ -231,11 +231,11 @@ def check_n1(id_, ficha):
 COLORS_STRONG = ("destaque", "acento", "apoio")
 
 
-def _layout_bad(nos, doc, N1) -> list[str]:
+def _layout_bad(nodes, doc, N1) -> list[str]:
     """Defeitos de caixa que a revisão do Claude reprovava sempre (traço que vira bloco, texto sem contraste sobre
     forma colorida, texto colado na borda, coluna de níveis misturados sem pesos): pegos aqui de graça."""
     errors = []
-    for e, parent in nos:
+    for e, parent in nodes:
         if not isinstance(parent, N1.Box):
             continue
         disp = parent.disposicao
@@ -256,10 +256,10 @@ def _layout_bad(nos, doc, N1) -> list[str]:
                     errors.append(f"retângulo {e.nome!r} sem `{missing}` numa `{disp}` ocupa {part:.0%} da caixa "
                                  f"{parent.nome!r} e vira um bloco: dê `{missing}` pequeno (traço: 0.006) ou peso mínimo "
                                  "à célula dele nos `pesos`")
-    for e, _ in nos:  # forma de dado (barra, fatia) na cor do fundo some
+    for e, _ in nodes:  # forma de dado (barra, fatia) na cor do fundo some
         if (getattr(e, "proporcional", False) or getattr(e, "fatia", False)) and e.cor in ("fundo", "fundo2"):
             errors.append(f"forma de dado {e.nome!r} na cor `{e.cor}` some no fundo: use `destaque` (ou `acento`)")
-    for cx, parent in ((e, m) for e, m in nos if isinstance(e, N1.Box)):
+    for cx, parent in ((e, m) for e, m in nodes if isinstance(e, N1.Box)):
         shapes = [x for x in cx.filhos if isinstance(x, (N1.Rectangle, N1.Ellipse)) and x.cor in COLORS_STRONG
                   and not getattr(x, "contorno", 0)]
         if cx.disposicao == "camadas" and shapes:
@@ -286,19 +286,19 @@ def _layout_bad(nos, doc, N1) -> list[str]:
     return errors
 
 
-def _small(doc, ficha, N1) -> list[str]:
+def _small(doc, card, N1) -> list[str]:
     """Compila com o texto máximo nos formatos da ficha: texto que a célula espreme vira rótulo ilegível (o Claude
     reprovava; o `caber` do EffectCraft ainda encolhe mais)."""
     from esteira.studio import piece as P
-    scene = P._scene(ficha, 4.0)
+    scene = P._scene(card, 4.0)
     found: dict[str, list[str]] = {}
     for fmt, (w, h) in P.DIM.items():
-        if fmt not in ficha.formatos:
+        if fmt not in card.formatos:
             continue
         c = N1.Compiler(doc, {"encaixes": scene["encaixes"], "botoes": scene["botoes"], "batidas": scene["batidas"],
-                                "t0": 0.3, "dur": 4.0, "w": w, "h": h, "fps": 30, "tela_cheia": ficha.tela_cheia})
+                                "t0": 0.3, "dur": 4.0, "w": w, "h": h, "fps": 30, "tela_cheia": card.tela_cheia})
         try:
-            c.compilar()
+            c.compile_script()
         except Exception:  # noqa: BLE001 — erro de compilação é do portão técnico, com a mensagem dele
             continue
         for n in dict.fromkeys(c.small):
@@ -317,7 +317,7 @@ def _descendants(cx, N1):
             yield from ((y, x) for y in x.elementos)
 
 
-def check_structure(doc, ficha) -> list[str]:
+def check_structure(doc, card) -> list[str]:
     """Portão estrutural, antes do render (de graça): o que compila mas sai vazio ou quebrado na tela. Eram esses
     os defeitos que só a revisão do Claude pegava (caixa vazia, encaixe obrigatório invisível, fileira de bolinhas,
     `se` com valor que o botão não tem, regiões sobrepostas)."""
@@ -339,21 +339,21 @@ def check_structure(doc, ficha) -> list[str]:
         if e.tipo != "repetir":
             continue
         texts = [x for x in e.elementos if x.tipo == "texto"]
-        forma_of_given = any(getattr(x, "fatia", False) or getattr(x, "proporcional", False) for x in e.elementos)
+        shape_of_given = any(getattr(x, "fatia", False) or getattr(x, "proporcional", False) for x in e.elementos)
         if not e.elementos:
             errors.append(f"`repetir` {e.nome!r} sem elementos no molde")
-        elif e.encaixe and not texts and not forma_of_given:
+        elif e.encaixe and not texts and not shape_of_given:
             errors.append(f"o molde do `repetir` {e.nome!r} não tem texto: cada item precisa mostrar o próprio conteúdo "
                          "({{item}} ou {{item.rotulo}}); só formas viram blocos de cor sem significado")
         elif not e.encaixe and not texts and not (isinstance(parent, N1.Box) and parent.disposicao == "grade"):
             errors.append(f"`repetir` {e.nome!r} de formas sem texto fora de caixa `grade`: os itens viram uma fileira "
                          "(ponha numa caixa `grade` com `colunas`, ou mostre texto em cada item)")
     errors += _layout_bad(nodes, doc, N1)
-    errors += _small(doc, ficha, N1)
+    errors += _small(doc, card, N1)
     content = " ".join(x.conteudo for x, _ in nodes if x.tipo == "texto")
     visiveis = {e.encaixe for e, _ in nodes if e.tipo == "repetir" and e.encaixe and any(
         x.tipo == "texto" or getattr(x, "fatia", False) or getattr(x, "proporcional", False) for x in e.elementos)}
-    for enc in ficha.encaixes:
+    for enc in card.encaixes:
         if not enc.obrigatorio:
             continue
         if enc.tipo in ("itens", "pares") and enc.nome not in visiveis:
@@ -363,8 +363,8 @@ def check_structure(doc, ficha) -> list[str]:
                 r"\{\{" + re.escape(enc.nome) + r"(\.\w+)?\}\}", content):
             errors.append(f"o encaixe obrigatório {enc.nome!r} não aparece: ponha um texto com "
                          f"\"conteudo\": \"{{{{{enc.nome}}}}}\"")
-    buttons = {b.nome: [str(v) for v in b.valores] for b in ficha.botoes}
-    fits = {e.nome for e in ficha.encaixes}
+    buttons = {b.nome: [str(v) for v in b.valores] for b in card.botoes}
+    fits = {e.nome for e in card.encaixes}
     values = {v: b for b, vs in buttons.items() for v in vs}
     for x in [*(e for e, _ in nodes), *doc.animacoes, *(a for e, _ in nodes if e.tipo == "repetir" for a in e.animacoes)]:
         for c in N1.conditions(x.se):
@@ -393,15 +393,15 @@ def check_structure(doc, ficha) -> list[str]:
              and any(x.tipo == "texto" for x, _ in andar(c.filhos))]
     if telas and len(set(regions)) > 1:
         # a LLM quase nunca escreve "tela": ela cria uma caixa nova sem `regiao` (o padrão é tela) e não achava qual era
-        sem = [c.nome for c in telas if "regiao" not in c.model_fields_set]
+        without_region = [c.nome for c in telas if "regiao" not in c.model_fields_set]
         errors.append(f"caixa `tela` com texto junto de outras regiões ({[c.nome for c in telas]}"
-                     + (f"; {sem} estão sem `regiao`, e sem ela a caixa vira `tela`" if sem else "")
+                     + (f"; {without_region} estão sem `regiao`, e sem ela a caixa vira `tela`" if without_region else "")
                      + "): o texto fica por cima delas. Ponha o conteúdo dela dentro da caixa da região certa "
                        "(ex.: a de `centro`) ou dê a ela uma região livre; na `tela` só formas de fundo, ou só ela")
     return errors
 
 
-def prove(id_, ficha):
+def prove(id_, card):
     """Texto máximo nas duas peles de prova × formatos: monta, mede o estouro em INSTANTES e fotografa o meio.
     → (erros, quadros, segundos de montagem + quadro)."""
     from esteira.studio import piece as P
@@ -409,14 +409,14 @@ def prove(id_, ficha):
     proof = PIECES / id_ / "prova"
     shutil.rmtree(proof, ignore_errors=True)
     proof.mkdir(parents=True)
-    duration = min(ficha.duracao_max, max(ficha.duracao_min, 4.0))
-    scene = P._scene(ficha, duration)
+    duration = min(card.duracao_max, max(card.duracao_min, 4.0))
+    scene = P._scene(card, duration)
     t0 = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="ecprova_") as tmp:
         for name_skin, skin in P.SKINS_PROOF.items():
-            for fmt in ficha.formatos:
+            for fmt in card.formatos:
                 inst = [round(scene["t"] + f * duration, 2) for f in P.INSTANTS]
-                d = data(ficha, scene["encaixes"], scene["botoes"], scene["batidas"], skin, fmt, duration, scene["t"], inst,
+                d = data(card, scene["encaixes"], scene["botoes"], scene["batidas"], skin, fmt, duration, scene["t"], inst,
                           P.AREA_SAFE)
                 ecproj = Path(tmp) / f"{name_skin}_{fmt.replace(':', 'x')}.ecproj"
                 try:
@@ -440,7 +440,7 @@ def preview(id_, est, fmt):
     from esteira.studio import piece as P
     card = P.load(id_)
     duration = min(card.duracao_max, max(card.duracao_min, 5.0))
-    scene = P._scene(card, duration, encaixes=P.examples(card))
+    scene = P._scene(card, duration, slots=P.examples(card))
     d = data(card, scene["encaixes"], scene["botoes"], scene["batidas"], est.pele, fmt, duration, scene["t"])
     output = P.previews_dir(id_) / f"{est.id}_{fmt.replace(':', 'x')}.mp4"
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -451,14 +451,14 @@ def preview(id_, est, fmt):
     return output
 
 
-def to_production(id_, cena, est, fmt, destination_webm):
+def to_production(id_, scene, est, fmt, destination_webm):
     """Renderiza a peça para uma cena do mapa (encaixes/botões da cena, pele do estilo) → WebM com alfa do tamanho
     da cena; o `.ecproj` fica ao lado para edição à mão."""
     from esteira.studio import piece as P
     card = P.load(id_)
-    duration = max(0.6, cena["ate"] - cena["t"])
-    d = data(card, cena.get("encaixes") or {}, {**P.defaults(card), **(cena.get("botoes") or {})},
-              {k: round(v - cena["t"], 3) for k, v in (cena.get("batidas") or {}).items()}, est.pele, fmt, duration, 0.0, cauda=0.0)
+    duration = max(0.6, scene["ate"] - scene["t"])
+    d = data(card, scene.get("encaixes") or {}, {**P.defaults(card), **(scene.get("botoes") or {})},
+              {k: round(v - scene["t"], 3) for k, v in (scene.get("batidas") or {}).items()}, est.pele, fmt, duration, 0.0, tail=0.0)
     ecproj = Path(destination_webm).with_suffix(".ecproj")
     assemble(id_, d, ecproj, est.pele)
     return render_webm(ecproj, destination_webm)

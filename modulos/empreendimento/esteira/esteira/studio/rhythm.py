@@ -61,7 +61,7 @@ def save(profile: Profile):
 
 def of_script(project):
     """`ritmo:` do frontmatter do roteiro (longo | curto) ou None."""
-    file = project.pasta / "roteiro_original.md"
+    file = project.folder_path / "roteiro_original.md"
     if not file.exists():
         return None
     m = re.match(r"^---\n(.*?)\n---", file.read_text(), re.S)
@@ -73,7 +73,7 @@ def id_of(project):
     """Perfil do vídeo: o do roteiro, senão curto para o Short e longo para o resto."""
     if r := of_script(project):
         return r
-    file = project.pasta / "roteiro.json"
+    file = project.folder_path / "roteiro.json"
     short = bool(json.loads(file.read_text()).get("short")) if file.exists() else False
     return "curto" if short or project.vertical else "longo"
 
@@ -82,42 +82,42 @@ def profile_of(project):
     return load(id_of(project))
 
 
-def aplicar(estilo, profile: Profile):
+def apply(style, profile: Profile):
     """Cópia do estilo para a produção com o ritmo do perfil (o estilo salvo não muda)."""
-    rg = estilo.regras.model_dump()
+    rg = style.regras.model_dump()
     rg.update(profile.regras)
     for k, cap in profile.tetos.items():
         if k in rg:
             rg[k] = min(rg[k], cap)
     rg["legenda_visual"] = {**rg["legenda_visual"], **profile.legenda}
-    pres = {**estilo.presenca.model_dump(), **profile.presenca}
-    return estilo.model_copy(update={"regras": type(estilo.regras).model_validate(rg),
-                                     "presenca": type(estilo.presenca).model_validate(pres)})
+    pres = {**style.presenca.model_dump(), **profile.presenca}
+    return style.model_copy(update={"regras": type(style.regras).model_validate(rg),
+                                     "presenca": type(style.presenca).model_validate(pres)})
 
 
 # ---------------------------------------------------------------- direção e conferência
 
-def hook(cenas, profile: Profile, frases):
+def hook(scenes, profile: Profile, sentences):
     """Curto: se nenhuma peça começa nos primeiros `gancho_s`, a primeira frase ganha uma frase de impacto (o
     espectador decide nos 2 primeiros segundos). Devolve as cenas (a nova marcada `por: "ritmo"`)."""
-    if not profile.gancho_s or not frases:
-        return cenas
-    if any(c["t"] <= profile.gancho_s and c["cena"] != "midia" for c in cenas):
-        return cenas
-    f = frases[0]
+    if not profile.gancho_s or not sentences:
+        return scenes
+    if any(c["t"] <= profile.gancho_s and c["cena"] != "midia" for c in scenes):
+        return scenes
+    f = sentences[0]
     end = min(f["fim"] + 0.3, profile.gancho_s + profile.peca_s[1])
-    if cenas:
-        end = min(end, cenas[0]["t"] - 0.05)
+    if scenes:
+        end = min(end, scenes[0]["t"] - 0.05)
     if end - 0.0 < profile.peca_s[0]:
-        return cenas
+        return scenes
     new = {"frase_i": 0, "frase": f["texto"], "cena": "frase_destaque", "t": 0.0, "ate": round(end, 3),
             "titulo": _short(f["texto"]), "ancora": "", "valores": [], "por": "ritmo", "takeover": False}
-    return [new] + cenas
+    return [new] + scenes
 
 
-def _short(texto, n=6):
+def _short(text, n=6):
     """As primeiras palavras da frase (frase de impacto do gancho), com a última em destaque."""
-    ws = re.sub(r"[.!?…]+$", "", texto.strip()).split()[:n]
+    ws = re.sub(r"[.!?…]+$", "", text.strip()).split()[:n]
     if len(ws) > 1:
         ws[-1] = f"*{ws[-1]}*"
     return " ".join(ws)
@@ -130,23 +130,23 @@ SWAPS = {"frase_destaque": "lettering", "lettering": "frase_destaque", "contador
           "alerta": "carimbo", "carimbo": "alerta", "passo_a_passo": "lista_itens"}
 
 
-def without_chapters(cenas, profile: Profile):
+def without_chapters(scenes, profile: Profile):
     """Perfil sem capítulos (curto): cartela de capítulo vira frase de impacto sobre a mídia."""
     if not profile.capitulos:
-        for c in cenas:
+        for c in scenes:
             if c["cena"] == "titulo_capitulo" and c.get("por") != "voce":
                 c["cena"] = "frase_destaque"
-    return cenas
+    return scenes
 
 
-def anti_repetition(cenas, profile: Profile, swaps=None):
+def anti_repetition(scenes, profile: Profile, swaps=None):
     """A mesma peça dentro de `anti_repeticao_s` troca pela parecida (`trocas[peça]`, se o canal tiver); sem
     alternativa, só vira mídia quando repete colada na anterior e não leva dado (número, itens); senão fica e a
     conferência avisa. Cenas da pessoa (`por: "voce"`) e de gatilho ficam. A IA tende a repetir o que funcionou: a
     anti-repetição é sempre código."""
     swaps = swaps or {}
     last, previous = {}, None
-    for c in cenas:
+    for c in scenes:
         if c["cena"] == "midia":
             continue
         t0 = last.get(c["cena"])
@@ -159,28 +159,28 @@ def anti_repetition(cenas, profile: Profile, swaps=None):
         if c["cena"] != "midia":
             last[c["cena"]] = c["t"]
             previous = c["cena"]
-    return cenas
+    return scenes
 
 
-def cross_check(cenas, midia, duration, profile: Profile):
+def cross_check(scenes, media, duration, profile: Profile):
     """Conferência de ritmo do mapa: trechos sem virada visual (nenhuma peça entrando nem mídia trocando) maiores
     que `virada_s[1]`, gancho do curto, peças fora de `peca_s` e duração do vídeo fora do perfil → avisos."""
     warnings = []
-    swaps = sorted({0.0, duration, *(c["t"] for c in cenas), *(c["ate"] for c in cenas),
-                     *(m["ini"] for m in midia)})
+    swaps = sorted({0.0, duration, *(c["t"] for c in scenes), *(c["ate"] for c in scenes),
+                     *(m["ini"] for m in media)})
     for a, b in zip(swaps, swaps[1:], strict=False):
         if b - a > profile.virada_s[1] + 0.5:
             warnings.append({"tipo": "sem_virada", "t": round(a, 2), "texto": f"{b - a:.0f} s sem virada visual "
                            f"(o perfil {profile.id} pede algo novo a cada {profile.virada_s[0]:.0f}–{profile.virada_s[1]:.0f} s)"})
-    if profile.gancho_s and not any(c["t"] <= profile.gancho_s and c["cena"] != "midia" for c in cenas):
+    if profile.gancho_s and not any(c["t"] <= profile.gancho_s and c["cena"] != "midia" for c in scenes):
         warnings.append({"tipo": "gancho", "t": 0.0, "texto": f"nenhuma peça nos primeiros {profile.gancho_s:.0f} s"})
-    for c in cenas:
+    for c in scenes:
         d = c["ate"] - c["t"]
         if c["cena"] != "midia" and d > profile.peca_s[1] + 0.5:
             warnings.append({"tipo": "peca_longa", "t": c["t"], "texto": f"{c['cena']} fica {d:.1f} s (máx. "
                            f"{profile.peca_s[1]:.0f} s no perfil {profile.id})"})
     uses = {}
-    for c in cenas:
+    for c in scenes:
         if c["cena"] != "midia":
             uses.setdefault(c["cena"], []).append(c["t"])
     for piece_, ts in uses.items():

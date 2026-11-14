@@ -6,15 +6,14 @@ from typing import Any
 
 from worker.core.config import WorkerSettings
 
-# Cópia intencional de gateway/src/gateway/core/logging.py: Gateway e Worker
-# são implantados/atualizados de forma independente (VPS vs. máquina
-# pessoal), então não compartilham um módulo de infraestrutura — só os
-# contratos de protocolo em shared/. Mantenha as duas cópias em sincronia se
-# o formato mudar.
+# Intentional copy of backend/core/logging.py: Gateway and Worker are
+# deployed/updated independently (VPS vs. personal machine), so they do not
+# share an infrastructure module — only the protocol contracts in shared/.
+# Keep both copies in sync if the format changes.
 
 
 class JsonFormatter(logging.Formatter):
-    """Formata cada log record como uma linha JSON, adequada para produção."""
+    """Formats each log record as one JSON line, suitable for production."""
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
@@ -29,7 +28,7 @@ class JsonFormatter(logging.Formatter):
 
 
 class ConsoleFormatter(logging.Formatter):
-    """Formato legível por humano, usado em desenvolvimento."""
+    """Human-readable format, used in development."""
 
     def format(self, record: logging.LogRecord) -> str:
         base = (
@@ -42,7 +41,7 @@ class ConsoleFormatter(logging.Formatter):
 
 
 def configure_logging(settings: WorkerSettings) -> None:
-    """Configura o logging raiz do Worker de acordo com as settings."""
+    """Configures the Worker root logging according to the settings."""
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.setFormatter(JsonFormatter() if settings.log_format == "json" else ConsoleFormatter())
 
@@ -51,5 +50,5 @@ def configure_logging(settings: WorkerSettings) -> None:
     root_logger.addHandler(handler)
     root_logger.setLevel(settings.log_level.upper())
 
-    # websockets é bem verboso em DEBUG/INFO durante ping/pong; mantém em WARNING.
+    # websockets is very verbose at DEBUG/INFO during ping/pong; keep it at WARNING.
     logging.getLogger("websockets").setLevel(logging.WARNING)

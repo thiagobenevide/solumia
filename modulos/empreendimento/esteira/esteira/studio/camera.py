@@ -29,10 +29,10 @@ def destination(project):
     return cut.folder(project) / "camera.mp4"
 
 
-def _in_camera(trechos, t):
+def _in_camera(segments, t):
     """Tempo da narração editada → tempo na câmera (pelos intervalos da esteira + offset do WAV)."""
-    for start, cam, duration in trechos:
-        if t < start + duration or (start, cam, duration) == trechos[-1]:
+    for start, cam, duration in segments:
+        if t < start + duration or (start, cam, duration) == segments[-1]:
             return cam + max(0.0, t - start)
     return t
 
@@ -103,8 +103,8 @@ def face(video, samples=24):
         if not ok:
             continue
         H, W = q.shape[:2]
-        cinza = cv2.cvtColor(q, cv2.COLOR_BGR2GRAY)
-        rostos = det.detectMultiScale(cinza, 1.1, 6, minSize=(H // 12, H // 12))
+        gray = cv2.cvtColor(q, cv2.COLOR_BGR2GRAY)
+        rostos = det.detectMultiScale(gray, 1.1, 6, minSize=(H // 12, H // 12))
         if len(rostos):
             x, y, w, h = max(rostos, key=lambda r: r[2] * r[3])
             found.append(((x + w / 2) / W, (y + h / 2) / H, h / H))
@@ -115,23 +115,23 @@ def face(video, samples=24):
     return {"x": round(float(x), 3), "y": round(float(y), 3), "h": round(float(h), 3), "achado": True}
 
 
-SEM_PRESENTER = ("tela", "solido")  # tiram o apresentador da tela: contam no teto `tela_max`
+WITHOUT_PRESENTER = ("tela", "solido")  # tiram o apresentador da tela: contam no teto `tela_max`
 
 
-def layouts(cenas, midia, regras, duration, variations=("split",)):
+def layouts(scenes, media, rules, duration, variations=("split",)):
     """Layout de cada trecho → [{t, ate, layout, punch}] cobrindo o vídeo; grava `layout` em cada cena.
     `variacoes`: rodízio das peças cheias com o apresentador (split, lateral, flutuante, sólido)."""
-    ap = regras.apresentador
+    ap = rules.apresentador
     screen_max, broll_max = ap.get("tela_max", 0.07), ap.get("broll", 0.3)
     marks = []
     screen = 0.0
     spin = 0
-    for c in cenas:
+    for c in scenes:
         request = c.get("layout_pedido")  # o gatilho do estilo escolheu o layout
         fits = screen + (c["ate"] - c["t"]) <= screen_max * duration
-        if request in ("full", "split", "broll", "lateral", "flutuante", "galeria") or (request in SEM_PRESENTER and fits):
+        if request in ("full", "split", "broll", "lateral", "flutuante", "galeria") or (request in WITHOUT_PRESENTER and fits):
             c["layout"] = request
-            screen += (c["ate"] - c["t"]) if request in SEM_PRESENTER else 0
+            screen += (c["ate"] - c["t"]) if request in WITHOUT_PRESENTER else 0
         elif request == "solido":
             c["layout"] = "flutuante"  # sem orçamento para tirar o apresentador: o card flutua sobre a câmera
         elif c.get("takeover"):
@@ -149,7 +149,7 @@ def layouts(cenas, midia, regras, duration, variations=("split",)):
         marks.append({"t": c["t"], "ate": c["ate"], "layout": c["layout"], "punch": c["cena"] in IMPACT})
     # B-roll: itens de mídia longos fora das cenas de motion, um sim um não, até o teto
     broll, alterna = 0.0, False
-    for m in midia:
+    for m in media:
         free = not any(x["t"] < m["fim"] and x["ate"] > m["ini"] and x["layout"] != "full" for x in marks)
         if m["fim"] - m["ini"] < 1.5 or not free or m["ini"] < 2.0:
             continue

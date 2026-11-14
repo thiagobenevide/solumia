@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,23 +7,45 @@ plugins {
 }
 
 android {
-    namespace = "com.thiagobenevide.agent.relogio"
+    namespace = "com.thiagobenevide.agent.watch"
     compileSdk = 36
 
     defaultConfig {
         applicationId = "com.thiagobenevide.agent.relogio"
         minSdk = 30 // Wear OS 3 (Galaxy Watch 4 em diante)
         targetSdk = 36
-        // build do publicar_app/instalar (-Pbuild=minutos desde 1970): o "Atualizar app" compara com ele
+        // build from publicar_app/instalar (-Pbuild=minutes since 1970): "Atualizar app" compares against it
         versionCode = (findProperty("build") as String?)?.toInt() ?: 1
-        versionName = "0.1.0"
+        versionName = (findProperty("versionName") as String?) ?: "0.1.0"
+    }
+
+    // wear/key.properties (never committed) holds the release keystore; release_local writes it.
+    // Without it the release build is signed with the debug key (personal use over ADB).
+    val keystorePropertiesFile = rootProject.file("key.properties")
+    val keystoreProperties = Properties()
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+    }
+
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            // uso pessoal por ADB: assina com a chave de debug
-            signingConfig = signingConfigs.getByName("debug")
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 

@@ -1,8 +1,9 @@
-"""Tipos de nota: campos e relações que o app transforma em formulário e botões.
+"""Note types: fields and relations the app turns into a form and buttons.
 
-Qualquer módulo pode usar estes tipos; o Cobrador (módulo Painel) lê `status`, `prazo` e as
-relações `cobra` das metas/tarefas para redigir as cobranças.
+Any module can use these types; the Nagger (Panel module) reads `status`, `prazo` and the `cobra`
+relations of goals/tasks to write the nagging messages.
 """
+
 
 from typing import Any
 

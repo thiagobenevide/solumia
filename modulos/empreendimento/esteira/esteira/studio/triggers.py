@@ -49,10 +49,10 @@ class Trigger(BaseModel):
     cor_regras: list[ColorRule] = Field(default_factory=list)
 
 
-def _g(id_, nome, grupo, prio, defaults, exemplos, layout, peca, nao=(), cor_regras=()):
-    return {"id": id_, "nome": nome, "grupo": grupo, "prioridade": prio, "padroes": list(defaults),
-            "exemplos": list(exemplos), "layout": layout, "peca": peca, "nao_disparar": list(nao),
-            "cor_regras": list(cor_regras)}
+def _g(id_, name, group, prio, defaults, examples, layout, piece, no_words=(), color_rules=()):
+    return {"id": id_, "nome": name, "grupo": group, "prioridade": prio, "padroes": list(defaults),
+            "exemplos": list(examples), "layout": layout, "peca": piece, "nao_disparar": list(no_words),
+            "cor_regras": list(color_rules)}
 
 
 NEGATIVE = {"termos": ["endividad*", "inadimpl*", "queda", "perd*", "divid*", "jur*", "golpe*"], "cor": "acento"}
@@ -67,26 +67,26 @@ def default():
            ["Segundo a CNC, 81,7% das famílias estão endividadas"], "split", "citacao_estudo"),
         _g("conta", "Conta / cálculo", "credibilidade", 2,
            ["{n} vezes {m}", "{n} x {m}", "{n} por {palavra} durante {m}", "re:\\d.*\\b(da|dá|igual a|resulta em)\\b.*\\d"],
-           ["200 reais por mês durante 5 anos dá 12 mil"], "split", "equacao", cor_regras=[NEGATIVE]),
+           ["200 reais por mês durante 5 anos dá 12 mil"], "split", "equacao", color_rules=[NEGATIVE]),
         _g("comparacao", "Comparação de 2", "credibilidade", 3,
            ["{número}…contra…{número}", "{número}…enquanto…{número}", "{número}…em vez de…{número}"],
            ["Os juros do rotativo passam de 400% ao ano, contra 12% da poupança"], "split", "versus",
-           cor_regras=[NEGATIVE]),
+           color_rules=[NEGATIVE]),
         _g("ranking", "Ranking (3+)", "credibilidade", 3,
            ["re:(\\d[\\d.,]*\\s*%?[^\\d]+){3,}", "em primeiro lugar", "ranking", "os tres maiores"],
            ["Cartão com 60%, cheque especial com 20% e consignado com 12%"], "peca", "ranking"),
         _g("evolucao", "Evolução no tempo", "credibilidade", 4,
            ["em {ano}…em {ano}", "de {ano} para {ano}", "desde {ano}", "subiu de", "caiu de", "cresceu"],
-           ["Em 2019 eram 63%; em 2025, 78%"], "peca", "grafico_linha", cor_regras=[NEGATIVE, POSITIVE]),
+           ["Em 2019 eram 63%; em 2025, 78%"], "peca", "grafico_linha", color_rules=[NEGATIVE, POSITIVE]),
         _g("porcentagem", "Porcentagem", "credibilidade", 5,
            ["{número}%", "{número} por cento", "{n} em cada {m}"],
            ["81,7% das famílias estão endividadas", "8 em cada 10 brasileiros não têm reserva"],
-           "split", "anel_percentual", nao=["dentro_de_comparacao", "numero_recente"], cor_regras=[NEGATIVE]),
+           "split", "anel_percentual", no_words=["dentro_de_comparacao", "numero_recente"], color_rules=[NEGATIVE]),
         _g("valor", "Valor em R$", "credibilidade", 5, ["{valor}", "{número} reais", "{número} mil reais"],
-           ["A fatura média é de R$ 1.200"], "split", "contador", nao=["dentro_de_comparacao", "numero_recente"],
-           cor_regras=[NEGATIVE, POSITIVE]),
+           ["A fatura média é de R$ 1.200"], "split", "contador", no_words=["dentro_de_comparacao", "numero_recente"],
+           color_rules=[NEGATIVE, POSITIVE]),
         _g("numero_solto", "Número solto", "credibilidade", 5, ["{número}"], ["São 77 milhões de pessoas"],
-           "split", "contador", nao=["dentro_de_comparacao", "numero_recente"]),
+           "split", "contador", no_words=["dentro_de_comparacao", "numero_recente"]),
         _g("processo", "Processo", "estrutura", 6,
            ["passo", "etapa", "primeiro…depois", "sao {palavra} passos", "listar…negociar"],
            ["São três passos para sair dessa: listar, negociar e cortar"], "split", "passo_a_passo"),
@@ -99,7 +99,7 @@ def default():
            ["agora vamos", "mas antes", "vamos falar", "parte {n}", "capitulo {n}"],
            ["Agora vamos ao que interessa"], "capitulo", "titulo_capitulo"),
         _g("alerta", "Alerta / dica", "tom", 8, ["cuidado", "atencao", "evite", "dica", "nunca", "nao caia"],
-           ["Cuidado com o pagamento mínimo"], "split", "alerta", cor_regras=[NEGATIVE]),
+           ["Cuidado com o pagamento mínimo"], "split", "alerta", color_rules=[NEGATIVE]),
         _g("dia_a_dia", "Situação do dia a dia", "tom", 9,
            ["quando voce", "imagine", "no mercado", "todo mes", "no dia a dia"],
            ["Quando você passa o cartão no mercado, não sente o dinheiro saindo"], "broll", ""),
@@ -151,57 +151,57 @@ def _numbers(s):
     return re.findall(NUM, s)
 
 
-def matches(g: Trigger, frase):
+def matches(g: Trigger, sentence):
     """Primeiro trecho da frase que casa com algum padrão do gatilho (ou None)."""
-    target = _without_accent(frase)
+    target = _without_accent(sentence)
     for p in g.padroes:
         try:
             m = build(p).search(target)
         except re.error:
             continue
         if m:
-            return frase[m.start():m.end()] or frase
+            return sentence[m.start():m.end()] or sentence
     return None
 
 
-def blocked(g: Trigger, frase, ctx):
-    ns = _numbers(re.sub(r"\d+\s+(?:em|de)\s+cada\s+\d+", "1", frase))  # "8 em cada 10" é um número só
+def blocked(g: Trigger, sentence, ctx):
+    ns = _numbers(re.sub(r"\d+\s+(?:em|de)\s+cada\s+\d+", "1", sentence))  # "8 em cada 10" é um número só
     if "dentro_de_comparacao" in g.nao_disparar and len(ns) >= 2:
         return True
     if "numero_recente" in g.nao_disparar and ctx.get("numero_recente"):
         return True
-    return "frase_longa" in g.nao_disparar and len(frase.split()) > 25
+    return "frase_longa" in g.nao_disparar and len(sentence.split()) > 25
 
 
-def color(g: Trigger, frase):
-    target = _without_accent(frase)
+def color(g: Trigger, sentence):
+    target = _without_accent(sentence)
     for r in g.cor_regras:
         if any(build(t).search(target) for t in r.termos if t.strip()):
             return r.cor
     return g.cor
 
 
-def detect(frase, triggers, ctx=None):
+def detect(sentence, triggers, ctx=None):
     """{gatilho, trecho, cor, perdeu:[ids]} do gatilho vencedor (menor prioridade; 0 vence todos) ou None."""
     ctx = ctx or {}
     hits = []
     for g in triggers:
-        if not g.ativo or blocked(g, frase, ctx):
+        if not g.ativo or blocked(g, sentence, ctx):
             continue
-        t = matches(g, frase)
+        t = matches(g, sentence)
         if t is not None:
             hits.append((g, t))
     if not hits:
         return None
     hits.sort(key=lambda x: x[0].prioridade)
     g, t = hits[0]
-    return {"gatilho": g, "trecho": t, "cor": color(g, frase), "perdeu": [h.id for h, _ in hits[1:]]}
+    return {"gatilho": g, "trecho": t, "cor": color(g, sentence), "perdeu": [h.id for h, _ in hits[1:]]}
 
 
-def aplicar(frases, triggers):
+def apply(sentences, triggers):
     """{i: detecção} para as frases com tempo (`ini`/`fim`); o contexto marca número dito há menos de 2 s."""
     output, last_num = {}, -99.0
-    for i, f in enumerate(frases):
+    for i, f in enumerate(sentences):
         d = detect(f["texto"], triggers, {"numero_recente": f["ini"] - last_num < 2.0})
         if _numbers(f["texto"]):
             last_num = f["fim"]
@@ -210,13 +210,13 @@ def aplicar(frases, triggers):
     return output
 
 
-def sentences_of_text(texto, words_s=2.6):
+def sentences_of_text(text, words_s=2.6):
     """Roteiro colado → frases com tempo estimado (2,6 palavras/s) para o teste sem gravação. Frontmatter, títulos,
     citações (`>`) e marcações do Obsidian saem."""
-    texto = re.sub(r"\A---\n.*?\n---\n", "", texto, flags=re.S)
-    texto = "\n".join(x for x in texto.splitlines() if not x.lstrip().startswith(("#", ">", "![[", "%%")))
-    texto = re.sub(r"[*_`]|\[\[|\]\]", "", texto)
-    parts =[x.strip() for x in re.split(r"(?<=[.!?])\s+|\n+", texto) if x.strip()]
+    text = re.sub(r"\A---\n.*?\n---\n", "", text, flags=re.S)
+    text = "\n".join(x for x in text.splitlines() if not x.lstrip().startswith(("#", ">", "![[", "%%")))
+    text = re.sub(r"[*_`]|\[\[|\]\]", "", text)
+    parts =[x.strip() for x in re.split(r"(?<=[.!?])\s+|\n+", text) if x.strip()]
     t, output = 0.0, []
     for x in parts:
         d = max(0.8, len(x.split()) / words_s)
@@ -225,22 +225,22 @@ def sentences_of_text(texto, words_s=2.6):
     return output
 
 
-def test(frases, estilo):
+def test(sentences, style):
     """Decupagem do roteiro pelo estilo, sem IA: cena por frase, ritmo e avisos (o "Testar com roteiro")."""
-    det = aplicar(frases, estilo.gatilhos)
+    det = apply(sentences, style.gatilhos)
     scenes = []
-    for i, f in enumerate(frases):
+    for i, f in enumerate(sentences):
         d = det.get(i)
         g = d["gatilho"] if d else None
         layout = g.layout if g else "camera"
-        if estilo.modo != "apresentador" and layout == "camera":
+        if style.modo != "apresentador" and layout == "camera":
             layout = "peca" if g and g.peca else "broll"
         scenes.append({"i": i, "t": f["ini"], "ate": f["fim"], "frase": f["texto"], "gatilho": g.id if g else "",
                       "gatilho_nome": g.nome if g else "", "trecho": d["trecho"] if d else "",
                       "perdeu": d["perdeu"] if d else [], "layout": layout, "peca": g.peca if g else "",
                       "cor": d["cor"] if d else ""})
-    duration = (frases[-1]["fim"] if frases else 0) or 1
-    pres = estilo.presenca
+    duration = (sentences[-1]["fim"] if sentences else 0) or 1
+    pres = style.presenca
     warnings = []
     # peça parada: a mesma peça em frases seguidas passa do limite
     k = 0
@@ -258,7 +258,7 @@ def test(frases, estilo):
     outside = 0.0
     for c in scenes:
         outside = outside + (c["ate"] - c["t"]) if c["layout"] in ("peca", "capitulo", "tipografia", "broll") else 0.0
-        if estilo.modo == "apresentador" and outside > pres.fora_max_s:
+        if style.modo == "apresentador" and outside > pres.fora_max_s:
             warnings.append({"tipo": "fora", "i": c["i"], "t": c["t"],
                            "titulo": f"Apresentador fora da tela por {outside:.0f} s em {_mmss(c['t'])}",
                            "texto": f"Máximo do estilo: {pres.fora_max_s:.0f} s.", "acoes": ["Ajustar regra"]})

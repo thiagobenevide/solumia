@@ -1,8 +1,8 @@
-"""Atualização do app: versão publicada e os pacotes (APK e Linux) que o botão "Atualizar app"
-baixa.
+"""App update: the published version and the packages (APK and Linux) the "Atualizar app"
+button downloads.
 
-`infra/scripts/publicar_app` grava em `atualizacoes_dir` o `versao.json` (`build`, `versao`,
-`publicado`) e os arquivos `agent.apk`, `agent-linux.tar.gz` e `relogio.apk` (app do relógio, mesmo
+`infra/scripts/publicar_app` writes into `atualizacoes_dir` the `versao.json` (`build`, `versao`,
+`publicado`) and the files `agent.apk`, `agent-linux.tar.gz` and `relogio.apk` (the watch app, same
 `build`).
 """
 
@@ -30,10 +30,12 @@ def _folder(settings) -> Path:
 
 @router.get("")
 def version(settings: SettingsDep) -> dict:
-    """Última versão publicada; `build` 0 = nada publicado ainda."""
+    """Latest published version; `build` 0 = nothing published yet."""
     file = _folder(settings) / "versao.json"
     data = json.loads(file.read_text()) if file.is_file() else {"build": 0}
-    data["plataformas"] = [p for p, name in PACKAGES.items() if (_folder(settings) / name).is_file()]
+    data["plataformas"] = [
+        p for p, name in PACKAGES.items() if (_folder(settings) / name).is_file()
+    ]
     return data
 
 

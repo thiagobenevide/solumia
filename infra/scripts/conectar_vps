@@ -1,45 +1,45 @@
 #!/usr/bin/env bash
-# Liga este PC à VPS depois do instalar_vps: busca a chave do worker e a do túnel, grava
-# plataforma/worker/.env e instala (systemd --user) três serviços que voltam sozinhos:
-#   agent-esteira  painel da esteira (:8765)
-#   agent-tunel    túnel SSH reverso que publica a esteira em https://<domínio>/esteira/
-#   agent-worker   worker (LLM local) conectado em wss://<domínio>/ws/worker
+# Connects this PC to the VPS after instalar_vps: fetches the worker key and the tunnel key, writes
+# plataforma/worker/.env and installs (systemd --user) three services that restart on their own:
+#   agent-esteira  esteira panel (:8765)
+#   agent-tunel    reverse SSH tunnel that publishes the esteira at https://<domain>/esteira/
+#   agent-worker   worker (local LLM) connected to wss://<domain>/ws/worker
 #
-#   infra/scripts/conectar_vps usuario@vps [/caminho/do/repo/na/vps]
+#   infra/scripts/conectar_vps user@vps [/path/to/repo/on/vps]
 set -euo pipefail
 
-destino="${1:?uso: conectar_vps usuario@vps [/caminho/do/repo/na/vps]}"
-remoto="${2:-agent}"
-raiz="$(cd "$(dirname "$0")/../.." && pwd)"
+target="${1:?usage: conectar_vps user@vps [/path/to/repo/on/vps]}"
+remote_dir="${2:-agent}"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
 conf="$HOME/.config/agent"
 units="$HOME/.config/systemd/user"
 mkdir -p "$conf" "$units"
 chmod 700 "$conf"
 
-echo "▶ Buscando configuração em $destino:$remoto"
-scp -q "$destino:$remoto/.env.pc" "$conf/vps.env"
-scp -q "$destino:$remoto/infra/docker/tunel/chave_pc" "$conf/tunel_chave" 2>/dev/null ||
-    echo "! chave_pc não encontrada na VPS: usando a de TUNEL_CHAVE_PUBLICA, copie a privada para $conf/tunel_chave"
+echo "▶ Fetching configuration from $target:$remote_dir"
+scp -q "$target:$remote_dir/.env.pc" "$conf/vps.env"
+scp -q "$target:$remote_dir/infra/docker/tunel/chave_pc" "$conf/tunel_chave" 2>/dev/null ||
+    echo "! chave_pc not found on the VPS: using the TUNEL_CHAVE_PUBLICA one, copy the private key to $conf/tunel_chave"
 chmod 600 "$conf"/*
 # shellcheck disable=SC1091
 set -a; . "$conf/vps.env"; set +a
 
 echo "▶ plataforma/worker/.env"
-w="$raiz/plataforma/worker/.env"
-[ -f "$w" ] || cp "$raiz/plataforma/worker/.env.example" "$w"
+w="$root/plataforma/worker/.env"
+[ -f "$w" ] || cp "$root/plataforma/worker/.env.example" "$w"
 for k in WORKER_GATEWAY_URL WORKER_API_KEY; do
     if grep -q "^$k=" "$w"; then sed -i "s|^$k=.*|$k=${!k}|" "$w"; else echo "$k=${!k}" >> "$w"; fi
 done
 chmod 600 "$w"
 
-echo "▶ Serviços systemd --user"
+echo "▶ systemd --user services"
 cat > "$units/agent-esteira.service" <<EOF
 [Unit]
-Description=Painel da esteira (agent)
+Description=Esteira panel (agent)
 
 [Service]
-WorkingDirectory=$raiz/modulos/empreendimento/esteira
-ExecStart=$raiz/modulos/empreendimento/esteira/dark panel --port 8765
+WorkingDirectory=$root/modulos/empreendimento/esteira
+ExecStart=$root/modulos/empreendimento/esteira/dark panel --port 8765
 Restart=always
 RestartSec=10
 
@@ -48,7 +48,7 @@ WantedBy=default.target
 EOF
 cat > "$units/agent-tunel.service" <<EOF
 [Unit]
-Description=Túnel da esteira para a VPS (agent)
+Description=Esteira tunnel to the VPS (agent)
 After=network-online.target agent-esteira.service
 
 [Service]
@@ -64,11 +64,11 @@ WantedBy=default.target
 EOF
 cat > "$units/agent-worker.service" <<EOF
 [Unit]
-Description=Worker do agent (LLM local para a VPS)
+Description=Agent worker (local LLM for the VPS)
 After=network-online.target
 
 [Service]
-ExecStart=$raiz/infra/scripts/run_worker.sh
+ExecStart=$root/infra/scripts/run_worker.sh
 Restart=always
 RestartSec=10
 
@@ -78,8 +78,8 @@ EOF
 systemctl --user daemon-reload
 systemctl --user enable --now agent-esteira agent-tunel agent-worker
 systemctl --user restart agent-tunel agent-worker
-# Sem linger os serviços só sobem depois do login gráfico.
-loginctl enable-linger "$USER" 2>/dev/null || echo "! rode 'sudo loginctl enable-linger $USER' para subir no boot"
+# Without linger the services only start after the graphical login.
+loginctl enable-linger "$USER" 2>/dev/null || echo "! run 'sudo loginctl enable-linger $USER' to start at boot"
 
 sleep 5
 systemctl --user --no-pager --lines=0 status agent-esteira agent-tunel agent-worker | grep -E '●|Active:'

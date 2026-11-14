@@ -22,11 +22,11 @@ def ep(tmp_path):
     return folder
 
 
-def _zip(pasta, arquivo, nome="pct"):
-    return zipfile.ZipFile(io.BytesIO(b"".join(package.pack(arquivo, pasta, nome))))
+def _zip(folder, file, name="pct"):
+    return zipfile.ZipFile(io.BytesIO(b"".join(package.pack(file, folder, name))))
 
 
-def test_pacote_leva_midia_e_caminhos_relativos(ep):
+def test_package_carries_media_and_relative_paths(ep):
     z = _zip(ep, ep / "projeto.fcproj")
     assert sorted(z.namelist()) == [
         "pct/graficos/pag.png", "pct/midia/c1.mp4", "pct/projeto.fcproj"]
@@ -38,7 +38,7 @@ def test_pacote_leva_midia_e_caminhos_relativos(ep):
     assert g["kind"]["path"] == "pag.png"
 
 
-def test_receber_religa_caminhos_de_outra_maquina_e_guarda_anterior(ep):
+def test_receive_relinks_paths_from_other_machine_and_keeps_previous(ep):
     previous = (ep / "projeto.fcproj").read_text()
     edited = {"format": "filmcraft.project", "itens": [
         {"path": "/home/outro/Downloads/x/finlumia/003/midia/c1.mp4"},  # trecho <canal>/<NNN>/
@@ -54,7 +54,7 @@ def test_receber_religa_caminhos_de_outra_maquina_e_guarda_anterior(ep):
     assert len(guardados) == 1 and guardados[0].read_text() == previous
 
 
-def test_receber_aceita_o_zip_baixado_e_recusa_lixo(ep):
+def test_receive_accepts_downloaded_zip_and_rejects_junk(ep):
     zipado = b"".join(package.pack(ep / "graficos" / "g.ecproj", ep, "pct"))
     package.receive(zipado, ep / "graficos" / "g.ecproj", ep)
     g = json.loads((ep / "graficos" / "g.ecproj").read_text())

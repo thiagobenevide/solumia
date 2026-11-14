@@ -1,10 +1,10 @@
-"""Dados em tempo real para a IA local (que só sabe o que viu no treino): tabela FIPE, moedas,
-cotações da B3/exterior, Selic/CDI/IPCA e busca geral na web. Todas sem chave de API.
+"""Real-time data for the local AI (which only knows what it saw in training): FIPE table,
+currencies, B3/foreign quotes, Selic/CDI/IPCA and general web search. All without an API key.
 
-Fontes: Parallelum (FIPE), AwesomeAPI (moedas), Yahoo Finance (cotações), SGS do Banco Central
-(indicadores) e Bing/DuckDuckGo (busca, `shared.web_search`). Cada função recebe o
-`httpx.AsyncClient` (testes usam um transporte falso) e devolve dados prontos para virar JSON,
-com a fonte.
+Sources: Parallelum (FIPE), AwesomeAPI (currencies), Yahoo Finance (quotes), the Central Bank SGS
+(indicators) and Bing/DuckDuckGo (search, `shared.web_search`). Each function receives the
+`httpx.AsyncClient` (tests use a fake transport) and returns data ready to become JSON, with the
+source.
 """
 
 import asyncio
@@ -27,7 +27,7 @@ AGENT = (
     "Chrome/130 Safari/537.36"
 )
 FIPE = "https://parallelum.com.br/fipe/api/v1"
-# Horários sempre no de Brasília, seja qual for o fuso do servidor (a VPS roda em UTC).
+# Times always in Brasília time, whatever the server time zone (the VPS runs on UTC).
 BRASILIA = ZoneInfo("America/Sao_Paulo")
 
 
@@ -49,18 +49,18 @@ async def _json(cliente: httpx.AsyncClient, url: str, agente: str = AGENT, **kw:
         raise ToolFailed(f"{urlparse(url).netloc}: {e.__class__.__name__}") from e
 
 
-# ---------- moedas ----------
+# ---------- currencies ----------
 
 
 async def currencies(cliente: httpx.AsyncClient, pairs: list[str] | None = None) -> dict[str, Any]:
-    """Cotação atual (ex.: ["USD-BRL", "EUR-BRL", "BTC-BRL"])."""
+    """Current quote (e.g. ["USD-BRL", "EUR-BRL", "BTC-BRL"])."""
     pairs = [p.upper().replace("/", "-") for p in (pairs or ["USD-BRL", "EUR-BRL"])][:6]
     try:
         data = await _json(
             cliente, f"https://economia.awesomeapi.com.br/json/last/{','.join(pairs)}"
         )
     except ToolFailed as e:
-        # a AwesomeAPI recusa IPs de datacenter (a VPS); o Yahoo tem os mesmos pares
+        # AwesomeAPI refuses datacenter IPs (the VPS); Yahoo has the same pairs
         return await _currencies_yahoo(cliente, pairs, e)
     output = {}
     for v in data.values():
@@ -77,7 +77,7 @@ async def currencies(cliente: httpx.AsyncClient, pairs: list[str] | None = None)
 async def _currencies_yahoo(
     cliente: httpx.AsyncClient, pairs: list[str], motivo: Exception
 ) -> dict[str, Any]:
-    """Segunda fonte de câmbio: USD-BRL → USDBRL=X; BTC-BRL → BTC-BRL (cripto no Yahoo)."""
+    """Second exchange-rate source: USD-BRL → USDBRL=X; BTC-BRL → BTC-BRL (crypto on Yahoo)."""
     cripto = {"BTC", "ETH", "SOL", "XRP", "USDT", "DOGE"}
     symbols = {
         p: (p if p.split("-")[0] in cripto else p.replace("-", "") + "=X") for p in pairs
@@ -100,22 +100,22 @@ async def _currencies_yahoo(
     return {"fonte": "Yahoo Finance", "cotacoes": output}
 
 
-# ---------- ações ----------
+# ---------- stocks ----------
 
 
 def _ticker_yahoo(t: str) -> str:
     t = t.upper().strip()
-    # PETR4, ITUB4, MXRF11, BOVA11 → B3 (.SA); AAPL, ^BVSP ficam como estão
+    # PETR4, ITUB4, MXRF11, BOVA11 → B3 (.SA); AAPL, ^BVSP stay as they are
     return f"{t}.SA" if re.fullmatch(r"[A-Z]{4}\d{1,2}", t) else t
 
 
 async def actions(cliente: httpx.AsyncClient, tickers: list[str]) -> dict[str, Any]:
-    """Último preço, fechamento anterior e variação (ex.: ["PETR4", "MXRF11", "AAPL", "^BVSP"])."""
+    """Last price, previous close and change (e.g. ["PETR4", "MXRF11", "AAPL", "^BVSP"])."""
 
     async def uma(t: str) -> tuple[str, Any]:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{_ticker_yahoo(t)}"
         try:
-            # O Yahoo recusa o agente completo de navegador sem cookies; o curto passa.
+            # Yahoo refuses the full browser user agent without cookies; the short one passes.
             d = await _json(
                 cliente, url, agente="Mozilla/5.0", params={"range": "1d", "interval": "1d"}
             )
@@ -143,7 +143,7 @@ async def actions(cliente: httpx.AsyncClient, tickers: list[str]) -> dict[str, A
 
 
 async def _brapi(cliente: httpx.AsyncClient, t: str, motivo: Exception) -> dict[str, Any]:
-    """Segunda fonte para a B3 (brapi.dev; sem token só alguns papéis)."""
+    """Second source for B3 (brapi.dev; without a token only a few tickers)."""
     try:
         r = (await _json(cliente, f"https://brapi.dev/api/quote/{t.upper()}"))["results"][0]
         return {
@@ -160,7 +160,7 @@ async def _brapi(cliente: httpx.AsyncClient, t: str, motivo: Exception) -> dict[
 
 
 async def dividends(cliente: httpx.AsyncClient, ticker: str) -> dict[str, Any]:
-    """Dividendos/rendimentos pagos nos últimos 12 meses e o dividend yield sobre o preço atual."""
+    """Dividends/income paid in the last 12 months and the dividend yield over the current price."""
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{_ticker_yahoo(ticker)}"
     d = await _json(
         cliente,
@@ -195,8 +195,9 @@ async def dividends(cliente: httpx.AsyncClient, ticker: str) -> dict[str, Any]:
 
 
 async def market(cliente: httpx.AsyncClient, n: int = 10, tipo: str = "stock") -> dict[str, Any]:
-    """Maiores altas e baixas do dia na B3 entre os 150 papéis mais negociados ([tipo] `stock` para
-    ações, `fund` para FIIs): ordenar a lista inteira só traria fracionário e papel sem negócio."""
+    """Top gainers and losers of the day on B3 among the 150 most traded tickers (type `stock` for
+    stocks, `fund` for REITs): sorting the whole list would only bring odd lots and untraded
+    tickers."""
     d = await _json(
         cliente,
         "https://brapi.dev/api/quote/list",
@@ -224,7 +225,7 @@ async def market(cliente: httpx.AsyncClient, n: int = 10, tipo: str = "stock") -
     }
 
 
-# ---------- notícias do dia ----------
+# ---------- today's news ----------
 
 THEMES_NEWS = {
     "economia": "economia brasileira OR Ibovespa OR dólar OR mercado financeiro",
@@ -238,7 +239,7 @@ THEMES_NEWS = {
 async def news(
     cliente: httpx.AsyncClient, tema: str = "economia", n: int = 30
 ) -> dict[str, Any]:
-    """Manchetes das últimas 24 h no Google News (RSS em português, sem chave), mais novas antes."""
+    """Headlines of the last 24 h on Google News (Portuguese RSS, no key), newest first."""
     query = THEMES_NEWS.get(tema, THEMES_NEWS["economia"])
     try:
         r = await cliente.get(
@@ -255,7 +256,7 @@ async def news(
     for it in root.iter("item"):
         source = it.findtext("source") or ""
         title = (it.findtext("title") or "").strip()
-        # o Google põe " - Fonte" no fim do título
+        # Google puts " - Source" at the end of the title
         if source and title.endswith(f" - {source}"):
             title = title[: -len(source) - 3]
         if not title or _norm(title) in seen:
@@ -282,7 +283,7 @@ async def news(
     }
 
 
-# ---------- indicadores do Banco Central ----------
+# ---------- Central Bank indicators ----------
 
 SERIES_BCB = {
     "selic_meta_aa": 432,
@@ -293,12 +294,12 @@ SERIES_BCB = {
 
 
 async def indicators(cliente: httpx.AsyncClient) -> dict[str, Any]:
-    """Selic meta (% a.a.), CDI (% a.a.), IPCA do último mês e dos últimos 12 meses (%)."""
+    """Selic target (% p.a.), CDI (% p.a.), IPCA of the last month and the last 12 months (%)."""
 
-    async def serie(nome: str, codigo: int) -> tuple[str, Any]:
-        url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{codigo}/dados/ultimos/1"
+    async def serie(nome: str, code: int) -> tuple[str, Any]:
+        url = f"https://api.bcb.gov.br/dados/serie/bcdata.sgs.{code}/dados/ultimos/1"
         error: Exception | None = None
-        for attempt in range(2):  # o SGS às vezes recusa pedidos em paralelo
+        for attempt in range(2):  # SGS sometimes refuses parallel requests
             try:
                 [d] = await _json(cliente, url, params={"formato": "json"})
                 return nome, {"valor": float(d["valor"]), "data": d["data"]}
@@ -317,7 +318,7 @@ async def indicators(cliente: httpx.AsyncClient) -> dict[str, Any]:
 async def fipe(
     cliente: httpx.AsyncClient, mark: str, modelo: str, year: str = "", tipo: str = "carros"
 ) -> dict[str, Any]:
-    """Preço da tabela FIPE: versões do [modelo] da [marca] no [ano] (ex.: Ford, EcoSport, 2015)."""
+    """FIPE table price: versions of the brand's model in the year (e.g. Ford, EcoSport, 2015)."""
     tipo = tipo if tipo in ("carros", "motos", "caminhoes") else "carros"
     marks = await _json(cliente, f"{FIPE}/{tipo}/marcas")
     target = _norm(mark)
@@ -358,7 +359,8 @@ async def fipe(
             )
         return output
 
-    everything = [v for items in await asyncio.gather(*(versoes(c) for c in candidates)) for v in items]
+    groups = await asyncio.gather(*(versoes(c) for c in candidates))
+    everything = [v for items in groups for v in items]
     if not everything:
         raise ToolFailed(f"Sem preço FIPE de {m['nome']} {modelo} {year}.")
     values = sorted(v["valor"] for v in everything)
@@ -372,13 +374,11 @@ async def fipe(
     }
 
 
-# ---------- busca na web ----------
+# ---------- web search ----------
 
 
 def _text_html(page: str) -> str:
-    page = re.sub(
-        r"(?is)<(script|style|noscript|svg|nav|footer|header)[^>]*>.*?</\1>", " ", page
-    )
+    page = re.sub(r"(?is)<(script|style|noscript|svg|nav|footer|header)[^>]*>.*?</\1>", " ", page)
     text = html.unescape(re.sub(r"(?s)<[^>]+>", " ", page))
     return re.sub(r"\s+", " ", text).strip()
 
@@ -389,8 +389,9 @@ async def fetch_web(
     read: int = 2,
     achados: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Resultados da busca (título, endereço, trecho) e o texto das [ler] primeiras páginas.
-    [achados]: a busca já feita no PC (`shared.web_search` pelo worker); sem ela, busca daqui."""
+    """Search results (title, address, snippet) and the text of the first pages read.
+    Found: the search already done on the PC (`shared.web_search` through the worker); without it,
+    searches from here."""
     if not achados:
         try:
             achados = await web_search.search(cliente, query)

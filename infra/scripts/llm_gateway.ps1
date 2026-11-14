@@ -1,11 +1,11 @@
 #!/usr/bin/env pwsh
-# Sobe/derruba os containers do Gateway via Docker Compose.
+# Starts/stops the Gateway containers via Docker Compose.
 #
-# Uso:
-#   .\scripts\llm_gateway.ps1 -home -up     # Máquina local: só o gateway (sem TLS)
-#   .\scripts\llm_gateway.ps1 -home -down   # Máquina local: derruba o gateway
+# Usage:
+#   .\scripts\llm_gateway.ps1 -home -up     # Local machine: gateway only (no TLS)
+#   .\scripts\llm_gateway.ps1 -home -down   # Local machine: stops the gateway
 #   .\scripts\llm_gateway.ps1 -vps -up      # VPS: gateway + nginx + certbot
-#   .\scripts\llm_gateway.ps1 -vps -down    # VPS: derruba os três serviços
+#   .\scripts\llm_gateway.ps1 -vps -down    # VPS: stops the three services
 param(
     [switch]$vps,
     [Alias('home')][switch]$IsHome,
@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 function Usage {
-    Write-Error "Uso: llm_gateway.ps1 (-vps|-home) (-up|-down)"
+    Write-Error "Usage: llm_gateway.ps1 (-vps|-home) (-up|-down)"
     exit 1
 }
 
@@ -28,13 +28,13 @@ Set-Location $repoRoot
 $composeFile = "infra/docker/docker-compose.yml"
 
 if (-not (Test-Path "gateway\.env")) {
-    Write-Host "gateway\.env não encontrado, copiando de gateway\.env.example"
+    Write-Host "gateway\.env not found, copying gateway\.env.example"
     Copy-Item "gateway\.env.example" "gateway\.env"
 }
 
 if ($vps) {
     if ($up -and -not (Test-Path "docker\nginx\nginx.conf")) {
-        Write-Error "docker\nginx\nginx.conf não encontrado — copie de docker\nginx\nginx.conf.example, configure seu domínio e emita o certificado (veja README, seção Deploy em produção)."
+        Write-Error "docker\nginx\nginx.conf not found — copy docker\nginx\nginx.conf.example, set your domain and issue the certificate (see README, production deploy section)."
         exit 1
     }
     if ($up) {

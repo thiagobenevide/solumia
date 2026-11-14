@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from youtube.importer import run_import, normalize
+from youtube.importer import normalize, run_import
 
 R = "/api/youtube"
 

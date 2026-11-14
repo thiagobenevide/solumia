@@ -67,13 +67,13 @@ def ready():
     return bool(e["node"] and e["pacotes"] and e["chromium"] and e["ffmpeg"])
 
 
-def _install_node(progresso):
+def _install_node(progress):
     versions = requests.get("https://nodejs.org/dist/index.json", timeout=30).json()
     v = next(x["version"] for x in versions if x["version"].startswith("v22.") and x.get("lts"))
     name = f"node-{v}-linux-x64.tar.xz"
-    somas = requests.get(f"https://nodejs.org/dist/{v}/SHASUMS256.txt", timeout=30).text
-    expected = next(line.split()[0] for line in somas.splitlines() if line.endswith(name))
-    progresso(f"baixando Node {v}")
+    sums = requests.get(f"https://nodejs.org/dist/{v}/SHASUMS256.txt", timeout=30).text
+    expected = next(line.split()[0] for line in sums.splitlines() if line.endswith(name))
+    progress(f"baixando Node {v}")
     tmp = NODE.parent / name
     NODE.parent.mkdir(parents=True, exist_ok=True)
     h = hashlib.sha256()
@@ -91,23 +91,23 @@ def _install_node(progresso):
     (NODE.parent / name.removesuffix(".tar.xz")).rename(NODE)
 
 
-def install(progresso=print):
+def install(progress=print):
     """Instala o que faltar, na ordem: Node → pacotes npm → Chromium. Devolve o estado final."""
     if not _version_node():
-        _install_node(progresso)
+        _install_node(progress)
     env = environment()
     if not (ENGINE / "node_modules" / "hyperframes").is_dir():
-        progresso("instalando hyperframes e playwright (npm)")
+        progress("instalando hyperframes e playwright (npm)")
         ENGINE.mkdir(parents=True, exist_ok=True)
         (ENGINE / "package.json").write_text(json.dumps({"name": "estudio-motor", "private": True, "type": "module",
                                                         "devDependencies": PACKAGES}, indent=1))
         subprocess.run(["npm", "install", "--no-audit", "--no-fund", "--silent"], cwd=ENGINE, env=env, check=True)
     if not _chromium():
-        progresso("baixando o Chromium do Playwright")
+        progress("baixando o Chromium do Playwright")
         subprocess.run(["npx", "playwright", "install", "chromium"], cwd=ENGINE, env=env, check=True)
     if not _opencv():
         import sys
-        progresso("instalando o OpenCV (rosto do apresentador)")
+        progress("instalando o OpenCV (rosto do apresentador)")
         uv = shutil.which("uv") or str(Path.home() / ".local/bin/uv")
         subprocess.run([uv, "pip", "install", "--python", sys.executable, "opencv-python-headless<5"], check=True)
     return state()

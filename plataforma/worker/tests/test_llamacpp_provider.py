@@ -32,30 +32,30 @@ def _m(id_: str, status: str = "unloaded") -> dict[str, Any]:
     return {"id": id_, "status": {"value": status}}
 
 
-async def test_estado_lista_carregados_e_ocupados() -> None:
+async def test_state_lists_loaded_and_busy() -> None:
     p = _provider([_m("b"), _m("a", "loaded")], ocupado=True)
     assert await p.estado() == {"modelos": ["a", "b"], "carregados": ["a"], "ocupados": ["a"]}
 
 
-async def test_recusa_troca_com_modelo_processando() -> None:
+async def test_refuses_switch_while_model_processing() -> None:
     p = _provider([_m("b"), _m("a", "loaded")], ocupado=True)
     with pytest.raises(RuntimeError, match="em andamento"):
         await p.load("b")
 
 
-async def test_carrega_pelo_roteador() -> None:
+async def test_loads_through_router() -> None:
     calls: list[str] = []
     p = _provider([_m("b"), _m("a", "loaded")], registro=calls)
     assert await p.load("b") == {"modelo": "b"}
     assert "POST /models/load" in calls
 
 
-async def test_modelo_desconhecido() -> None:
+async def test_unknown_model() -> None:
     with pytest.raises(RuntimeError, match="não encontrado"):
         await _provider([_m("a")]).load("x")
 
 
-async def test_chat_sem_modelo_usa_o_carregado() -> None:
+async def test_chat_without_model_uses_loaded_one() -> None:
     p = _provider([_m("b"), _m("a", "loaded")])
     r: Callable[..., Any] = p.chat_completion
     answer = await r({"messages": []})

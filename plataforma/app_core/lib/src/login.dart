@@ -217,7 +217,7 @@ class _TelaLoginState extends State<TelaLogin> {
                   spacing: 16,
                   children: [
                     Image.asset('assets/logo.png', package: 'agent_core', width: 72, height: 72),
-                    Text('Agent', textAlign: TextAlign.center, style: tema.textTheme.headlineMedium),
+                    Text('Solumia', textAlign: TextAlign.center, style: tema.textTheme.headlineMedium),
                     TextFormField(
                       controller: _usuario,
                       autofillHints: const [AutofillHints.username],

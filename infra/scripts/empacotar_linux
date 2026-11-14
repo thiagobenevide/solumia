@@ -1,60 +1,60 @@
 #!/usr/bin/env bash
-# Gera o app Linux (release) apontado para a VPS e empacota em plataforma/app/build/agent-linux.tar.gz,
-# com instalar.sh (sem sudo: ~/.local/opt/agent + atalho no menu). Precisa do libmpv-dev para compilar.
+# Builds the Linux app (release) pointed at the VPS and packs it into plataforma/app/build/agent-linux.tar.gz,
+# with instalar.sh (no sudo: ~/.local/opt/agent + menu shortcut). Needs libmpv-dev to compile.
 #
-#   infra/scripts/empacotar_linux [URL_DA_API]       # padrão: https://agent.thiagobenevide.com
-#   tar -xzf agent-linux.tar.gz && agent/instalar.sh  # no PC de destino
+#   infra/scripts/empacotar_linux [API_URL]          # default: https://agent.thiagobenevide.com
+#   tar -xzf agent-linux.tar.gz && agent/instalar.sh  # on the target PC
 set -euo pipefail
 
 url="${1:-https://agent.thiagobenevide.com}"
-raiz="$(cd "$(dirname "$0")/../.." && pwd)"
-app="$raiz/plataforma/app"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+app="$root/plataforma/app"
 flutter="$(command -v flutter || echo "$HOME/development/flutter/bin/flutter")"
 
-pkg-config --exists mpv || { echo "Falta o libmpv-dev: sudo apt install -y libmpv-dev" >&2; exit 1; }
+pkg-config --exists mpv || { echo "Missing libmpv-dev: sudo apt install -y libmpv-dev" >&2; exit 1; }
 
 cd "$app"
-# Cache de um configure que falhou deixa CMAKE_INSTALL_PREFIX=/usr/local e quebra o install.
+# The cache of a failed configure leaves CMAKE_INSTALL_PREFIX=/usr/local and breaks the install.
 grep -qs 'CMAKE_INSTALL_PREFIX:PATH=/usr/local' build/linux/x64/release/CMakeCache.txt && rm -rf build/linux
-# BUILD (posto pelo publicar_app) vira o número da versão que o botão "Atualizar app" compara.
+# BUILD (set by publicar_app) becomes the version number the "Atualizar app" button compares.
 "$flutter" build linux --release --dart-define=API_URL="$url" \
     ${BUILD:+--dart-define=BUILD=$BUILD --build-number=$BUILD}
 
-pacote="$app/build/pacote"
-rm -rf "$pacote" && mkdir -p "$pacote/agent"
-cp -r build/linux/x64/release/bundle/. "$pacote/agent/"
-cp "$raiz/plataforma/app_core/assets/logo.png" "$pacote/agent/agent.png"
+package="$app/build/package"
+rm -rf "$package" && mkdir -p "$package/agent"
+cp -r build/linux/x64/release/bundle/. "$package/agent/"
+cp "$root/plataforma/app_core/assets/logo.png" "$package/agent/agent.png"
 
-cat > "$pacote/agent/instalar.sh" <<'EOF'
+cat > "$package/agent/instalar.sh" <<'EOF'
 #!/usr/bin/env bash
-# Instala o Agent para o usuário atual (sem sudo): ~/.local/opt/agent + atalho no menu.
+# Installs Agent for the current user (no sudo): ~/.local/opt/agent + menu shortcut.
 set -euo pipefail
-origem="$(cd "$(dirname "$0")" && pwd)"
-destino="$HOME/.local/opt/agent"
-if ldd "$origem"/lib/*.so | grep -q 'not found'; then
-    echo "! Faltam bibliotecas (player de vídeo): sudo apt install -y libmpv2"
+source="$(cd "$(dirname "$0")" && pwd)"
+target="$HOME/.local/opt/agent"
+if ldd "$source"/lib/*.so | grep -q 'not found'; then
+    echo "! Missing libraries (video player): sudo apt install -y libmpv2"
 fi
-rm -rf "$destino"
-mkdir -p "$destino" "$HOME/.local/share/applications" "$HOME/.local/bin"
-cp -r "$origem/." "$destino/"
-ln -sf "$destino/agent" "$HOME/.local/bin/agent"
-# Nome do .desktop e StartupWMClass = APPLICATION_ID (classe da janela), senão o painel não liga a janela ao atalho.
+rm -rf "$target"
+mkdir -p "$target" "$HOME/.local/share/applications" "$HOME/.local/bin"
+cp -r "$source/." "$target/"
+ln -sf "$target/agent" "$HOME/.local/bin/agent"
+# .desktop name and StartupWMClass = APPLICATION_ID (window class), otherwise the panel does not tie the window to the shortcut.
 rm -f "$HOME/.local/share/applications/agent.desktop"
 cat > "$HOME/.local/share/applications/com.thiagobenevide.agent.desktop" <<DESK
 [Desktop Entry]
 Type=Application
 Name=Agent
 Comment=Agent
-Exec=$destino/agent
-Icon=$destino/agent.png
+Exec=$target/agent
+Icon=$target/agent.png
 Terminal=false
 Categories=Office;Utility;
 StartupWMClass=com.thiagobenevide.agent
 DESK
 update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
-echo "Agent instalado: procure 'Agent' no menu ou rode 'agent'."
+echo "Agent installed: look for 'Agent' in the menu or run 'agent'."
 EOF
-chmod +x "$pacote/agent/instalar.sh"
+chmod +x "$package/agent/instalar.sh"
 
-tar -czf "$app/build/agent-linux.tar.gz" -C "$pacote" agent
-echo "Pacote: $app/build/agent-linux.tar.gz ($(du -h "$app/build/agent-linux.tar.gz" | cut -f1))"
+tar -czf "$app/build/agent-linux.tar.gz" -C "$package" agent
+echo "Package: $app/build/agent-linux.tar.gz ($(du -h "$app/build/agent-linux.tar.gz" | cut -f1))"

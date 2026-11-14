@@ -1,6 +1,6 @@
 package com.thiagobenevide.agent
 
-import com.thiagobenevide.agent.consumo.ConsumoPlugin
+import com.thiagobenevide.agent.usage.UsagePlugin
 import com.thiagobenevide.agent.recording.CameraProPlugin
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -12,20 +12,20 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        // Saúde › Consumo: leitura do tempo de uso neste aparelho
-        val canal = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "agent/saude/consumo")
-        ConsumoPlugin(this).handle(canal)
-        // Empreendimento › Gravação: pro camera (Camera2 + encoder) streaming to the PC
-        val mensageiro = flutterEngine.dartExecutor.binaryMessenger
+        // Saúde › Consumo: screen-time reading on this device
+        val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "agent/saude/consumo")
+        UsagePlugin(this).handle(channel)
+        // Empreendimento › Recording: pro camera (Camera2 + encoder) streaming to the PC
+        val messenger = flutterEngine.dartExecutor.binaryMessenger
         camera = CameraProPlugin(this, flutterEngine.renderer).also {
-            MethodChannel(mensageiro, "agent/empreendimento/camera").setMethodCallHandler(it)
-            EventChannel(mensageiro, "agent/empreendimento/camera/events").setStreamHandler(it)
+            MethodChannel(messenger, "agent/empreendimento/camera").setMethodCallHandler(it)
+            EventChannel(messenger, "agent/empreendimento/camera/events").setStreamHandler(it)
         }
     }
 
-    override fun onRequestPermissionsResult(codigo: Int, permissoes: Array<out String>, concedidas: IntArray) {
-        if (camera?.onPermissionResult(codigo) != true) {
-            super.onRequestPermissionsResult(codigo, permissoes, concedidas)
+    override fun onRequestPermissionsResult(code: Int, permissions: Array<out String>, grantResults: IntArray) {
+        if (camera?.onPermissionResult(code) != true) {
+            super.onRequestPermissionsResult(code, permissions, grantResults)
         }
     }
 

@@ -1,43 +1,43 @@
-# Dashboard e Accountability (Cobrador)
+# Dashboard and Accountability (Cobrador)
 
-Logs de operação, consumo de recursos, disponibilidade e latência das LLMs; cobrador que acompanha metas e ações e alerta quando o planejamento desvia.
+Operation logs, resource usage, LLM availability and latency; a coach (Cobrador) that tracks goals and actions and alerts when the plan drifts.
 
-## Estrutura
+## Layout
 
 ```
 painel/
-├── backend/   pacote Python: API FastAPI, modelos e regras (roda na VPS)
-├── worker/    jobs pesados de LLM/GPU (roda no PC com a GPU)
-└── app/       pacote Flutter com as telas do módulo
+├── backend/   Python package: FastAPI API, models and rules (runs on the VPS)
+├── worker/    heavy LLM/GPU jobs (runs on the GPU PC)
+└── app/       Flutter package with the module screens
 ```
 
-Cada parte só existe quando houver código para ela. A plataforma (`plataforma/`) registra o
-router do backend, despacha os jobs do worker e monta as telas do app.
+Each part only exists once there is code for it. The platform (`plataforma/`) registers the
+backend router, dispatches the worker jobs and mounts the app screens.
 
-## Cobrador (pronto)
+## Cobrador (done)
 
-- `backend/` → `/api/painel`: metas (`/metas`, `/metas/{id}/acoes`), agenda do dia (`/agenda/{dia}`,
-  `/sugerir`, `PUT` devolve `contestacoes`, `/blocos/{id}/feito`), `/disciplina` (índice 0–100 e alertas),
-  `/provedores` e `/conversar` (`local` = worker; `claude` com `GATEWAY_ANTHROPIC_API_KEY`).
-  No chat, “anote …” cria nota no cofre e “pesquise …” responde com as notas da base.
-- `app/`: abas Hoje (placar, alertas, agenda editável), Cobrador (chat) e Metas.
-- Agente: o LLM pode terminar a resposta com um bloco ```acoes``` (criar tarefa/nota, mexer na
-  agenda, registrar meta, concluir/mover tarefa); o servidor executa e devolve `executadas`
-  (`painel/agent.py`). Consultas (`pesquisar_web`, `pesquisar_notas`, `analisar_desempenho`) voltam
-  ao LLM numa segunda rodada antes da resposta final.
-- Outros módulos: `Fontes.modulos` (registrado em `_acoes_modulos` no `main.py` da plataforma) dá
-  ao agente `criar_caderno`, `criar_quadro`, `criar_fluxograma` (Design) e `criar_projeto_estudo`,
-  `criar_leitura` (Estudos). Módulo novo = mais uma entrada ali.
-- Velocidade: o prompt de sistema só tem o que quase não muda (instruções, agenda, até 40 tarefas
-  abertas); hora e alertas vão na última mensagem, para o llama-server reaproveitar o cache.
-- Desempenho: `GET /desempenho?dias=30` (`painel/performance.py`: concluídas, no prazo, atrasadas,
-  aderência à agenda por dia da semana, metas); mensagens com “desempenho/produtividade” já levam a
-  análise ao prompt.
-- Voz: `POST /voz` (WAV → transcrição no worker → conversa) e `POST /falar` (texto → WAV). No worker:
-  `uv sync --extra voz` (faster-whisper) e Piper (`WORKER_PIPER_MODELO`) ou `espeak-ng`.
-- Notificações: no app, `VigiaCobrador` mostra os alertas novos no sistema (Linux/Android) a cada
-  5 min; com o app fechado, `GATEWAY_PAINEL_NTFY_URL` manda push pelo ntfy.
-  No Galaxy Watch, o app `modulos/saude/wear` mostra os alertas, toca alarme no início dos blocos
-  e conversa com o cobrador por voz.
-- Dashboard: `GET /dashboard` (pedidos, erros, p50/p95, tokens, log em `uso.jsonl`, CPU/RAM/GPU dos
-  workers via heartbeat); aba LLMs no app.
+- `backend/` → `/api/painel`: goals (`/metas`, `/metas/{id}/acoes`), day agenda (`/agenda/{dia}`,
+  `/sugerir`, `PUT` returns `contestacoes`, `/blocos/{id}/feito`), `/disciplina` (0–100 index and alerts),
+  `/provedores` and `/conversar` (`local` = worker; `claude` with `GATEWAY_ANTHROPIC_API_KEY`).
+  In the chat, "anote …" creates a note in the vault and "pesquise …" answers with the notes in the base.
+- `app/`: Today tab (score, alerts, editable agenda), Cobrador (chat) and Goals.
+- Agent: the LLM can end its answer with an ```acoes``` block (create task/note, change the
+  agenda, record a goal, finish/move a task); the server runs it and returns `executadas`
+  (`painel/agent.py`). Queries (`pesquisar_web`, `pesquisar_notas`, `analisar_desempenho`) go back
+  to the LLM in a second round before the final answer.
+- Other modules: `Fontes.modulos` (registered in `_acoes_modulos` in the platform `main.py`) gives
+  the agent `criar_caderno`, `criar_quadro`, `criar_fluxograma` (Design) and `criar_projeto_estudo`,
+  `criar_leitura` (Studies). A new module = one more entry there.
+- Speed: the system prompt only has what barely changes (instructions, agenda, up to 40 open
+  tasks); time and alerts go in the last message, so llama-server can reuse the cache.
+- Performance: `GET /desempenho?dias=30` (`painel/performance.py`: done, on time, late,
+  agenda adherence per weekday, goals); messages about "desempenho/produtividade" already bring the
+  analysis into the prompt.
+- Voice: `POST /voz` (WAV → transcription on the worker → conversation) and `POST /falar` (text → WAV). On the worker:
+  `uv sync --extra voz` (faster-whisper) and Piper (`WORKER_PIPER_MODELO`) or `espeak-ng`.
+- Notifications: in the app, `VigiaCobrador` shows new alerts in the system (Linux/Android) every
+  5 min; with the app closed, `GATEWAY_PAINEL_NTFY_URL` sends a push through ntfy.
+  On the Galaxy Watch, the `modulos/saude/wear` app shows the alerts, rings an alarm at the start of the blocks
+  and talks to the coach by voice.
+- Dashboard: `GET /dashboard` (requests, errors, p50/p95, tokens, log in `uso.jsonl`, workers' CPU/RAM/GPU
+  via heartbeat); LLMs tab in the app.

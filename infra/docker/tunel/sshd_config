@@ -5,7 +5,7 @@ AllowUsers tunel
 PermitRootLogin no
 PasswordAuthentication no
 KbdInteractiveAuthentication no
-# Só "ssh -N -R 0.0.0.0:8765:localhost:8765": nada de shell, terminal ou encaminhamento local.
+# Only "ssh -N -R 0.0.0.0:8765:localhost:8765": no shell, terminal or local forwarding.
 AllowTcpForwarding remote
 GatewayPorts clientspecified
 PermitListen 0.0.0.0:8765 8765

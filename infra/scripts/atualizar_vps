@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Atualiza a VPS com o master do GitHub: git pull no repositório de lá e roda o instalar_vps
-# (seguro de repetir: só reconstrói e reinicia) e reinicia a esteira e o worker do PC. VPS vem do
-# .env.prd (TUNEL_HOST, DOMINIO).
+# Updates the VPS to GitHub's master: git pull in the repository there, runs instalar_vps
+# (safe to repeat: it only rebuilds and restarts) and restarts the PC's esteira and worker. The VPS
+# comes from .env.prd (TUNEL_HOST, DOMINIO).
 #
-#   infra/scripts/atualizar_vps [usuario@vps]
+#   infra/scripts/atualizar_vps [user@vps]
 set -euo pipefail
 
-raiz="$(cd "$(dirname "$0")/../.." && pwd)"
-ler() { grep -E "^$1=" "$raiz/.env.prd" 2>/dev/null | tail -n1 | cut -d= -f2-; }
-dominio="$(ler DOMINIO)"; dominio="${dominio:-agent.thiagobenevide.com}"
-host="$(ler TUNEL_HOST)"; vps="${1:-root@${host:-$dominio}}"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+read_env() { grep -E "^$1=" "$root/.env.prd" 2>/dev/null | tail -n1 | cut -d= -f2-; }
+domain="$(read_env DOMINIO)"; domain="${domain:-agent.thiagobenevide.com}"
+host="$(read_env TUNEL_HOST)"; vps="${1:-root@${host:-$domain}}"
 
-echo "▶ Atualizando $vps"
-# A pasta do repositório lá sai do rótulo do docker compose (…/infra/docker); senão, os lugares comuns.
+echo "▶ Updating $vps"
+# The repository folder there comes from the docker compose label (…/infra/docker); otherwise, the usual places.
 # shellcheck disable=SC2016
 ssh -o BatchMode=yes "$vps" bash -s <<'EOF'
 set -euo pipefail
@@ -23,34 +23,34 @@ if [ ! -x "$repo/infra/scripts/instalar_vps" ]; then
         [ -x "$d/infra/scripts/instalar_vps" ] && repo="$d" && break
     done
 fi
-[ -x "$repo/infra/scripts/instalar_vps" ] || { echo "✗ repositório não encontrado na VPS" >&2; exit 1; }
+[ -x "$repo/infra/scripts/instalar_vps" ] || { echo "✗ repository not found on the VPS" >&2; exit 1; }
 cd "$repo"
 echo "▶ $repo: $(git log --oneline -1)"
 git fetch -q origin
-# Histórico reescrito no GitHub (ex.: remoção de segredo): o fast-forward falha; o reset --keep
-# segue para o master novo e se recusa se houver mudança local versionada (nada se perde).
+# History rewritten on GitHub (e.g. a removed secret): the fast-forward fails; reset --keep moves
+# to the new master and refuses if there is a tracked local change (nothing is lost).
 git merge --ff-only -q origin/master 2>/dev/null || git reset -q --keep origin/master
-echo "▶ agora: $(git log --oneline -1)"
+echo "▶ now: $(git log --oneline -1)"
 infra/scripts/instalar_vps 2>&1 | tail -n 15
 EOF
 
-echo "▶ Conferindo a rota nova"
-curl -s -o /dev/null -w '/api/codigo/arvore → HTTP %{http_code} (401 = existe, falta login; 404 = ainda antigo)\n' \
-    "https://$dominio/api/codigo/arvore"
+echo "▶ Checking the new route"
+curl -s -o /dev/null -w '/api/codigo/arvore → HTTP %{http_code} (401 = exists, needs login; 404 = still old)\n' \
+    "https://$domain/api/codigo/arvore"
 
-# A esteira e o worker rodam no PC (serviços do systemd do usuário): sem reiniciar, seguem com o
-# código antigo mesmo com a VPS em dia. Os pedidos do Código são filhos do worker, então, se este
-# script roda dentro dele, o reinício do worker fica para 60 s depois (fora do serviço) para não
-# derrubar a sessão que pediu a atualização.
-echo "▶ Reiniciando os serviços do PC"
+# The esteira and the worker run on the PC (user systemd services): without a restart they keep
+# the old code even with the VPS up to date. Code requests are children of the worker, so if this
+# script runs inside it, the worker restart is scheduled 60 s later (outside the service) so it does
+# not kill the session that asked for the update.
+echo "▶ Restarting the PC services"
 if systemctl --user cat agent-esteira >/dev/null 2>&1; then
-    systemctl --user restart agent-esteira && echo "agent-esteira reiniciado"
+    systemctl --user restart agent-esteira && echo "agent-esteira restarted"
 fi
 if systemctl --user cat agent-worker >/dev/null 2>&1; then
     if grep -q 'agent-worker\.service' /proc/self/cgroup; then
         systemd-run --user --quiet --on-active=60 systemctl --user restart agent-worker \
-            && echo "agent-worker reinicia em 60 s (este pedido roda dentro dele)"
+            && echo "agent-worker restarts in 60 s (this request runs inside it)"
     else
-        systemctl --user restart agent-worker && echo "agent-worker reiniciado"
+        systemctl --user restart agent-worker && echo "agent-worker restarted"
     fi
 fi

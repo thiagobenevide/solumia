@@ -1,9 +1,9 @@
-"""Host WOPI para o Collabora Online (CODE): o Collabora lê e grava o original da biblioteca
-por estas rotas, autenticado pelo `access_token` assinado aqui (nunca a chave do app).
+"""WOPI host for Collabora Online (CODE): Collabora reads and writes the library original
+through these routes, authenticated by the `access_token` signed here (never the app key).
 
-Fluxo: o app pede `POST /api/arquivos/{id}/collabora` (com a chave), recebe a action URL do
-Collabora + token e faz POST do formulário `access_token` nessa URL. O Collabora então chama
-`/wopi/files/{id}` (CheckFileInfo, GetFile, PutFile, locks) pela `wopi_base_url`.
+Flow: the app requests `POST /api/arquivos/{id}/collabora` (with the key), receives the Collabora
+action URL + token and POSTs the `access_token` form to that URL. Collabora then calls
+`/wopi/files/{id}` (CheckFileInfo, GetFile, PutFile, locks) through the `wopi_base_url`.
 """
 
 import base64
@@ -23,14 +23,14 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from backend.files.library import FileInvalid, FileNotFound, Collection
 from backend.core.config import Settings
+from backend.files.library import Collection, FileInvalid, FileNotFound
 
 router = APIRouter(prefix="/wopi", tags=["wopi"])
 
 LOCK_SECONDS = 30 * 60
 DISCOVERY_SECONDS = 60 * 60
-# Ordem de preferência das ações do discovery (edição primeiro).
+# Preference order of the discovery actions (edit first).
 ACTIONS = ("edit", "view_comment", "view")
 
 
@@ -50,7 +50,7 @@ def _secret(request: Request) -> bytes:
     value = settings.wopi_secret.get_secret_value()
     if value:
         return value.encode()
-    # Sem segredo configurado: um aleatório por processo (tokens caem num reinício).
+    # No configured secret: a random one per process (tokens drop on a restart).
     if not hasattr(request.app.state, "wopi_segredo"):
         request.app.state.wopi_segredo = secrets.token_bytes(32)
     secret: bytes = request.app.state.wopi_segredo
@@ -58,7 +58,7 @@ def _secret(request: Request) -> bytes:
 
 
 def generate_token(secret: bytes, id_: str, validity: int, origem: str = "") -> tuple[str, int]:
-    """Devolve (token, expiração em ms desde a época — o `access_token_ttl` do WOPI)."""
+    """Returns (token, expiry in ms since the epoch — the WOPI `access_token_ttl`)."""
     exp = int(time.time()) + validity
     body = _b64(json.dumps({"id": id_, "exp": exp, "origem": origem}).encode())
     signature = _b64(hmac.new(secret, body.encode(), hashlib.sha256).digest())
@@ -85,7 +85,7 @@ _discovery: dict[str, tuple[float, dict[str, str]]] = {}
 
 
 def _read_discovery(xml: str) -> dict[str, str]:
-    """extensão → urlsrc, preferindo a ação de edição."""
+    """extension → urlsrc, preferring the edit action."""
     actions: dict[str, tuple[int, str]] = {}
     for action in ET.fromstring(xml).iter("action"):
         ext, name, url = action.get("ext"), action.get("name"), action.get("urlsrc")
@@ -114,17 +114,17 @@ async def _discovery_of(settings: Settings) -> dict[str, str]:
 
 
 async def url_action(settings: Settings, extension: str, id_: str) -> str:
-    """Action URL do Collabora para a extensão, com o `WOPISrc` deste arquivo."""
+    """Collabora action URL for the extension, with this file's `WOPISrc`."""
     if not settings.collabora_url:
         raise HTTPException(503, "Collabora não configurado (GATEWAY_COLLABORA_URL)")
     urlsrc = (await _discovery_of(settings)).get(extension.lower())
     if urlsrc is None:
         raise HTTPException(415, f"O Collabora não edita .{extension}")
-    # Tira os marcadores opcionais (<ui=UI_LLCC&>) e troca a origem pela pública: o backend pode
-    # ter lido o discovery por um endereço interno (http://collabora:9980).
+    # Strip the optional markers (<ui=UI_LLCC&>) and replace the origin with the public one: the
+    # backend may have read the discovery through an internal address (http://collabora:9980).
     urlsrc = re.sub(r"<[^>]*>", "", urlsrc)
-    publica = urlsplit(settings.collabora_url)
-    parts = urlsplit(urlsrc)._replace(scheme=publica.scheme, netloc=publica.netloc)
+    public = urlsplit(settings.collabora_url)
+    parts = urlsplit(urlsrc)._replace(scheme=public.scheme, netloc=public.netloc)
     url = urlunsplit(parts)
     wopi_src = f"{settings.wopi_base_url.rstrip('/')}/wopi/files/{id_}"
     separador = "" if url.endswith(("?", "&")) else ("&" if "?" in url else "?")
@@ -132,7 +132,7 @@ async def url_action(settings: Settings, extension: str, id_: str) -> str:
 
 
 async def session(request: Request, id_: str) -> dict[str, Any]:
-    """Usado por `POST /api/arquivos/{id}/collabora` (rota protegida pela chave do app)."""
+    """Used by `POST /api/arquivos/{id}/collabora` (route protected by the app key)."""
     settings: Settings = request.app.state.settings
     collection: Collection = request.app.state.collection
     try:
@@ -145,7 +145,7 @@ async def session(request: Request, id_: str) -> dict[str, Any]:
     return {"url": url, "access_token": token, "access_token_ttl": ttl}
 
 
-# --- travas (em memória, expiram em 30 min) ---
+# --- locks (in memory, expire in 30 min) ---
 
 
 class Locks:
@@ -160,8 +160,8 @@ class Locks:
             return ""
         return lock[0]
 
-    def travar(self, id_: str, valor: str) -> None:
-        self._locks[id_] = (valor, time.time() + LOCK_SECONDS)
+    def travar(self, id_: str, value: str) -> None:
+        self._locks[id_] = (value, time.time() + LOCK_SECONDS)
 
     def soltar(self, id_: str) -> None:
         self._locks.pop(id_, None)
@@ -174,10 +174,10 @@ def _locks(request: Request) -> Locks:
     return locks
 
 
-def _conflict(atual: str, motivo: str) -> Response:
-    # Cabeçalho HTTP só aceita ASCII: motivos sem acento.
+def _conflict(current: str, motivo: str) -> Response:
+    # HTTP headers only accept ASCII: reasons without accents.
     return Response(
-        status_code=409, headers={"X-WOPI-Lock": atual, "X-WOPI-LockFailureReason": motivo}
+        status_code=409, headers={"X-WOPI-Lock": current, "X-WOPI-LockFailureReason": motivo}
     )
 
 
@@ -236,7 +236,7 @@ async def put_file(
     current = _locks(request).atual(id_)
     if current and request.headers.get("x-wopi-lock", "") != current:
         return _conflict(current, "Arquivo travado por outra sessao")
-    # O Collabora manda o horário da versão que abriu; se o arquivo mudou por fora, avisa.
+    # Collabora sends the time of the version it opened; if the file changed outside, it warns.
     carimbo = request.headers.get("x-cool-wopi-timestamp") or request.headers.get(
         "x-lool-wopi-timestamp"
     )
@@ -290,18 +290,18 @@ def lock(id_: str, request: Request, access_token: str = "") -> Response:
 
 @router.get("/abrir/{id_}")
 async def open_file(id_: str, request: Request, t: str = "") -> HTMLResponse:
-    """Página que faz POST do token para o Collabora: o app no desktop (sem webview) abre
-    esta URL no navegador. `t` é o `access_token` de `POST /api/arquivos/{id}/collabora`."""
+    """Page that POSTs the token to Collabora: the desktop app (no webview) opens this URL in
+    the browser. `t` is the `access_token` from `POST /api/arquivos/{id}/collabora`."""
     meta, data = _meta(request, id_, t)
     settings: Settings = request.app.state.settings
     url = await url_action(settings, meta["extensao"], id_)
     nonce = secrets.token_urlsafe(16)
-    publica = urlsplit(settings.collabora_url)
-    origin = f"{publica.scheme}://{publica.netloc}"
+    public = urlsplit(settings.collabora_url)
+    origin = f"{public.scheme}://{public.netloc}"
     return HTMLResponse(
         page_form(url, t, int(data["exp"]) * 1000, meta["nome_original"], nonce),
         headers={
-            # O middleware de segurança só preenche o que faltar: libera o script e o POST.
+            # The security middleware only fills what is missing: allow the script and the POST.
             "Content-Security-Policy": (
                 f"default-src 'none'; script-src 'nonce-{nonce}'; form-action {origin}; "
                 "frame-ancestors 'none'"
@@ -312,7 +312,7 @@ async def open_file(id_: str, request: Request, t: str = "") -> HTMLResponse:
 
 
 def page_form(url: str, token: str, ttl: int, titulo: str, nonce: str = "") -> str:
-    """HTML com o formulário WOPI que se envia sozinho (o app usa o mesmo HTML na webview)."""
+    """HTML with the self-submitting WOPI form (the app uses the same HTML in the webview)."""
     atributo = f' nonce="{nonce}"' if nonce else ""
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"

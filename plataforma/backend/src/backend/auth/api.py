@@ -27,16 +27,16 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 class Attempts:
-    """Falhas de login por IP numa janela; passou do limite, o IP fica bloqueado até ela fechar."""
+    """Login failures per IP in a window; past the limit, the IP stays blocked until it closes."""
 
     def __init__(self) -> None:
         self._failures: dict[str, list[float]] = {}
         self._lock = threading.Lock()
-        # Último passo TOTP aceito: o mesmo código não serve para um segundo login (replay).
+        # Last accepted TOTP step: the same code does not work for a second login (replay).
         self.last_step_totp = -1
 
     def blocked_by(self, ip: str, maximum: int, window: float) -> float:
-        """Segundos restantes de bloqueio (0 = liberado)."""
+        """Seconds of block left (0 = unblocked)."""
         with self._lock:
             now = time.monotonic()
             failures = [t for t in self._failures.get(ip, []) if now - t < window]
@@ -96,7 +96,7 @@ def login(
 
     hash_password = settings.admin_senha_hash.get_secret_value()
     user_ok = hmac.compare_digest(credenciais.usuario.encode(), settings.admin_usuario.encode())
-    # Verifica a senha mesmo com usuário errado para não revelar, pelo tempo, se o usuário existe.
+    # Check the password even with a wrong user so timing does not reveal whether the user exists.
     password_ok = verify_password(credenciais.senha, hash_password if user_ok else HASH_FICTITIOUS)
     step = verify_totp(settings.admin_totp_segredo.get_secret_value(), credenciais.codigo)
     totp_ok = step is not None and step > tentativas.last_step_totp
@@ -112,8 +112,8 @@ def login(
 
 
 def _session(settings: Settings, lembrar: bool, totp: int) -> Session:
-    """Token de sessão com a geração atual, o "manter conectado" e a hora do último código TOTP
-    (o módulo Código exige um recente)."""
+    """Session token with the current generation, the "stay signed in" choice and the time of the
+    last TOTP code (the Code module requires a recent one)."""
     minutes = settings.jwt_lembrar_dias * 24 * 60 if lembrar else settings.jwt_expire_minutes
     extras: dict[str, object] = {
         "ger": read_generation(settings.sessoes_geracao_arquivo),
@@ -135,11 +135,11 @@ def _session_of_request(request: Request) -> dict[str, object]:
 
 @router.post("/renovar", dependencies=[Depends(require_client_api_key)])
 def renew(request: Request, settings: SettingsDep) -> Session:
-    """Token novo com a mesma escolha de "manter conectado" e a mesma hora do último código: o
-    app chama ao abrir e uma vez por dia, então a sessão não vence enquanto é usada."""
+    """New token with the same "stay signed in" choice and the same last-code time: the app
+    calls it on open and once a day, so the session does not expire while in use."""
     session = _session_of_request(request)
     lembrar = session.get("lem")
-    if not isinstance(lembrar, bool):  # token de antes da renovação: deduz pela validade
+    if not isinstance(lembrar, bool):  # token from before renewal: infer from the validity
         duration = int(session["exp"]) - int(session["iat"])  # type: ignore[call-overload]
         lembrar = duration > settings.jwt_expire_minutes * 60
     totp = session.get("totp")
@@ -157,8 +157,9 @@ def confirm(
     settings: SettingsDep,
     tentativas: Annotated[Attempts, Depends(get_attempts)],
 ) -> Response:
-    """Confirma um código do Authenticator na sessão aberta (o Código pede um recente). Fica
-    anotado no servidor para este token (`jti`): o app segue com o mesmo token, sem recarregar."""
+    """Confirms an Authenticator code on the open session (Code requires a recent one). It is
+    recorded on the server for this token (`jti`): the app keeps the same token, without
+    reloading."""
     session = _session_of_request(request)
     ip = request.client.host if request.client else "?"
     window = settings.login_bloqueio_minutos * 60
@@ -180,7 +181,7 @@ def confirm(
 
 @router.post("/sair-de-todos", status_code=204, dependencies=[Depends(require_client_api_key)])
 def leave_of_all(request: Request, settings: SettingsDep) -> Response:
-    """Invalida todas as sessões (todos os aparelhos, este incluído): login de novo em cada um."""
+    """Invalidates every session (every device, this one included): log in again on each one."""
     _session_of_request(request)
     generation = upload_generation(settings.sessoes_geracao_arquivo)
     logger.warning("Sessões revogadas (geração %s)", generation)
@@ -194,8 +195,8 @@ class TokenMedia(BaseModel):
 
 @router.post("/token-midia", dependencies=[Depends(require_client_api_key)])
 def token_media(request: Request, settings: SettingsDep) -> TokenMedia:
-    """Token curto para o `?token=` das URLs de arquivo da esteira (imagem, vídeo, PDF): vale só
-    em `/esteira/` e nunca na API, então uma URL vazada não abre o resto."""
+    """Short token for the `?token=` of the pipeline file URLs (image, video, PDF): valid only on
+    `/esteira/` and never on the API, so a leaked URL does not open the rest."""
     session = _session_of_request(request)
     token, expira = issue_token(
         str(session["sub"]),
@@ -208,16 +209,17 @@ def token_media(request: Request, settings: SettingsDep) -> TokenMedia:
 
 @router.get("/sessao", dependencies=[Depends(require_client_api_key)])
 def session(request: Request) -> dict[str, str]:
-    """Confere se o token ainda vale (o app usa ao abrir)."""
+    """Checks whether the token is still valid (the app uses it on open)."""
     return {"usuario": request.state.usuario}
 
 
 @router.get("/verificar", status_code=204)
 def verify(request: Request, settings: SettingsDep) -> Response:
-    """Subpedido `auth_request` do nginx antes de repassar `/esteira/` ao túnel do PC.
+    """nginx `auth_request` subrequest before forwarding `/esteira/` to the PC tunnel.
 
-    Aceita o token de sessão no cabeçalho ou em `?token=` da URI original (`X-Original-URI`):
-    imagem, vídeo e PDF abertos por URL não mandam cabeçalho. Só o JWT do login vale aqui.
+    Accepts the session token in the header or in `?token=` of the original URI
+    (`X-Original-URI`): images, videos and PDFs opened by URL send no header. Only the login JWT
+    is valid here.
     """
     token = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
     if not token:
@@ -229,7 +231,8 @@ def verify(request: Request, settings: SettingsDep) -> Response:
 
 
 def _applies_in_esteira(token: str, settings: Settings) -> bool:
-    """Sessão do login ou token de mídia, ambos de geração não revogada."""
+    """Login session or media token, both from a non-revoked generation."""
+
     if session_validates(token, settings) is not None:
         return True
     payload = validate_token(token, settings.jwt_secret_key.get_secret_value())

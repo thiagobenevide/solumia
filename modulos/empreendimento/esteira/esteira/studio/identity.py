@@ -60,20 +60,22 @@ def propose(id_, niche=""):
     current = E.load(id_)
     sheet = _sheet(id_)
     dossier = (
-        "Você é diretor de arte de um canal do YouTube. Proponha a IDENTIDADE VISUAL e o GUIA de edição deste estilo, "
-        "para uma IA local menor seguir depois em cada vídeo (ela só escolhe cenas de um cardápio, então o guia tem "
-        "que ser concreto: quando usar cada cena, tom, o que destacar).\n"
-        f"Canal: {current.canal} · modo {current.modo} · nicho: {niche or current.guia}\n"
-        f"Estilo atual (JSON): {current.model_dump_json()}\n"
-        f"Cenas possíveis: {', '.join(E.SCENES)}. Sons possíveis: {', '.join(E.SOUNDS)}.\n"
-        f"Fontes (use só estas): {', '.join(fonts.CATALOG)}; fonte_editorial é a serifa dos capítulos e citações.\n"
-        "Variações do kit ('visual'): entradas (desfoque, deslizar, revelar, escala; o código alterna), fundo das "
-        "cenas de motion (veu, solido, gradiente), alinhamento (centro, esquerda), cartao (vidro, contorno, solido), "
-        "cantos 0–3. Responda só com dados; não escreva código.\n"
-        + ("A imagem anexada é uma folha com as referências visuais enviadas: extraia paleta (hex), clima e tipografia.\n"
-           if sheet else "Sem referências visuais: proponha a partir do nicho.\n")
-        + "Regras: cores em #rrggbb com contraste alto entre texto e fundo; 'destaque' é a cor de ênfase; 5 a 8 "
-        "exemplos frase→cena típicos do nicho; takeover_max entre 0,35 e 0,65 (muito motion graphics, mas com respiro).")
+        "You are the art director of a YouTube channel in Brazilian Portuguese. Propose the VISUAL IDENTITY and the "
+        "editing GUIDE of this style, for a smaller local AI to follow later in each video (it only chooses scenes "
+        "from a menu, so the guide has to be concrete: when to use each scene, tone, what to highlight).\n"
+        f"Channel: {current.canal} · mode {current.modo} · niche: {niche or current.guia}\n"
+        f"Current style (JSON): {current.model_dump_json()}\n"
+        f"Possible scenes: {', '.join(E.SCENES)}. Possible sounds: {', '.join(E.SOUNDS)}.\n"
+        f"Fonts (use only these): {', '.join(fonts.CATALOG)}; fonte_editorial is the serif for chapters and quotes.\n"
+        "Kit variations ('visual', use these exact values): entradas (desfoque, deslizar, revelar, escala; the code "
+        "alternates them), background of the motion scenes (veu, solido, gradiente), alinhamento (centro, esquerda), "
+        "cartao (vidro, contorno, solido), cantos 0–3. Respond with data only; do not write code.\n"
+        + ("The attached image is a sheet with the visual references sent: extract the palette (hex), mood and "
+           "typography.\n" if sheet else "No visual references: propose from the niche.\n")
+        + "Rules: colors as #rrggbb with high contrast between text and background; 'destaque' is the emphasis color; "
+        "5 to 8 typical sentence→scene examples for the niche, with the sentences in Brazilian Portuguese; write the "
+        "guide in Brazilian Portuguese; takeover_max between 0.35 and 0.65 (lots of motion graphics, but with room "
+        "to breathe).")
     r = claude.query(dossier, Proposal, {"claude": {}}, f"estilo:{id_}", "estudio_identidade",
                          image=str(sheet) if sheet else None)
     if not r:

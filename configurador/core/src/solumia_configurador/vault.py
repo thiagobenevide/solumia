@@ -1,10 +1,10 @@
-"""Cofre de segredos: AES-256-GCM, chave no chaveiro do sistema operacional.
+"""Secret vault: AES-256-GCM, key in the operating system keyring.
 
 - Linux: Secret Service (GNOME Keyring / KWallet); Windows: Credential Manager.
-- Sem chaveiro disponível (servidor sem sessão gráfica), a chave sai de uma frase-senha via scrypt;
-  a frase nunca é gravada.
-- O arquivo é reescrito inteiro a cada mudança (atômico, 0600). Valores nunca vão para logs: `repr`
-  do cofre só mostra os nomes.
+- With no keyring available (server without a graphical session), the key comes from a passphrase
+  via scrypt; the passphrase is never stored.
+- The file is rewritten in full on every change (atomic, 0600). Values never go to logs: the vault
+  `repr` only shows the names.
 """
 
 from __future__ import annotations
@@ -22,28 +22,28 @@ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
 from . import names
 
-_VERSAO = 1
+_VERSION = 1
 _AAD = b"solumia-cofre-v1"
 
 
-class CofreErro(Exception):
+class VaultError(Exception):
     pass
 
 
-class ChaveiroIndisponivel(CofreErro):
+class KeyringUnavailable(VaultError):
     pass
 
 
-def _b64(dados: bytes) -> str:
-    return base64.b64encode(dados).decode()
+def _b64(data: bytes) -> str:
+    return base64.b64encode(data).decode()
 
 
-def _d64(texto: str) -> bytes:
-    return base64.b64decode(texto)
+def _d64(text: str) -> bytes:
+    return base64.b64decode(text)
 
 
-class FonteChave:
-    """De onde vem a chave de 32 bytes do cofre."""
+class KeySource:
+    """Where the 32-byte vault key comes from."""
 
     def obter(self, criar: bool) -> bytes:
         raise NotImplementedError
@@ -52,134 +52,134 @@ class FonteChave:
         return None
 
 
-class ChaveDoChaveiro(FonteChave):
+class KeyringKey(KeySource):
     def obter(self, criar: bool) -> bytes:
         try:
             import keyring
             from keyring.errors import KeyringError
         except ImportError as e:  # pragma: no cover
-            raise ChaveiroIndisponivel("pacote keyring ausente") from e
+            raise KeyringUnavailable("pacote keyring ausente") from e
         try:
-            salva = keyring.get_password(names.SERVICO_CHAVEIRO, names.CONTA_CHAVEIRO)
-            if salva:
-                chave = _d64(salva)
-                if len(chave) != 32:
-                    raise CofreErro("chave do chaveiro corrompida")
-                return chave
+            saved = keyring.get_password(names.SERVICO_CHAVEIRO, names.KEYRING_ACCOUNT)
+            if saved:
+                key = _d64(saved)
+                if len(key) != 32:
+                    raise VaultError("chave do chaveiro corrompida")
+                return key
             if not criar:
-                raise CofreErro("o cofre existe mas a chave não está no chaveiro deste usuário")
-            chave = AESGCM.generate_key(bit_length=256)
-            keyring.set_password(names.SERVICO_CHAVEIRO, names.CONTA_CHAVEIRO, _b64(chave))
-            return chave
+                raise VaultError("o cofre existe mas a chave não está no chaveiro deste usuário")
+            key = AESGCM.generate_key(bit_length=256)
+            keyring.set_password(names.SERVICO_CHAVEIRO, names.KEYRING_ACCOUNT, _b64(key))
+            return key
         except KeyringError as e:
-            raise ChaveiroIndisponivel(str(e)) from e
+            raise KeyringUnavailable(str(e)) from e
 
 
-class ChaveDeFrase(FonteChave):
-    def __init__(self, frase: str, sal: bytes | None = None) -> None:
-        if len(frase) < 12:
-            raise CofreErro("frase-senha do cofre: mínimo 12 caracteres")
-        self._frase = frase
-        self.sal = sal or secrets.token_bytes(16)
+class PassphraseKey(KeySource):
+    def __init__(self, sentence: str, salt: bytes | None = None) -> None:
+        if len(sentence) < 12:
+            raise VaultError("frase-senha do cofre: mínimo 12 caracteres")
+        self._passphrase = sentence
+        self.salt = salt or secrets.token_bytes(16)
 
     def obter(self, criar: bool) -> bytes:
-        return Scrypt(salt=self.sal, length=32, n=2**17, r=8, p=1).derive(self._frase.encode())
+        return Scrypt(salt=self.salt, length=32, n=2**17, r=8, p=1).derive(self._passphrase.encode())
 
     def kdf(self) -> dict[str, object]:
-        return {"tipo": "scrypt", "n": 2**17, "r": 8, "p": 1, "sal": _b64(self.sal)}
+        return {"tipo": "scrypt", "n": 2**17, "r": 8, "p": 1, "sal": _b64(self.salt)}
 
 
-class Cofre:
-    def __init__(self, caminho: Path, fonte: FonteChave | None = None) -> None:
-        self.caminho = caminho
-        self._fonte = fonte or ChaveDoChaveiro()
+class Vault:
+    def __init__(self, path: Path, source: KeySource | None = None) -> None:
+        self.path = path
+        self._source = source or KeyringKey()
         self._lock = threading.Lock()
-        self._dados: dict[str, str] = {}
-        self._chave: bytes | None = None
+        self._data: dict[str, str] = {}
+        self._key: bytes | None = None
 
     def __repr__(self) -> str:
-        return f"Cofre({self.caminho}, nomes={sorted(self._dados)})"
+        return f"Cofre({self.path}, nomes={sorted(self._data)})"
 
     @classmethod
-    def com_frase(cls, caminho: Path, frase: str) -> Cofre:
-        sal = None
-        if caminho.exists():
-            kdf = json.loads(caminho.read_text()).get("kdf") or {}
+    def with_passphrase(cls, path: Path, sentence: str) -> Vault:
+        salt = None
+        if path.exists():
+            kdf = json.loads(path.read_text()).get("kdf") or {}
             if kdf.get("tipo") != "scrypt":
-                raise CofreErro("este cofre não usa frase-senha")
-            sal = _d64(str(kdf["sal"]))
-        return cls(caminho, ChaveDeFrase(frase, sal))
+                raise VaultError("este cofre não usa frase-senha")
+            salt = _d64(str(kdf["sal"]))
+        return cls(path, PassphraseKey(sentence, salt))
 
-    # --- ciclo de vida -------------------------------------------------------------------------
-    def abrir(self) -> Cofre:
+    # --- lifecycle ------------------------------------------------------------------------------
+    def open_file(self) -> Vault:
         with self._lock:
-            existe = self.caminho.exists()
-            self._chave = self._fonte.obter(criar=not existe)
-            if existe:
-                bruto = json.loads(self.caminho.read_text())
-                if bruto.get("v") != _VERSAO:
-                    raise CofreErro(f"versão de cofre desconhecida: {bruto.get('v')}")
+            exists = self.path.exists()
+            self._key = self._source.obter(criar=not exists)
+            if exists:
+                raw = json.loads(self.path.read_text())
+                if raw.get("v") != _VERSION:
+                    raise VaultError(f"versão de cofre desconhecida: {raw.get('v')}")
                 try:
-                    texto = AESGCM(self._chave).decrypt(_d64(bruto["nonce"]), _d64(bruto["dados"]), _AAD)
+                    text = AESGCM(self._key).decrypt(_d64(raw["nonce"]), _d64(raw["dados"]), _AAD)
                 except InvalidTag as e:
-                    raise CofreErro("chave errada ou cofre adulterado") from e
-                self._dados = json.loads(texto)
+                    raise VaultError("chave errada ou cofre adulterado") from e
+                self._data = json.loads(text)
             else:
-                self._dados = {}
-                self._gravar()
+                self._data = {}
+                self._write()
         return self
 
-    def _gravar(self) -> None:
-        assert self._chave is not None
+    def _write(self) -> None:
+        assert self._key is not None
         nonce = secrets.token_bytes(12)
-        cifrado = AESGCM(self._chave).encrypt(nonce, json.dumps(self._dados).encode(), _AAD)
-        conteudo = {"v": _VERSAO, "kdf": self._fonte.kdf(), "nonce": _b64(nonce), "dados": _b64(cifrado)}
-        self.caminho.parent.mkdir(parents=True, exist_ok=True)
-        temporario = self.caminho.with_suffix(".tmp")
-        fd = os.open(temporario, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        encrypted = AESGCM(self._key).encrypt(nonce, json.dumps(self._data).encode(), _AAD)
+        content = {"v": _VERSION, "kdf": self._source.kdf(), "nonce": _b64(nonce), "dados": _b64(encrypted)}
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.path.with_suffix(".tmp")
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
-            json.dump(conteudo, f)
-        os.replace(temporario, self.caminho)
+            json.dump(content, f)
+        os.replace(temporary, self.path)
 
     # --- acesso ----------------------------------------------------------------------------------
     def _aberto(self) -> None:
-        if self._chave is None:
-            raise CofreErro("cofre fechado")
+        if self._key is None:
+            raise VaultError("cofre fechado")
 
-    def obter(self, nome: str) -> str | None:
+    def obter(self, name: str) -> str | None:
         self._aberto()
-        return self._dados.get(nome)
+        return self._data.get(name)
 
-    def exigir(self, nome: str) -> str:
-        valor = self.obter(nome)
-        if not valor:
-            raise CofreErro(f"segredo ausente no cofre: {nome}")
-        return valor
+    def require(self, name: str) -> str:
+        value = self.obter(name)
+        if not value:
+            raise VaultError(f"segredo ausente no cofre: {name}")
+        return value
 
-    def definir(self, nome: str, valor: str) -> None:
-        self._aberto()
-        with self._lock:
-            self._dados[nome] = valor
-            self._gravar()
-
-    def obter_ou_gerar(self, nome: str, gerar) -> str:  # noqa: ANN001
-        valor = self.obter(nome)
-        if not valor:
-            valor = gerar()
-            self.definir(nome, valor)
-        return valor
-
-    def remover(self, nome: str) -> None:
+    def definir(self, name: str, value: str) -> None:
         self._aberto()
         with self._lock:
-            if self._dados.pop(nome, None) is not None:
-                self._gravar()
+            self._data[name] = value
+            self._write()
 
-    def nomes(self) -> list[str]:
-        self._aberto()
-        return sorted(self._dados)
+    def get_or_generate(self, name: str, generate) -> str:  # noqa: ANN001
+        value = self.obter(name)
+        if not value:
+            value = generate()
+            self.definir(name, value)
+        return value
 
-    def valores_sensiveis(self) -> list[str]:
-        """Para mascarar em logs qualquer valor do cofre que escape para uma saída de comando."""
+    def remove(self, name: str) -> None:
         self._aberto()
-        return [v for v in self._dados.values() if len(v) >= 8]
+        with self._lock:
+            if self._data.pop(name, None) is not None:
+                self._write()
+
+    def names(self) -> list[str]:
+        self._aberto()
+        return sorted(self._data)
+
+    def sensitive_values(self) -> list[str]:
+        """To mask in logs any vault value that leaks into a command output."""
+        self._aberto()
+        return [v for v in self._data.values() if len(v) >= 8]

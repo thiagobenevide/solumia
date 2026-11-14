@@ -1,7 +1,7 @@
-"""Codificação a distância: sessões do Claude Code (`claude -p`, assinatura logada neste PC)
-rodando dentro do repositório, pedidas pelo app via VPS. Cada aba do app é uma sessão; o pedido
-seguinte continua a conversa (`--resume`). As etapas (texto, ferramentas, resultado) voltam ao
-Gateway como `evento` do canal `codigo` enquanto o Claude trabalha."""
+"""Remote coding: Claude Code sessions (`claude -p`, subscription logged in on this PC) running
+inside the repository, requested by the app through the VPS. Each app tab is a session; the next
+request continues the conversation (`--resume`). The steps (text, tools, result) go back to the
+Gateway as `evento` of the `codigo` channel while Claude works."""
 
 import asyncio
 import base64
@@ -22,19 +22,19 @@ TASKS = {
     "codigo.arvore", "codigo.arquivo", "codigo.buscar",
 }
 
-# Navegador de código (só leitura): commit pedido pelo app e tamanho máximo do arquivo enviado.
+# Code browser (read only): commit requested by the app and max size of the file sent.
 _COMMIT = re.compile(r"^[0-9a-f]{4,40}$")
 _LIMIT_FILE = 400_000
 _LIMIT_SEARCH = 400
-# Observações = comentários: o termo tem que aparecer depois de um marcador de comentário;
-# sem termo, as marcações de pendência (TODO, FIXME...).
+# Observations = comments: the term must appear after a comment marker;
+# without a term, the pending-work markers (TODO, FIXME...).
 _COMMENT = re.compile(r"(//|#|/\*|^\s*\*|<!--|^\s*--\s)")
 _MARKS = re.compile(r"\b(TODO|FIXME|XXX|HACK|NOTE|OBS)\b")
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
 def lines_new(diff: str) -> list[int]:
-    """Números (lado novo) das linhas adicionadas num diff `-U0` (hunk `+início,n` = n linhas)."""
+    """Numbers (new side) of the lines added in a `-U0` diff (hunk `+start,n` = n lines)."""
     new: list[int] = []
     for line in diff.splitlines():
         m = _HUNK.match(line)
@@ -45,7 +45,7 @@ def lines_new(diff: str) -> list[int]:
 
 
 def changes(name_status: str) -> list[dict[str, str]]:
-    """`git diff-tree --name-status` → `[{caminho, status}]` (A, M, D, R…; renomeado: nome novo)."""
+    """`git diff-tree --name-status` → `[{caminho, status}]` (A, M, D, R…; renamed: new name)."""
     output = []
     for line in name_status.splitlines():
         parts = line.split("\t")
@@ -53,15 +53,17 @@ def changes(name_status: str) -> list[dict[str, str]]:
             output.append({"caminho": parts[-1], "status": parts[0][:1]})
     return output
 
-# Vai junto do CLAUDE.md do repositório (carregado normalmente, pois roda na pasta do projeto).
-SYSTEM = """Você está sendo acionado a distância pelo app (módulo Código), sem ninguém no terminal.
-- Siga à risca o CLAUDE.md do repositório e os CLAUDE.md das pastas que tocar (economia de tokens, \
-validação com infra/scripts/verificar, estilo em português).
-- Não faça perguntas: decida pelo padrão do projeto e diga no fim o que assumiu.
-- Outras sessões podem estar editando o mesmo repositório ao mesmo tempo: não reverta nem commite \
-mudanças que não são suas.
-- Só faça commit, push ou publicação quando o pedido mandar.
-- Termine com um resumo curto: o que mudou (arquivo:linha), o que falhou e o próximo passo."""
+# Goes along with the repository CLAUDE.md (loaded as usual, since it runs in the project folder).
+SYSTEM = """You are being triggered remotely by the app (Código module), with nobody at the
+terminal.
+- Follow to the letter the repository's CLAUDE.md and the CLAUDE.md of the folders you touch \
+(token economy, validation with infra/scripts/verificar, the code style defined there).
+- Do not ask questions: decide by the project's patterns and say at the end what you assumed.
+- Other sessions may be editing the same repository at the same time: do not revert or commit \
+changes that are not yours.
+- Only commit, push or publish when the request says so.
+- End with a short summary in Brazilian Portuguese: what changed (file:line), what failed and the \
+next step."""
 
 _LIMIT_SUMMARY = 600
 
@@ -74,7 +76,7 @@ def _short(text: str, limite: int = _LIMIT_SUMMARY) -> str:
 
 
 def _summary_tool(nome: str, entry: dict[str, Any]) -> str:
-    """O que a ferramenta vai fazer, numa linha: comando, arquivo ou padrão buscado."""
+    """What the tool is about to do, in one line: command, file or searched pattern."""
     for key in ("command", "file_path", "pattern", "path", "url", "description", "prompt"):
         if entry.get(key):
             return _short(str(entry[key]), 300)
@@ -88,7 +90,7 @@ def _text_result(content: Any) -> str:
 
 
 def stages(msg: dict[str, Any]) -> list[dict[str, Any]]:
-    """Uma linha do `--output-format stream-json` → etapas mostradas no app."""
+    """One `--output-format stream-json` line → steps shown in the app."""
     kind = msg.get("type")
     if kind == "system" and msg.get("subtype") == "init":
         return [
@@ -142,7 +144,7 @@ def _name_safe(nome: str) -> str:
 
 
 class Code:
-    """Sessões em andamento (uma execução do `claude` por sessão por vez)."""
+    """Running sessions (one `claude` run per session at a time)."""
 
     def __init__(self, settings: WorkerSettings, issue: Issue) -> None:
         self._settings = settings
@@ -176,7 +178,8 @@ class Code:
         return await self.git()
 
     async def enviar(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Grava as imagens, sobe o `claude` e volta na hora; as etapas seguem por `evento`."""
+        """Stores the images, starts `claude` and returns right away; the steps follow as
+        `evento`."""
         session = str(payload["sessao_id"])
         if session in self._processes:
             raise RuntimeError("Esta aba ainda está trabalhando. Pare ou espere terminar.")
@@ -211,7 +214,7 @@ class Code:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                limit=2**24,  # linhas do stream-json com resultados grandes de ferramentas
+                limit=2**24,  # stream-json lines with large tool results
             )
         except FileNotFoundError as e:
             raise RuntimeError("Claude Code (`claude`) não está instalado neste computador.") from e
@@ -237,7 +240,7 @@ class Code:
 
     async def _track(self, session: str, process: asyncio.subprocess.Process) -> None:
         assert process.stdout is not None and process.stderr is not None
-        terminou = False
+        finished = False
         try:
             async for line in process.stdout:
                 try:
@@ -245,11 +248,11 @@ class Code:
                 except json.JSONDecodeError:
                     continue
                 for stage in stages(msg):
-                    terminou = terminou or stage["tipo"] == "fim"
+                    finished = finished or stage["tipo"] == "fim"
                     await self._avisar(session, stage)
             error = (await process.stderr.read()).decode(errors="replace").strip()
             code = await process.wait()
-            if not terminou:
+            if not finished:
                 reason = "Parado pelo app." if code < 0 else _short(error or f"saída {code}")
                 await self._avisar(session, {"tipo": "fim", "erro": code != 0, "texto": reason})
         except Exception as e:
@@ -262,7 +265,7 @@ class Code:
         try:
             await self._issue({**etapa, "sessao_id": session, "em": datetime.now(UTC).isoformat()})
         except Exception:
-            # Sem conexão com o Gateway agora: a etapa se perde, o Claude segue trabalhando.
+            # No connection to the Gateway right now: the step is lost, Claude keeps working.
             logger.warning("Etapa da sessão %s não entregue ao Gateway", session)
 
     def stop(self, session: str) -> dict[str, Any]:
@@ -273,7 +276,7 @@ class Code:
         return {"ok": True}
 
     async def git(self) -> dict[str, Any]:
-        """Branch, arquivos alterados e últimos commits do repositório."""
+        """Branch, changed files and latest commits of the repository."""
 
         async def rodar(*args: str) -> str:
             process = await asyncio.create_subprocess_exec(
@@ -290,8 +293,8 @@ class Code:
         }
 
     async def _git(self, *args: str, vazio_ok: bool = False) -> bytes:
-        """Saída do `git` no repositório; código de saída ≠ 0 → RuntimeError com o stderr
-        ([vazio_ok]: código 1 = nada encontrado, como no `git grep`)."""
+        """`git` output in the repository; exit code ≠ 0 → RuntimeError with the stderr
+        (with empty-ok: exit code 1 = nothing found, as in `git grep`)."""
         process = await asyncio.create_subprocess_exec(
             "git", *args, cwd=self._repo,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
@@ -304,14 +307,14 @@ class Code:
         return output
 
     async def _commit(self, commit: str) -> str:
-        """Hash completo do [commit] (vazio = HEAD); só aceita hash, nunca ref ou opção."""
+        """Full hash of the commit (empty = HEAD); accepts only a hash, never a ref or an option."""
         if commit and not _COMMIT.match(commit):
             raise RuntimeError("Commit inválido")
         output = await self._git("rev-parse", "--verify", f"{commit or 'HEAD'}^{{commit}}")
         return output.decode().strip()
 
     async def tree(self, commit: str) -> dict[str, Any]:
-        """Arquivos do repositório no [commit], o que ele mudou e os últimos commits."""
+        """Repository files at the commit, what it changed and the latest commits."""
         target = await self._commit(commit)
         log = await self._git("log", "-40", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%cI")
         fields = ("hash", "curto", "assunto", "autor", "data")
@@ -331,7 +334,7 @@ class Code:
         }
 
     async def arquivo(self, caminho: str, commit: str) -> dict[str, Any]:
-        """Conteúdo do arquivo no [commit] e as linhas que esse commit adicionou nele."""
+        """File content at the commit and the lines that commit added to it."""
         if not caminho or caminho.startswith(("/", "-")) or ".." in caminho.split("/"):
             raise RuntimeError("Caminho inválido")
         target = await self._commit(commit)
@@ -351,8 +354,8 @@ class Code:
         }
 
     async def fetch(self, term: str, commit: str, *, observacoes: bool = False) -> dict[str, Any]:
-        """Linhas com o [termo] (sem diferenciar maiúsculas) nos arquivos de texto do [commit];
-        [observacoes]: só onde o termo está num comentário (sem termo: TODO/FIXME/...)."""
+        """Lines with the term (case-insensitive) in the text files of the commit;
+        with observations: only where the term is in a comment (without a term: TODO/FIXME/...)."""
         term = term.strip()
         if not term and not observacoes:
             raise RuntimeError("Digite o que buscar")

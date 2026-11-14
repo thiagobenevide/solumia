@@ -17,14 +17,14 @@ from esteira.n1 import filmcraft as N1
 from esteira.project import ROOT
 
 
-def _path(valor, nome):
+def _path(value, name):
     """Caminho da config: absoluto, com ~ ou relativo à pasta da esteira. Ausente → aviso e None."""
-    if not valor:
+    if not value:
         return None
-    p = Path(valor).expanduser()
+    p = Path(value).expanduser()
     p = p if p.is_absolute() else ROOT / p
     if not p.exists():
-        print(f"  aviso: {nome} não encontrado em {p}; seguindo sem")
+        print(f"  aviso: {name} não encontrado em {p}; seguindo sem")
         return None
     return p
 
@@ -32,17 +32,17 @@ def _path(valor, nome):
 def _scenes_with_media(plan):
     """Cenas sem mídia são absorvidas pela anterior (ou pela seguinte, se for a primeira)."""
     output = []
-    pendente_start = None
+    pending_start = None
     for c in plan["cenas"]:
         if c.get("midia"):
             c = dict(c)
-            if pendente_start is not None:
-                c["inicio"], pendente_start = pendente_start, None
+            if pending_start is not None:
+                c["inicio"], pending_start = pending_start, None
             output.append(c)
         elif output:
             output[-1]["fim"] = c["fim"]
         else:
-            pendente_start = c["inicio"]
+            pending_start = c["inicio"]
     if not output:
         raise SystemExit("nenhuma cena tem mídia; rode buscar")
     output[-1]["fim"] = plan["duracao"]
@@ -58,23 +58,23 @@ class _Transitions:
 
     def __init__(self, cfg, chapters):
         ef = cfg.get("efeitos", {})
-        self.mapa = ef.get("transicao", {})
-        self.padrao = cfg["edicao"]["transicao"]
-        self.intervalo = ef.get("intervalo_forte", 20)
-        self.capitulos = sorted(chapters)
+        self.transition_map = ef.get("transicao", {})
+        self.default_transition = cfg["edicao"]["transicao"]
+        self.strong_interval = ef.get("intervalo_forte", 20)
+        self.chapters = sorted(chapters)
         self.last_strong, self.spin = -1e9, {}
 
-    def escolher(self, cena):
-        t = cena["inicio"]
-        if any(abs(t - c) <= 1.5 for c in self.capitulos):
+    def pick(self, scene):
+        t = scene["inicio"]
+        if any(abs(t - c) <= 1.5 for c in self.chapters):
             return "dip_to_black"
-        options = self.mapa.get(cena.get("clima"), [self.padrao]) or [self.padrao]
-        k = self.spin.get(cena.get("clima"), 0)
-        self.spin[cena.get("clima")] = k + 1
+        options = self.transition_map.get(scene.get("clima"), [self.default_transition]) or [self.default_transition]
+        k = self.spin.get(scene.get("clima"), 0)
+        self.spin[scene.get("clima")] = k + 1
         effect = options[k % len(options)]
         if effect in STRONG:
-            if t - self.last_strong < self.intervalo:
-                return next((o for o in options if o not in STRONG), self.padrao)
+            if t - self.last_strong < self.strong_interval:
+                return next((o for o in options if o not in STRONG), self.default_transition)
             self.last_strong = t
         return effect
 
@@ -82,8 +82,8 @@ class _Transitions:
 PUNCH, PUNCH_DURATION, PUNCHES_MAX = 6, 0.12, 2  # % de zoom de impacto, s que ele leva, máximo por cena
 
 
-def _captions_srt(project, destino, max_words=7, max_seg=3.0):
-    if project.caminho("alinhamento.json").exists():
+def _captions_srt(project, destination, max_words=7, max_seg=3.0):
+    if project.path_of("alinhamento.json").exists():
         words = project.load_json("alinhamento.json")
     else:
         words = project.load_json("transcricao.json")["palavras"]
@@ -108,7 +108,7 @@ def _captions_srt(project, destino, max_words=7, max_seg=3.0):
     lines = []
     for i, b in enumerate(blocks, 1):
         lines += [str(i), f"{tc(b[0]['ini'])} --> {tc(b[-1]['fim'])}", " ".join(w["p"] for w in b), ""]
-    destino.write_text("\n".join(lines))
+    destination.write_text("\n".join(lines))
 
 
 @contextmanager
@@ -133,7 +133,7 @@ def _beat(arquivo, duration, interval=10):
         stop.set()
 
 
-def assemble(project, exportar=True):
+def assemble(project, export=True):
     _store_edit_manual(project)
     cfg = project.cfg
     e = cfg["edicao"]
@@ -149,12 +149,12 @@ def assemble(project, exportar=True):
     from esteira import photos
     scenes = photos.treat(project, scenes)
     if e["legendas"]:
-        _captions_srt(project, project.caminho("legendas.srt"))
+        _captions_srt(project, project.path_of("legendas.srt"))
     doc, medias = assembly(project, plan, scenes, cam)
     fc = FilmCraft()
     try:
         ex = N1.Executor(fc, medias, style(cfg))
-        ex.executar(doc)
+        ex.apply_doc(doc)
         n_graphic = sum(1 for o in doc.ops if o.op == "colocar" and o.trilha == "grafismo")
         n_keys = sum(1 for o in doc.ops if o.op == "texto" and o.estilo == "pop")
         print(f"  {sum(1 for o in doc.ops if o.op == 'colocar' and o.midia.startswith('cena:'))} cenas"
@@ -163,16 +163,16 @@ def assemble(project, exportar=True):
         from esteira.description import generate as gerar_descricao
         print(f"  descrição com os links das fontes: {gerar_descricao(project).name}")
 
-        fcproj = project.caminho("projeto.fcproj")
+        fcproj = project.path_of("projeto.fcproj")
         fc.run("file.saveAs", path=str(fcproj))
         _sign(project)
         print(f"  projeto salvo: {fcproj} (`./dark open {project.ep}` para editar à mão)")
 
         _dataset(project, plan, doc, ex.trace, cam, medias)
-        if exportar:
+        if export:
             _export(fc, project, duration)
     finally:
-        fc.fechar()
+        fc.close()
 
 
 def style(cfg):
@@ -183,7 +183,7 @@ def style(cfg):
                       "acento": cfg.get("graficos", {}).get("cor", "#ffd400")}}
 
 
-def assembly(project, plan, cenas, cam):
+def assembly(project, plan, scenes, cam):
     """Plano do episódio → montagem em N1 do FilmCraft + mídias referenciadas. É o que o modelo local aprende a
     escrever na tarefa `montar` (o executor transforma em comandos da app)."""
     cfg = project.cfg
@@ -211,20 +211,20 @@ def assembly(project, plan, cenas, cam):
                         "origem": t_cam, "dur": d})
             if scale != 100:
                 ops.append({"op": "enquadrar", "alvo": f"cam{k}", "zoom": scale})
-        print(f"  câmera: {len(spans)} trechos na V1; {len(cenas)} cenas de B-roll na V2")
+        print(f"  câmera: {len(spans)} trechos na V1; {len(scenes)} cenas de B-roll na V2")
         lane = "apoio"
 
-    graphics = [g for g in (project.load_json("graficos.json") if project.caminho("graficos.json").exists()
-                            else []) if g.get("arquivo") and (project.pasta / g["arquivo"]).exists()]
-    keys = project.load_json("chaves.json") if project.caminho("chaves.json").exists() else []
+    graphics = [g for g in (project.load_json("graficos.json") if project.path_of("graficos.json").exists()
+                            else []) if g.get("arquivo") and (project.folder_path / g["arquivo"]).exists()]
+    keys = project.load_json("chaves.json") if project.path_of("chaves.json").exists() else []
     trans = _Transitions(cfg, [g["inicio"] for g in graphics if g.get("origem") == "capitulo"])
     # socos de zoom: cada palavra-chave e cada número no instante em que é dito
     punches = [k["inicio"] + 0.08 for k in keys] + [g["ancora"] for g in graphics if g.get("ancora")]
     zooms = cfg.get("efeitos", {}).get("zoom", {})
     names = []
-    for i, scene in enumerate(cenas):
+    for i, scene in enumerate(scenes):
         ref, name = f"cena:{scene['id']}", f"c{scene['id']}"
-        medias[ref] = {"caminho": project.pasta / scene["midia"]}
+        medias[ref] = {"caminho": project.folder_path / scene["midia"]}
         start, end = scene["inicio"], scene["fim"]
         ops.append({"op": "colocar", "id": name, "midia": ref, "trilha": lane, "em": start, "dur": end - start})
         ops.append({"op": "ken_burns", "alvo": name, "movimento": scene.get("movimento", "zoom_in"),
@@ -235,7 +235,7 @@ def assembly(project, plan, cenas, cam):
             ops += [{"op": "transicao", "alvo": name, "tipo": "cross_dissolve", "borda": b, "quadros": q}
                     for b in ("entrada", "saida")]
         else:
-            ops.append({"op": "transicao", "alvo": name, "tipo": "dip_to_black" if i == 0 else trans.escolher(scene),
+            ops.append({"op": "transicao", "alvo": name, "tipo": "dip_to_black" if i == 0 else trans.pick(scene),
                         "quadros": q})
         names.append(name)
     if names and not cam:
@@ -249,14 +249,14 @@ def assembly(project, plan, cenas, cam):
 
     # Gráficos animados (EffectCraft/HTML com alfa) por cima de tudo, fora da correção de cor
     for n, g in enumerate(graphics, 1):
-        medias[f"grafico:{n}"] = {"caminho": project.pasta / g["arquivo"]}
+        medias[f"grafico:{n}"] = {"caminho": project.folder_path / g["arquivo"]}
         ops.append({"op": "colocar", "id": f"g{n}", "midia": f"grafico:{n}", "trilha": "grafismo", "em": g["inicio"]})
 
     # Sem gráficos: título e palavras em destaque como texto do FilmCraft
     slack = 2 / cfg["video"]["fps"]  # o arredondamento para quadros não pode encostar um texto no outro
     free = 0.0                       # quando a faixa de texto fica livre
     if e["titulo_inicio"] and plan.get("titulo") and not graphics:
-        duration_title = min(4.0, cenas[0]["fim"] - 0.6)
+        duration_title = min(4.0, scenes[0]["fim"] - 0.6)
         ops.append({"op": "texto", "id": "titulo", "conteudo": plan["titulo"].upper(), "em": 0.6, "dur": duration_title,
                     "tamanho": e["destaque_tamanho"] * 0.8 / h, "pos": (0.5, 0.55), "cor": "destaque"})
         free = 0.6 + duration_title + slack
@@ -285,7 +285,7 @@ def assembly(project, plan, cenas, cam):
         ops.append({"op": "musica", "ate": duration, "ganho_db": au["musica_db"]})
 
     if e["legendas"]:
-        medias["legendas"] = {"caminho": project.caminho("legendas.srt")}
+        medias["legendas"] = {"caminho": project.path_of("legendas.srt")}
         ops.append({"op": "legendas", "tamanho": e.get("legenda_tamanho", 54) / h,
                     "margem": e.get("legenda_margem", 0.06)})
     return N1.Assembly.model_validate({"ops": ops}), medias
@@ -302,13 +302,13 @@ def _dataset(project, plan, doc, trace, cam, medias=None):
                          for c in plan["cenas"] if c.get("midia")],
                "graficos": [{k: g.get(k) for k in ("inicio", "modelo", "origem", "ancora")}
                             for g in (project.load_json("graficos.json")
-                                      if project.caminho("graficos.json").exists() else [])],
-               "chaves": project.load_json("chaves.json") if project.caminho("chaves.json").exists() else [],
+                                      if project.path_of("graficos.json").exists() else [])],
+               "chaves": project.load_json("chaves.json") if project.path_of("chaves.json").exists() else [],
                "receita": {"edicao": {k: cfg["edicao"].get(k) for k in ("zoom", "transicao_frames", "legendas",
                                                                           "grade_cor", "titulo_inicio")},
                            "efeitos": cfg.get("efeitos", {}), "musica_db": cfg["audio"].get("musica_db")}}
-        R.write("montar", grupo=f"ep:{project.ep}", contexto=ctx, saida=doc.model_dump(mode="json"),
-                 origem="traducao", n0=trace, versoes={"n1": N1.VERSION, "app": "filmcraft"},
+        R.write("montar", group=f"ep:{project.ep}", context=ctx, output=doc.model_dump(mode="json"),
+                 origin="traducao", n0=trace, versions={"n1": N1.VERSION, "app": "filmcraft"},
                  extra={"episodio": project.ep, "fcproj": "projeto.fcproj",
                         "midias": {k: Path(str(v["caminho"])).name for k, v in (medias or {}).items()}})
     except Exception as e:  # noqa: BLE001
@@ -317,7 +317,7 @@ def _dataset(project, plan, doc, trace, cam, medias=None):
 
 def _export(fc, project, duration):
     e, au = project.cfg["edicao"], project.cfg["audio"]
-    final = project.caminho("final.mp4")
+    final = project.path_of("final.mp4")
     print("  exportando final.mp4…")
     with _beat(final, duration):
         fc.run("file.exportMedia", path=str(final), format="h264", bitrateMode="crf", crf=18,
@@ -335,12 +335,12 @@ def _hash(file):
 
 
 def _sign(project):
-    project.caminho("log").mkdir(exist_ok=True)
-    project.caminho("log/fcproj.sha1").write_text(_hash(project.caminho("projeto.fcproj")))
+    project.path_of("log").mkdir(exist_ok=True)
+    project.path_of("log/fcproj.sha1").write_text(_hash(project.path_of("projeto.fcproj")))
 
 
 def _store_edit_manual(project):
-    fcproj, signature = project.caminho("projeto.fcproj"), project.caminho("log/fcproj.sha1")
+    fcproj, signature = project.path_of("projeto.fcproj"), project.path_of("log/fcproj.sha1")
     if not fcproj.exists() or (signature.exists() and signature.read_text() == _hash(fcproj)):
         return
     copy = fcproj.with_name(f"projeto.manual-{time.strftime('%Y%m%d-%H%M')}.fcproj")
@@ -356,17 +356,17 @@ def _store_edit_manual(project):
 def _open_reconnected(fc, project):
     """Abre o projeto.fcproj no FilmCraft (MCP); se a pasta do episódio mudou de lugar, religa a mídia pela
     pasta do projeto e salva. Mantém a assinatura se o arquivo ainda era o gerado pela esteira."""
-    fcproj, signature = project.caminho("projeto.fcproj"), project.caminho("log/fcproj.sha1")
+    fcproj, signature = project.path_of("projeto.fcproj"), project.path_of("log/fcproj.sha1")
     if not fcproj.exists():
         raise SystemExit("sem projeto.fcproj: rode `./dark assemble` antes")
     of_esteira = signature.exists() and signature.read_text() == _hash(fcproj)
     missing = fc.run("file.open", path=str(fcproj)).get("missingMedia", 0)
     if missing:
-        fc.run("media.autoRelink", folder=str(project.pasta))
+        fc.run("media.autoRelink", folder=str(project.folder_path))
         fc.run("file.saveAs", path=str(fcproj))
         if of_esteira:
             _sign(project)
-        print(f"  {missing} mídias religadas a partir de {project.pasta}")
+        print(f"  {missing} mídias religadas a partir de {project.folder_path}")
 
 
 def export_manual(project):
@@ -376,7 +376,7 @@ def export_manual(project):
         _open_reconnected(fc, project)
         _export(fc, project, project.load_json("plano.json")["duracao"])
     finally:
-        fc.fechar()
+        fc.close()
 
 
 def open_file(project):
@@ -385,7 +385,7 @@ def open_file(project):
     try:
         _open_reconnected(fc, project)
     finally:
-        fc.fechar()
-    fcproj = project.caminho("projeto.fcproj")
+        fc.close()
+    fcproj = project.path_of("projeto.fcproj")
     open_program("filmcraft", str(fcproj))
     print(f"  FilmCraft aberto: {fcproj}\n  depois de editar e salvar: ./dark export {project.ep}")

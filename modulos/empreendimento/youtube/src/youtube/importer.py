@@ -1,9 +1,9 @@
-"""Traz as notas dos canais do vault do Obsidian para o cofre da plataforma, no padrão das notas.
+"""Brings the channel notes from the Obsidian vault into the platform vault, in the notes format.
 
-Copia `<vault>/Notas/Empreendimento/YouTube/**.md` para o mesmo caminho dentro do cofre,
-mantendo corpo, links e propriedades. Só o frontmatter muda: `criado`/`atualizado` viram
-`criada`/`atualizada` (campos reservados do cofre), datas viram texto ISO e ids repetidos ganham
-sufixo (o cofre indexa por id).
+Copies `<vault>/Notas/Empreendimento/YouTube/**.md` to the same path inside the platform vault,
+keeping body, links and properties. Only the frontmatter changes: `criado`/`atualizado` become
+`criada`/`atualizada` (reserved vault fields), dates become ISO text and repeated ids get a
+suffix (the vault indexes by id).
 
     python -m youtube.importer [--vault ~/Documents/github/obsidian] [--destino ~/agent-data/notas]
 """
@@ -48,7 +48,7 @@ def _separate(text: str) -> tuple[dict[str, Any] | None, str]:
 
 
 def normalize(text: str, ids: set[str]) -> str:
-    """Frontmatter no padrão do cofre; registra o id usado em `ids`."""
+    """Frontmatter in the vault format; records the id used in `ids`."""
     meta, body = _separate(text)
     if meta is None:
         return text
@@ -72,10 +72,10 @@ def normalize(text: str, ids: set[str]) -> str:
 def run_import(vault: Path, destination: Path, replace: bool = False) -> dict[str, Any]:
     origin = Path(vault).expanduser() / ROOT
     if not origin.is_dir():
-        raise ValueError(f"Pasta dos canais não encontrada no vault: {origin}")
+        raise ValueError(f"Channels folder not found in the vault: {origin}")
     destination = Path(destination).expanduser()
     ids: set[str] = set()
-    importadas = puladas = 0
+    imported = skipped = 0
     for file in sorted(origin.rglob("*.md")):
         rel = file.relative_to(origin)
         if any(p.startswith(".") for p in rel.parts):
@@ -85,19 +85,19 @@ def run_import(vault: Path, destination: Path, replace: bool = False) -> dict[st
             meta, _ = _separate(target.read_text("utf-8"))
             if meta and meta.get("id") is not None:
                 ids.add(str(meta["id"]))
-            puladas += 1
+            skipped += 1
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(normalize(file.read_text("utf-8"), ids), "utf-8")
-        importadas += 1
-    return {"importadas": importadas, "puladas": puladas, "origem": str(origin)}
+        imported += 1
+    return {"importadas": imported, "puladas": skipped, "origem": str(origin)}
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--vault", default="~/Documents/github/obsidian")
     ap.add_argument("--destino", default=os.environ.get("GATEWAY_NOTAS_DIR", "~/agent-data/notas"))
-    ap.add_argument("--substituir", action="store_true", help="regrava as notas que já existem")
+    ap.add_argument("--substituir", action="store_true", help="rewrites existing notes")
     a = ap.parse_args()
     print(run_import(Path(a.vault), Path(a.destino), a.substituir))
 

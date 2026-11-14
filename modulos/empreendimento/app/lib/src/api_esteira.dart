@@ -2,404 +2,404 @@ import 'dart:typed_data';
 
 import 'package:agent_core/agent_core.dart';
 
-import 'modelos.dart';
+import 'models.dart';
 
-/// Chamadas ao painel da esteira (`./dark panel`, padrão `http://localhost:8765`), API `/api/v1`.
+/// Calls to the esteira panel (`./dark panel`, default `http://localhost:8765`), `/api/v1` API.
 ///
-/// Leituras de estrutura variável (roteiro, editor, grafo, processo, opções) voltam como [Json]: o app
-/// só exibe e devolve esses dados, quem os interpreta é a esteira.
+/// Reads with a variable structure (script, editor, graph, process, options) come back as [Json]: the app
+/// only displays and returns that data; the esteira is the one that interprets it.
 class ApiEsteira {
-  /// [token]: sessão do login. Pela VPS (`https://<domínio>/esteira/`) o nginx exige o token; no PC
-  /// (`localhost:8765`) ele é ignorado.
+  /// [token]: login session. Through the VPS (`https://<domain>/esteira/`) nginx requires the token; on the PC
+  /// (`localhost:8765`) it is ignored.
   ApiEsteira(String base, {String token = ''})
     : _token = token,
       _api = ApiCliente(base, cabecalhos: token.isEmpty ? const {} : {'Authorization': 'Bearer $token'}) {
-    _renovarMidia();
+    _renewMedia();
   }
 
   final ApiCliente _api;
   final String _token;
 
-  /// Token de mídia (`POST /api/auth/token-midia`, 12 h, só abre `/esteira/`): é ele que vai nas
-  /// URLs, para uma URL vazada (histórico, log) não abrir a API. Enquanto não chega, vai o da sessão.
-  String? _midia;
-  DateTime _midiaEm = DateTime(2000);
-  bool _buscandoMidia = false;
+  /// Media token (`POST /api/auth/token-midia`, 12 h, only opens `/esteira/`): it is the one that goes in the
+  /// URLs, so a leaked URL (history, log) does not open the API. Until it arrives, the session one is used.
+  String? _media;
+  DateTime _mediaIn = DateTime(2000);
+  bool _searchingMedia = false;
 
   String get base => _api.base.toString();
 
-  void _renovarMidia() {
-    if (_token.isEmpty || _buscandoMidia || DateTime.now().difference(_midiaEm) < const Duration(hours: 6)) return;
-    _buscandoMidia = true;
+  void _renewMedia() {
+    if (_token.isEmpty || _searchingMedia || DateTime.now().difference(_mediaIn) < const Duration(hours: 6)) return;
+    _searchingMedia = true;
     ApiCliente(_api.base.resolve('/').toString(), cabecalhos: {'Authorization': 'Bearer $_token'})
         .post('/api/auth/token-midia')
         .then((r) {
-          _midia = (r as Map)['token'] as String?;
-          _midiaEm = DateTime.now();
+          _media = (r as Map)['token'] as String?;
+          _mediaIn = DateTime.now();
         })
         .catchError((_) {})
-        .whenComplete(() => _buscandoMidia = false);
+        .whenComplete(() => _searchingMedia = false);
   }
 
-  /// URL absoluta de um arquivo servido pela esteira (thumbs, vídeo, áudio, PDF, quadros). Leva o
-  /// token em `?token=`: imagem, player e navegador externo abrem a URL sem mandar cabeçalho.
+  /// Absolute URL of a file served by the esteira (thumbnails, video, audio, PDF, frames). It carries the
+  /// token in `?token=`: image, player and external browser open the URL without sending a header.
   String arquivo(String caminho) {
     final u = _api.url(caminho);
     if (_token.isEmpty) return u.toString();
-    _renovarMidia();
-    return u.replace(queryParameters: {...u.queryParameters, 'token': _midia ?? _token}).toString();
+    _renewMedia();
+    return u.replace(queryParameters: {...u.queryParameters, 'token': _media ?? _token}).toString();
   }
 
   static const _v1 = 'api/v1';
 
   Future<Json> _json(String caminho) async => await _api.get('$_v1/$caminho') as Json;
 
-  Future<List<dynamic>> _lista(String caminho) async => await _api.get('$_v1/$caminho') as List;
+  Future<List<dynamic>> _list(String caminho) async => await _api.get('$_v1/$caminho') as List;
 
   Future<dynamic> _post(String caminho, [Object? corpo]) => _api.post('$_v1/$caminho', corpo);
 
   // ---------- Biblioteca ----------
 
-  /// Nomes das etapas e quem faz cada operação; não muda enquanto o painel roda, então fica em memória.
+  /// Stage names and who runs each operation; does not change while the panel runs, so it stays in memory.
   late final Future<Json> meta = _json('meta');
 
-  Future<List<Canal>> canais() async => [for (final c in await _lista('canais')) Canal.fromJson(c as Json)];
+  Future<List<Channel>> channels() async => [for (final c in await _list('canais')) Channel.fromJson(c as Json)];
 
-  Future<List<Roteiro>> roteiros(String canal) async => [
-    for (final r in await _lista('canais/$canal/roteiros')) Roteiro.fromJson(r as Json),
+  Future<List<Script>> scripts(String channel) async => [
+    for (final r in await _list('canais/$channel/roteiros')) Script.fromJson(r as Json),
   ];
 
-  /// Importa os roteiros (se preciso) e põe `tudo` de cada um na fila; devolve quantos entraram.
-  /// `templates`: caminho do roteiro → template `id@N` que a produção no Estúdio vai usar.
-  Future<int> produzir(List<String> caminhos, {Map<String, String> templates = const {}}) async =>
-      (await _post('produzir', {'roteiros': caminhos, 'templates': templates}) as List).where((t) => t != null).length;
+  /// Imports the scripts (if needed) and queues `tudo` for each one; returns how many went in.
+  /// `templates`: script path → `id@N` template that the Studio production will use.
+  Future<int> produce(List<String> paths, {Map<String, String> templates = const {}}) async =>
+      (await _post('produzir', {'roteiros': paths, 'templates': templates}) as List).where((t) => t != null).length;
 
-  /// `./dark script canal:N [--to M]` na fila. `false`: já estava na fila.
-  Future<bool> gerarRoteiro(String alvo, {String ate = '', String motor = 'local'}) async =>
-      await _post('roteiros/gerar', {'alvo': alvo, 'ate': ate, 'motor': motor}) != null;
+  /// `./dark script canal:N [--to M]` in the queue. `false`: it was already in the queue.
+  Future<bool> generateScript(String target, {String until = '', String engine = 'local'}) async =>
+      await _post('roteiros/gerar', {'alvo': target, 'ate': until, 'motor': engine}) != null;
 
-  // ---------- Episódio ----------
+  // ---------- Episode ----------
 
-  Future<List<EpisodioResumo>> episodios({String canal = ''}) async => [
-    for (final e in await _lista('episodios?canal=${Uri.encodeQueryComponent(canal)}'))
-      EpisodioResumo.fromJson(e as Json),
+  Future<List<EpisodeSummary>> episodes({String channel = ''}) async => [
+    for (final e in await _list('episodios?canal=${Uri.encodeQueryComponent(channel)}'))
+      EpisodeSummary.fromJson(e as Json),
   ];
 
-  Future<Episodio> episodio(String ep) async => Episodio.fromJson(await _json('episodios/$ep'));
+  Future<Episode> episode(String ep) async => Episode.fromJson(await _json('episodios/$ep'));
 
-  /// Põe a etapa na fila. `false`: a mesma etapa já estava na fila ou rodando.
-  Future<bool> rodar(
+  /// Queues the stage. `false`: the same stage was already queued or running.
+  Future<bool> run(
     String ep,
-    String etapa, {
-    bool refazer = false,
-    String motor = '',
-    bool soRender = false,
+    String stage, {
+    bool redo = false,
+    String engine = '',
+    bool renderOnly = false,
   }) async =>
-      await _post('episodios/$ep/rodar/$etapa', {
-        'refazer': refazer,
-        'motor': motor,
-        'so_render': soRender,
+      await _post('episodios/$ep/rodar/$stage', {
+        'refazer': redo,
+        'motor': engine,
+        'so_render': renderOnly,
       }) !=
       null;
 
-  Future<void> abrirFilmCraft(String ep) => _post('episodios/$ep/abrir');
+  Future<void> openFilmCraft(String ep) => _post('episodios/$ep/abrir');
 
-  Future<Json> roteiro(String ep) => _json('episodios/$ep/roteiro');
+  Future<Json> script(String ep) => _json('episodios/$ep/roteiro');
 
-  Future<Json> cortes(String ep, String filtro) => _json('episodios/$ep/cortes?filtro=$filtro');
+  Future<Json> cuts(String ep, String filter) => _json('episodios/$ep/cortes?filtro=$filter');
 
-  Future<Json> alternarCorte(String ep, int k) async =>
+  Future<Json> toggleCut(String ep, int k) async =>
       await _post('episodios/$ep/cortes/$k/alternar') as Json;
 
-  Future<Json> cenas(String ep) => _json('episodios/$ep/cenas');
+  Future<Json> scenes(String ep) => _json('episodios/$ep/cenas');
 
-  Future<bool> trocarMidia(String ep, int cena, String buscaEn) async =>
-      await _post('episodios/$ep/cenas/$cena/trocar', {'busca_en': buscaEn}) != null;
+  Future<bool> swapMedia(String ep, int scene, String searchEn) async =>
+      await _post('episodios/$ep/cenas/$scene/trocar', {'busca_en': searchEn}) != null;
 
-  Future<Json> graficos(String ep) => _json('episodios/$ep/graficos');
+  Future<Json> graphics(String ep) => _json('episodios/$ep/graficos');
 
-  Future<void> abrirEffectCraft(String ep, int i) => _post('episodios/$ep/graficos/$i/effectcraft');
+  Future<void> openEffectCraft(String ep, int i) => _post('episodios/$ep/graficos/$i/effectcraft');
 
   Future<Json> thumbs(String ep) => _json('episodios/$ep/thumbs');
 
-  Future<void> usarThumb(String ep, String arquivo, int vaga) =>
-      _post('episodios/$ep/thumbs/usar', {'arquivo': arquivo, 'vaga': vaga});
+  Future<void> useThumb(String ep, String arquivo, int slot) =>
+      _post('episodios/$ep/thumbs/usar', {'arquivo': arquivo, 'vaga': slot});
 
-  Future<void> abrirPhotoCraft(String ep, String arquivo) =>
+  Future<void> openPhotoCraft(String ep, String arquivo) =>
       _post('episodios/$ep/thumbs/photocraft', {'arquivo': arquivo});
 
-  /// Envia uma imagem para fundo de thumb; devolve o nome com que ficou em `thumbs/`.
-  Future<String> enviarFundo(String ep, String nome, List<int> bytes) async =>
+  /// Uploads an image as a thumbnail background; returns the name it got in `thumbs/`.
+  Future<String> sendBackground(String ep, String nome, List<int> bytes) async =>
       (await _api.enviarArquivo('$_v1/episodios/$ep/thumbs/fundo', 'arquivo', nome, bytes) as Json)['nome']
           as String;
 
-  // ---------- Pacotes de edição (editar em qualquer máquina) ----------
+  // ---------- Edit packages (edit on any machine) ----------
 
-  /// URL para baixar o arquivo do editor: zip com a mídia (FilmCraft/EffectCraft) ou o `.pcraft`.
-  String pacoteFilmCraft(String ep) => arquivo('$_v1/episodios/$ep/pacote/filmcraft');
+  /// URL to download the editor file: zip with the media (FilmCraft/EffectCraft) or the `.pcraft`.
+  String packageFilmCraft(String ep) => arquivo('$_v1/episodios/$ep/pacote/filmcraft');
 
-  String pacoteGrafico(String ep, int i) => arquivo('$_v1/episodios/$ep/graficos/$i/pacote');
+  String graphicPackage(String ep, int i) => arquivo('$_v1/episodios/$ep/graficos/$i/pacote');
 
-  String pacoteThumb(String ep, String thumb) =>
+  String packageThumb(String ep, String thumb) =>
       arquivo('$_v1/episodios/$ep/thumbs/pacote?arquivo=${Uri.encodeQueryComponent(thumb)}');
 
-  /// Sobrescreve o arquivo do editor com a edição (o anterior fica em `log/envios/`); devolve quantas
-  /// mídias referenciadas não foram achadas no episódio.
-  Future<int> enviarFilmCraft(String ep, String nome, List<int> bytes) =>
-      _enviarEdicao('episodios/$ep/pacote/filmcraft', nome, bytes);
+  /// Overwrites the editor file with the edit (the previous one stays in `log/envios/`); returns how many
+  /// referenced media were not found in the episode.
+  Future<int> sendFilmCraft(String ep, String nome, List<int> bytes) =>
+      _sendEdit('episodios/$ep/pacote/filmcraft', nome, bytes);
 
-  Future<int> enviarGrafico(String ep, int i, String nome, List<int> bytes) =>
-      _enviarEdicao('episodios/$ep/graficos/$i/pacote', nome, bytes);
+  Future<int> sendGraphic(String ep, int i, String nome, List<int> bytes) =>
+      _sendEdit('episodios/$ep/graficos/$i/pacote', nome, bytes);
 
-  Future<int> enviarThumb(String ep, String thumb, String nome, List<int> bytes) =>
-      _enviarEdicao('episodios/$ep/thumbs/pacote?thumb=${Uri.encodeQueryComponent(thumb)}', nome, bytes);
+  Future<int> sendThumb(String ep, String thumb, String nome, List<int> bytes) =>
+      _sendEdit('episodios/$ep/thumbs/pacote?thumb=${Uri.encodeQueryComponent(thumb)}', nome, bytes);
 
-  Future<int> _enviarEdicao(String caminho, String nome, List<int> bytes) async =>
+  Future<int> _sendEdit(String caminho, String nome, List<int> bytes) async =>
       (await _api.enviarArquivo('$_v1/$caminho', 'arquivo', nome, bytes) as Json)['midia_faltando'] as int;
 
   // ---------- Editor ----------
 
-  Future<Json> editorGrafico(String ep, int i, {double t = 0}) =>
+  Future<Json> graphicEditor(String ep, int i, {double t = 0}) =>
       _json('episodios/$ep/editor/grafico/$i?t=$t');
 
-  Future<Json> editorThumb(String ep, {String arquivo = '', String fundo = ''}) => _json(
-    'episodios/$ep/editor/thumb?arquivo=${Uri.encodeQueryComponent(arquivo)}&fundo=${Uri.encodeQueryComponent(fundo)}',
+  Future<Json> editorThumb(String ep, {String arquivo = '', String background = ''}) => _json(
+    'episodios/$ep/editor/thumb?arquivo=${Uri.encodeQueryComponent(arquivo)}&fundo=${Uri.encodeQueryComponent(background)}',
   );
 
-  /// PNG da prévia (gráfico no instante [t], com fundo transparente; thumb inteira).
-  Future<Uint8List> quadro(String ep, String tipo, Json estado, {double t = 0}) =>
-      _api.postBytes('$_v1/episodios/$ep/editor/quadro', {'tipo': tipo, 'estado': estado, 't': t});
+  /// Preview PNG (graphic at instant [t], with a transparent background; whole thumbnail).
+  Future<Uint8List> frame(String ep, String kind, Json state, {double t = 0}) =>
+      _api.postBytes('$_v1/episodios/$ep/editor/quadro', {'tipo': kind, 'estado': state, 't': t});
 
-  /// Grava a peça e põe a renderização na fila; devolve o novo índice dela na lista.
-  Future<int> salvarGrafico(String ep, int i, Json estado) async =>
-      (await _post('episodios/$ep/editor/grafico/$i', estado) as Json)['i'] as int;
+  /// Saves the piece and queues its render; returns its new index in the list.
+  Future<int> saveGraphic(String ep, int i, Json state) async =>
+      (await _post('episodios/$ep/editor/grafico/$i', state) as Json)['i'] as int;
 
-  Future<void> excluirGrafico(String ep, int i) => _post('episodios/$ep/editor/grafico/$i/excluir');
+  Future<void> deleteGraphic(String ep, int i) => _post('episodios/$ep/editor/grafico/$i/excluir');
 
-  Future<String> salvarThumb(String ep, Json estado) async =>
-      (await _post('episodios/$ep/editor/thumb', estado) as Json)['arquivo'] as String;
+  Future<String> saveThumb(String ep, Json state) async =>
+      (await _post('episodios/$ep/editor/thumb', state) as Json)['arquivo'] as String;
 
-  Future<Json> sugerir(String ep, String tipo, Json estado, String pedido, String motor) async => await _post(
+  Future<Json> suggest(String ep, String kind, Json state, String request, String engine) async => await _post(
     'episodios/$ep/editor/ia',
-    {'tipo': tipo, 'estado': estado, 'pedido': pedido, 'motor': motor},
+    {'tipo': kind, 'estado': state, 'pedido': request, 'motor': engine},
   ) as Json;
 
   // ---------- Fila e processos ----------
 
-  Future<Fila> fila() async => Fila.fromJson(await _json('fila'));
+  Future<ProductionQueue> queue() async => ProductionQueue.fromJson(await _json('fila'));
 
-  Future<void> cancelar(int tarefa) => _post('fila/$tarefa/cancelar');
+  Future<void> cancelar(int task) => _post('fila/$task/cancelar');
 
-  Future<void> limparFila() => _post('fila/limpar');
+  Future<void> cleanQueue() => _post('fila/limpar');
 
-  Future<Json> processos({int limite = 300}) => _json('processos?limite=$limite');
+  Future<Json> processes({int limit = 300}) => _json('processos?limite=$limit');
 
-  Future<Json> processo(String id) => _json('processos/$id');
+  Future<Json> process(String id) => _json('processos/$id');
 
-  Future<void> pararProcesso(String id) => _post('processos/$id/parar');
+  Future<void> stopProcess(String id) => _post('processos/$id/parar');
 
-  // ---------- Monitor, opções, custos, acervo ----------
+  // ---------- Monitor, options, costs, library ----------
 
-  Future<Maquina> maquina() async => Maquina.fromJson(await _json('monitor'));
+  Future<Machine> machine() async => Machine.fromJson(await _json('monitor'));
 
-  Future<Json> grafo() => _json('grafo');
+  Future<Json> graph() => _json('grafo');
 
-  Future<Json> noDoGrafo(String id) => _json('grafo/no/$id');
+  Future<Json> graphNode(String id) => _json('grafo/no/$id');
 
-  Future<Json> opcoes() => _json('opcoes');
+  Future<Json> options() => _json('opcoes');
 
-  Future<Json> salvarOpcoes(Json opcoes) async => await _post('opcoes', opcoes) as Json;
+  Future<Json> saveOptions(Json options) async => await _post('opcoes', options) as Json;
 
-  Future<void> baixarModelo(String nome) => _post('opcoes/baixar', {'nome': nome});
+  Future<void> downloadModel(String nome) => _post('opcoes/baixar', {'nome': nome});
 
-  Future<Json> baixando() => _json('opcoes/baixando');
+  Future<Json> downloading() => _json('opcoes/baixando');
 
-  Future<Json> custos() => _json('custos');
+  Future<Json> costs() => _json('custos');
 
-  // ---------- Backup e dataset das Craft Apps ----------
+  // ---------- Backup and Craft Apps dataset ----------
   Future<Json> backup() => _json('backup');
   Future<Json> dataset() => _json('dataset');
-  Future<void> vereditoMontagem(String ep, String veredito, {String comentario = ''}) =>
-      _post('dataset/montagem/$ep', {'veredito': veredito, 'comentario': comentario});
+  Future<void> verdictAssembly(String ep, String verdict, {String comment = ''}) =>
+      _post('dataset/montagem/$ep', {'veredito': verdict, 'comentario': comment});
 
-  Future<Json> acervo({String q = '', String tipo = ''}) =>
-      _json('acervo?q=${Uri.encodeQueryComponent(q)}&tipo=$tipo');
+  Future<Json> mediaLibrary({String q = '', String kind = ''}) =>
+      _json('acervo?q=${Uri.encodeQueryComponent(q)}&tipo=$kind');
 
-  // ---------- Estúdio (canais da rede, estilos, produções por estilo) ----------
+  // ---------- Studio (network channels, styles, productions per style) ----------
 
-  Future<List<dynamic>> estudioCanais() => _lista('estudio/canais');
+  Future<List<dynamic>> studioChannels() => _list('estudio/canais');
 
-  Future<Json> novoCanal(Json dados) async => await _post('estudio/canais', dados) as Json;
+  Future<Json> newChannel(Json dados) async => await _post('estudio/canais', dados) as Json;
 
-  /// Templates do canal, cada um com as versões guardadas (`ref` = `id@N`) e o estado dos exemplos.
-  Future<List<dynamic>> templates(String canal) => _lista('estudio/templates?canal=$canal');
+  /// Channel templates, each one with its stored versions (`ref` = `id@N`) and the state of the samples.
+  Future<List<dynamic>> templates(String channel) => _list('estudio/templates?canal=$channel');
 
-  Future<Json> novoTemplate(String canal, String modo, List<String> formatos, {String nome = ''}) async =>
-      await _post('estudio/templates', {'canal': canal, 'modo': modo, 'formatos': formatos, 'nome': nome}) as Json;
+  Future<Json> newTemplate(String channel, String modo, List<String> formats, {String nome = ''}) async =>
+      await _post('estudio/templates', {'canal': channel, 'modo': modo, 'formatos': formats, 'nome': nome}) as Json;
 
-  /// Exemplo de 30 s da versão (vertical e horizontal) na fila.
-  Future<void> gerarAmostra(String ref) => _post('estudio/templates/$ref/amostra');
+  /// 30 s sample of the version (vertical and horizontal) in the queue.
+  Future<void> generateSample(String ref) => _post('estudio/templates/$ref/amostra');
 
-  /// URL do exemplo de uma versão (`formato` = 16x9 ou 9x16).
-  String amostra(String id, int versao, String formato) => arquivo('$_v1/estudio/amostras/$id-v$versao/$formato.mp4');
+  /// URL of a version's sample (`formato` = 16x9 or 9x16).
+  String sample(String id, int version, String format) => arquivo('$_v1/estudio/amostras/$id-v$version/$format.mp4');
 
-  Future<void> escolherTemplate(String ep, String ref) => _api.put('$_v1/estudio/producoes/$ep/template', {'estilo': ref});
+  Future<void> chooseTemplate(String ep, String ref) => _api.put('$_v1/estudio/producoes/$ep/template', {'estilo': ref});
 
   Future<Json> estilo(String id) => _json('estudio/estilos/$id');
 
-  Future<Json> salvarEstilo(String id, Json estilo) async =>
+  Future<Json> saveStyle(String id, Json estilo) async =>
       await _api.put('$_v1/estudio/estilos/$id', estilo) as Json;
 
-  Future<Json> travarEstilo(String id, bool travado) async =>
-      await _post('estudio/estilos/$id/travar', {'travado': travado}) as Json;
+  Future<Json> lockStyle(String id, bool locked) async =>
+      await _post('estudio/estilos/$id/travar', {'travado': locked}) as Json;
 
-  Future<void> enviarReferencia(String id, String nome, List<int> bytes) =>
+  Future<void> sendReference(String id, String nome, List<int> bytes) =>
       _api.enviarArquivo('$_v1/estudio/estilos/$id/referencias', 'arquivo', nome, bytes);
 
-  Future<void> apagarReferencia(String id, String nome) =>
+  Future<void> eraseReference(String id, String nome) =>
       _api.delete('$_v1/estudio/estilos/$id/referencias/${Uri.encodeComponent(nome)}');
 
-  Future<Json> duplicarEstilo(String id, String novoId, String nome) async =>
-      await _post('estudio/estilos/$id/duplicar', {'id': novoId, 'nome': nome}) as Json;
+  Future<Json> duplicateStyle(String id, String newId, String nome) async =>
+      await _post('estudio/estilos/$id/duplicar', {'id': newId, 'nome': nome}) as Json;
 
-  Future<Json> niveisEstudio() => _json('estudio/niveis');
+  Future<Json> studioLevels() => _json('estudio/niveis');
 
-  Future<List<dynamic>> fontesEstudio() => _lista('estudio/fontes');
+  Future<List<dynamic>> studioSources() => _list('estudio/fontes');
 
-  /// Bytes do .ttf/.otf para a prévia (FontLoader).
-  Future<Uint8List> arquivoFonte(String arquivo) => _api.getBytes('$_v1/estudio/fontes/arquivo/${Uri.encodeComponent(arquivo)}');
+  /// Bytes of the .ttf/.otf for the preview (FontLoader).
+  Future<Uint8List> sourceFile(String arquivo) => _api.getBytes('$_v1/estudio/fontes/arquivo/${Uri.encodeComponent(arquivo)}');
 
-  Future<void> enviarFonte(String nome, List<int> bytes) =>
+  Future<void> sendSource(String nome, List<int> bytes) =>
       _api.enviarArquivo('$_v1/estudio/fontes', 'arquivo', nome, bytes);
 
-  Future<void> proporEstilo(String id, String nicho) => _post('estudio/estilos/$id/propor', {'nicho': nicho});
+  Future<void> proposeStyle(String id, String niche) => _post('estudio/estilos/$id/propor', {'nicho': niche});
 
-  Future<List<dynamic>> producoesEstudio(String canal) => _lista('estudio/producoes?canal=$canal');
+  Future<List<dynamic>> studioProductions(String channel) => _list('estudio/producoes?canal=$channel');
 
-  /// Decupagem do roteiro (trecho colado ou episódio) pelos gatilhos do estilo; `estilo` = rascunho da tela.
-  Future<Json> testarEstilo(String id, {String texto = '', String ep = '', Json? estilo}) async =>
+  /// Script breakdown (pasted passage or episode) by the style triggers; `estilo` = the screen's draft.
+  Future<Json> testStyle(String id, {String texto = '', String ep = '', Json? estilo}) async =>
       await _post('estudio/estilos/$id/testar', {'texto': texto, 'ep': ep, 'estilo': estilo}) as Json;
 
-  Future<Json> producaoEstudio(String ep) => _json('estudio/producoes/$ep');
+  Future<Json> studioProduction(String ep) => _json('estudio/producoes/$ep');
 
-  Future<void> produzirEstudio(
+  Future<void> produceStudio(
     String ep, {
     String estilo = '',
-    List<String> formatos = const [],
-    List<String> etapas = const [],
+    List<String> formats = const [],
+    List<String> stages = const [],
     Map<String, String> intensidade = const {},
   }) => _post('estudio/producoes/$ep/produzir', {
     'estilo': estilo,
-    'formatos': formatos,
-    'etapas': etapas,
+    'formatos': formats,
+    'etapas': stages,
     'intensidade': intensidade,
   });
 
-  Future<void> aprovarPortao(String ep, String portao, bool aprovado, {String nota = ''}) =>
-      _post('estudio/producoes/$ep/aprovar/$portao', {'aprovado': aprovado, 'nota': nota});
+  Future<void> approveGate(String ep, String gate, bool approved, {String note = ''}) =>
+      _post('estudio/producoes/$ep/aprovar/$gate', {'aprovado': approved, 'nota': note});
 
-  Future<Json> corteEstudio(String ep) => _json('estudio/producoes/$ep/corte');
+  Future<Json> studioCut(String ep) => _json('estudio/producoes/$ep/corte');
 
-  Future<void> cortarPeloSom(String ep) => _post('estudio/producoes/$ep/corte');
+  Future<void> cutBySound(String ep) => _post('estudio/producoes/$ep/corte');
 
-  Future<Json> apontamento(String ep, {String estilo = ''}) => _json(
+  Future<Json> marking(String ep, {String estilo = ''}) => _json(
     'estudio/producoes/$ep/apontamento${estilo.isEmpty ? '' : '?estilo=${Uri.encodeQueryComponent(estilo)}'}',
   );
 
-  /// `produzir` (estilo, formatos, intensidade) junto com `confirmar` já põe a produção na fila.
-  Future<Json> salvarApontamento(String ep, List<Json> marcas, {bool confirmar = false, Json? produzir}) async =>
+  /// `produzir` (style, formats, intensity) together with `confirmar` already queues the production.
+  Future<Json> saveMarking(String ep, List<Json> marks, {bool confirm = false, Json? produce}) async =>
       await _api.put('$_v1/estudio/producoes/$ep/apontamento', {
-            'marcas': marcas,
-            'confirmar': confirmar,
-            'produzir': ?produzir,
+            'marcas': marks,
+            'confirmar': confirm,
+            'produzir': ?produce,
           })
           as Json;
 
-  Future<void> reverterEmenda(String ep, num de, num ate, bool reverter) =>
-      _api.put('$_v1/estudio/producoes/$ep/corte/emenda', {'de': de, 'ate': ate, 'reverter': reverter});
+  Future<void> revertSplice(String ep, num de, num until, bool revert) =>
+      _api.put('$_v1/estudio/producoes/$ep/corte/emenda', {'de': de, 'ate': until, 'reverter': revert});
 
-  Future<Json> editarCena(String ep, int id, Json cena) async =>
-      await _api.put('$_v1/estudio/producoes/$ep/cenas/$id', cena) as Json;
+  Future<Json> editScene(String ep, int id, Json scene) async =>
+      await _api.put('$_v1/estudio/producoes/$ep/cenas/$id', scene) as Json;
 
-  Future<Json> dependencias() => _json('estudio/dependencias');
+  Future<Json> dependencies() => _json('estudio/dependencias');
 
-  Future<void> instalarDependencias() => _post('estudio/dependencias/instalar');
+  Future<void> installDependencies() => _post('estudio/dependencias/instalar');
 
-  Future<Json> bancada() => _json('bancada');
+  Future<Json> bench() => _json('bancada');
 
-  Future<void> rodarBancada({List<String> modelos = const []}) => _post('bancada/rodar', {'modelos': modelos});
+  Future<void> runBench({List<String> models = const []}) => _post('bancada/rodar', {'modelos': models});
 
-  /// Base de aprovações → fine-tune: casos por tarefa, mínimo, última exportação e se o `.venv-treino` existe.
-  Future<Json> treino() => _json('estudio/treino');
+  /// Approvals base → fine-tune: cases per task, minimum, last export and whether `.venv-treino` exists.
+  Future<Json> training() => _json('estudio/treino');
 
-  Future<Json> exportarTreino() async => await _api.post('$_v1/estudio/treino/exportar', {}) as Json;
+  Future<Json> exportTraining() async => await _api.post('$_v1/estudio/treino/exportar', {}) as Json;
 
-  Future<void> treinarLora() => _post('estudio/treino/treinar');
+  Future<void> trainLora() => _post('estudio/treino/treinar');
 
-  // ---------- Fábrica de peças (Estúdio) ----------
+  // ---------- Piece factory (Studio) ----------
 
-  /// Pedidos, fila de revisão, lacunas do acervo, gasto do dia e registro da fábrica.
-  Future<Json> fabrica() => _json('estudio/fabrica');
+  /// Requests, review queue, library gaps, today's spend and the factory log.
+  Future<Json> pieceFactory() => _json('estudio/fabrica');
 
-  /// Pedido novo (`tipo`: livre | referencia | lacunas); entra direto na fila do Claude.
-  Future<Json> novoPedidoFabrica(Json dados) async => await _post('estudio/fabrica/pedidos', dados) as Json;
+  /// New request (`tipo`: livre | referencia | lacunas); goes straight into the Claude queue.
+  Future<Json> newFactoryRequest(Json dados) async => await _post('estudio/fabrica/pedidos', dados) as Json;
 
-  /// Pedido pronto da primeira peça: a citação de PDF.
-  Future<Json> pedidoCitacao({double teto = 3, String motor = 'html'}) async =>
-      await _post('estudio/fabrica/citacao?teto_dia_usd=$teto&motor=$motor') as Json;
+  /// Ready-made request for the first piece: the PDF citation.
+  Future<Json> requestQuote({double cap = 3, String engine = 'html'}) async =>
+      await _post('estudio/fabrica/citacao?teto_dia_usd=$cap&motor=$engine') as Json;
 
-  /// Imagem de referência do pedido; devolve o nome guardado.
-  Future<String> enviarReferenciaFabrica(String nome, List<int> bytes) async =>
+  /// Reference image of the request; returns the stored name.
+  Future<String> sendFactoryReference(String nome, List<int> bytes) async =>
       ((await _api.enviarArquivo('$_v1/estudio/fabrica/referencias', 'arquivo', nome, bytes)) as Json)['nome'] as String;
 
-  Future<void> pausarPedido(String id, bool pausado) => _post('estudio/fabrica/pedidos/$id/pausar?pausado=$pausado');
+  Future<void> pauseRequest(String id, bool pausado) => _post('estudio/fabrica/pedidos/$id/pausar?pausado=$pausado');
 
-  Future<void> rodarPedido(String id) => _post('estudio/fabrica/pedidos/$id/rodar');
+  Future<void> runRequest(String id) => _post('estudio/fabrica/pedidos/$id/rodar');
 
-  /// Painel ao vivo da fábrica: etapa em andamento, chamadas do Claude/LLM local, cota, números de hoje,
-  /// fila de ideias, acervo, dataset e linha do tempo.
-  Future<Json> painelFabrica() => _json('estudio/fabrica/painel');
+  /// Live factory panel: stage in progress, Claude/local LLM calls, quota, today's numbers,
+  /// idea queue, library, dataset and timeline.
+  Future<Json> factoryPanel() => _json('estudio/fabrica/painel');
 
-  /// O Claude cria `quantidade` ideias em lote e a LLM local executa cada uma em N1.
-  Future<Json> gerarIdeias(int quantidade, String texto) async =>
+  /// Claude creates `quantidade` ideas in a batch and the local LLM runs each one in N1.
+  Future<Json> generateIdeas(int quantidade, String texto) async =>
       await _post('estudio/fabrica/ideias', {'quantidade': quantidade, 'texto': texto}) as Json;
 
-  /// Porte das peças HTML para EffectCraft pela LLM local (retoma o pedido aberto).
+  /// Port of the HTML pieces to EffectCraft by the local LLM (resumes the open request).
   Future<Json> portarHtml() async => await _post('estudio/fabrica/porte') as Json;
 
-  /// Peças do acervo com a ficha, o último portão e os quadros da prova.
-  Future<List<dynamic>> pecasAcervo() => _lista('estudio/pecas');
+  /// Library pieces with their sheet, the last gate and the proof frames.
+  Future<List<dynamic>> libraryPieces() => _list('estudio/pecas');
 
-  /// `acao`: aprovar | ajuste (texto = o que mudar) | variacao | reprovar (texto = motivo).
-  Future<Json> revisarPeca(String id, String acao, [String texto = '', int? nota]) async =>
-      await _post('estudio/pecas/$id/revisar', {'acao': acao, 'texto': texto, 'nota': nota}) as Json;
+  /// `acao`: aprovar | ajuste (text = what to change) | variacao | reprovar (text = reason).
+  Future<Json> reviewPiece(String id, String acao, [String texto = '', int? note]) async =>
+      await _post('estudio/pecas/$id/revisar', {'acao': acao, 'texto': texto, 'nota': note}) as Json;
 
-  /// Linha do tempo por bloco: troca a peça da cena por outra (a IA local preenche a nova; ensina a bancada).
-  Future<Json> trocarPeca(String ep, int cena, String peca) async =>
-      await _post('estudio/producoes/$ep/cenas/$cena/trocar', {'peca': peca}) as Json;
+  /// Timeline per block: swaps the scene's piece for another (the local AI fills the new one; it teaches the bench).
+  Future<Json> swapPiece(String ep, int scene, String piece) async =>
+      await _post('estudio/producoes/$ep/cenas/$scene/trocar', {'peca': piece}) as Json;
 
-  /// Render só do bloco: trecho → emenda no vídeo renderizado → loudness e prévia (fila).
-  Future<void> renderBloco(String ep, int bloco) => _post('estudio/producoes/$ep/blocos/$bloco/render', {'formatos': []});
+  /// Render of the block only: span → splice into the rendered video → loudness and preview (queue).
+  Future<void> renderBlock(String ep, int bloco) => _post('estudio/producoes/$ep/blocos/$bloco/render', {'formatos': []});
 
-  /// Ampliação contínua do acervo pelas lacunas (liga, peças por dia, teto, motor, limite da fila de revisão).
-  Future<Json> salvarAmpliacao(Json dados) async => await _api.put('$_v1/estudio/fabrica/ampliacao', dados) as Json;
+  /// Continuous library growth from the gaps (on, pieces per day, cap, engine, review queue limit).
+  Future<Json> saveExpansion(Json dados) async => await _api.put('$_v1/estudio/fabrica/ampliacao', dados) as Json;
 
-  /// HTML × EffectCraft: geral, por intenção e a sugestão de motor por intenção.
-  Future<Json> comparacaoMotores() => _json('estudio/fabrica/comparacao');
+  /// HTML × EffectCraft: overall, per intent and the engine suggestion per intent.
+  Future<Json> enginesComparison() => _json('estudio/fabrica/comparacao');
 
-  /// Decisão de motor por intenção (pedidos com motor "auto").
-  Future<Json> aplicarMotores(Map<String, String> porIntencao) async =>
-      await _api.put('$_v1/estudio/fabrica/motores', {'por_intencao': porIntencao}) as Json;
+  /// Engine decision per intent (requests with the "auto" engine).
+  Future<Json> applyEngines(Map<String, String> byIntent) async =>
+      await _api.put('$_v1/estudio/fabrica/motores', {'por_intencao': byIntent}) as Json;
 
-  Future<void> portaoPeca(String id) => _post('estudio/pecas/$id/portao');
+  Future<void> pieceGate(String id) => _post('estudio/pecas/$id/portao');
 
-  /// MP4 curto da peça na pele do estilo (fila do motor de render).
-  Future<void> previaPeca(String id, String estilo) => _post('estudio/pecas/$id/previa', {'estilo': estilo});
+  /// Short MP4 of the piece in the style's skin (render engine queue).
+  Future<void> piecePreview(String id, String estilo) => _post('estudio/pecas/$id/previa', {'estilo': estilo});
 
-  Future<List<dynamic>> previasPeca(String id) => _lista('estudio/pecas/$id/previas');
+  Future<List<dynamic>> piecePreviews(String id) => _list('estudio/pecas/$id/previas');
 
-  /// Todas as peças aprovadas na pele de cada estilo (fila); o resultado traz as folhas e os problemas.
-  Future<void> provaCanais(List<String> estilos) => _post('estudio/pecas/prova-canais', {'estilos': estilos});
+  /// Every approved piece in the skin of each style (queue); the result brings the sheets and the problems.
+  Future<void> channelsProof(List<String> styles) => _post('estudio/pecas/prova-canais', {'estilos': styles});
 
-  Future<Json> resultadoProvaCanais() => _json('estudio/pecas/prova-canais');
+  Future<Json> resultChannelsProof() => _json('estudio/pecas/prova-canais');
 }

@@ -7,23 +7,23 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- frequência cardíaca ao vivo: BODY_SENSORS até o Wear OS 5; READ_HEART_RATE no 6 -->
+    <!-- live heart rate: BODY_SENSORS up to Wear OS 5; READ_HEART_RATE on 6 -->
     <uses-permission android:name="android.permission.BODY_SENSORS" android:maxSdkVersion="35" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
-    <!-- batimento passivo com o app fechado (Wear OS 4–5; no 6 a do Health Connect) -->
+    <!-- passive heartbeat with the app closed (Wear OS 4–5; on 6 the Health Connect one) -->
     <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" android:maxSdkVersion="35" />
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
-    <!-- refaz o registro do sensor passivo depois de reiniciar o relógio -->
+    <!-- redoes the passive sensor registration after the watch restarts -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- passos, calorias e distância do dia (sensor passivo) e calorias do treino -->
+    <!-- day steps, calories and distance (passive sensor) and workout calories -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
-    <!-- treino em segundo plano: serviço em primeiro plano do tipo health -->
+    <!-- background workout: foreground service of the health type -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
-    <!-- alarme no início de cada bloco da agenda -->
+    <!-- alarm at the start of each agenda block -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
-    <!-- botão "Atualizar app": instala o relogio.apk publicado na VPS -->
+    <!-- "Atualizar app" button: installs the relogio.apk published on the VPS -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
@@ -32,7 +32,7 @@
         android:theme="@android:style/Theme.DeviceDefault"
         android:usesCleartextTraffic="false">
 
-        <!-- funciona sem o app do celular: fala direto com o backend -->
+        <!-- works without the phone app: talks straight to the backend -->
         <meta-data
             android:name="com.google.android.wearable.standalone"
             android:value="true" />
@@ -48,22 +48,22 @@
             </intent-filter>
         </activity>
 
-        <receiver android:name=".AlarmeReceiver" android:exported="false" />
-        <receiver android:name=".InstalacaoReceiver" android:exported="false" />
-        <receiver android:name=".PassivoBootReceiver" android:exported="true">
+        <receiver android:name=".AlarmReceiver" android:exported="false" />
+        <receiver android:name=".InstallReceiver" android:exported="false" />
+        <receiver android:name=".PassiveBootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
-        <!-- sensor passivo (Passivo.kt): o Health Services entrega os lotes aqui -->
+        <!-- passive sensor (Passive.kt): Health Services delivers the batches here -->
         <service
-            android:name=".PassivoServico"
+            android:name=".PassiveService"
             android:exported="true"
             android:permission="com.google.android.wearable.healthservices.permission.PASSIVE_DATA_BINDING" />
 
         <service
-            android:name=".TreinoServico"
+            android:name=".WorkoutService"
             android:exported="false"
             android:foregroundServiceType="health" />
     </application>

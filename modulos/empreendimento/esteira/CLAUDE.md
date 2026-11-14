@@ -53,7 +53,7 @@ Busca de mídia: a curadoria dá `chave_en` (o que TEM de aparecer) + `alternati
 candidatos de todos os bancos e do acervo por relevância (chave nas tags/descrição) e vídeo sem nada relevante cai
 para foto. Pixabay: `PIXABAY_API_KEY_IMAGE`/`_VIDEO`, cache de 24 h em `cache/pixabay/`, termo em inglês com lang en.
 Dinamismo: todo número com unidade dito vira gráfico (`plano._numeros_da_frase`, fora do teto de cobertura);
-`graphics/keywords.py` escolhe 1–2 palavras-chave por frase (LLM, prompt `chaves`) → `chaves.json` → texto com
+`graphics/keywords.py` escolhe 1–2 palavras-chave por frase (LLM, prompt `keywords`) → `chaves.json` → texto com
 "pop" na V3 no instante dito, fora dos gráficos; o montar dá "socos" de zoom (`_ken_burns(socos)`) nesses instantes.
 Direção por bloco (padrão; `studio/direction.py`, embeddings em `ai/embeddings.py` na porta 8082): blocos do roteiro →
 momentos → leitura → 5 candidatas do acervo → escolha → preenchimento validado; tarefa `bloco_peca` na bancada.

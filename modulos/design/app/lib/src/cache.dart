@@ -2,87 +2,87 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'modelos.dart';
+import 'models.dart';
 
-/// Cópia local de um quadro: o que o aparelho tem e se ainda falta mandar ao servidor.
-class CopiaLocal {
-  CopiaLocal(this.resumo, this.elementos, {required this.pendente, required this.apagados, this.paginaDe = const {}});
+/// Local copy of a board: what the device has and whether it still needs to be sent to the server.
+class LocalCopy {
+  LocalCopy(this.summary, this.elements, {required this.pending, required this.erased, this.pageOf = const {}});
 
-  final ResumoQuadro resumo;
-  final List<Elemento> elementos;
-  final bool pendente;
-  final Set<String> apagados;
-  final Map<String, String> paginaDe;
+  final BoardSummary summary;
+  final List<Elemento> elements;
+  final bool pending;
+  final Set<String> erased;
+  final Map<String, String> pageOf;
 }
 
-/// Cache offline dos quadros no aparelho (SharedPreferences: arquivo no Android/desktop,
-/// localStorage na web). Sem o plugin (testes), vira um cache só em memória.
-class CacheQuadros {
-  CacheQuadros._(this._prefs, this._prefixo);
+/// Offline cache of the boards on the device (SharedPreferences: file on Android/desktop,
+/// localStorage on the web). Without the plugin (tests), it becomes a memory-only cache.
+class BoardCache {
+  BoardCache._(this._prefs, this._prefix);
 
-  /// [prefixo] separa coleções no aparelho (`design.caderno.` para os cadernos).
-  static Future<CacheQuadros> abrir({String prefixo = 'design.quadro.'}) async {
+  /// [prefix] separates collections on the device (`design.caderno.` for the notebooks).
+  static Future<BoardCache> open({String prefix = 'design.quadro.'}) async {
     try {
-      return CacheQuadros._(await SharedPreferences.getInstance(), prefixo);
+      return BoardCache._(await SharedPreferences.getInstance(), prefix);
     } catch (_) {
-      return CacheQuadros._(null, prefixo);
+      return BoardCache._(null, prefix);
     }
   }
 
   final SharedPreferences? _prefs;
-  final Map<String, String> _memoria = {};
-  final String _prefixo;
+  final Map<String, String> _memory = {};
+  final String _prefix;
 
-  String? _ler(String chave) => _prefs != null ? _prefs.getString(chave) : _memoria[chave];
+  String? _read(String key) => _prefs != null ? _prefs.getString(key) : _memory[key];
 
-  Iterable<String> get _chaves => (_prefs?.getKeys() ?? _memoria.keys).where((k) => k.startsWith(_prefixo));
+  Iterable<String> get _keys => (_prefs?.getKeys() ?? _memory.keys).where((k) => k.startsWith(_prefix));
 
-  Future<void> guardar(
-    Map<String, dynamic> resumo,
-    List<Elemento> elementos, {
-    required bool pendente,
-    Set<String> apagados = const {},
-    Map<String, String> paginaDe = const {},
+  Future<void> store(
+    Map<String, dynamic> summary,
+    List<Elemento> elements, {
+    required bool pending,
+    Set<String> erased = const {},
+    Map<String, String> pageOf = const {},
   }) async {
-    final chave = '$_prefixo${resumo['id']}';
-    final texto = jsonEncode({
-      'resumo': resumo,
-      'elementos': [for (final e in elementos) jsonComPagina(e, paginaDe)],
-      'pendente': pendente,
-      'apagados': [...apagados],
+    final key = '$_prefix${summary['id']}';
+    final text = jsonEncode({
+      'resumo': summary,
+      'elementos': [for (final e in elements) jsonWithPage(e, pageOf)],
+      'pendente': pending,
+      'apagados': [...erased],
     });
     if (_prefs == null) {
-      _memoria[chave] = texto;
+      _memory[key] = text;
       return;
     }
     try {
-      await _prefs.setString(chave, texto);
+      await _prefs.setString(key, text);
     } catch (_) {
-      // Sem espaço (localStorage da web tem ~5 MB): o servidor continua sendo a fonte.
+      // No space (web localStorage has ~5 MB): the server remains the source.
     }
   }
 
-  CopiaLocal? ler(String id) {
-    final texto = _ler('$_prefixo$id');
-    if (texto == null) return null;
-    final j = jsonDecode(texto) as Map<String, dynamic>;
-    return CopiaLocal(
-      ResumoQuadro.fromJson({...j['resumo'] as Map<String, dynamic>, 'total': (j['elementos'] as List).length}),
+  LocalCopy? read(String id) {
+    final text = _read('$_prefix$id');
+    if (text == null) return null;
+    final j = jsonDecode(text) as Map<String, dynamic>;
+    return LocalCopy(
+      BoardSummary.fromJson({...j['resumo'] as Map<String, dynamic>, 'total': (j['elementos'] as List).length}),
       [for (final e in j['elementos'] as List) ?Elemento.fromJson(e as Map<String, dynamic>)],
-      pendente: j['pendente'] == true,
-      apagados: {...(j['apagados'] as List? ?? const []).cast<String>()},
-      paginaDe: paginasDosElementos(j['elementos'] as List),
+      pending: j['pendente'] == true,
+      erased: {...(j['apagados'] as List? ?? const []).cast<String>()},
+      pageOf: elementPages(j['elementos'] as List),
     );
   }
 
-  /// Quadros guardados no aparelho, para a galeria sem rede.
-  List<ResumoQuadro> resumos() => [
-    for (final k in _chaves)
-      if (ler(k.substring(_prefixo.length)) case final c?) c.resumo,
-  ]..sort((a, b) => (b.atualizado ?? DateTime(0)).compareTo(a.atualizado ?? DateTime(0)));
+  /// Boards stored on the device, for the gallery without network.
+  List<BoardSummary> summaries() => [
+    for (final k in _keys)
+      if (read(k.substring(_prefix.length)) case final c?) c.summary,
+  ]..sort((a, b) => (b.updated ?? DateTime(0)).compareTo(a.updated ?? DateTime(0)));
 
   Future<void> remover(String id) async {
-    _memoria.remove('$_prefixo$id');
-    await _prefs?.remove('$_prefixo$id');
+    _memory.remove('$_prefix$id');
+    await _prefs?.remove('$_prefix$id');
   }
 }

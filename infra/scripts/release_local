@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# Publishes a Solumia release from this PC, without GitHub Actions (same files as
+# .github/workflows/release.yml). Usage: infra/scripts/release_local X.Y.Z
+#   - the tag vX.Y.Z must already be on GitHub;
+#   - builds the phone APK, the watch APK (both signed with ~/solumia-release.jks) and the Linux
+#     AppImage, with the server address baked in (SOLUMIA_URL, default below);
+#   - signs SHA256SUMS.txt with the release GPG key and creates the GitHub release.
+# Passwords are typed at a prompt (keystore) or in the gpg window: never in arguments or history.
+set -euo pipefail
+
+VERSION="${1:-}"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "uso: $0 X.Y.Z" >&2; exit 2; }
+
+REPO="thiagobenevide/solumia"
+URL="${SOLUMIA_URL:-https://solumialocal.thiagobenevide.com}"
+FPR="401962C4ED4FA05AE568116E68F5115E5B50B880"
+KEYSTORE="$HOME/solumia-release.jks"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+APP="$ROOT/plataforma/app"
+WEAR="$ROOT/modulos/saude/wear"
+PROPS_APP="$APP/android/key.properties"
+PROPS_WEAR="$WEAR/key.properties"
+OUT="$HOME/solumia-release-$VERSION"
+FLUTTER="${FLUTTER:-$HOME/development/flutter/bin/flutter}"
+APPIMAGETOOL="$HOME/.cache/solumia/appimagetool-1.9.0"
+IFS=. read -r major minor patch <<< "$VERSION"
+BUILD_NUMBER=$((major * 10000 + minor * 100 + patch))  # same rule as the workflow
+DEFINES=(--dart-define=API_URL="$URL" --dart-define=BUILD="$BUILD_NUMBER")
+
+step() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
+fail() { printf '\n\033[31mERRO: %s\033[0m\n' "$1" >&2; exit 1; }
+remove_props() { rm -f "$PROPS_APP" "$PROPS_WEAR"; }
+
+check_signer() {
+    local apk="$1" signer
+    signer=$("$APKSIGNER" verify --print-certs "$apk" | awk -F': ' '/Signer #1 certificate DN/{print $2; exit}')
+    [ "$signer" = "CN=Solumia, C=BR" ] || fail "$(basename "$apk") assinado por '$signer', não pela keystore de release"
+    echo "   ok: $(basename "$apk") assinado por $signer"
+}
+
+[ -f "$KEYSTORE" ] || fail "keystore $KEYSTORE não encontrada (restaure do backup)"
+gpg --list-secret-keys "$FPR" >/dev/null 2>&1 || fail "chave GPG $FPR não está neste PC"
+gh auth status >/dev/null 2>&1 || fail "gh sem login: rode 'gh auth login'"
+gh api "repos/$REPO/git/ref/tags/v$VERSION" >/dev/null 2>&1 || fail "a tag v$VERSION não está no GitHub"
+if gh release view "v$VERSION" -R "$REPO" >/dev/null 2>&1; then fail "a release v$VERSION já existe"; fi
+# minSdk 26+ means APK signature v2+ only: keytool cannot read it, apksigner can.
+APKSIGNER=$(ls -d "${ANDROID_HOME:-$HOME/Android/Sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1)
+[ -n "$APKSIGNER" ] || fail "apksigner não encontrado no Android SDK"
+[ -f "$WEAR/local.properties" ] || echo "sdk.dir=${ANDROID_HOME:-$HOME/Android/Sdk}" > "$WEAR/local.properties"
+mkdir -p "$OUT"
+echo "   Versão $VERSION, build $BUILD_NUMBER, servidor $URL"
+
+step "1/5 Senha da keystore"
+read -rsp "   Senha da keystore: " KS_PASS; echo
+export KS_PASS
+keytool -list -keystore "$KEYSTORE" -storepass:env KS_PASS -alias solumia >/dev/null 2>&1 \
+    || fail "senha da keystore incorreta"
+trap remove_props EXIT
+for props in "$PROPS_APP" "$PROPS_WEAR"; do
+    (umask 077; printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=solumia\nkeyPassword=%s\n' \
+        "$KEYSTORE" "$KS_PASS" "$KS_PASS" > "$props")
+done
+unset KS_PASS
+
+step "2/5 App do celular (APK)"
+(cd "$APP" && "$FLUTTER" build apk --release "${DEFINES[@]}" \
+    --build-name "$VERSION" --build-number "$BUILD_NUMBER" 2>&1 | tail -n 1)
+cp "$APP/build/app/outputs/flutter-apk/app-release.apk" "$OUT/solumia-$VERSION-android.apk"
+check_signer "$OUT/solumia-$VERSION-android.apk"
+
+step "3/5 App do relógio (Wear OS)"
+(cd "$WEAR" && ./gradlew -q assembleRelease -Pbuild="$BUILD_NUMBER" -PversionName="$VERSION")
+cp "$WEAR/app/build/outputs/apk/release/app-release.apk" "$OUT/solumia-$VERSION-wear.apk"
+check_signer "$OUT/solumia-$VERSION-wear.apk"
+remove_props
+
+step "4/5 App do PC (Linux AppImage)"
+(cd "$APP" && "$FLUTTER" build linux --release "${DEFINES[@]}" \
+    --build-name "$VERSION" --build-number "$BUILD_NUMBER" 2>&1 | tail -n 1)
+if [ ! -x "$APPIMAGETOOL" ]; then
+    mkdir -p "$(dirname "$APPIMAGETOOL")"
+    curl -fsSL -o "$APPIMAGETOOL" \
+        https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-x86_64.AppImage
+    chmod +x "$APPIMAGETOOL"
+fi
+appdir="$(mktemp -d)/Solumia.AppDir"
+mkdir -p "$appdir/usr/bin"
+cp -r "$APP/build/linux/x64/release/bundle/." "$appdir/usr/bin/"
+cp "$APP/assets/logo.png" "$appdir/solumia.png"
+printf '[Desktop Entry]\nType=Application\nName=Solumia\nExec=agent\nIcon=solumia\nCategories=Office;\n' \
+    > "$appdir/solumia.desktop"
+printf '#!/bin/sh\nHERE="$(dirname "$(readlink -f "$0")")"\nexec "$HERE/usr/bin/agent" "$@"\n' > "$appdir/AppRun"
+chmod +x "$appdir/AppRun"
+rm -f "$OUT/solumia-$VERSION-linux-x86_64.AppImage"
+ARCH=x86_64 "$APPIMAGETOOL" --appimage-extract-and-run "$appdir" \
+    "$OUT/solumia-$VERSION-linux-x86_64.AppImage" >/dev/null 2>&1
+rm -rf "$(dirname "$appdir")"
+echo "   ok: solumia-$VERSION-linux-x86_64.AppImage"
+
+step "5/5 SHA256SUMS assinado e release no GitHub"
+cd "$OUT"
+rm -f SHA256SUMS.txt SHA256SUMS.txt.asc release-signing-key.asc
+sha256sum solumia-* > SHA256SUMS.txt
+echo "   O gpg vai pedir a senha da chave GPG."
+gpg --local-user "$FPR" --armor --detach-sign --output SHA256SUMS.txt.asc SHA256SUMS.txt
+gpg --armor --export "$FPR" > release-signing-key.asc
+gpg --status-fd 1 --verify SHA256SUMS.txt.asc SHA256SUMS.txt 2>/dev/null | grep -q "VALIDSIG .* $FPR\$" \
+    || fail "a assinatura não confere"
+sed 's/^/   /' SHA256SUMS.txt
+gh release create "v$VERSION" -R "$REPO" --verify-tag --title "Solumia $VERSION" \
+    --notes "Phone, watch and Linux apps for $URL." \
+    solumia-* SHA256SUMS.txt SHA256SUMS.txt.asc release-signing-key.asc
+echo "   ok: https://github.com/$REPO/releases/tag/v$VERSION"

@@ -168,8 +168,165 @@ e `generate_secret_totp`.
 motor → engine, pastas → folders, gerar → generate, manifesto → manifest, nomes → names, plataforma →
 platform_setup, papeis → roles, segredos → secret_store, apps_solumia → solumia_apps, cofre → vault, verificacao →
 verification. Testes: test_pastas → test_folders, test_motor_gerar → test_engine_generate, test_manifesto_cofre →
-test_manifest_vault. Funções, classes e variáveis internas ainda em português.
+test_manifest_vault. Nomes internos (funções, classes, constantes, locais, atributos, testes) em inglês: mapa em `infra/tools/english_migration/overrides_configurador.txt`. Ficam como contrato: chaves JSON/TOML, rotas, subcomandos (`servir`, `verificar`) e nomes de segredos no cofre.
+
+## Configurador — app Flutter (`configurador/app/lib/`)
+
+nucleo.dart → core.dart, plano.dart → plan.dart, tema.dart → theme.dart, telas/ → screens/ (inicio → home, conta → account, pastas → folders, registro → run_log, apps_solumia → solumia_apps). Localização: `textos.dart`/`Textos` → `app_text.dart`/`AppText`; chaves dos ARB em inglês (textos da tela seguem traduzidos). Classes: Nucleo → Core, ErroNucleo → CoreError, Tela* → *Screen.
 
 Pendente em todo o repositório: métodos e campos de classes, parâmetros que são contrato (rotas, nomes passados por
 palavra-chave), chaves JSON/frontmatter/WebSocket, rotas, comentários, docstrings, mensagens, prompts, testes
 (nomes dos arquivos e das funções da plataforma), nomes internos do configurador, `capture`, e os apps Flutter.
+
+## App de notas (`plataforma/app_notas/`)
+
+Arquivos: `api_notas` → `notes_api`, `controlador` → `open_note`, `modelos` → `models`, `modulo_notas` →
+`notes_module`, `telas/` → `screens/`, `editor_nota` → `note_editor`, `notas_tela` → `notes_screen`,
+`painel_analise` → `analysis_panel`, `painel_relacoes` → `relations_panel`. Pacote `agent_notas` e `offline.dart`
+mantidos. Classes: `ApiNotas` → `NotesApi`, `EspelhoNotas` → `NotesMirror`, `NotaAberta` → `OpenNote`, `Nota` →
+`Note`, `NotaResumo` → `NoteSummary`, `TipoNota` → `NoteType`, `Campo` → `NoteField`, `Ligacao` → `NoteLink`,
+`Analise` → `NoteAnalysis`, `ModuloNotas` → `NotesModule`, `NotasTela` → `NotesScreen`, `EditorNota` →
+`NoteEditor`, `PainelAnalise` → `AnalysisPanel`, `PainelRelacoes` → `RelationsPanel`, `escolherNota` → `pickNote`.
+Ficam em português (contrato/dados): chaves JSON, rotas, ops da fila offline (`criar`/`salvar`/`excluir`),
+caminhos do armazém `notas/`, id do módulo `notas`, nomes vindos do `agent_core` e o texto da tela.
+
+## App Rotinas (`modulos/rotinas/app/`)
+
+Arquivos: `api_rotinas` → `routines_api`, `modelos` → `models`, `modulo_rotinas` → `routines_module`, `telas/` →
+`screens/` (`assistente` → `assistant`, `cartao_tarefa` → `task_card`, `editor_tarefa` → `task_editor`,
+`rotinas_tela` → `routines_screen`). Classes: `ApiRotinas` → `RoutinesApi`, `Tarefa` → `Task`, `Coluna` →
+`BoardColumn`, `Resumo` → `BoardSummary`, `CartaoTarefa` → `TaskCard`, `ConversaAssistente` → `AssistantChat`,
+`Assistente` → `Assistant`, `RotinasTela` → `RoutinesScreen`, `ModuloRotinas` → `RoutinesModule`. Os valores de
+`BoardColumn` (`pendente`, `execucao`, `concluida`) ficam: vão para a API via `.name`.
+
+## App Painel (`modulos/painel/app/`)
+
+Arquivos: `api_painel` → `panel_api`, `modelos` → `models`, `modulo_painel` → `panel_module`, `vigia` →
+`coach_watcher`, `telas/` → `screens/` (`chat_cobrador` → `coach_chat`, `dashboard_llms` → `llm_dashboard`,
+`painel_tela` → `panel_screen`). Classes: `ApiPainel` → `PanelApi`, `Bloco` → `ScheduleBlock`, `Alerta` → `Alert`,
+`Disciplina` → `Discipline`, `Meta` → `Goal`, `Executada` → `ExecutedAction`, `Resposta` → `CoachReply`,
+`UsoProvedor` → `ProviderUsage`, `ChatCobrador` → `CoachChat`, `ConversaCobrador` → `CoachConversation`,
+`ConversaSalva` → `SavedConversation`, `VigiaCobrador` → `CoachWatcher`, `DashboardLlms` → `LlmDashboard`,
+`PainelTela` → `PanelScreen`, `ModuloPainel` → `PanelModule`. "Cobrador" = coach.
+
+## App Código (`modulos/codigo/app/`)
+
+Arquivos: `api_codigo` → `code_api`, `codigo_tela` → `code_screen`, `contas_claude` → `claude_accounts`, `modelos` →
+`models`, `modulo_codigo` → `code_module`, `navegador_tela` → `browser_screen`, `realce` → `highlight`. Classes:
+`ApiCodigo` → `CodeApi`, `AbaCodigo` → `CodeTab`, `Etapa` → `SessionStep`, `ArvoreCodigo` → `CodeTree`,
+`ArquivoCodigo` → `CodeFile`, `CommitCodigo` → `CodeCommit`, `Tipo` → `TokenKind`, `Linguagem` → `Language`,
+`Trecho` → `Span`, `CodigoTela` → `CodeScreen`, `NavegadorTela` → `BrowserScreen`, `SessaoVista` → `SessionView`,
+`ModuloCodigo` → `CodeModule`.
+
+## App Concursos (`modulos/concursos/app/`)
+
+Arquivos: `api_concursos` → `exams_api`, `modelos` → `models`, `modulo_concursos` → `exams_module`, `telas/` →
+`screens/` (`concursos_tela` → `exams_screen`, `concurso_tela` → `exam_screen`, `radar_tela` → `radar_screen`,
+`rumores_tela` → `rumors_screen`, `simulados_tela` → `mock_exams_screen`). "Concurso" = exam; "edital" = notice;
+"simulado" = mock exam; "banca" = board; "vaga" = opening; "esfera" = sphere. Classes: `ApiConcursos` →
+`ExamsApi`, `Concurso` → `Exam`, `Simulado` → `MockExam`, `Questao` → `Question`, `Topico` → `Topic`, `Prazo` →
+`Deadline`, `Rota` → `TravelRoute`, `VagaTI` → `ItJob`, `Rumores` → `Rumors`, `ModuloConcursos` → `ExamsModule`.
+
+## App Eletrônica (`modulos/eletronica/app/`)
+
+Arquivos: `api_eletronica` → `electronics_api`, `calculos` → `calculations`, `modelos` → `models`,
+`modulo_eletronica` → `electronics_module`, `simulacao` → `simulation`, `cad/` (`cad_tela` → `cad_screen`,
+`exportar` → `export`, `paineis` → `panels`, `pintura` → `painting`), `telas/` → `screens/` (`bibliotecas_tela` →
+`libraries_screen`, `bom_tela` → `bom_screen`, `calculadoras_tela` → `calculators_screen`, `grafico` → `chart`,
+`projetos_tela` → `projects_screen`, `simulacao_tela` → `simulation_screen`). Classes: `Componente` → `Component`,
+`Fio` → `Wire`, `Folha` → `Sheet`, `Pino` → `Pin`, `Rotulo` → `NetLabel`, `Sonda` → `Probe`, `Simbolo` →
+`Symbol`, `Biblioteca` → `Library`, `Projeto` → `Project`, `Camada` → `Layer`, `Ferramenta` → `Tool`, `Direcao` →
+`Direction`, `Analise` → `Analysis`, `Curvas` → `SimCurves`, `Resultado` → `SimulationResult`. Os valores de
+`Direction` (`d`, `e`, `c`, `b`) e de `Analysis` (`op`, `tran`, `ac`, `dc`) ficam: vão para a API.
+
+## Pacotes Python dos módulos (import) e nomes de pasta combinados
+
+Pacotes renomeados (`modulos/<m>/backend/src/<pacote>`): saude → health, financas → finance, estudos → studies,
+concursos → exams, eletronica → electronics, painel → panel, rotinas → routines, codigo → coding (`code` colide com a
+stdlib); design fica. Comentários e docstrings dos backends, da plataforma e do worker em inglês. Continuam como
+contrato: rotas (`/api/saude`…), chaves JSON, nomes de tarefa do worker (`codigo.enviar`…) e chaves de `app.state`.
+Combinado entre os chats para a mudança de pastas, feita de uma vez num ponto marcado pelo usuário: os mesmos nomes
+para `modulos/<m>/`, arquivos → files, empreendimento → business, esteira → pipeline, modulos → modules,
+plataforma → platform; distribuições `agent-<m>` e `uv.lock` mudam junto.
+
+## App Estudos (`modulos/estudos/app/`)
+
+Arquivos: `api_estudos` → `studies_api`, `layout_grafo` → `graph_layout`, `modelos` → `models`, `modelos_conhecimento`
+→ `knowledge_models`, `modulo_estudos` → `studies_module`, `telas/` → `screens/` (`grafo_tela` → `graph_screen`,
+`idiomas_tela` → `foreign_languages_screen`, `leituras_tela` → `readings_screen`, `linguagem_tela` →
+`language_screen`, `mapeamento_painel` → `mapping_panel`, `projetos_tela` → `projects_screen`, `trilhas_tela` →
+`tracks_screen`). Classes: `ApiEstudos` → `StudiesApi`, `Leitura` → `Reading`, `Trilha` → `Track`,
+`TrilhaConhecimento` → `KnowledgeTrack`, `EtapaTrilha` → `TrackStep`, `ProjetoLeitura` → `ReadingProject`, `Matriz` →
+`Matrix`, `TrabalhoMatriz` → `MatrixPaper`, `ItemMatriz` → `MatrixItem`, `TracoMao` → `HandStroke`, `NoGrafo` →
+`GraphNode`, `Aresta` → `Edge`, `Opcoes` → `StudyOptions`, `ModuloEstudos` → `StudiesModule`.
+
+## App Empreendimento (`modulos/empreendimento/app`)
+
+Arquivos: `modelos` → `models`, `modulo_empreendimento` → `business_module`, `telas/` → `screens/` (`empreendimento_tela` →
+`business_screen`, `*_aba` → `*_tab`, `grafo` → `graph`, `serie_temporal` → `time_series`, `episodio/` → `episode/`,
+`editor/campos` → `editor/fields`), `estudio/` → `studio/` (`estilo_tela`/`estilo_abas` → `style_screen`/`style_tabs`,
+`fabrica_tela` → `factory_screen`, `previa_peca` → `piece_preview`, `linha_tempo` → `timeline`), `vagas/` → `jobs/`
+(`api_vagas` → `jobs_api`, `curriculos_tela` → `resumes_screen`, `mapa_vagas` → `jobs_map`), `youtube/` (`api_youtube` →
+`youtube_api`, `canal_tela` → `channel_screen`, `formulario` → `form`, `youtube_aba` → `youtube_tab`).
+Classes: Canal → Channel, Roteiro → Script, Episodio/EpisodioResumo → Episode/EpisodeSummary, Etapa → Stage,
+Fila → ProductionQueue (não `Queue`, do dart:collection), Selo → Pill (não `Badge`, do Material), Campo* → *Field
+(CampoTexto → TextInputField), *Tela → *Screen, *Aba → *Tab, ApiVagas → ApiJobs. ModuloEmpreendimento → BusinessModule (`urlEsteira:` → `pipelineUrl:`). Ficam:
+`ApiEsteira`/`api_esteira.dart` (seguem o nome novo da esteira) e o
+pacote `agent_empreendimento` (renomeado junto com as pastas da raiz). Chaves JSON e rotas não mudaram.
+
+## App Finanças (`modulos/financas/app/`)
+
+Arquivos: `api_financas` → `finance_api`, `formato` → `format`, `modulo_financas` → `finance_module`, `telas/` →
+`screens/` (`cenarios_tela` → `scenarios_screen`, `comuns` → `common`, `contas_tela` → `accounts_screen`,
+`conversa_financas` → `finance_chat`, `empresa_tela` → `company_screen`, `estudo_tela` → `finance_study_screen`,
+`extrato_tela` → `statement_screen`, `graficos` → `charts`, `investimentos_tela` → `investments_screen`,
+`mercado_tela` → `market_screen`, `noticias_tela` → `news_screen`, `painel_tela` → `dashboard_screen`,
+`planejamento_tela` → `planning_screen`). Classes: `ApiFinancas` → `FinanceApi`, `Campo` → `FormFieldSpec`,
+`TipoCampo` → `FieldKind`, `Indicador` → `Indicator`, `Rosca` → `Donut`, `Fatia` → `Slice`, `ModuloFinancas` →
+`FinanceModule`. Nomes do pacote do `arquivos` ficam até ele ser migrado.
+
+## App Saúde (`modulos/saude/app/`)
+
+Arquivos: `api_saude` → `health_api`, `aviso_treino` → `workout_notice`, `consumo_nativo` → `native_usage`, `datas` →
+`dates`, `modelos` → `models`, `modulo_saude` → `health_module`, `sessao` → `session`, `sincronizacao` → `sync`,
+`telas/` → `screens/` (`analise_tela` → `analysis_screen`, `biblioteca_exercicios` → `exercise_library`,
+`calendario` → `calendar`, `comuns` → `common`, `consumo_tela` → `usage_screen`, `dialogos` → `dialogs`,
+`espiritual_tela` → `spiritual_screen`, `guia_treino_tela` → `workout_guide_screen`, `mental_tela` →
+`mental_screen`, `relogio_tela` → `watch_screen`, `treinos_tela` → `workouts_screen`). "Relógio" = watch; "consumo" =
+usage; "treino" = workout; "série" = set. Classes: `ApiSaude` → `HealthApi`, `Exercicio` → `Exercise`,
+`SessaoTreino` → `WorkoutSession`, `AvisoTreino` → `WorkoutNotice`, `LeitorHealthConnect` → `HealthConnectReader`,
+`PontoSaude` → `HealthPoint`, `ConsumoNativo` → `NativeUsage`, `ModuloSaude` → `HealthModule`. Nomes de
+MethodChannel, métodos e argumentos do lado Android ficam (são strings).
+Testes da plataforma (`plataforma/backend/tests`, `plataforma/worker/tests`): arquivos e funções em inglês
+(`test_saude_sessoes` → `test_health_sessions`, `test_concursos` → `test_exams`, `test_voz` → `test_voice`…;
+`test_youtube.py` fica com o chat do YouTube). Fixtures curtas (`api`, `cliente`, `pasta`) ficaram como estavam.
+
+## App Design (`modulos/design/app/`)
+
+Arquivos: `api_design` → `design_api`, `modelos` → `models`, `modulo_design` → `design_module`, `rotas` → `routing`,
+`caderno/` → `notebook/` (`caderno_tela` → `notebook_screen`, `caneta` → `pen`, `papel_dialogo` → `paper_dialog`,
+`referencias` → `references`), `quadro/` → `board/` (`busca_bing` → `bing_search`, `entrada` → `input`, `estojo` →
+`toolbox`, `exportar` → `export`, `fluxo` → `flow`, `imagens` → `images`, `menu_caneta` → `pen_menu`, `paineis` →
+`panels`, `pintura` → `painting`, `quadro_tela` → `board_screen`, `tabela` → `table`), `telas/` → `screens/`
+(`design_tela` → `design_screen`, `galeria_tela` → `gallery_screen`), `wireframe/` (`galeria` → `gallery`, `modelo` →
+`model`, `pintura` → `painting`, `wireframe_tela` → `wireframe_screen`). Classes: `Quadro` → `Board`, `Pagina` →
+`BoardPage`, `Ligacao` → `Connector`, `NoFluxo` → `FlowNode`, `Tabela` → `BoardTable`, `Imagem` → `BoardImage`,
+`Texto` → `BoardText`, `Nota` → `StickyNote`, `Papel` → `Paper`, `Prancha` → `Artboard`, `Componente` →
+`WfComponent`, `Ferramenta` → `Tool`, `Estojo` → `Toolbox`. Os valores dos enums gravados nos quadros (`Fundo`,
+`Pincel`, `TipoForma`, `TipoNo`, `TipoLinha`, `TipoPonta`, `EstadoWf`, `_Lado`) ficam, e por isso variáveis locais
+com os mesmos nomes (`fim`, `inicio`, `pontos`…) também.
+
+## App Arquivos (`modulos/arquivos/app/`)
+
+Arquivos: `api_arquivos` → `files_api`, `modelos` → `models`, `modulo_arquivos` → `files_module`, `editores/` →
+`editors/` (`apresentacao_tela` → `presentation_screen`, `collabora_tela` → `collabora_screen`, `documento_tela` →
+`document_screen`, `exportar` → `export`, `planilha_tela` → `spreadsheet_screen`, `reescrita` → `rewrite`),
+`externo/` → `external/`, `leitor/` → `reader/` (`anotador` → `annotator`, `camada_pagina` → `page_layer`,
+`dados_tela` → `data_screen`, `diagramacao` → `layout`, `estojo` → `toolbox`, `geometria` → `geometry`,
+`leitor_tela` → `reader_screen`, `leitura_guiada` → `guided_reading`, `pintura` → `painting`, `previa_tela` →
+`preview_screen`, `traducao` → `translation`, `traducao_pagina` → `page_translation`), `telas/` → `screens/`
+(`acoes_destaque` → `highlight_actions`, `biblioteca_tela` → `library_screen`, `destaques_aba` → `highlights_tab`,
+`projetos_leitura` → `reading_projects`). Classes: `ApiArquivos` → `FilesApi`, `Arquivo` → `FileItem`, `Anotacoes` →
+`Annotations`, `Anotador` → `Annotator`, `Destaque` → `Highlight`, `Traco` → `InkStroke`, `LeitorTela` →
+`ReaderScreen`, `LeituraGuiada` → `GuidedReading`, `AcervoOffline` → `OfflineVault`, `ModuloArquivos` →
+`FilesModule`. Os valores de `Brush` (`caneta`, `lapis`, `caligrafia`, `marcador`) ficam: vão para o JSON.

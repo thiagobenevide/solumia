@@ -7,18 +7,18 @@ from esteira.n1 import photocraft as N1
 CORES = {"texto": "#ffffff", "destaque": "#ffd400", "alerta": "#ff2d2d", "preto": "#000000"}
 
 
-def _executar(doc):
+def _execute(doc):
     passes = []
 
-    def rodar(origem, passos, destino):
-        passes.append(passos)
-        return [{"layer": f"L{i}", "bounds": [100, 200, 600, 400], "name": f"n{i}"} for i in range(len(passos))]
-    N1.Executor(rodar, {"fundo": "/f.png", "foto": "/p.jpg"}, CORES, lambda a: (2560, 1440)).executar(doc, "/tmp/t.pcraft")
+    def run_job(origin, steps, destination):
+        passes.append(steps)
+        return [{"layer": f"L{i}", "bounds": [100, 200, 600, 400], "name": f"n{i}"} for i in range(len(steps))]
+    N1.Executor(run_job, {"fundo": "/f.png", "foto": "/p.jpg"}, CORES, lambda a: (2560, 1440)).apply_doc(doc, "/tmp/t.pcraft")
     return passes
 
 
-def test_thumb_titulo_centralizado_selo_acima_e_caixa_com_vidro():
-    passes = _executar({"elementos": [
+def test_thumb_centered_title_badge_above_and_glass_box():
+    passes = _execute({"elementos": [
         {"tipo": "imagem", "midia": "fundo"},
         {"tipo": "titulo", "conteudo": "O *ERRO* DOS 30", "tamanho": 0.2, "lado": "direita"},
         {"tipo": "selo", "conteudo": "ESTUDO"},
@@ -36,18 +36,18 @@ def test_thumb_titulo_centralizado_selo_acima_e_caixa_com_vidro():
 
 
 def test_variantes_viram_layer_comps():
-    passes = _executar({"elementos": [{"tipo": "titulo", "conteudo": "A", "tamanho": 0.2}],
+    passes = _execute({"elementos": [{"tipo": "titulo", "conteudo": "A", "tamanho": 0.2}],
                           "variantes": [{"nome": "B", "titulo": "OUTRO *TEXTO*"}]})
     assert ("layerComp.new", {"name": "A"}) in passes[0]
     p2 = passes[1]
     assert ("layerComp.new", {"name": "B"}) in p2 and p2[-1] == ("layerComp.apply", {"comp": "A"})
 
 
-def test_tratamento_pela_receita_e_decisao():
+def test_treatment_by_recipe_and_decision():
     recipe = {"lut": "tealOrange", "nitidez": 0.25, "grao": 0.1, "desfoque_fundo": 0.4}
     doc = N1.treatment(recipe, N1.PhotoDecision(foco=(0.9, 0.5), separar_planos=True, recortar=False), "9:16",
                         1920, 1080)
-    steps = _executar(doc)[0]
+    steps = _execute(doc)[0]
     crop = next(p for c, p in steps if c == "image.crop")
     assert crop["width"] == 608 and crop["height"] == 1080 and crop["x"] == 1920 - 608  # foco na borda direita
     names = [c for c, _ in steps]
@@ -55,7 +55,7 @@ def test_tratamento_pela_receita_e_decisao():
     assert "layer.removeBackground" not in names
 
 
-def test_esquema_fechado():
+def test_closed_schema():
     with pytest.raises(ValidationError):  # cor fora dos papéis e não hex
         N1.Composition.model_validate({"elementos": [{"tipo": "titulo", "conteudo": "x", "tamanho": 0.2,
                                                      "cor": "vermelho"}]})

@@ -33,10 +33,10 @@ def normalize(word):
     return re.sub(r"[^a-z0-9]", "", s)
 
 
-def read_script(texto):
+def read_script(text):
     """Devolve (titulo, frases); cada frase: {texto, destaques, busca, tipo}."""
-    title, sentences, pendente = None, [], None
-    for line in texto.splitlines():
+    title, sentences, pending = None, [], None
+    for line in text.splitlines():
         line = line.strip()
         if not line:
             continue
@@ -45,7 +45,7 @@ def read_script(texto):
             continue
         for m in RE_DIRECTIVE.finditer(line):
             kind = {"busca": None, "imagem": "imagem"}.get(m.group(1).lower(), "video")
-            pendente = {"busca": m.group(2).strip(), "tipo": kind}
+            pending = {"busca": m.group(2).strip(), "tipo": kind}
         line = RE_DIRECTIVE.sub("", line).strip()
         if not line:
             continue
@@ -54,9 +54,9 @@ def read_script(texto):
                 continue
             item = {"texto": sentence.replace("*", "").strip(), "destaques": re.findall(r"\*([^*]+)\*", sentence),
                     "busca": None, "tipo": None}
-            if pendente:
-                item.update(pendente)
-                pendente = None
+            if pending:
+                item.update(pending)
+                pending = None
             sentences.append(item)
     return title, sentences
 
@@ -73,7 +73,7 @@ def sentences_of_transcript(transc):
     return [{"texto": f, "destaques": [], "busca": None, "tipo": None} for f in sentences]
 
 
-def align(frases, transc):
+def align(sentences, transc):
     """Dá a cada palavra do roteiro um tempo (ini) usando a transcrição; devolve lista por frase."""
     words_w = transc["palavras"]
     norm_w = [normalize(w["p"]) for w in words_w]
@@ -82,7 +82,7 @@ def align(frases, transc):
         if re.match(r"^[.,]\d", words_w[k]["p"].strip()) and norm_w[k - 1][-1:].isdigit():
             norm_w[k - 1], norm_w[k] = norm_w[k - 1] + norm_w[k], ""
     tokens = []  # (indice_frase, texto_original)
-    for i, f in enumerate(frases):
+    for i, f in enumerate(sentences):
         for p in f["texto"].split():
             if normalize(p):
                 tokens.append((i, p))
@@ -111,19 +111,19 @@ def align(frases, transc):
         times[k] = t0 + (t1 - t0) * (k - k0) / (k1 - k0)
         fins[k] = times[k]
 
-    by_sentence = [[] for _ in frases]
+    by_sentence = [[] for _ in sentences]
     for (i, p), t, f in zip(tokens, times, fins):
         by_sentence[i].append({"p": p, "ini": t, "fim": f})
     return by_sentence
 
 
-def _start_highlight(palavras, destaque):
+def _start_highlight(words, highlight):
     """Momento em que a primeira palavra do destaque é falada, ou None se não está nestas palavras."""
-    target = normalize(destaque.split()[0])
-    return next((p["ini"] for p in palavras if normalize(p["p"]) == target), None)
+    target = normalize(highlight.split()[0])
+    return next((p["ini"] for p in words if normalize(p["p"]) == target), None)
 
 
-def _divide_long(blocks, alvo, maximum):
+def _divide_long(blocks, target, maximum):
     output = []
     for b in blocks:
         queue = [b]
@@ -138,7 +138,7 @@ def _divide_long(blocks, alvo, maximum):
             best, note = None, None
             for k in range(2, len(ps) - 1):
                 t = ps[k]["ini"]
-                dist = abs((t - current["ini"]) - alvo)
+                dist = abs((t - current["ini"]) - target)
                 if ps[k - 1]["p"].endswith((",", ";", ":")):
                     dist -= 1.5
                 if note is None or dist < note:
@@ -173,10 +173,10 @@ def _join_short(blocks, minimum):
     return output
 
 
-def words_key(texto, freq, n=2):
+def words_key(text, freq, n=2):
     """Heurística local: palavras longas, nomes próprios e termos raros no roteiro."""
     candidates = []
-    for pos, raw in enumerate(texto.split()):
+    for pos, raw in enumerate(text.split()):
         p = re.sub(r"[^\wÀ-ÿ-]", "", raw)
         if len(p) < 4 or p.lower() in STOPWORDS or p.isdigit():
             continue
@@ -193,7 +193,7 @@ def words_key(texto, freq, n=2):
 def generate_scenes(project):
     cfg = project.cfg["cenas"]
     transc = project.load_json("transcricao.json")
-    file = project.roteiro()
+    file = project.script_path()
     if file:
         title, sentences = read_script(file.read_text())
     else:
@@ -245,7 +245,7 @@ def generate_scenes(project):
         })
 
     # Rodar de novo (ex.: após mudar o roteiro) preserva o trabalho feito nas cenas que não mudaram.
-    if project.caminho("plano.json").exists():
+    if project.path_of("plano.json").exists():
         old = project.load_json("plano.json")
         project.save_json("plano.anterior.json", old)
         by_time = {(c["inicio"], c["fim"]): c for c in old["cenas"]}

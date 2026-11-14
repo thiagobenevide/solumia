@@ -85,9 +85,9 @@ def _operation(text, operation):
     name = getattr(text, "name", "")
     if operation:
         return operation
-    if name.startswith("acervo"):
+    if name.startswith("library_"):
         return "library"
-    if name.startswith("roteiro"):
+    if name.startswith("script_"):
         return "script"
     if events._current:
         return events._current.name

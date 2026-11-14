@@ -1,5 +1,5 @@
-/// Módulo Rotinas: Kanban (pendente, execução, concluída), temporizador por tarefa e assistente por LLM.
+/// Routines module: Kanban (pending, in progress, done), per-task timer and LLM assistant.
 library;
 
-export 'src/api_rotinas.dart' show ApiRotinas;
-export 'src/modulo_rotinas.dart';
+export 'src/routines_api.dart' show RoutinesApi;
+export 'src/routines_module.dart';

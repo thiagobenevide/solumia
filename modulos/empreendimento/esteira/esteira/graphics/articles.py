@@ -23,9 +23,9 @@ def _slug(t):
     return re.sub(r"[^a-z0-9]+", "-", "".join(c for c in s if not unicodedata.combining(c))).strip("-")[:60]
 
 
-def _resembles(titulo, file):
+def _resembles(title, file):
     """O PDF é desse artigo? Compara o título com o nome do arquivo, os metadados e a 1ª página."""
-    target = _slug(titulo)
+    target = _slug(title)
     if SequenceMatcher(None, target, _slug(file.stem)).ratio() >= 0.7:
         return True
     try:
@@ -37,15 +37,15 @@ def _resembles(titulo, file):
     return SequenceMatcher(None, target, meta).ratio() >= 0.7 or target[:40] in pag1
 
 
-def _download(url, destino):
+def _download(url, destination):
     try:
         r = requests.get(url, headers=UA, timeout=40, allow_redirects=True)
     except requests.RequestException:
         return False
     if r.status_code != 200 or not r.content.startswith(b"%PDF"):
         return False
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    destino.write_bytes(r.content)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(r.content)
     return True
 
 
@@ -58,21 +58,21 @@ def _urls_openalex(doi):
     return [u for l in locs for u in (l.get("pdf_url"),) if u]
 
 
-def find_pdf(fonte, folder_vault=None):
+def find_pdf(source, folder_vault=None):
     """Caminho do PDF da fonte, ou None."""
-    destination = CACHE / f"{_slug(fonte['titulo'])}.pdf"
+    destination = CACHE / f"{_slug(source['titulo'])}.pdf"
     if destination.exists():
         return destination
     if folder_vault:
         for file in Path(folder_vault).expanduser().glob("*.pdf"):
-            if _resembles(fonte["titulo"], file):
+            if _resembles(source["titulo"], file):
                 return file
-    urls = [fonte["url"]] if fonte.get("url", "") and fonte["url"].lower().endswith(".pdf") else []
-    if fonte.get("doi"):
-        urls += _urls_openalex(fonte["doi"])
+    urls = [source["url"]] if source.get("url", "") and source["url"].lower().endswith(".pdf") else []
+    if source.get("doi"):
+        urls += _urls_openalex(source["doi"])
     for u in urls:
-        if _download(u, destination) and _resembles(fonte["titulo"], destination):
-            events.debug("artigo baixado", titulo=fonte["titulo"][:60], url=u)
+        if _download(u, destination) and _resembles(source["titulo"], destination):
+            events.debug("artigo baixado", titulo=source["titulo"][:60], url=u)
             return destination
         destination.unlink(missing_ok=True)
     return None
@@ -81,14 +81,14 @@ def find_pdf(fonte, folder_vault=None):
 NUM = re.compile(r"\d+(?:[.,]\d+)?")
 
 
-def _numbers(texto):
-    return {n.replace(",", ".").rstrip("0").rstrip(".") for n in NUM.findall(texto)}
+def _numbers(text):
+    return {n.replace(",", ".").rstrip("0").rstrip(".") for n in NUM.findall(text)}
 
 
-def candidates_span(pdf, fala, terms_en=(), max_pages=30, n=8):
+def candidates_span(pdf, speech, terms_en=(), max_pages=30, n=8):
     """Frases do PDF que mais se parecem com a fala: números iguais pesam mais que palavras-chave."""
     doc = pymupdf.open(pdf)
-    nums, terms = _numbers(fala) - {"1", "2", "3"}, {t.lower() for t in terms_en}
+    nums, terms = _numbers(speech) - {"1", "2", "3"}, {t.lower() for t in terms_en}
     output = []
     for k in range(min(len(doc), max_pages)):
         text = re.sub(r"-\n(?=\w)", "", doc[k].get_text())  # junta palavras hifenizadas

@@ -13,23 +13,23 @@ from esteira.scenes import normalize
 EDITABLE = {"busca_en", "busca", "tipo", "destaques", "movimento"}
 
 
-def _ids(texto):
-    return {int(x) for x in texto.split(",")} if texto else None
+def _ids(text):
+    return {int(x) for x in text.split(",")} if text else None
 
 
-def summary(project, cenas=None, without_text=False):
+def summary(project, scenes=None, without_text=False):
     plan = project.load_json("plano.json")
-    so = _ids(cenas)
+    only_ids = _ids(scenes)
     without_media = [c["id"] for c in plan["cenas"] if not c.get("midia")]
     print(f"{plan.get('titulo') or '(sem título)'} · {plan['duracao']:.0f}s · {len(plan['cenas'])} cenas"
           + (f" · sem mídia: {','.join(map(str, without_media))}" if without_media else ""))
     print("id ini tipo>obtido | busca_en | busca | destaques | texto   (* = busca_definida)")
     for c in plan["cenas"]:
-        if so and c["id"] not in so:
+        if only_ids and c["id"] not in only_ids:
             continue
-        obtido = {"video": "v", "imagem": "i"}.get(c.get("midia_tipo"), "-") if c.get("midia") else "-"
+        obtained = {"video": "v", "imagem": "i"}.get(c.get("midia_tipo"), "-") if c.get("midia") else "-"
         dest = ";".join(f"{d['texto']}@{d['inicio']:.1f}" for d in c.get("destaques", []))
-        fields = [f"{c['id']}{'*' if c.get('busca_definida') else ''} {c['inicio']:.1f} {c['tipo'][0]}>{obtido}",
+        fields = [f"{c['id']}{'*' if c.get('busca_definida') else ''} {c['inicio']:.1f} {c['tipo'][0]}>{obtained}",
                   c.get("busca_en") or "", c.get("busca") or "", dest]
         if not without_text:
             fields.append(c["texto"])
@@ -38,34 +38,34 @@ def summary(project, cenas=None, without_text=False):
 
 def _words(project):
     # alinhamento.json tem o texto do roteiro (grafia certa); a transcrição é o fallback.
-    if project.caminho("alinhamento.json").exists():
+    if project.path_of("alinhamento.json").exists():
         return project.load_json("alinhamento.json")
     return project.load_json("transcricao.json")["palavras"]
 
 
-def words(project, de=0.0, ate=None):
+def words(project, de=0.0, until=None):
     line = []
     for p in _words(project):
-        if p["ini"] >= de and (ate is None or p["ini"] <= ate):
+        if p["ini"] >= de and (until is None or p["ini"] <= until):
             line.append(f"{p['ini']:.1f} {p['p']}")
     print(" · ".join(line))
 
 
-def _start(palavras, texto, ini, fim):
-    target = [normalize(w) for w in texto.split()]
-    inside = [p for p in palavras if ini - 0.5 <= p["ini"] <= fim + 0.5]
+def _start(words, text, start, end):
+    target = [normalize(w) for w in text.split()]
+    inside = [p for p in words if start - 0.5 <= p["ini"] <= end + 0.5]
     for i, p in enumerate(inside):
         if [normalize(q["p"]) for q in inside[i:i + len(target)]] == target:
             return round(p["ini"], 3)
     return next((round(p["ini"], 3) for p in inside if normalize(p["p"]) == target[0]), None)
 
 
-def adjust(project, arquivo=None):
+def adjust(project, file=None):
     """Uma linha JSON por cena: {"id": 3, "busca_en": "...", "tipo": "imagem", "destaques": ["piratas"]}.
 
     Só os campos informados mudam. Destaque pode ser texto puro: o início é achado nas palavras da cena.
     """
-    entry = open(arquivo, encoding="utf-8").read() if arquivo else sys.stdin.read()
+    entry = open(file, encoding="utf-8").read() if file else sys.stdin.read()
     plan = project.load_json("plano.json")
     by_id = {c["id"]: c for c in plan["cenas"]}
     words_ = _words(project)
@@ -83,9 +83,9 @@ def adjust(project, arquivo=None):
         if not c:
             errors.append(f"linha {n}: cena inexistente")
             continue
-        proibidos = set(ed) - EDITABLE
-        if proibidos:
-            errors.append(f"cena {c['id']}: campos não editáveis {sorted(proibidos)}")
+        forbidden = set(ed) - EDITABLE
+        if forbidden:
+            errors.append(f"cena {c['id']}: campos não editáveis {sorted(forbidden)}")
             continue
         if "tipo" in ed and ed["tipo"] not in ("video", "imagem"):
             errors.append(f"cena {c['id']}: tipo deve ser video|imagem")

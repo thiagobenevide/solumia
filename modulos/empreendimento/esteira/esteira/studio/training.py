@@ -18,14 +18,14 @@ MINIMUM = {"bloco_peca": 150, "preencher": 150, "corte": 300, "legenda": 300}  #
 VALIDATION = 0.1
 
 
-def _cases(tarefa):
+def _cases(task):
     from esteira import bench
-    return bench.cases(tarefa)
+    return bench.cases(task)
 
 
-def _prompt_bench(tarefa, instance):
+def _prompt_bench(task, instance):
     from esteira import bench
-    text, _, _ = bench.TASKS[tarefa][0](instance)
+    text, _, _ = bench.TASKS[task][0](instance)
     return str(text)
 
 
@@ -39,7 +39,7 @@ def _fill(instance):
         return None
     spoken = sorted(D.spoken(instance["texto"]))
     text = D.local.prompt(
-        "direcao_preencher", peca=f.id, comunica=f.comunica, texto=instance["texto"], numeros=", ".join(spoken) or "nenhum",
+        "direction_fill", peca=f.id, comunica=f.comunica, texto=instance["texto"], numeros=", ".join(spoken) or "nenhum",
         datas="nenhuma", nomes="nenhum", encaixes=D._describe_fits(f),
         botoes="\n".join(f"- {b.nome}: {b.valores} (padrão {b.padrao})" for b in f.botoes) or "(nenhum)", erros="")
     if P.validate_data(f, instance["encaixes"], instance.get("botoes") or {}):
@@ -47,18 +47,18 @@ def _fill(instance):
     return str(text), {"encaixes": instance["encaixes"], "botoes": instance.get("botoes") or {}}
 
 
-def examples(tarefa):
+def examples(task):
     """[(id, prompt, resposta JSON)] de uma tarefa (casos repetidos: vale o último)."""
     output = {}
-    for c in _cases(tarefa):
-        if tarefa == "bloco_peca":
-            pair = (_prompt_bench(tarefa, c), {"escolha": c["aceitas"][0], "motivo": "a que a pessoa aprovou"})
-        elif tarefa == "preencher":
+    for c in _cases(task):
+        if task == "bloco_peca":
+            pair = (_prompt_bench(task, c), {"escolha": c["aceitas"][0], "motivo": "a que a pessoa aprovou"})
+        elif task == "preencher":
             pair = _fill(c)
-        elif tarefa == "corte":
-            pair = (_prompt_bench(tarefa, c), {"manter": c["manter"], "motivo": "decisão revisada", "confianca": 1.0})
-        elif tarefa == "legenda":
-            pair = (_prompt_bench(tarefa, c), {"texto": c["certo"]})
+        elif task == "corte":
+            pair = (_prompt_bench(task, c), {"manter": c["manter"], "motivo": "decisão revisada", "confianca": 1.0})
+        elif task == "legenda":
+            pair = (_prompt_bench(task, c), {"texto": c["certo"]})
         else:
             pair = None
         if pair:
@@ -70,12 +70,12 @@ def _validation(id_):
     return int(hashlib.sha1(str(id_).encode()).hexdigest()[:8], 16) / 0xFFFFFFFF < VALIDATION
 
 
-def export(tarefas=tuple(MINIMUM)):
+def export(tasks=tuple(MINIMUM)):
     """Escreve `<tarefa>.train.jsonl` / `.val.jsonl` (mensagens de chat) e `resumo.json`. → o resumo."""
     destination = FOLDER / datetime.now().strftime("%Y%m%d-%H%M")
     destination.mkdir(parents=True, exist_ok=True)
     summary = {"em": datetime.now().isoformat(timespec="seconds"), "pasta": str(destination), "tarefas": {}}
-    for t in tarefas:
+    for t in tasks:
         ex = examples(t)
         parts = {"train": [], "val": []}
         for id_, prompt, answer in ex:

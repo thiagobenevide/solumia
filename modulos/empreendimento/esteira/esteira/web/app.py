@@ -120,12 +120,12 @@ def _project_of_script(path):
     return None
 
 
-def final_of_ep(pasta):
+def final_of_ep(folder):
     """`final.mp4` em vigor: o do Estúdio no formato do episódio, se existir (substitui gráficos + montagem); senão o
     da montagem."""
-    fmt = Project(pasta).cfg["video"].get("formato", "16:9").replace(":", "x")
-    estudio = pasta / "estudio" / fmt / "final.mp4"
-    return estudio if estudio.exists() else pasta / "final.mp4"
+    fmt = Project(folder).cfg["video"].get("formato", "16:9").replace(":", "x")
+    estudio = folder / "estudio" / fmt / "final.mp4"
+    return estudio if estudio.exists() else folder / "final.mp4"
 
 
 def _summary_ep(ep):
@@ -168,7 +168,7 @@ def collection(request: Request, canal: str = "", status_r: str = ""):
                           ep=ep, prog=_summary_ep(ep) if ep else None))
     for r in items:
         r["citacoes"] = len(re.findall(r"^>\s*\[!cite\]", Path(r["caminho"]).read_text(), re.M))  # só blocos
-    contagem = {c: sum(len(list((obsidian.folder_channels(cfg["vault"]) / c / sub).glob("*.md")))
+    count = {c: sum(len(list((obsidian.folder_channels(cfg["vault"]) / c / sub).glob("*.md")))
                        for sub in ("Roteiros", "Shorts")) for c in channels}
     from esteira.project import Project
     profile_mode = {}
@@ -181,11 +181,11 @@ def collection(request: Request, canal: str = "", status_r: str = ""):
             else:
                 r["modo"] = profile_mode.setdefault(canal, _mode_of_profile(canal))
     return tpl.TemplateResponse(request, "biblioteca.html", {"canais": channels, "canal": canal, "itens": items,
-                                                             "contagem": contagem, "status_r": status_r})
+                                                             "contagem": count, "status_r": status_r})
 
 
-def _mode_of_profile(canal):
-    profile = ROOT / "perfis" / f"{canal}.toml"
+def _mode_of_profile(channel):
+    profile = ROOT / "perfis" / f"{channel}.toml"
     cfg = _cfg()
     if profile.exists():
         cfg.update(tomllib.loads(profile.read_text()))
@@ -263,11 +263,11 @@ def episode(request: Request, ep: str):
 
 # ---------- Estrutura do roteiro: partes, falas, cenas e citações (o que a esteira leu do vault) ----------
 
-def _crop_quote(pasta, k, c):
+def _crop_quote(folder, k, c):
     """PNG do pedaço da página do PDF com o trecho (cache em graficos/) e os retângulos do marca-texto em %."""
     import pymupdf
     from esteira.graphics import pdf as P
-    destination = pasta / "graficos" / f"cite_{k}.png"
+    destination = folder / "graficos" / f"cite_{k}.png"
     meta = destination.with_suffix(".json")
     if destination.exists() and meta.exists() and meta.stat().st_mtime >= Path(c["arquivo"]).stat().st_mtime:
         return json.loads(meta.read_text())
@@ -464,10 +464,10 @@ def _error(e):
     return PlainTextResponse(str(e), status_code=400)
 
 
-def _ctx_editor(p, ep, tipo):
-    rot = json.loads(p.caminho("roteiro.json").read_text()) if p.caminho("roteiro.json").exists() else {}
+def _ctx_editor(p, ep, kind):
+    rot = json.loads(p.path_of("roteiro.json").read_text()) if p.path_of("roteiro.json").exists() else {}
     cits = [{k: c.get(k) for k in ("autores", "ano", "revista", "pt")} for c in rot.get("citacoes", [])]
-    return {"ep": ep, "tipo": tipo, "citacoes": cits, "motor": p.cfg.get("editor", {}).get("motor_ia", "claude"),
+    return {"ep": ep, "tipo": kind, "citacoes": cits, "motor": p.cfg.get("editor", {}).get("motor_ia", "claude"),
             "cor": p.cfg.get("graficos", {}).get("cor", "#ffd400")}
 
 
@@ -489,16 +489,16 @@ def page_thumbs(request: Request, ep: str):
     from esteira import editor
     p = _project(ep)
     from esteira import photocraft
-    slots = [(k, p.caminho(f"thumb_{k}.png")) for k in (1, 2, 3)]
+    slots = [(k, p.path_of(f"thumb_{k}.png")) for k in (1, 2, 3)]
     items = editor.thumbs(p)
     for t in items:  # .pcraft salvo à mão no PhotoCraft → refaz o PNG (as vagas 1–3 são cópias: use de novo)
-        pc = p.caminho(f"thumbs/{t['arquivo']}").with_suffix(".pcraft")
+        pc = p.path_of(f"thumbs/{t['arquivo']}").with_suffix(".pcraft")
         if photocraft.edited(pc):
             photocraft.export(pc)
-            marks = p.caminho("thumbs/editadas_photocraft.json")
+            marks = p.path_of("thumbs/editadas_photocraft.json")
             done = set(json.loads(marks.read_text())) if marks.exists() else set()
             marks.write_text(json.dumps(sorted(done | {t["arquivo"]})))
-    marks = p.caminho("thumbs/editadas_photocraft.json")
+    marks = p.path_of("thumbs/editadas_photocraft.json")
     done = set(json.loads(marks.read_text())) if marks.exists() else set()
     for t in items:
         t["pc_editado"] = t["arquivo"] in done
@@ -622,17 +622,17 @@ def ensure_ecproj(ep: str, i: int):
     if not 0 <= i < len(items):
         raise HTTPException(404, "peça não encontrada")
     c = items[i]
-    ecp = p.pasta / c["ecproj"] if c.get("ecproj") else None
+    ecp = p.folder_path / c["ecproj"] if c.get("ecproj") else None
     if not ecp or not ecp.exists():
         w, h = p.cfg["video"]["largura"], p.cfg["video"]["altura"]
-        folder = p.caminho("graficos")
+        folder = p.path_of("graficos")
         base = Path(c["arquivo"]).stem if c.get("arquivo") else f"{c['modelo']}_{int(c['inicio'] * 1000)}"
         pc = plan.piece(c, folder, w, h, folder / f"pag_{base}.png")
         if not pc:
             return None
         ecp = effectcraft.build(*pc, c["dur"], folder / f"{base}.ecproj", w, h,
                                     p.cfg.get("graficos", {}).get("cor", "#ffd400"), p.cfg["video"]["fps"])
-        c.update(ecproj=str(ecp.relative_to(p.pasta)), ec_gerado=ecp.stat().st_mtime)
+        c.update(ecproj=str(ecp.relative_to(p.folder_path)), ec_gerado=ecp.stat().st_mtime)
         p.save_json("graficos.json", items)
     return ecp
 
@@ -656,10 +656,10 @@ def ensure_pcraft(ep: str, file: str):
     t = next((t for t in editor.thumbs(p) if t["arquivo"] == file), None)
     if not t:
         raise HTTPException(404, "thumb não encontrada")
-    png = p.caminho(f"thumbs/{file}")
+    png = p.path_of(f"thumbs/{file}")
     pc = png.with_suffix(".pcraft")
     if not pc.exists():
-        compose_file(t["estado"], p.caminho(f"thumbs/{t['estado']['fundo']}"), png, p.cfg)
+        compose_file(t["estado"], p.path_of(f"thumbs/{t['estado']['fundo']}"), png, p.cfg)
     return pc
 
 
@@ -739,12 +739,12 @@ async def save_options(request: Request):
     return RedirectResponse("/opcoes?salvo=1", status_code=303)
 
 
-def _download(nome):
+def _download(name):
     """Baixa `usuario/repo:QUANT` do Hugging Face para a pasta de modelos do llama.cpp."""
     from esteira.ai import llama
-    st = _downloading[nome]
+    st = _downloading[name]
     try:
-        id_ = llama.download(nome, lambda feito, total, msg: st.update(feito=feito, total=total, msg=msg))
+        id_ = llama.download(name, lambda done, total, msg: st.update(feito=done, total=total, msg=msg))
         st.update(estado="ok", msg=f"instalado como {id_}")
     except Exception as e:
         st.update(estado="erro", msg=str(e)[:200])
@@ -854,7 +854,7 @@ def file(ep: str, caminho: str):
 @app.get("/acervo", response_class=HTMLResponse)
 def page_library(request: Request, q: str = "", tipo: str = ""):
     from esteira import library
-    return tpl.TemplateResponse(request, "acervo.html", {"itens": library.list_all(q, tipo, limite=180), "q": q,
+    return tpl.TemplateResponse(request, "acervo.html", {"itens": library.list_all(q, tipo, limit=180), "q": q,
                                                          "tipo": tipo, "e": library.call_statistics()})
 
 

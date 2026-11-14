@@ -59,9 +59,9 @@ def _history(r):
     return h
 
 
-def _position_of(t, tam):
+def _position_of(t, size_px):
     """Busca binária pelo byte onde começam os registros a partir do instante t."""
-    lo, hi = 0, tam
+    lo, hi = 0, size_px
     with open(trace.LOG, "rb") as f:
         while hi - lo > 65536:
             meio = (lo + hi) // 2
@@ -76,13 +76,13 @@ def _position_of(t, tam):
     return lo
 
 
-def _path(nos, fim):
+def _path(nodes, end):
     """Nós visitados em ordem, com a duração de cada um (o último dura até agora ou até o fim)."""
     output = []
-    for i, n in enumerate(nos):
+    for i, n in enumerate(nodes):
         if not n["no"]:
             continue
-        until = nos[i + 1]["t"] if i + 1 < len(nos) else fim
+        until = nodes[i + 1]["t"] if i + 1 < len(nodes) else end
         output.append(dict(n, nome=NAMES.get(n["id_no"], n["no"]), seg=round(until - n["t"], 1)))
     return output
 
@@ -126,12 +126,12 @@ def detail(pid_id, monitor_current):
             vivo["nome"] = NAMES.get(vivo.get("id_no"), vivo.get("node"))
     h = _history(r)
     end = r.get("end") or time.time()
-    recursos = next((p for p in (monitor_current or {}).get("esteira", []) if p["pid"] == r["pid"]), None)
+    resources = next((p for p in (monitor_current or {}).get("esteira", []) if p["pid"] == r["pid"]), None)
     calls = h["chamadas"]
     tok = sum(c.get("output_tokens") or 0 for c in calls)
     summary = {"chamadas": len(calls), "falhas": sum(not c.get("ok") for c in calls), "cache": h["caches"],
               "tokens_saida": tok, "custo_usd": round(sum(c.get("cost_usd") or 0 for c in calls), 4),
               "seg_llm": round(sum(c.get("seconds") or 0 for c in calls), 1)}
-    return {"processo": r, "vivo": vivo, "recursos": recursos, "caminho": _path(h["nos"], end),
+    return {"processo": r, "vivo": vivo, "recursos": resources, "caminho": _path(h["nos"], end),
             "chamadas": calls[-30:][::-1], "resumo": summary, "eventos": _events(r)[::-1],
             "log": _tail(r.get("output") or _log_of_queue(r))}

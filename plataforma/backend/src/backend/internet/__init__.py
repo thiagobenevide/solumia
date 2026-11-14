@@ -1,8 +1,8 @@
-"""Internet para a IA local: o LLM escolhe as ferramentas (FIPE, moedas, ações, indicadores do BC,
-busca na web), o servidor executa e o LLM responde com os dados e as fontes.
+"""Internet for the local AI: the LLM picks the tools (FIPE, currencies, stocks, central bank
+indicators, web search), the server runs them and the LLM answers with the data and the sources.
 
-Os módulos recebem uma [Internet] em `app.state.internet` (Cobrador: "busque na internet …";
-Finanças: preço FIPE e CDI nos cenários).
+The modules receive an [Internet] in `app.state.internet` (Nagger: "busque na internet …";
+Finance: FIPE price and CDI in the scenarios).
 """
 
 import asyncio
@@ -17,33 +17,34 @@ import httpx
 from backend.internet import tools as f
 
 ChatLLM = Callable[[list[dict[str, str]]], Awaitable[str]]
-# Busca feita no PC pelo worker (`shared.web_search`); None = sem worker ou falhou.
+# Search done on the PC through the worker (`shared.web_search`); None = no worker or it failed.
 FetchNodePC = Callable[[str], Awaitable[dict[str, Any] | None]]
 
-SYSTEM_PLAN = """Hoje é {hoje}. Você decide quais ferramentas de dados em tempo real usar para
-responder ao pedido. Ferramentas:
+SYSTEM_PLAN = """Today is {hoje}. You decide which real-time data tools to use to answer the request
+(written in Brazilian Portuguese). Tools:
 - fipe: {{"marca": "Ford", "modelo": "EcoSport", "ano": "2015", "tipo": "carros|motos|caminhoes"}}
 - moedas: {{"pares": ["USD-BRL", "EUR-BRL", "BTC-BRL"]}}
-- acoes: {{"tickers": ["PETR4", "MXRF11", "AAPL", "^BVSP"]}} (ações, FIIs, índices)
-- indicadores: {{}} (Selic, CDI, IPCA atuais)
-- mercado: {{"tipo": "stock|fund"}} (10 maiores altas e baixas do dia na B3; fund = FIIs)
-- proventos: {{"ticker": "MXRF11"}} (dividendos/rendimentos de 12 meses e dividend yield)
-- noticias: {{"tema": "economia|acoes|fiis|impostos|juros"}} (manchetes das últimas 24 h)
-- buscar_web: {{"consulta": "..."}} (qualquer outra coisa atual: notícias, preços, regras)
-Responda SOMENTE com JSON: {{"ferramentas": [{{"nome": "fipe", "args": {{...}}}}]}}.
-Use até 4 ferramentas. Se o pedido não precisa de dado atual, devolva {{"ferramentas": []}}.
-Para carro/moto informe a marca mesmo que a pessoa não diga (EcoSport → Ford).
-Para empresa da bolsa use o ticker mesmo que a pessoa só diga o nome (Klabin → KLBN11, Petrobras →
-PETR4, Vale → VALE3, Itaú → ITUB4) e junte buscar_web quando pedirem notícias ou o porquê."""
+- acoes: {{"tickers": ["PETR4", "MXRF11", "AAPL", "^BVSP"]}} (stocks, REITs (FIIs), indexes)
+- indicadores: {{}} (current Selic, CDI, IPCA)
+- mercado: {{"tipo": "stock|fund"}} (the day's 10 biggest gains and losses on B3; fund = FIIs)
+- proventos: {{"ticker": "MXRF11"}} (12-month dividends/income and dividend yield)
+- noticias: {{"tema": "economia|acoes|fiis|impostos|juros"}} (headlines of the last 24 h)
+- buscar_web: {{"consulta": "..."}} (anything else current: news, prices, rules)
+Respond ONLY with JSON: {{"ferramentas": [{{"nome": "fipe", "args": {{...}}}}]}}.
+Use up to 4 tools. If the request does not need current data, return {{"ferramentas": []}}.
+For a car/motorcycle give the brand even if the person does not say it (EcoSport → Ford).
+For a listed company use the ticker even if the person only says the name (Klabin → KLBN11,
+Petrobras → PETR4, Vale → VALE3, Itaú → ITUB4) and add buscar_web when they ask for news or the
+reason why."""
 
-SYSTEM_ANSWER = """Hoje é {hoje}. Responda em português, direto, usando os DADOS EM TEMPO REAL
-abaixo (eles valem mais do que o que você lembra do treino). Dê os números com a data/referência e
-cite a fonte de cada um entre parênteses. Horários sempre no de Brasília (os dados já vêm
-nele). Se uma ferramenta falhou, diga que não conseguiu aquele
-dado. Não invente valores."""
+SYSTEM_ANSWER = """Today is {hoje}. Answer in Brazilian Portuguese, directly, using the REAL-TIME
+DATA below (it is worth more than what you remember from training). Give the numbers with their
+date/reference and cite the source of each one in parentheses. Times always in Brasília time (the
+data already comes in it). If a tool failed, say you could not get that data. Do not invent
+values."""
 
 
-# Ferramenta → como o aviso de andamento a chama.
+# Tool → how the progress notice names it.
 _ONGOING = {
     "fipe": "a tabela FIPE",
     "moedas": "a cotação das moedas",
@@ -72,22 +73,23 @@ def _json_of_answer(text: str) -> Any:
 
 
 class Internet:
-    """Ferramentas + agente. [transporte] troca a rede nos testes."""
+    """Tools + agent. The transport replaces the network in tests."""
 
     def __init__(
         self,
-        transporte: httpx.AsyncBaseTransport | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
         buscar_no_pc: FetchNodePC | None = None,
     ) -> None:
-        self._transporte = transporte
-        # Os buscadores barram o IP da VPS: com o worker conectado, a busca sai do PC de casa.
+        self._transporte = transport
+        # Search engines block the VPS IP: with the worker connected, the search goes out from the
+        # home PC.
         self.fetch_node_pc = buscar_no_pc
 
     def _cliente(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=self._transporte, follow_redirects=True)
 
     async def use(self, nome: str, args: dict[str, Any]) -> dict[str, Any]:
-        """Roda uma ferramenta; falha vira `{"erro": ...}` (a IA diz que não conseguiu)."""
+        """Runs a tool; a failure becomes `{"erro": ...}` (the AI says it could not)."""
         async with self._cliente() as c:
             try:
                 match nome:
@@ -127,8 +129,9 @@ class Internet:
         contexto: str = "",
         aviso: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
-        """Planeja com o LLM, executa as ferramentas em paralelo e responde com as fontes.
-        [aviso] recebe o andamento ("Consultando a cotação das moedas…") para o app falar."""
+        """Plans with the LLM, runs the tools in parallel and answers with the sources.
+        The notice callback receives the progress ("Consultando a cotação das moedas…") for the app
+        to speak."""
         today = datetime.now(f.BRASILIA).strftime("%d/%m/%Y, %H:%M (horário de Brasília)")
         plan = _json_of_answer(
             await llm(
@@ -143,7 +146,7 @@ class Internet:
             for x in (plan.get("ferramentas") or [] if isinstance(plan, dict) else [])
             if isinstance(x, dict)
         ][:4]
-        if not calls:  # o modelo não planejou: busca geral com o próprio pedido
+        if not calls:  # the model did not plan: general search with the request itself
             calls = [("buscar_web", {"consulta": request})]
         if aviso is not None:
             names = list(dict.fromkeys(_ONGOING.get(n, "a web") for n, _ in calls))
@@ -162,7 +165,7 @@ class Internet:
                 },
                 {
                     "role": "user",
-                    "content": f"Pedido: {request}\n\nDADOS EM TEMPO REAL:\n"
+                    "content": f"Request: {request}\n\nREAL-TIME DATA:\n"
                     + json.dumps(data, ensure_ascii=False)[:14000],
                 },
             ]

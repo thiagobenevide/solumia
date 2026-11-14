@@ -27,19 +27,19 @@ LOSS_MAX = 0.25                          # fração do núcleo que pode sumir an
 DIGITAL = -90.0                           # dB: silêncio digital do noise gate fica fora do piso
 
 
-def floor(v, pct=10, window=WINDOW_FLOOR, validos=None):
+def floor(v, pct=10, window=WINDOW_FLOOR, valid=None):
     """Percentil `pct` de `v` numa janela móvel de `janela` s (calculado a cada 1 s), um valor por quadro."""
     n = len(v)
     if n == 0:
         return np.zeros(0)
     step, half = int(1 / Q), int(window / Q / 2)
-    validos = np.ones(n, bool) if validos is None else validos
-    general = np.percentile(v[validos], pct) if validos.any() else float(np.min(v))
+    valid = np.ones(n, bool) if valid is None else valid
+    general = np.percentile(v[valid], pct) if valid.any() else float(np.min(v))
     centers = np.arange(0, n, step)
     vals = []
     for c in centers:
         a, b = max(0, c - half), min(n, c + half)
-        w = v[a:b][validos[a:b]]
+        w = v[a:b][valid[a:b]]
         vals.append(np.percentile(w, pct) if len(w) > 20 else general)
     return np.repeat(np.array(vals), step)[:n]
 
@@ -63,7 +63,7 @@ def analysis(x):
     voice = 10 * np.log10(X[:, (f > 80) & (f < 900)].sum(1) + 1e-12)
     fric = 10 * np.log10(X[:, (f >= 3000) & (f <= 8000)].sum(1) + 1e-12)
     valid = db > DIGITAL
-    p_db, p_voice, p_fric = (floor(v, validos=valid) for v in (db, voice, fric))
+    p_db, p_voice, p_fric = (floor(v, valid=valid) for v in (db, voice, fric))
     sound = ((voice > p_voice + VOICE_DB) & (db > p_db + SOUND_DB)) | (db > p_db + STRONG_DB)
     friction = (fric > p_fric + FRIC_DB) & valid
     near = np.convolve(sound.astype(float), np.ones(2 * int(NEIGHBOR_VOICE / Q) + 1), "same") > 0
@@ -74,18 +74,18 @@ def analysis(x):
     return {"fala": speech, "som": (db > p_db + SOUND_DB) & valid, "db": db}
 
 
-def core(ini, fim, sound, lo=None, hi=None):
+def core(start, end, sound, lo=None, hi=None):
     """Trecho com som da palavra [ini, fim]: o som dentro da zona dela, estendido enquanto o som continua (o fim
     fraco de "casa" que o Whisper deu como pausa), até ESTENDE s e nunca além de [lo, hi] (meio das vizinhas).
     None se não há som nenhum (palavra que o Whisper inventou sobre a pausa)."""
     if sound is None:
-        return ini, fim
-    lo = max(ini - EXTENDS, 0.0 if lo is None else lo)
-    hi = min(fim + EXTENDS, len(sound) * Q if hi is None else hi)
+        return start, end
+    lo = max(start - EXTENDS, 0.0 if lo is None else lo)
+    hi = min(end + EXTENDS, len(sound) * Q if hi is None else hi)
     a, b = max(0, int(lo / Q)), min(len(sound), int(np.ceil(hi / Q)))
     s = sound[a:b]
-    i0 = min(len(s), max(0, int((ini - BEFORE) / Q) - a))
-    i1 = min(len(s), max(0, int(np.ceil((fim + AFTER) / Q)) - a))
+    i0 = min(len(s), max(0, int((start - BEFORE) / Q) - a))
+    i1 = min(len(s), max(0, int(np.ceil((end + AFTER) / Q)) - a))
     idx = np.flatnonzero(s[i0:i1])
     if not len(idx):
         return None
@@ -97,18 +97,18 @@ def core(ini, fim, sound, lo=None, hi=None):
     return (a + p) * Q, (a + u + 1) * Q
 
 
-def cores(kept, sound, todas=()):
+def cores(kept, sound, all_items=()):
     """[(ini, fim)] das palavras mantidas → núcleos (as sem som nenhum saem). `todas` (todas as palavras, mantidas
     ou não) limita a extensão: até o meio da vizinha mantida e no máximo VIZINHA_CORTADA s para dentro da que
     sai, então o núcleo não engole o retake colado."""
-    todas = sorted(set(map(tuple, todas)))
+    all_items = sorted(set(map(tuple, all_items)))
     stays = set(map(tuple, kept))
-    inis = [w[0] for w in todas]
+    inis = [w[0] for w in all_items]
     out = []
     for a, b in kept:
         k = bisect.bisect_left(inis, a)
-        ant = todas[k - 1] if k > 0 else None
-        prox = next((todas[j] for j in range(k, len(todas)) if todas[j][0] > a), None)
+        ant = all_items[k - 1] if k > 0 else None
+        prox = next((all_items[j] for j in range(k, len(all_items)) if all_items[j][0] > a), None)
         lo = None if not ant else (ant[0] + ant[1]) / 2 if ant in stays else ant[1] - NEIGHBOR_CUT
         hi = None if not prox else (prox[0] + prox[1]) / 2 if prox in stays else prox[0] + NEIGHBOR_CUT
         n = core(a, b, sound, lo, hi)
@@ -117,10 +117,10 @@ def cores(kept, sound, todas=()):
     return out
 
 
-def zones(palavras):
+def zones(words):
     """Zonas protegidas (unidas) das palavras mantidas."""
     out = []
-    for a, b in sorted(palavras):
+    for a, b in sorted(words):
         a, b = max(0.0, a - BEFORE), b + AFTER
         if out and a <= out[-1][1]:
             out[-1][1] = max(out[-1][1], b)
@@ -129,13 +129,13 @@ def zones(palavras):
     return out
 
 
-def validate(intervalos, palavras, dur=None, join=0.02):
+def validate(intervals, words, duration=None, join=0.02):
     """Intervalos mantidos ∪ zonas das palavras mantidas: nenhuma borda fica dentro de palavra mantida e nenhuma
     palavra mantida fica de fora. Intervalos a menos de `juntar` s viram um só."""
     out = []
-    for a, b in sorted([list(i) for i in intervalos] + zones(palavras)):
+    for a, b in sorted([list(i) for i in intervals] + zones(words)):
         a = max(0.0, a)
-        b = min(b, dur) if dur else b
+        b = min(b, duration) if duration else b
         if b <= a:
             continue
         if out and a <= out[-1][1] + join:
@@ -151,13 +151,13 @@ def inside(t, zs):
     return k >= 0 and zs[k][0] < t < zs[k][1]
 
 
-def losses(palavras, intervalos, texts=None):
+def losses(words, intervals, texts=None):
     """Conferência por duração: palavras mantidas [(ini, fim)] cujo trecho ficou mais de PERDA_MAX fora dos
     intervalos mantidos → [{"t", "texto", "perdeu"}]."""
-    ivs = sorted(intervalos)
+    ivs = sorted(intervals)
     inis = [i[0] for i in ivs]
     alerts = []
-    for n, (a, b) in enumerate(palavras):
+    for n, (a, b) in enumerate(words):
         if b - a <= 0:
             continue
         k = max(0, bisect.bisect_right(inis, a) - 1)

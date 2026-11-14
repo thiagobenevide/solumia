@@ -809,7 +809,7 @@ class _CabecalhoUsuario extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cores = Theme.of(context).colorScheme;
-    final nome = usuario.isEmpty ? 'Agent' : usuario;
+    final nome = usuario.isEmpty ? 'Solumia' : usuario;
     return ColoredBox(
       color: cores.primaryContainer,
       child: SafeArea(
@@ -836,7 +836,7 @@ class _CabecalhoUsuario extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(color: cores.onPrimaryContainer),
                     ),
-                    Text('Agent', style: TextStyle(color: cores.onPrimaryContainer.withValues(alpha: 0.7))),
+                    Text('Solumia', style: TextStyle(color: cores.onPrimaryContainer.withValues(alpha: 0.7))),
                   ],
                 ),
               ),

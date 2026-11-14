@@ -25,7 +25,7 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "SIM"]
 ignore = ["B008", "SIM108"]  # if/else explícito é preferido ao ternário
 
 [tool.ruff.lint.isort]
-known-first-party = ["backend", "worker", "shared", "saude", "estudos", "rotinas", "design", "eletronica", "codigo", "financas", "painel", "youtube", "concursos"]
+known-first-party = ["backend", "worker", "shared", "health", "studies", "routines", "design", "electronics", "coding", "finance", "panel", "youtube", "exams"]
 
 [tool.mypy]
 python_version = "3.12"

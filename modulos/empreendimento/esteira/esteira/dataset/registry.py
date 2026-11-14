@@ -91,27 +91,27 @@ def file_artifact(ref: str) -> Path:
     return next((ARTIFACTS / sha[:2]).glob(f"{sha}.*"))
 
 
-def write(tarefa: str, *, grupo: str, contexto: dict, saida: Any, origem: str, pai: str | None = None,
-           n0: Any = None, portao: dict | None = None, humano: dict | None = None, versoes: dict | None = None,
+def write(task: str, *, group: str, context: dict, output: Any, origin: str, parent: str | None = None,
+           n0: Any = None, gate: dict | None = None, humano: dict | None = None, versions: dict | None = None,
            metricas: dict | None = None, extra: dict | None = None) -> str:
     """Grava um registro → id. `saida` é o N1 (ou o artefato equivalente: código da peça, decisão N2)."""
-    if tarefa not in TASKS:
-        raise ValueError(f"tarefa desconhecida: {tarefa}")
+    if task not in TASKS:
+        raise ValueError(f"tarefa desconhecida: {task}")
     if humano and humano.get("veredito") not in VERDICTS:
         raise ValueError(f"veredito inválido: {humano.get('veredito')}")
     id_ = "rg_" + ulid()
-    ctx = json.dumps(contexto, ensure_ascii=False)
+    ctx = json.dumps(context, ensure_ascii=False)
     r = {
-        "id": id_, "t": _now(), "app": TASKS[tarefa], "tarefa": tarefa, "grupo": grupo, "pai": pai,
-        "versoes": versoes or {}, "origem": origem,
-        "contexto": contexto if len(ctx) <= INLINE else {"ref": artifact(contexto)},
-        "saida": {"n1": artifact(saida), "tokens": len(json.dumps(saida, ensure_ascii=False)) // 4},
+        "id": id_, "t": _now(), "app": TASKS[task], "tarefa": task, "grupo": group, "pai": parent,
+        "versoes": versions or {}, "origem": origin,
+        "contexto": context if len(ctx) <= INLINE else {"ref": artifact(context)},
+        "saida": {"n1": artifact(output), "tokens": len(json.dumps(output, ensure_ascii=False)) // 4},
         "n0": n0 if n0 is None or isinstance(n0, dict) else {"sha": artifact(n0), "comandos": len(n0)},
-        "portao": portao, "humano": humano, "metricas": metricas or {},
+        "portao": gate, "humano": humano, "metricas": metricas or {},
     }
     if extra:
         r["extra"] = extra
-    _attach(RECORD / TASKS[tarefa] / tarefa / f"{time.strftime('%Y-%m')}.jsonl", r)
+    _attach(RECORD / TASKS[task] / task / f"{time.strftime('%Y-%m')}.jsonl", r)
     return id_
 
 
@@ -163,11 +163,11 @@ def usage(r: dict) -> str:
     return "descartar" if not ok else "pendente"
 
 
-def records(tarefa: str | None = None, app: str | None = None) -> Iterator[dict]:
+def records(task: str | None = None, app: str | None = None) -> Iterator[dict]:
     """Registros com os eventos posteriores aplicados (o último veredito vale) e o campo `uso` calculado."""
     ev = _events()
     base = RECORD / app if app else RECORD
-    default = f"**/{tarefa}/*.jsonl" if tarefa else "**/*.jsonl"
+    default = f"**/{task}/*.jsonl" if task else "**/*.jsonl"
     for file in sorted(base.glob(default)):
         if file.parent.name == "_eventos":
             continue

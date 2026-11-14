@@ -67,9 +67,9 @@ def _chunks(words, duration):
         yield group
 
 
-def align(x, words, model, proc, device):
-    vocab = proc.tokenizer.get_vocab()
-    blank = proc.tokenizer.pad_token_id
+def align(x, words, model, process, device):
+    vocab = process.tokenizer.get_vocab()
+    blank = process.tokenizer.pad_token_id
     sep = vocab.get("|")
     output = [None] * len(words)
     duration = len(x) / SR
@@ -79,7 +79,7 @@ def align(x, words, model, proc, device):
         y = x[int(t0 * SR):int(t1 * SR)]
         if len(y) < SR // 10:
             continue
-        inputs = proc(y, sampling_rate=SR, return_tensors="pt").input_values.to(device, next(model.parameters()).dtype)
+        inputs = process(y, sampling_rate=SR, return_tensors="pt").input_values.to(device, next(model.parameters()).dtype)
         with torch.inference_mode():
             lp = torch.log_softmax(model(inputs).logits[0].float(), -1).cpu().numpy()
         step = (t1 - t0) / lp.shape[0]
@@ -120,12 +120,12 @@ def main():
         allowed = ", ".join(sorted(ALLOWED_MODELS))
         sys.exit(f"model not allowed: {name} (allowed: {allowed})")
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    proc = Wav2Vec2Processor.from_pretrained(name)  # the Auto class picks ProcessorWithLM (pyctcdecode)
+    process = Wav2Vec2Processor.from_pretrained(name)  # the Auto class picks ProcessorWithLM (pyctcdecode)
     model = AutoModelForCTC.from_pretrained(name, trust_remote_code=False).to(device).eval()
     if device == "cuda":
         model = model.half()
     x = np.fromfile(request["audio"], np.float32)
-    print(json.dumps(align(x, request["words"], model, proc, device)))
+    print(json.dumps(align(x, request["words"], model, process, device)))
 
 
 if __name__ == "__main__":

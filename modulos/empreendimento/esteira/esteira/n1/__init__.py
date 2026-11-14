@@ -14,12 +14,12 @@ def schema_json(model: type[BaseModel]) -> dict:
     return model.model_json_schema()
 
 
-def save_schemas(pasta: Path) -> list[Path]:
+def save_schemas(folder: Path) -> list[Path]:
     """Escreve `<app>/n1.v<N>.json` de cada app em `pasta` (o dataset guarda a versão de cada registro)."""
     from esteira.n1 import effectcraft, filmcraft, photocraft
     output = []
     for mod in (filmcraft, photocraft, effectcraft):
-        file = pasta / mod.APP / f"n1.v{mod.VERSION}.json"
+        file = folder / mod.APP / f"n1.v{mod.VERSION}.json"
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text(json.dumps(schema_json(mod.DOCUMENT), ensure_ascii=False, indent=1))
         output.append(file)

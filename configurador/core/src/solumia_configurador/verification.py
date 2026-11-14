@@ -1,13 +1,13 @@
-"""Verificação de integridade de tudo que o configurador baixa.
+"""Integrity check of everything the configurator downloads.
 
-Ordem obrigatória antes de instalar qualquer arquivo:
-1. `SHA256SUMS` assinado por uma chave cuja impressão digital está FIXADA no catálogo
-   (a chave baixada da própria release só é usada se bater com a impressão fixada);
-2. SHA-256 do arquivo igual ao da linha correspondente em `SHA256SUMS`.
+Mandatory order before installing any file:
+1. `SHA256SUMS` signed by a key whose fingerprint is PINNED in the catalog
+   (the key downloaded from the release itself is only used if it matches the pinned fingerprint);
+2. SHA-256 of the file equal to the one on the matching line of `SHA256SUMS`.
 
-A assinatura é conferida pelo `gpg` num diretório temporário próprio (não toca no chaveiro da
-pessoa). Sem `gpg` instalado a instalação é recusada, a não ser que a pessoa desligue a exigência
-de assinatura de forma explícita no catálogo.
+The signature is checked by `gpg` in its own temporary directory (it never touches the person's
+keyring). Without `gpg` installed the installation is refused, unless the person explicitly turns
+off the signature requirement in the catalog.
 """
 
 from __future__ import annotations
@@ -20,78 +20,78 @@ import tempfile
 from pathlib import Path
 
 
-class VerificacaoFalhou(Exception):
+class VerificationFailed(Exception):
     pass
 
 
-_LINHA_SUMS = re.compile(r"^([0-9a-f]{64})\s+\*?(.+)$")
+_SUMS_LINE = re.compile(r"^([0-9a-f]{64})\s+\*?(.+)$")
 
 
-def sha256(caminho: Path) -> str:
+def sha256(path: Path) -> str:
     h = hashlib.sha256()
-    with caminho.open("rb") as f:
-        for bloco in iter(lambda: f.read(1 << 20), b""):
-            h.update(bloco)
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
     return h.hexdigest()
 
 
-def ler_sums(texto: str) -> dict[str, str]:
-    somas: dict[str, str] = {}
-    for linha in texto.splitlines():
-        linha = linha.strip()
-        if not linha or linha.startswith("#"):
+def read_sums(text: str) -> dict[str, str]:
+    sums: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
             continue
-        m = _LINHA_SUMS.match(linha)
+        m = _SUMS_LINE.match(line)
         if not m:
-            raise VerificacaoFalhou(f"linha inválida em SHA256SUMS: {linha[:80]!r}")
-        nome = m.group(2).strip()
-        if nome in somas and somas[nome] != m.group(1):
-            raise VerificacaoFalhou(f"SHA256SUMS com duas somas para {nome}")
-        somas[nome] = m.group(1)
-    return somas
+            raise VerificationFailed(f"linha inválida em SHA256SUMS: {line[:80]!r}")
+        name = m.group(2).strip()
+        if name in sums and sums[name] != m.group(1):
+            raise VerificationFailed(f"SHA256SUMS com duas somas para {name}")
+        sums[name] = m.group(1)
+    return sums
 
 
-def conferir_arquivo(caminho: Path, nome: str, somas: dict[str, str]) -> str:
-    esperado = somas.get(nome)
-    if esperado is None:
-        raise VerificacaoFalhou(f"{nome} não está no SHA256SUMS")
-    obtido = sha256(caminho)
-    if obtido != esperado:
-        raise VerificacaoFalhou(f"SHA-256 de {nome} não confere (esperado {esperado[:12]}…, obtido {obtido[:12]}…)")
-    return obtido
+def check_file(path: Path, name: str, sums: dict[str, str]) -> str:
+    expected = sums.get(name)
+    if expected is None:
+        raise VerificationFailed(f"{name} não está no SHA256SUMS")
+    obtained = sha256(path)
+    if obtained != expected:
+        raise VerificationFailed(f"SHA-256 de {name} não confere (esperado {expected[:12]}…, obtido {obtained[:12]}…)")
+    return obtained
 
 
-def gpg_disponivel() -> str | None:
+def gpg_available() -> str | None:
     return shutil.which("gpg")
 
 
-def conferir_assinatura(chave_publica: bytes, assinatura: Path, dados: Path, impressoes_aceitas: list[str]) -> str:
-    """Devolve a impressão digital da chave PRIMÁRIA que assinou; levanta se não for uma aceita."""
-    gpg = gpg_disponivel()
+def check_signature(key_public: bytes, signature: Path, data: Path, fingerprints_accepted: list[str]) -> str:
+    """Returns the fingerprint of the PRIMARY key that signed; raises if it is not an accepted one."""
+    gpg = gpg_available()
     if gpg is None:
-        raise VerificacaoFalhou("gpg não encontrado: instale o GnuPG (Linux) ou Gpg4win (Windows)")
-    aceitas = {i.replace(" ", "").upper() for i in impressoes_aceitas}
-    if not aceitas:
-        raise VerificacaoFalhou("nenhuma impressão digital fixada para este app")
-    with tempfile.TemporaryDirectory(prefix="solumia-gpg-") as casa:
-        Path(casa).chmod(0o700)
-        base = [gpg, "--homedir", casa, "--batch", "--no-tty", "--no-auto-key-retrieve"]
-        imp = subprocess.run([*base, "--import"], input=chave_publica, capture_output=True, timeout=30)
+        raise VerificationFailed("gpg não encontrado: instale o GnuPG (Linux) ou Gpg4win (Windows)")
+    accepted = {i.replace(" ", "").upper() for i in fingerprints_accepted}
+    if not accepted:
+        raise VerificationFailed("nenhuma impressão digital fixada para este app")
+    with tempfile.TemporaryDirectory(prefix="solumia-gpg-") as matches:
+        Path(matches).chmod(0o700)
+        base = [gpg, "--homedir", matches, "--batch", "--no-tty", "--no-auto-key-retrieve"]
+        imp = subprocess.run([*base, "--import"], input=key_public, capture_output=True, timeout=30)
         if imp.returncode != 0:
-            raise VerificacaoFalhou("chave pública da release inválida")
+            raise VerificationFailed("chave pública da release inválida")
         r = subprocess.run(
-            [*base, "--status-fd", "1", "--verify", str(assinatura), str(dados)],
+            [*base, "--status-fd", "1", "--verify", str(signature), str(data)],
             capture_output=True, text=True, timeout=60,
         )
-    validas = []
-    for linha in r.stdout.splitlines():
-        partes = linha.split()
-        # [GNUPG:] VALIDSIG <subchave> <data> ... <primária>
-        if len(partes) >= 3 and partes[1] == "VALIDSIG":
-            validas.append(partes[-1].upper())
-    if r.returncode != 0 or not validas:
-        raise VerificacaoFalhou("assinatura do SHA256SUMS inválida")
-    for impressao in validas:
-        if impressao in aceitas:
-            return impressao
-    raise VerificacaoFalhou(f"assinado por chave não fixada no catálogo ({validas[0][-16:]})")
+    valid = []
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        # [GNUPG:] VALIDSIG <subkey> <date> ... <primary>
+        if len(parts) >= 3 and parts[1] == "VALIDSIG":
+            valid.append(parts[-1].upper())
+    if r.returncode != 0 or not valid:
+        raise VerificationFailed("assinatura do SHA256SUMS inválida")
+    for fingerprint in valid:
+        if fingerprint in accepted:
+            return fingerprint
+    raise VerificationFailed(f"assinado por chave não fixada no catálogo ({valid[0][-16:]})")

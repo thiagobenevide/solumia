@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Sobe o Worker localmente na sua máquina pessoal (onde roda o llama.cpp com a GPU).
+# Starts the Worker locally on your personal machine (where llama.cpp runs on the GPU).
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$repo_root"
 
 if [ ! -d ".venv" ]; then
-    echo "Criando virtualenv em .venv ..."
+    echo "Creating virtualenv in .venv ..."
     python3 -m venv .venv
 fi
 
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-# .venv do workspace uv (uv sync --all-packages) não tem pip: os pacotes já vêm instalados.
+# The uv workspace .venv (uv sync --all-packages) has no pip: the packages are already installed.
 if command -v pip >/dev/null; then
     pip install --quiet --upgrade pip
     pip install --quiet -e "./plataforma/shared"
@@ -21,10 +21,10 @@ if command -v pip >/dev/null; then
 fi
 
 if [ ! -f "plataforma/worker/.env" ]; then
-    echo "plataforma/worker/.env não encontrado, copiando de plataforma/worker/.env.example"
+    echo "plataforma/worker/.env not found, copying plataforma/worker/.env.example"
     cp plataforma/worker/.env.example plataforma/worker/.env
 fi
 
-# WorkerSettings.env_file é relativo ao cwd, por isso rodamos a partir de plataforma/worker/.
+# WorkerSettings.env_file is relative to the cwd, so we run from plataforma/worker/.
 cd "$repo_root/plataforma/worker"
 exec python -m worker.main

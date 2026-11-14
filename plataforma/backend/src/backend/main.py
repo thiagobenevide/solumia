@@ -17,71 +17,71 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend import __version__
-from backend.api.updates import router as atualizacoes_router
-from backend.api.deps import require_totp_recent, require_client_api_key
+from backend.api.deps import require_client_api_key, require_totp_recent
 from backend.api.health import router as health_router
 from backend.api.llm import router as llm_router
+from backend.api.updates import router as atualizacoes_router
 from backend.api.v1.router import router as v1_router
 from backend.api.ws.worker import router as ws_router
+from backend.auth.api import Attempts
+from backend.auth.api import router as auth_router
+from backend.core.config import Settings, get_settings
+from backend.core.llm_model import ModelLLM
+from backend.core.logging import configure_logging
+from backend.core.worker_registry import (
+    WorkerDisconnected,
+    WorkerRegistry,
+    WorkerRespondedWithError,
+)
 from backend.files.api import router as arquivos_router
 from backend.files.library import Collection
 from backend.files.mapping import router as mapeamento_router
 from backend.files.rewrite import Rewrite, text_of_document
 from backend.files.rewrite import router as reescrita_router
 from backend.files.wopi import router as wopi_router
-from backend.auth.api import Attempts
-from backend.auth.api import router as auth_router
-from backend.core.config import Settings, get_settings
-from backend.core.logging import configure_logging
-from backend.core.llm_model import ModelLLM
-from backend.core.worker_registry import (
-    WorkerDisconnected,
-    WorkerRegistry,
-    WorkerRespondedWithError,
-)
 from backend.internet import Internet
 from backend.middleware.headers import HeadersSecurityMiddleware
 from backend.middleware.request_id import RequestIdMiddleware
 from backend.notes.api import router as notas_router
 from backend.notes.vault import Vault
-from codigo.api import Executor as ExecutorCodigo
-from codigo.api import router as codigo_router
-from codigo.sessions import SessionNotFound, Sessions
-from concursos.api import IA as ConcursosIA
-from concursos.api import router as concursos_router
-from concursos.api_jobs import router as vagas_router
-from concursos.exams import Exams
-from concursos.radar import Radar
-from concursos.rumors import Rumors
-from concursos.jobs import Slots
-from design.api import router as design_router
-from design.notebooks import router as cadernos_router
-from design.images import Images
-from design.boards import Frames
+from coding.api import Executor as ExecutorCodigo
+from coding.api import router as codigo_router
+from coding.sessions import SessionNotFound, Sessions
 from design.ai_wireframe import KINDS as TIPOS_WIREFRAME
-from eletronica.api import router as eletronica_router
-from eletronica.api_simulation import router as eletronica_simulacao_router
-from eletronica.libraries import Libraries as BibliotecasEletronica
-from eletronica.projects import Projects
-from eletronica.simulation import Simulations
-from estudos.api import router as estudos_router
-from estudos.studies import Studies, Invalid
-from estudos.language import Language, extract_json
-from financas.api import router as financas_router
-from financas.warehouse import Warehouse
-from painel.api import Sources, Voice
-from painel.api import LLMUnavailable as PainelLLMIndisponivel
-from painel.api import router as painel_router
-from painel.nagger import Nagger
-from painel.meter import Meter
-from painel.notifier import Notifier
-from rotinas.api import LLMUnavailable
-from rotinas.api import router as rotinas_router
-from rotinas.board import Frame
-from saude.api import router as saude_router
-from saude.workouts import Workouts
+from design.api import router as design_router
+from design.boards import Frames
+from design.images import Images
+from design.notebooks import router as cadernos_router
+from electronics.api import router as eletronica_router
+from electronics.api_simulation import router as eletronica_simulacao_router
+from electronics.libraries import Libraries as BibliotecasEletronica
+from electronics.projects import Projects
+from electronics.simulation import Simulations
+from exams.api import IA as ConcursosIA
+from exams.api import router as concursos_router
+from exams.api_jobs import router as vagas_router
+from exams.exams import Exams
+from exams.jobs import Slots
+from exams.radar import Radar
+from exams.rumors import Rumors
+from finance.api import router as financas_router
+from finance.warehouse import Warehouse
+from health.api import router as saude_router
+from health.workouts import Workouts
+from panel.api import LLMUnavailable as PainelLLMIndisponivel
+from panel.api import Sources, Voice
+from panel.api import router as painel_router
+from panel.meter import Meter
+from panel.nagger import Nagger
+from panel.notifier import Notifier
+from routines.api import LLMUnavailable
+from routines.api import router as rotinas_router
+from routines.board import Frame
 from shared.claude_code import claude_json, rewrite
 from shared.ngspice import run_ngspice
+from studies.api import router as estudos_router
+from studies.language import Language, extract_json
+from studies.studies import Invalid, Studies
 from youtube.api import router as youtube_router
 from youtube.channels import Youtube
 
@@ -119,7 +119,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.concursos_radar_horas > 0:
         radar = app.state.concursos_radar
         tasks.append(asyncio.create_task(radar.rodar(3600 * settings.concursos_radar_horas)))
-        # rumores acompanhados: o Claude procura novidades 1x por dia
+        # followed rumors: Claude looks for news once a day
         rumors = app.state.concursos_rumores
         tasks.append(asyncio.create_task(rumors.rodar(app.state.concursos_ia.executar, 86400)))
     yield
@@ -137,11 +137,11 @@ def _chat_llm(
     pensar: bool = True,
     max_tokens: int | None = None,
 ) -> Callable[[list[dict[str, str]]], Awaitable[str]]:
-    """Função de chat usada pelos módulos: manda as mensagens a um worker e devolve o texto.
+    """Chat function used by the modules: sends the messages to a worker and returns the text.
 
-    O modelo é o escolhido no app agora; [origem] (o módulo) bloqueia a troca enquanto responde.
-    [pensar]=False desliga o raciocínio do modelo (gemma/qwen): a conversa por voz cai de ~19 s
-    para ~2 s.
+    The model is the one chosen in the app right now; the origin (the module) blocks switching
+    while it answers. think=False turns the model reasoning off (gemma/qwen): voice conversation
+    drops from ~19 s to ~2 s.
     """
 
     async def chat(messages: list[dict[str, str]]) -> str:
@@ -174,7 +174,8 @@ def _chat_llm(
 
 
 def _context_health(estado: Any) -> Callable[[date, date], str]:
-    """Dados dos outros módulos no período, para a análise de saúde cruzar com sono e atividade."""
+    """Data of the other modules in the period, for the health analysis to cross with sleep and
+    activity."""
 
     def contexto(de: date, ate: date) -> str:
         d1, d2 = de.isoformat(), ate.isoformat()
@@ -203,7 +204,8 @@ def _context_health(estado: Any) -> Callable[[date, date], str]:
 def _llms_panel(
     local: Callable[[list[dict[str, str]]], Awaitable[str]], settings: Settings, meter: Meter
 ) -> dict[str, Callable[[list[dict[str, str]]], Awaitable[str]]]:
-    """Provedores do chat do cobrador: só o worker local (Claude só via `claude -p` no worker)."""
+    """Nagger chat providers: only the local worker (Claude only through `claude -p` on the
+    worker)."""
 
     async def via_worker(messages: list[dict[str, str]]) -> str:
         try:
@@ -215,7 +217,8 @@ def _llms_panel(
 
 
 def _simulations_electronics(registry: WorkerRegistry, settings: Settings) -> Simulations:
-    """Simulação SPICE como tarefa do worker (`simular_spice`); sem worker, ngspice no backend."""
+    """SPICE simulation as a worker task (`simular_spice`); without a worker, ngspice on the
+    backend."""
     timeout = settings.eletronica_simulacao_timeout_s
 
     def disponivel() -> str | None:
@@ -246,8 +249,8 @@ def _simulations_electronics(registry: WorkerRegistry, settings: Settings) -> Si
 
 
 def _rewrite_files(registry: WorkerRegistry) -> Rewrite:
-    """Reescrita pelo Claude Code (tarefa `reescrever` do worker, com a assinatura do PC); sem
-    worker, o `claude` deste computador. Nunca a API da Anthropic."""
+    """Rewrite through Claude Code (worker task `reescrever`, with the PC subscription); without a
+    worker, this computer's `claude`. Never the Anthropic API."""
 
     def disponivel() -> str | None:
         if registry.pick_worker(None) is None and shutil.which("claude") is None:
@@ -295,8 +298,8 @@ def _rewrite_files(registry: WorkerRegistry) -> Rewrite:
 
 
 def _exams_ai(registry: WorkerRegistry) -> ConcursosIA:
-    """Plano de estudos pelo Claude Code (tarefa `claude_json` do worker, assinatura do PC); sem
-    worker, o `claude` deste computador. Nunca a API da Anthropic."""
+    """Study plan through Claude Code (worker task `claude_json`, PC subscription); without a
+    worker, this computer's `claude`. Never the Anthropic API."""
 
     def disponivel() -> str | None:
         if registry.pick_worker(None) is None and shutil.which("claude") is None:
@@ -332,12 +335,12 @@ def _exams_ai(registry: WorkerRegistry) -> ConcursosIA:
 
 
 def _executor_code(registry: WorkerRegistry, sessions: Sessions) -> ExecutorCodigo:
-    """Tarefas `codigo.*` no worker do PC (Claude Code logado lá, dentro do repositório); as
-    etapas voltam pelo canal `codigo` e entram na aba."""
+    """`codigo.*` tasks on the PC worker (Claude Code logged in there, inside the repository); the
+    steps come back through the `codigo` channel and go into the tab."""
 
     def ao_evento(dados: dict[str, Any]) -> None:
         dados = dict(dados)
-        # Aba excluída enquanto o Claude terminava: a etapa é descartada.
+        # Tab deleted while Claude was finishing: the step is discarded.
         with contextlib.suppress(SessionNotFound):
             sessions.adicionar(str(dados.pop("sessao_id", "")), dados)
 
@@ -365,8 +368,8 @@ def _executor_code(registry: WorkerRegistry, sessions: Sessions) -> ExecutorCodi
 
 
 def _fetch_on_pc(registry: WorkerRegistry) -> Any:
-    """Busca na web pelo worker (IP de casa, que os buscadores não barram como o da VPS).
-    None se não houver worker ou ele falhar: aí a VPS tenta sozinha."""
+    """Web search through the worker (home IP, which search engines do not block like the VPS one).
+    None if there is no worker or it fails: then the VPS tries on its own."""
 
     async def buscar(query: str) -> dict[str, Any] | None:
         worker = registry.pick_worker(None)
@@ -385,7 +388,7 @@ def _fetch_on_pc(registry: WorkerRegistry) -> Any:
 
 
 def _actions_modules(estado: Any) -> dict[str, Any]:
-    """O que o Cobrador consegue criar nos outros módulos pelo chat (ver `painel.agent`)."""
+    """What the Nagger can create in the other modules through the chat (see `panel.agent`)."""
     from design import flows
 
     async def caderno(a: dict[str, Any], _llm: Any) -> str:
@@ -421,7 +424,7 @@ def _actions_modules(estado: Any) -> dict[str, Any]:
             "titulo": str(a["titulo"])[:300],
             "autor": str(a.get("autor") or "")[:200],
             "area": str(a.get("area") or "Geral")[:60],
-            # `tipo` é o da ação; o do texto vem em `tipo_texto`
+            # `tipo` is the action's; the text's comes in `tipo_texto`
             "tipo": a.get("tipo_texto") if a.get("tipo_texto") in ("livro", "artigo") else "livro",
         }
         x = estado.studies.create_reading(data)
@@ -448,7 +451,7 @@ def _actions_modules(estado: Any) -> dict[str, Any]:
 
 
 def _voice_panel(registry: WorkerRegistry, settings: Settings) -> Voice:
-    """Transcrição e fala do cobrador como tarefas do worker (`payload.task`)."""
+    """Nagger transcription and speech as worker tasks (`payload.task`)."""
 
     async def tarefa(payload: dict[str, object]) -> dict[str, object]:
         worker = registry.pick_worker(None)
@@ -491,12 +494,12 @@ def _voice_panel(registry: WorkerRegistry, settings: Settings) -> Voice:
 def _json_local(
     chat: Callable[[list[dict[str, str]]], Awaitable[str]],
 ) -> Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]:
-    """O mesmo pedido do `claude_json` (prompt, sistema, esquema) pela LLM local: a tradução do
-    leitor dos Arquivos não passa pelo Claude."""
+    """The same `claude_json` request (prompt, system, schema) through the local LLM: the Files
+    reader translation does not go through Claude."""
 
     async def executar(request: dict[str, Any]) -> dict[str, Any]:
         system = (
-            f"{request['sistema']}\n\nResponda SOMENTE com um objeto JSON válido neste esquema:\n"
+            f"{request['sistema']}\n\nRespond ONLY with a valid JSON object in this schema:\n"
             f"{json.dumps(request['esquema'], ensure_ascii=False)}"
         )
         messages = [
@@ -510,7 +513,7 @@ def _json_local(
             except Invalid:
                 messages += [
                     {"role": "assistant", "content": answer[:3000]},
-                    {"role": "user", "content": "Responda de novo SOMENTE com o JSON."},
+                    {"role": "user", "content": "Respond again ONLY with the JSON."},
                 ]
                 return extract_json(await chat(messages))
         except (LLMUnavailable, Invalid) as e:
@@ -520,8 +523,8 @@ def _json_local(
 
 
 def _language(app: FastAPI, settings: Settings) -> Language:
-    """Estudos › Linguagem: LLM local sem raciocínio (respostas em segundos) e a voz do worker
-    (`falar_marcado`, `avaliar_leitura`). Nunca o Claude."""
+    """Studies › Language: local LLM without reasoning (answers in seconds) and the worker voice
+    (`falar_marcado`, `avaliar_leitura`). Never Claude."""
     registry: WorkerRegistry = app.state.worker_registry
     local = _chat_llm(registry, settings, app.state.modelo_llm, "Estudos (idiomas)", 600, False)
 
@@ -554,7 +557,7 @@ def _language(app: FastAPI, settings: Settings) -> Language:
 
 
 def _enable_pc(settings: Settings) -> None:
-    """Wake-on-LAN pela internet: magic packet (6×FF + MAC 16×) em UDP para o DDNS de casa."""
+    """Wake-on-LAN over the internet: magic packet (6×FF + MAC 16×) over UDP to the home DDNS."""
     destination = settings.wol_destino
     if not destination:
         file = Path(settings.wol_ip_arquivo).expanduser()
@@ -569,8 +572,8 @@ def _enable_pc(settings: Settings) -> None:
 def _pc_panel(
     registry: WorkerRegistry, settings: Settings
 ) -> Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]:
-    """Comandos no PC (tarefa `pc` do worker): abrir site/programa, pesquisar, desligar; ligar vai
-    por Wake-on-LAN, já que com o PC desligado não há worker."""
+    """PC commands (worker task `pc`): open site/program, search, shut down; turning on goes
+    through Wake-on-LAN, since with the PC off there is no worker."""
 
     async def pc(request: dict[str, Any]) -> dict[str, Any]:
         if request.get("acao") == "ligar":
@@ -592,10 +595,10 @@ def _pc_panel(
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    """Application factory do Gateway.
+    """Gateway application factory.
 
-    Recebe `settings` explicitamente para facilitar testes; em produção o
-    padrão via `get_settings()` (lido do ambiente/.env) é suficiente.
+    Takes `settings` explicitly to make testing easier; in production the
+    default through `get_settings()` (read from the environment/.env) is enough.
     """
     settings = settings or get_settings()
     configure_logging(settings)
@@ -605,7 +608,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=__version__,
         debug=settings.debug,
         lifespan=lifespan,
-        # Em produção a API não publica o mapa dos endpoints.
+        # In production the API does not publish the endpoint map.
         docs_url=None if settings.environment == "production" else "/docs",
         redoc_url=None if settings.environment == "production" else "/redoc",
         openapi_url=None if settings.environment == "production" else "/openapi.json",
@@ -613,7 +616,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.worker_registry = WorkerRegistry()
     app.state.tentativas_login = Attempts()
-    # jti da sessão → hora do último código do Authenticator confirmado (módulo Código).
+    # session jti → time of the last confirmed Authenticator code (Code module).
     app.state.totp_confirmacoes = {}
     app.state.cofre = Vault(settings.notas_dir)
     app.state.collection = Collection(
@@ -655,7 +658,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.worker_registry, app.state.sessoes_codigo
     )
     app.state.workouts = Workouts(settings.saude_dir, settings.saude_baixar_imagens)
-    # dados de saúde são pessoais: só a LLM local, nunca o Claude
+    # health data is personal: only the local LLM, never Claude
     app.state.saude_llm = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Saúde", timeout=600
     )
@@ -679,7 +682,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.medidor = Meter(settings.painel_dir)
     app.state.worker_registry.to_measure = app.state.medidor.registrar
     app.state.painel_workers = app.state.worker_registry.describe
-    # Cobrador (texto e voz): sem raciocínio e com teto de tokens, para responder em segundos.
+    # Nagger (text and voice): no reasoning and a token cap, to answer in seconds.
     panel_local = _chat_llm(
         app.state.worker_registry,
         settings,
@@ -689,7 +692,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_tokens=2048,
     )
     app.state.painel_llms = _llms_panel(panel_local, settings, app.state.medidor)
-    # Fluxo a partir de código grande pode levar minutos no LLM local (a resposta é por tarefa).
+    # A flow from large code can take minutes on the local LLM (the answer goes through a task).
     design_local = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Design", timeout=600
     )
@@ -698,16 +701,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.worker_registry, settings, app.state.modelo_llm, "Finanças", timeout=600
     )
     app.state.financas_llms = _llms_panel(financas_local, settings, app.state.medidor)
-    # Conversa dos Cenários (texto/voz): sem raciocínio, para responder em segundos.
+    # Scenarios conversation (text/voice): no reasoning, to answer in seconds.
     financas_rapido = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Finanças", pensar=False
     )
     app.state.financas_llms["local_rapido"] = _llms_panel(
         financas_rapido, settings, app.state.medidor
     )["local"]
-    # Dados em tempo real (FIPE, moedas, ações, BC, busca) para a IA local dos módulos.
+    # Real-time data (FIPE, currencies, stocks, central bank, search) for the modules' local AI.
     app.state.internet = Internet(buscar_no_pc=_fetch_on_pc(app.state.worker_registry))
-    # Concursos: LLM local sem raciocínio extrai dados do radar e classifica materiais
+    # Exams: local LLM without reasoning extracts radar data and classifies materials
     app.state.concursos_llm = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Concursos", 600, pensar=False
     )
@@ -723,14 +726,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         (settings.concursos_origem_cidade, settings.concursos_origem_uf),
     )
     app.state.concursos_rumores = Rumors(settings.concursos_dir)
-    # o mapa das vagas usa os municípios (IBGE) já baixados pelo radar
+    # the jobs map uses the municipalities (IBGE) already downloaded by the radar
     app.state.vagas.geo = app.state.concursos_radar.geo
     app.state.painel_voz = _voice_panel(app.state.worker_registry, settings)
     app.state.painel_pc = _pc_panel(app.state.worker_registry, settings)
 
     app.add_middleware(RequestIdMiddleware)
     app.add_middleware(HeadersSecurityMiddleware, hsts=settings.environment == "production")
-    # Autenticação é por cabeçalho Bearer, não por cookie: sem credenciais no CORS.
+    # Authentication is by Bearer header, not cookie: no credentials in CORS.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
@@ -762,8 +765,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(v1_router)
     app.include_router(ws_router)
     app.include_router(notas_router)
-    app.include_router(reescrita_router)  # antes: /reescrita não pode cair em /{id_}
-    app.include_router(mapeamento_router)  # documento do projeto de leitura → citações
+    app.include_router(reescrita_router)  # first: /reescrita must not fall into /{id_}
+    app.include_router(mapeamento_router)  # reading project document → citations
     app.include_router(arquivos_router)
     app.include_router(wopi_router)
     app.include_router(
@@ -803,7 +806,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(
         codigo_router,
         prefix="/api/codigo",
-        # Comandos no PC: além do token, um código do Authenticator recente (ver deps).
+        # PC commands: besides the token, a recent Authenticator code (see deps).
         dependencies=[Depends(require_client_api_key), Depends(require_totp_recent)],
     )
     app.include_router(
@@ -820,7 +823,7 @@ app = create_app()
 
 
 def run() -> None:
-    """Entrypoint usado por `python -m backend.main` / script de desenvolvimento."""
+    """Entry point used by `python -m backend.main` / the development script."""
     import uvicorn
 
     settings = get_settings()

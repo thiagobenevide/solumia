@@ -23,9 +23,9 @@ def _line(f):
 
 
 def generate(project):
-    rot = json.loads(project.caminho("roteiro.json").read_text()) if project.caminho("roteiro.json").exists() else {}
+    rot = json.loads(project.path_of("roteiro.json").read_text()) if project.path_of("roteiro.json").exists() else {}
     sources = rot.get("fontes", [])
-    graphics = project.load_json("graficos.json") if project.caminho("graficos.json").exists() else []
+    graphics = project.load_json("graficos.json") if project.path_of("graficos.json").exists() else []
     surname = lambda f: re.split(r"[ ,]", f.get("autores", "") or "?")[0].lower()
     in_screen = []
     for g in graphics:
@@ -39,9 +39,9 @@ def generate(project):
     blocks = []
     if sources:
         blocks.append("📚 Estudos e fontes citados no vídeo\n" + "\n".join(_line(sources[k]) for k in order))
-    credit = project.caminho("creditos.txt")
+    credit = project.path_of("creditos.txt")
     if credit.exists() and credit.read_text().strip():
         blocks.append("📷 Créditos das imagens\n" + credit.read_text().strip())
-    destination = project.caminho("descricao.txt")
+    destination = project.path_of("descricao.txt")
     destination.write_text("\n\n".join(blocks) + "\n")
     return destination

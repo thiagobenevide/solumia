@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Sobe/derruba os containers do Gateway via Docker Compose.
+# Starts/stops the Gateway containers via Docker Compose.
 #
-# Uso:
+# Usage:
 #   ./scripts/llm_gateway.sh -vps -up      # VPS: gateway + nginx + certbot
-#   ./scripts/llm_gateway.sh -vps -down    # VPS: derruba os três serviços
-#   ./scripts/llm_gateway.sh -home -up     # Máquina local: só o gateway (sem TLS)
-#   ./scripts/llm_gateway.sh -home -down   # Máquina local: derruba o gateway
+#   ./scripts/llm_gateway.sh -vps -down    # VPS: stops the three services
+#   ./scripts/llm_gateway.sh -home -up     # Local machine: gateway only (no TLS)
+#   ./scripts/llm_gateway.sh -home -down   # Local machine: stops the gateway
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -16,7 +16,7 @@ target=""
 action=""
 
 usage() {
-    echo "Uso: $0 (-vps|-home) (-up|-down)" >&2
+    echo "Usage: $0 (-vps|-home) (-up|-down)" >&2
     exit 1
 }
 
@@ -33,14 +33,14 @@ done
 [ -n "$target" ] && [ -n "$action" ] || usage
 
 if [ ! -f "plataforma/backend/.env" ]; then
-    echo "plataforma/backend/.env não encontrado, copiando de plataforma/backend/.env.example"
+    echo "plataforma/backend/.env not found, copying plataforma/backend/.env.example"
     cp plataforma/backend/.env.example plataforma/backend/.env
 fi
 
 if [ "$target" = "vps" ]; then
     if [ "$action" = "up" ] && [ ! -f "infra/docker/nginx/nginx.conf" ]; then
-        echo "infra/docker/nginx/nginx.conf não encontrado — copie de infra/docker/nginx/nginx.conf.example," >&2
-        echo "configure seu domínio e emita o certificado (veja README, seção Deploy em produção)." >&2
+        echo "infra/docker/nginx/nginx.conf not found — copy infra/docker/nginx/nginx.conf.example," >&2
+        echo "set your domain and issue the certificate (see README, production deploy section)." >&2
         exit 1
     fi
     if [ "$action" = "up" ]; then

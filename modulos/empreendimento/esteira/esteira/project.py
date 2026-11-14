@@ -39,10 +39,10 @@ def folder_ep(ep):
     return PROJECTS / channel / rest if rest else PROJECTS / ep
 
 
-def ep_id(pasta):
+def ep_id(folder):
     """Inverso de pasta_ep: projetos/finlumia/003 → "finlumia-003"."""
-    pasta = Path(pasta).resolve()
-    return f"{pasta.parent.name}-{pasta.name}" if pasta.parent.parent == PROJECTS.resolve() else pasta.name
+    folder = Path(folder).resolve()
+    return f"{folder.parent.name}-{folder.name}" if folder.parent.parent == PROJECTS.resolve() else folder.name
 
 
 def episodes():
@@ -51,14 +51,14 @@ def episodes():
 
 
 class Project:
-    def __init__(self, pasta):
-        self.pasta = Path(pasta).resolve()
-        self.ep = ep_id(self.pasta)
-        if not self.pasta.is_dir():
-            raise SystemExit(f"pasta de projeto não encontrada: {self.pasta}")
+    def __init__(self, folder):
+        self.folder_path = Path(folder).resolve()
+        self.ep = ep_id(self.folder_path)
+        if not self.folder_path.is_dir():
+            raise SystemExit(f"pasta de projeto não encontrada: {self.folder_path}")
         # config.toml geral ← perfis/<canal>.toml ← config.toml do projeto
         self.cfg = tomllib.loads((ROOT / "config.toml").read_text())
-        file = self.pasta / "config.toml"
+        file = self.folder_path / "config.toml"
         local = tomllib.loads(file.read_text()) if file.exists() else {}
         self.canal = local.get("canal") or self.cfg.get("canal")
         profile = ROOT / "perfis" / f"{self.canal}.toml"
@@ -69,7 +69,7 @@ class Project:
             _merge(self.cfg, self.cfg.get("vertical", {}))
             _merge(self.cfg, local)
         self.env = load_env()
-        (self.pasta / "midia").mkdir(exist_ok=True)
+        (self.folder_path / "midia").mkdir(exist_ok=True)
 
     @property
     def vertical(self):
@@ -78,29 +78,29 @@ class Project:
     def audio(self):
         for name in ("narracao", "audio", "narração"):
             for ext in AUDIO_EXT:
-                p = self.pasta / f"{name}{ext}"
+                p = self.folder_path / f"{name}{ext}"
                 if p.exists():
                     return p
-        found = sorted(p for p in self.pasta.iterdir() if p.suffix.lower() in AUDIO_EXT)
+        found = sorted(p for p in self.folder_path.iterdir() if p.suffix.lower() in AUDIO_EXT)
         if not found:
-            raise SystemExit(f"nenhum áudio de narração em {self.pasta} (ex.: narracao.mp3)")
+            raise SystemExit(f"nenhum áudio de narração em {self.folder_path} (ex.: narracao.mp3)")
         return found[0]
 
-    def roteiro(self):
+    def script_path(self):
         for name in ("roteiro.txt", "roteiro.md"):
-            p = self.pasta / name
+            p = self.folder_path / name
             if p.exists():
                 return p
         return None
 
-    def caminho(self, nome):
-        return self.pasta / nome
+    def path_of(self, name):
+        return self.folder_path / name
 
-    def load_json(self, nome):
-        p = self.pasta / nome
+    def load_json(self, name):
+        p = self.folder_path / name
         if not p.exists():
-            raise SystemExit(f"{nome} ainda não existe; rode a etapa anterior")
+            raise SystemExit(f"{name} ainda não existe; rode a etapa anterior")
         return json.loads(p.read_text())
 
-    def save_json(self, nome, dados):
-        (self.pasta / nome).write_text(json.dumps(dados, ensure_ascii=False, indent=2))
+    def save_json(self, name, data):
+        (self.folder_path / name).write_text(json.dumps(data, ensure_ascii=False, indent=2))

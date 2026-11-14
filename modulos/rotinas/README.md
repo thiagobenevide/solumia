@@ -1,15 +1,15 @@
-# Gerenciamento de Processos e Rotinas
+# Process and Routine Management
 
-Kanban (pendente, em execução, concluído), temporizador por tarefa e respostas rápidas por LLM em linguagem natural.
+Kanban (pending, in progress, done), a timer per task and quick natural-language answers from an LLM.
 
-## Estrutura
+## Layout
 
 ```
 rotinas/
-├── backend/   pacote Python: API FastAPI, modelos e regras (roda na VPS)
-├── worker/    jobs pesados de LLM/GPU (roda no PC com a GPU)
-└── app/       pacote Flutter com as telas do módulo
+├── backend/   Python package: FastAPI API, models and rules (runs on the VPS)
+├── worker/    heavy LLM/GPU jobs (runs on the GPU PC)
+└── app/       Flutter package with the module screens
 ```
 
-Cada parte só existe quando houver código para ela. A plataforma (`plataforma/`) registra o
-router do backend, despacha os jobs do worker e monta as telas do app.
+Each part only exists once there is code for it. The platform (`plataforma/`) registers the
+backend router, dispatches the worker jobs and mounts the app screens.

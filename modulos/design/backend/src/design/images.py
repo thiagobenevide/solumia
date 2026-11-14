@@ -1,11 +1,12 @@
-"""Imagens do quadro: busca no Google Imagens e cópia local da imagem escolhida.
+"""Board images: Google Images search and a local copy of the chosen image.
 
-A busca usa a API oficial do Google (Programmable Search / Custom Search JSON, `searchType=image`)
-quando há chave; sem chave (o Google fechou a API para contas novas) ou se ela falhar, cai no Bing
-Imagens, no Wikimedia Commons e, por último, no Openverse (APIs abertas, sem chave). Da VPS o Bing
-costuma vir vazio (IP de datacenter): por isso o app busca primeiro do próprio aparelho. A imagem
-escolhida é baixada para `imagens/<sha256>.<ext>`: o quadro guarda só o id e não depende do site
-de origem continuar no ar."""
+The search uses the official Google API (Programmable Search / Custom Search JSON,
+`searchType=image`)
+when there is a key; without a key (Google closed the API to new accounts) or if it fails, it falls
+back to Bing Images, Wikimedia Commons and, last, Openverse (open APIs, no key). From the VPS Bing
+usually comes back empty (datacenter IP): that is why the app searches from the device first. The
+chosen image is downloaded to `imagens/<sha256>.<ext>`: the board keeps only the id and does not
+depend on the source site staying up."""
 
 import asyncio
 import hashlib
@@ -20,7 +21,7 @@ from typing import Any
 import httpx
 
 URL_SEARCH = "https://www.googleapis.com/customsearch/v1"
-# Tipo pedido no app → `imgType` da API (ícone: clip-art; figura: desenho de linhas).
+# Type requested in the app → API `imgType` (icon: clip-art; figure: line drawing).
 KINDS = {"foto": "photo", "icone": "clipart", "figura": "lineart"}
 EXTENSIONS = {
     "image/png": "png",
@@ -53,8 +54,8 @@ class Invalid(Exception):
 
 
 async def _only_internet(requisicao: httpx.Request) -> None:
-    """Recusa endereço da rede interna (também nos redirecionamentos): a rota baixa a URL que o app
-    manda, e a VPS não pode virar ponte para os serviços dela."""
+    """Refuses internal network addresses (also on redirects): the route downloads the URL the app
+    sends, and the VPS must not become a bridge to its own services."""
     host = requisicao.url.host
     enderecos = await asyncio.to_thread(socket.getaddrinfo, host, None)
     if any(not ipaddress.ip_address(e[4][0]).is_global for e in enderecos):
@@ -68,7 +69,8 @@ class Images:
         self.key, self.cx = chave, cx
 
     async def fetch(self, q: str, tipo: str = "foto", page: int = 0) -> list[dict[str, Any]]:
-        """Até 10 resultados por [pagina] (até a 10ª): Google com chave; senão Bing e Openverse."""
+        """Up to 10 results per page (up to the 10th): Google with a key; otherwise Bing and
+        Openverse."""
         page = min(page, 9)
         providers = [self._bing, self._commons, self._openverse]
         if self.key and self.cx:
@@ -110,12 +112,12 @@ class Images:
         ]
 
     async def _bing(self, q: str, tipo: str, page: int) -> list[dict[str, Any]]:
-        """Página `async` do Bing Imagens: cada resultado é um `<a class="iusc" m="{json}">` seguido
-        do tamanho (`1299 × 866`)."""
-        # Sem `adlt`: com ele o Bing ignora o filtro de tipo (padrão: busca segura moderada).
+        """Bing Images `async` page: each result is an `<a class="iusc" m="{json}">` followed
+        by the size (`1299 × 866`)."""
+        # No `adlt`: with it Bing ignores the type filter (default: moderate safe search).
         params: dict[str, Any] = {"q": q, "first": page * 10 + 1, "count": 10, "mmasync": 1}
         if f := FILTERS_BING.get(tipo):
-            # Sem `form=IRFLTR` o Bing ignora o filtro.
+            # Without `form=IRFLTR` Bing ignores the filter.
             params.update(qft=f, form="IRFLTR")
         async with httpx.AsyncClient(
             timeout=15, headers=BROWSER, follow_redirects=True
@@ -148,7 +150,7 @@ class Images:
         return results
 
     async def _commons(self, q: str, tipo: str, page: int) -> list[dict[str, Any]]:
-        """Wikimedia Commons (só arquivos de imagem); ícone/figura viram termos da busca."""
+        """Wikimedia Commons (image files only); icon/figure become search terms."""
         term = {"icone": " icon", "figura": " drawing"}.get(tipo, "")
         params: dict[str, Any] = {
             "action": "query",
@@ -217,7 +219,7 @@ class Images:
         ]
 
     async def download(self, url: str) -> dict[str, Any]:
-        """Copia a imagem de [url] para a pasta; devolve `{id}` (o mesmo para a mesma imagem)."""
+        """Copies the image at [url] to the folder; returns `{id}` (the same for the same image)."""
         if not url.startswith(("http://", "https://")):
             raise Invalid("Endereço inválido")
         headers = {"User-Agent": "agent-design/1"}

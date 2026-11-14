@@ -16,7 +16,7 @@ GATES = ("corte", "mapa", "final_16x9", "final_9x16")
 
 
 def _aprov_file(project):
-    return project.pasta / "estudio" / "aprovacoes.json"
+    return project.folder_path / "estudio" / "aprovacoes.json"
 
 
 def approvals(project):
@@ -24,13 +24,13 @@ def approvals(project):
     return json.loads(file.read_text()) if file.exists() else {}
 
 
-def approve(ep, portao, aprovado=True, nota=""):
+def approve(ep, gate, aprovado=True, note=""):
     """Grava a decisão do portão e a guarda na base de aprovações (gabarito futuro / fine-tune)."""
     from esteira.bench import FOLDER
-    if portao not in GATES:
-        raise ValueError(f"portão inválido: {portao}")
+    if gate not in GATES:
+        raise ValueError(f"portão inválido: {gate}")
     project = Project(folder_ep(ep))
-    if portao == "corte" and aprovado:
+    if gate == "corte" and aprovado:
         from esteira.studio import cut
         e = cut.state(project)
         if not e["feito"] or not e["atualizado"]:
@@ -38,30 +38,30 @@ def approve(ep, portao, aprovado=True, nota=""):
         if e.get("cortadas"):
             raise ValueError(f"{e['cortadas']} palavra(s) cortada(s) no corte pelo som: reverta as emendas em volta "
                              "delas (aba Estúdio → Corte) antes de aprovar")
-    if portao == "mapa" and aprovado:  # direção por bloco: as escolhas aprovadas ensinam a bancada
-        file = project.pasta / "estudio" / "mapa.json"
+    if gate == "mapa" and aprovado:  # direção por bloco: as escolhas aprovadas ensinam a bancada
+        file = project.folder_path / "estudio" / "mapa.json"
         if file.exists() and (m := json.loads(file.read_text())).get("direcao") == "blocos":
             from esteira.studio import direction
             direction.approve_map(ep, m)
     d = approvals(project)
-    reg = {"aprovado": aprovado, "nota": nota, "em": datetime.now().isoformat(timespec="seconds")}
-    d[portao] = reg
+    reg = {"aprovado": aprovado, "nota": note, "em": datetime.now().isoformat(timespec="seconds")}
+    d[gate] = reg
     _aprov_file(project).parent.mkdir(exist_ok=True)
     _aprov_file(project).write_text(json.dumps(d, ensure_ascii=False, indent=1))
     FOLDER.mkdir(parents=True, exist_ok=True)
     with open(FOLDER / "aprovacoes.jsonl", "a") as f:
-        f.write(json.dumps({"ep": ep, "portao": portao, **reg}, ensure_ascii=False) + "\n")
+        f.write(json.dumps({"ep": ep, "portao": gate, **reg}, ensure_ascii=False) + "\n")
     return d
 
 
 def template(project):
     """Template (`id@N`) escolhido para o episódio na aba Roteiros, ou None."""
-    file = project.pasta / "estudio" / "template.json"
+    file = project.folder_path / "estudio" / "template.json"
     return json.loads(file.read_text()).get("estilo") if file.exists() else None
 
 
 def choose_template(project, ref):
-    file = project.pasta / "estudio" / "template.json"
+    file = project.folder_path / "estudio" / "template.json"
     file.parent.mkdir(parents=True, exist_ok=True)
     file.write_text(json.dumps({"estilo": ref}))
 
@@ -81,7 +81,7 @@ def style_default(project):
 def status(ep):
     """O que já existe da produção (para o app): mapa, e por formato compilado/render/final/relatório."""
     project = Project(folder_ep(ep))
-    base = project.pasta / "estudio"
+    base = project.folder_path / "estudio"
     mapping = base / "mapa.json"
     from esteira.studio import marking, cut
     ap = marking.load(project)
@@ -119,7 +119,7 @@ def style_of_map(project, mapping):
         events.warning(f"estilo {mapping['estilo']} v{mapping['versao']} não está guardado; usando a versão atual")
         base = style.load(mapping["estilo"])
     est = style.with_mode(base, production.mode(project))
-    return rhythm.aplicar(est, rhythm.profile_of(project))
+    return rhythm.apply(est, rhythm.profile_of(project))
 
 
 def window_of_block(mapping, block):
@@ -135,16 +135,16 @@ def window_of_block(mapping, block):
     return round(de, 3), round(until, 3)
 
 
-def render_block(ep, block, formatos=None):
+def render_block(ep, block, formats=None):
     """Render só do bloco alterado: trecho [de, ate] → emenda no bruto → loudness e prévia de novo."""
     from esteira.studio import compiler
     from esteira.ai import local
     project = Project(folder_ep(ep))
-    mapping = json.loads((project.pasta / "estudio" / "mapa.json").read_text())
+    mapping = json.loads((project.folder_path / "estudio" / "mapa.json").read_text())
     est = style_of_map(project, mapping)
     de, until = window_of_block(mapping, block)
     done = []
-    for fmt in formatos or [f.replace("x", ":") for f in ("16x9", "9x16") if (compiler.folder(project, f.replace("x", ":")) / "render" / "bruto.mp4").exists()]:
+    for fmt in formats or [f.replace("x", ":") for f in ("16x9", "9x16") if (compiler.folder(project, f.replace("x", ":")) / "render" / "bruto.mp4").exists()]:
         local.free_gpu()
         span = compiler.render_span(project, est, fmt, de, until, f"bloco{block:03d}")
         compiler.splice(project, fmt, de, until, span)
@@ -156,7 +156,7 @@ def render_block(ep, block, formatos=None):
     return done
 
 
-def produce(ep, style_id=None, formatos=None, stages=STAGES, sem_portao=False, intensidade=None):
+def produce(ep, style_id=None, formats=None, stages=STAGES, without_gate=False, intensidade=None):
     """`intensidade` ({"sfx"|"motion"|"efeitos": "baixa"|"media"|"alta"}) vale só para esta produção."""
     from esteira.core import events
     from esteira.studio import compiler, director, style, engine
@@ -170,26 +170,26 @@ def produce(ep, style_id=None, formatos=None, stages=STAGES, sem_portao=False, i
     est = style.with_mode(est, production.mode(project))  # o modo é do vídeo (roteiro), não da configuração do canal
     from esteira.studio import rhythm
     profile = rhythm.profile_of(project)  # longo ou curto: o ritmo também é do vídeo
-    est = rhythm.aplicar(est, profile)
-    formatos = formatos or est.formatos
-    if not sem_portao and not approvals(project).get("corte", {}).get("aprovado"):
+    est = rhythm.apply(est, profile)
+    formats = formats or est.formatos
+    if not without_gate and not approvals(project).get("corte", {}).get("aprovado"):
         raise SystemExit("portão 1: aprove o corte do áudio antes (aba Estúdio → Corte)")
     from esteira.studio import marking
-    if not sem_portao and "dirigir" in stages and not marking.confirmed(project):
+    if not without_gate and "dirigir" in stages and not marking.confirmed(project):
         raise SystemExit("apontamento: marque as cenas no roteiro e confirme (aba Estúdio → Apontamento)")
     if any(e in stages for e in ("render", "audio")) and not engine.ready():
         raise SystemExit("motor de render incompleto: instale as dependências (aba Estúdio → Dependências)")
-    print(f"  estúdio: {ep} · estilo {est.id} v{est.versao} · {', '.join(formatos)} · níveis {est.regras.niveis} · "
+    print(f"  estúdio: {ep} · estilo {est.id} v{est.versao} · {', '.join(formats)} · níveis {est.regras.niveis} · "
           f"ritmo {profile.id} · modo {est.modo}")
     if "dirigir" in stages:
         from esteira.core import options
         with events.stage(project, "estudio-dirigir"):
             if options.read().get("direction", "blocks") == "blocks":  # direção por bloco com o acervo de peças
                 from esteira.studio import direction
-                direction.direct(project, est, profile, formatos)
+                direction.direct(project, est, profile, formats)
             else:
                 director.direct(project, est, profile)
-    for fmt in formatos:
+    for fmt in formats:
         if "compilar" in stages:
             with events.stage(project, f"estudio-compilar-{fmt}"):
                 compiler.build(project, est, fmt)

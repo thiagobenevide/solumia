@@ -124,7 +124,7 @@ def _processes(vram):
     return sorted(output, key=lambda x: x["desde"]), sorted(groups.values(), key=lambda g: -g["cpu"])
 
 
-def _files_recent(roots, minutes=15, limite=25):
+def _files_recent(roots, minutes=15, limit=25):
     """Arquivos alterados nos últimos `minutos` (profundidade limitada; ignora mídia pesada e caches)."""
     now, found = time.time(), []
     for root, prof in roots:
@@ -144,7 +144,7 @@ def _files_recent(roots, minutes=15, limite=25):
                     continue
                 if now - m < minutes * 60:
                     found.append({"caminho": str(c).replace(str(Path.home()), "~"), "seg": round(now - m)})
-    return sorted(found, key=lambda x: x["seg"])[:limite]
+    return sorted(found, key=lambda x: x["seg"])[:limit]
 
 
 def _sample(roots):

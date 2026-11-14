@@ -1,4 +1,4 @@
-"""Diferenças entre Linux e Windows: pastas do configurador, pastas de mídia padrão, arquitetura."""
+"""Differences between Linux and Windows: configurator folders, default media folders, architecture."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from . import names
 
 
 @dataclass(frozen=True)
-class Sistema:
+class System:
     so: str  # "linux" | "windows"
     arquitetura: str  # "x86_64" | "aarch64"
 
@@ -21,78 +21,78 @@ class Sistema:
         return self.so == "windows"
 
 
-def detectar() -> Sistema:
+def detect() -> System:
     so = platform.system().lower()
     if so not in ("linux", "windows"):
         raise RuntimeError(f"Sistema não suportado: {platform.system()} (só Linux e Windows).")
-    maquina = platform.machine().lower()
-    arquitetura = {"amd64": "x86_64", "x86_64": "x86_64", "arm64": "aarch64", "aarch64": "aarch64"}.get(maquina)
-    if arquitetura is None:
+    machine = platform.machine().lower()
+    architecture = {"amd64": "x86_64", "x86_64": "x86_64", "arm64": "aarch64", "aarch64": "aarch64"}.get(machine)
+    if architecture is None:
         raise RuntimeError(f"Arquitetura não suportada: {platform.machine()}")
-    return Sistema(so, arquitetura)
+    return System(so, architecture)
 
 
-def dir_config(sistema: Sistema | None = None) -> Path:
+def dir_config(system: System | None = None) -> Path:
     """Onde ficam o manifesto e o cofre."""
-    sistema = sistema or detectar()
-    if sistema.windows:
-        return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / names.NOME_EXIBICAO
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / names.PREFIXO
+    system = system or detect()
+    if system.windows:
+        return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / names.DISPLAY_NAME
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / names.PREFIX
 
 
-def dir_estado(sistema: Sistema | None = None) -> Path:
-    """Registro de execuções, known_hosts das VPS, downloads parciais."""
-    sistema = sistema or detectar()
-    if sistema.windows:
+def state_dir(system: System | None = None) -> Path:
+    """Run log, VPS known_hosts, partial downloads."""
+    system = system or detect()
+    if system.windows:
         base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-        return base / names.NOME_EXIBICAO / "estado"
-    return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / names.PREFIXO
+        return base / names.DISPLAY_NAME / "estado"
+    return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / names.PREFIX
 
 
-def dir_apps(sistema: Sistema | None = None) -> Path:
-    """Onde os Craft Apps baixados são instalados (sem precisar de administrador)."""
-    sistema = sistema or detectar()
-    if sistema.windows:
+def dir_apps(system: System | None = None) -> Path:
+    """Where downloaded Craft Apps are installed (no admin rights needed)."""
+    system = system or detect()
+    if system.windows:
         base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-        return base / names.NOME_EXIBICAO / "craft-apps"
-    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / names.PREFIXO / "craft-apps"
+        return base / names.DISPLAY_NAME / "craft-apps"
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / names.PREFIX / "craft-apps"
 
 
-def _pasta_xdg(chave: str, padrao: str) -> Path:
+def _xdg_folder(key: str, default: str) -> Path:
     try:
-        saida = subprocess.run(
-            ["xdg-user-dir", chave], capture_output=True, text=True, timeout=3, check=False
+        output = subprocess.run(
+            ["xdg-user-dir", key], capture_output=True, text=True, timeout=3, check=False
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError):
-        saida = ""
-    caminho = Path(saida) if saida else Path.home() / padrao
-    # xdg-user-dir devolve a home quando a pasta não está configurada.
-    return caminho if caminho != Path.home() else Path.home() / padrao
+        output = ""
+    path = Path(output) if output else Path.home() / default
+    # xdg-user-dir returns the home folder when the folder is not configured.
+    return path if path != Path.home() else Path.home() / default
 
 
-def dir_downloads(sistema: Sistema | None = None) -> Path:
-    """Onde os instaladores dos apps do Solumia (APK, AppImage, setup) são guardados."""
-    sistema = sistema or detectar()
-    if sistema.windows:
-        return Path(os.environ.get("USERPROFILE", Path.home())) / "Downloads" / names.NOME_EXIBICAO
-    return _pasta_xdg("DOWNLOAD", "Downloads") / names.NOME_EXIBICAO
+def dir_downloads(system: System | None = None) -> Path:
+    """Where the Solumia app installers (APK, AppImage, setup) are stored."""
+    system = system or detect()
+    if system.windows:
+        return Path(os.environ.get("USERPROFILE", Path.home())) / "Downloads" / names.DISPLAY_NAME
+    return _xdg_folder("DOWNLOAD", "Downloads") / names.DISPLAY_NAME
 
 
-def pastas_midia_padrao(sistema: Sistema | None = None) -> dict[str, str]:
-    """Sugestões iniciais; a pessoa troca na tela Pastas."""
-    sistema = sistema or detectar()
-    if sistema.windows:
-        casa = Path(os.environ.get("USERPROFILE", Path.home()))
-        imagens, videos, musica = casa / "Pictures", casa / "Videos", casa / "Music"
+def default_media_folders(system: System | None = None) -> dict[str, str]:
+    """Initial suggestions; the person changes them on the Folders screen."""
+    system = system or detect()
+    if system.windows:
+        matches = Path(os.environ.get("USERPROFILE", Path.home()))
+        images, videos, music = matches / "Pictures", matches / "Videos", matches / "Music"
     else:
-        imagens = _pasta_xdg("PICTURES", "Imagens")
-        videos = _pasta_xdg("VIDEOS", "Vídeos")
-        musica = _pasta_xdg("MUSIC", "Músicas")
-    raiz = videos / names.NOME_EXIBICAO
+        images = _xdg_folder("PICTURES", "Imagens")
+        videos = _xdg_folder("VIDEOS", "Vídeos")
+        music = _xdg_folder("MUSIC", "Músicas")
+    root = videos / names.DISPLAY_NAME
     return {
-        "imagens": str(imagens / names.NOME_EXIBICAO),
-        "videos": str(raiz / "acervo"),
-        "audio": str(musica / names.NOME_EXIBICAO),
-        "producao": str(raiz / "em-producao"),
-        "produzidos": str(raiz / "produzidos"),
+        "imagens": str(images / names.DISPLAY_NAME),
+        "videos": str(root / "acervo"),
+        "audio": str(music / names.DISPLAY_NAME),
+        "producao": str(root / "em-producao"),
+        "produzidos": str(root / "produzidos"),
     }

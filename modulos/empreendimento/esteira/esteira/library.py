@@ -94,7 +94,7 @@ def _index(con, mid):
                 (mid, " ".join(json.loads(r["termos"])), r["tags"], r["titulo"], r["descricao"]))
 
 
-def register(cand, origem, term="", mover=True, normalizado=False):
+def register(cand, origin, term="", move=True, normalizado=False):
     """Guarda o arquivo `origem` do candidato de um provedor (id, tipo, url, credito, ...) no acervo e devolve
     o caminho no acervo. Se o id já existe, só acrescenta o termo de busca."""
     con = _db()
@@ -109,19 +109,19 @@ def register(cand, origem, term="", mover=True, normalizado=False):
                 con.commit()
             return folder() / exists["arquivo"]
     provider = cand["id"].split("-")[0]
-    ext = Path(origem).suffix.lower() if Path(origem).suffix.lower() not in ("", ".img") else ".jpg"
+    ext = Path(origin).suffix.lower() if Path(origin).suffix.lower() not in ("", ".img") else ".jpg"
     if cand["tipo"] == "video" and ext not in (".mp4", ".mov", ".webm"):
         ext = ".mp4"
     rel = f"{provider}/{cand['id']}{ext}"
     destination = folder() / rel
     destination.parent.mkdir(parents=True, exist_ok=True)
-    if mover:
-        shutil.move(str(origem), destination)
+    if move:
+        shutil.move(str(origin), destination)
     else:  # cópia de arquivo de episódio: link físico quando possível (não ocupa espaço de novo)
         try:
-            os.link(origem, destination)
+            os.link(origin, destination)
         except OSError:
-            shutil.copy2(origem, destination)
+            shutil.copy2(origin, destination)
     w, h, duration = _probe(destination)
     with _lock:
         con.execute("""INSERT OR REPLACE INTO midia (id, provedor, tipo, arquivo, url, pagina, credito, licenca,
@@ -140,18 +140,18 @@ WORDS_EMPTY = {"a", "an", "the", "of", "in", "on", "with", "and", "or", "to", "f
                    "do", "e", "o", "um", "uma", "com", "em", "no", "na", "para"}
 
 
-def _query(term, todas=True):
+def _query(term, all_items=True):
     words = [p for p in re.findall(r"\w+", term.lower()) if p not in WORDS_EMPTY and len(p) > 1]
-    return (" AND " if todas else " OR ").join(f'"{p}"' for p in words[:5])
+    return (" AND " if all_items else " OR ").join(f'"{p}"' for p in words[:5])
 
 
-def search(terms, tipo, orientation, duration_min=0.0, excluir=(), canal=None, max_usos_canal=2, n=8):
+def search(terms, kind, orientation, duration_min=0.0, exclude=(), channel=None, max_uses_channel=2, n=8):
     """Itens do acervo para os termos (o primeiro é o mais importante), do melhor para o pior.
     Exige todas as palavras de um dos termos. Filtra tipo, orientação, duração
     mínima (vídeo), itens excluídos, os já usados `max_usos_canal` vezes no canal e os que o modelo de
     visão reprovou (nota ≤ 2) para este mesmo termo."""
     con = _db()
-    seen, output = set(excluir), []
+    seen, output = set(exclude), []
     queries = [_query(t) for t in terms if t]
     # (sem o recuo para as 2 primeiras palavras: trazia mídia de outro assunto; a relevância decide em midia.ordenar)
     for q in filter(None, dict.fromkeys(queries)):
@@ -162,13 +162,13 @@ def search(terms, tipo, orientation, duration_min=0.0, excluir=(), canal=None, m
                           (SELECT nota FROM avaliacao a WHERE a.midia = m.id AND a.termo = ?) AS nota_termo
                    FROM busca JOIN midia m ON m.id = busca.id
                    WHERE busca MATCH ? AND m.tipo = ? AND m.orientacao IN (?, 'quadrado')
-                   ORDER BY rank LIMIT 40""", (canal or "", terms[0] if terms else "", q, tipo, orientation)).fetchall()
+                   ORDER BY rank LIMIT 40""", (channel or "", terms[0] if terms else "", q, kind, orientation)).fetchall()
         except sqlite3.OperationalError:
             continue
         for r in lines:
-            if r["id"] in seen or r["usos_canal"] >= max_usos_canal or (r["nota_termo"] or 5) <= 2:
+            if r["id"] in seen or r["usos_canal"] >= max_uses_channel or (r["nota_termo"] or 5) <= 2:
                 continue
-            if tipo == "video" and duration_min and (r["duracao"] or 0) * 2 < duration_min:
+            if kind == "video" and duration_min and (r["duracao"] or 0) * 2 < duration_min:
                 continue
             if not (folder() / r["arquivo"]).exists():
                 continue
@@ -179,10 +179,10 @@ def search(terms, tipo, orientation, duration_min=0.0, excluir=(), canal=None, m
     return output[:n]
 
 
-def mark_usage(mid, canal, ep, cena):
+def mark_usage(mid, channel, ep, scene):
     con = _db()
     with _lock:
-        con.execute("INSERT OR REPLACE INTO uso VALUES (?,?,?,?,?)", (mid, canal or "", ep, cena, _now()))
+        con.execute("INSERT OR REPLACE INTO uso VALUES (?,?,?,?,?)", (mid, channel or "", ep, scene, _now()))
         con.commit()
 
 
@@ -191,10 +191,10 @@ def evaluation(mid, term):
     return dict(r) if r else None
 
 
-def save_evaluation(mid, term, nota, problema=""):
+def save_evaluation(mid, term, note, problem=""):
     con = _db()
     with _lock:
-        con.execute("INSERT OR REPLACE INTO avaliacao VALUES (?,?,?,?,?)", (mid, term, nota, problema, _now()))
+        con.execute("INSERT OR REPLACE INTO avaliacao VALUES (?,?,?,?,?)", (mid, term, note, problem, _now()))
         con.commit()
 
 
@@ -212,15 +212,15 @@ def item(mid):
     return dict(r) if r else None
 
 
-def list_all(q="", tipo="", limite=120):
+def list_all(q="", kind="", limit=120):
     con = _db()
     if q.strip():
         sql = ("SELECT m.* FROM busca JOIN midia m ON m.id = busca.id WHERE busca MATCH ? "
-               + ("AND m.tipo = ? " if tipo else "") + "ORDER BY bm25(busca) LIMIT ?")
-        args = [_query(q, todas=False)] + ([tipo] if tipo else []) + [limite]
+               + ("AND m.tipo = ? " if kind else "") + "ORDER BY bm25(busca) LIMIT ?")
+        args = [_query(q, all_items=False)] + ([kind] if kind else []) + [limit]
     else:
-        sql = "SELECT * FROM midia " + ("WHERE tipo = ? " if tipo else "") + "ORDER BY atualizado DESC LIMIT ?"
-        args = ([tipo] if tipo else []) + [limite]
+        sql = "SELECT * FROM midia " + ("WHERE tipo = ? " if kind else "") + "ORDER BY atualizado DESC LIMIT ?"
+        args = ([kind] if kind else []) + [limit]
     try:
         lines = [dict(r) for r in con.execute(sql, args)]
     except sqlite3.OperationalError:
@@ -233,14 +233,14 @@ def list_all(q="", tipo="", limite=120):
 
 def call_statistics():
     con = _db()
-    por = {f"{r['provedor']}/{r['tipo']}": r["n"] for r in
+    by_choice = {f"{r['provedor']}/{r['tipo']}": r["n"] for r in
            con.execute("SELECT provedor, tipo, COUNT(*) n FROM midia GROUP BY provedor, tipo")}
     total = con.execute("SELECT COUNT(*) n, SUM(tipo='video') v, SUM(descricao != '') d FROM midia").fetchone()
     uses = con.execute("SELECT COUNT(*) n, COUNT(DISTINCT midia) m FROM uso").fetchone()
     size = sum(f.stat().st_size for f in folder().rglob("*") if f.is_file()) / 1e9 if folder().exists() else 0
     return {"itens": total["n"] or 0, "videos": total["v"] or 0, "imagens": (total["n"] or 0) - (total["v"] or 0),
             "descritos": total["d"] or 0, "usos": uses["n"] or 0, "reusados": uses["m"] or 0,
-            "por_provedor": por, "gb": round(size, 2)}
+            "por_provedor": by_choice, "gb": round(size, 2)}
 
 
 def import_projects():
@@ -259,9 +259,9 @@ def import_projects():
             cand = {"id": c["midia_id"], "tipo": c.get("midia_tipo") or ("video" if c["midia"].endswith(".mp4") else "imagem"),
                     "credito": c.get("credito", "")}
             term = c.get("busca_en") or c.get("busca") or ""
-            register(cand, p / c["midia"], term, mover=False, normalizado=True)
+            register(cand, p / c["midia"], term, move=False, normalizado=True)
             if c.get("busca") and c.get("busca") != term:
-                register(cand, p / c["midia"], c["busca"], mover=False)
+                register(cand, p / c["midia"], c["busca"], move=False)
             mark_usage(c["midia_id"], proj.canal, proj.ep, c["id"])
             if c.get("nota_midia"):
                 save_evaluation(c["midia_id"], term, c["nota_midia"], c.get("problema_midia", ""))
@@ -269,23 +269,23 @@ def import_projects():
     return n
 
 
-def describe(limite=200):
+def describe(limit=200):
     """Descreve com o modelo de visão local (sem tokens do Claude) os itens que ainda não têm descrição:
     a busca no acervo passa a achar a mídia pelo que aparece nela, não só pelo termo que a encontrou."""
     from pydantic import BaseModel, Field
     from esteira.ai import local
 
-    class Descricao(BaseModel):
-        descricao: str = Field(max_length=220)
+    class Description(BaseModel):
+        description: str = Field(max_length=220)
         tags: str = Field("", max_length=160)
 
-    lines = [dict(r) for r in _db().execute("SELECT * FROM midia WHERE descricao = '' LIMIT ?", (limite,))]
+    lines = [dict(r) for r in _db().execute("SELECT * FROM midia WHERE descricao = '' LIMIT ?", (limit,))]
     done = 0
     for n, it in enumerate(lines, 1):
         mini = thumbnail(it)
         if not mini.exists():
             continue
-        r = local.ask(local.prompt("acervo_descrever"), Descricao, model=local.VISION, images=[mini],
+        r = local.ask(local.prompt("library_describe"), Description, model=local.VISION, images=[mini],
                             max_tokens=160)
         if r:
             save_description(it["id"], r.descricao, r.tags)

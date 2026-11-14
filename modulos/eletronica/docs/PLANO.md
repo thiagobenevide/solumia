@@ -1,38 +1,38 @@
-# Plano do módulo Eletrônica — "AutoCAD só para eletrônica"
+# Electronics module plan — "AutoCAD just for electronics"
 
-Ferramenta de CAD de precisão para montar circuitos de computador, celular, monitor/TV e som: esquemático,
-simulação e desenho da placa no mesmo projeto. Usada com mouse, tablet e caneta digitalizadora.
-Catálogo da bancada física: [CATALOGO.md](CATALOGO.md).
+Precision CAD tool to build computer, phone, monitor/TV and audio circuits: schematic,
+simulation and board design in the same project. Used with mouse, tablet and drawing pen.
+Physical bench catalog: [CATALOGO.md](CATALOGO.md).
 
-## Estrutura
+## Layout
 
-- `backend/` (`agent-eletronica`, `/api/eletronica`, VPS): projetos com `versao` (409 quando outro aparelho
-  gravou antes), biblioteca de componentes, netlist, ERC/DRC, exportações (KiCad, Gerber, furação, BOM).
-- `worker/` (PC): simulação no ngspice (ponto de operação, transiente, AC, varredura); depois Freerouting.
-- `app/` (`agent_eletronica`): tela de CAD com os modos **Esquemático**, **Placa** e **Simulação**.
+- `backend/` (`agent-eletronica`, `/api/eletronica`, VPS): projects with `versao` (409 when another device
+  saved first), component library, netlist, ERC/DRC, exports (KiCad, Gerber, drill, BOM).
+- `worker/` (PC): ngspice simulation (operating point, transient, AC, sweep); later Freerouting.
+- `app/` (`agent_eletronica`): CAD screen with the **Schematic**, **Board** and **Simulation** modes.
 
-## Tela de CAD
+## CAD screen
 
-- Coordenadas inteiras em micrômetros (µm); a tela mostra mm ou mils. Grade padrão de 1,27 mm (50 mil).
-- Grade, snap (pino, ponta de fio, grade), fio ortogonal, camadas, rotação 90°, espelhamento, desfazer/refazer.
-- Mouse: esquerdo coloca/seleciona, meio/direito arrasta, roda dá zoom, atalhos de CAD (R, C, D, W, L, T…).
-- Tablet e caneta: a ponta coloca, pairar mostra a prévia, o dedo arrasta e dá pinça, barra de ferramentas
-  e botões grandes no lugar do teclado.
+- Integer coordinates in micrometers (µm); the screen shows mm or mils. Default grid of 1.27 mm (50 mil).
+- Grid, snap (pin, wire end, grid), orthogonal wire, layers, 90° rotation, mirroring, undo/redo.
+- Mouse: left places/selects, middle/right drags, wheel zooms, CAD shortcuts (R, C, D, W, L, T…).
+- Tablet and pen: the tip places, hovering shows the preview, the finger drags and pinches, toolbar
+  and big buttons instead of the keyboard.
 
-## Biblioteca
+## Library
 
-Base própria (símbolo, pinos, propriedades, prefixo) com os componentes mais usados; depois, importação
-das bibliotecas oficiais do KiCad (`.kicad_sym`, `.kicad_mod`) e modelos SPICE por componente.
+Own base (symbol, pins, properties, prefix) with the most used components; later, import of
+the official KiCad libraries (`.kicad_sym`, `.kicad_mod`) and SPICE models per component.
 
-## Fases
+## Phases
 
-1. **Núcleo e esquemático**: tela de CAD, biblioteca base, fios, redes nomeadas (rótulos e símbolos de
-   alimentação), várias folhas, lista de peças, exportação PNG/PDF.
-2. **ERC e calculadoras**: pino solto, saídas em curto, rede sem terra; Ohm, divisor, LED, RC, crossover,
-   dissipação.
-3. **Simulação**: netlist → ngspice no worker; pontas de prova no esquemático, osciloscópio e multímetro
-   virtuais.
-4. **Placa**: footprints, linhas guia (ratsnest) do esquemático, trilhas em 2–4 camadas, vias, plano de terra,
-   DRC, Gerber + furação + BOM/pick-and-place para JLCPCB.
-5. **Extras**: roteamento automático, vista 3D, troca com o KiCad, modelos prontos (fonte ATX, VRM, carga de
-   celular, backlight, amplificador classe D).
+1. **Core and schematic**: CAD screen, base library, wires, named nets (labels and power
+   symbols), several sheets, parts list, PNG/PDF export.
+2. **ERC and calculators**: loose pin, shorted outputs, net without ground; Ohm, divider, LED, RC, crossover,
+   dissipation.
+3. **Simulation**: netlist → ngspice on the worker; probes on the schematic, virtual oscilloscope and
+   multimeter.
+4. **Board**: footprints, ratsnest from the schematic, traces on 2–4 layers, vias, ground plane,
+   DRC, Gerber + drill + BOM/pick-and-place for JLCPCB.
+5. **Extras**: autorouting, 3D view, KiCad exchange, ready-made templates (ATX supply, VRM, phone
+   charging, backlight, class D amplifier).

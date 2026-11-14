@@ -1,161 +1,244 @@
 {
   "@@locale": "pt",
-  "appTitulo": "Solumia: configurador",
-  "iniciandoNucleo": "Abrindo o cofre e iniciando o núcleo…",
-  "tentarDeNovo": "Tentar de novo",
-
-  "navInicio": "Início",
-  "navConta": "Conta",
+  "appTitle": "Solumia: configurador",
+  "startingCore": "Abrindo o cofre e iniciando o núcleo…",
+  "tryAgain": "Tentar de novo",
+  "navHome": "Início",
+  "navAccount": "Conta",
   "navVps": "VPS",
-  "navPastas": "Pastas",
+  "navFolders": "Pastas",
   "navCraft": "Craft Apps",
   "navApps": "Apps",
-  "navRegistro": "Registro",
-
-  "aparencia": "Aparência",
-  "tema": "Tema",
-  "temaSistema": "Do sistema",
-  "temaClaro": "Claro",
-  "temaEscuro": "Escuro",
-  "idioma": "Idioma",
-
-  "inicioVersao": "Configurador {versao} · protocolo {protocolo} · {so} {arquitetura}",
-  "@inicioVersao": {"placeholders": {"versao": {}, "protocolo": {}, "so": {}, "arquitetura": {}}},
-  "inicioManifesto": "Manifesto: {caminho}",
-  "@inicioManifesto": {"placeholders": {"caminho": {}}},
-  "itemConta": "Conta e autenticador",
-  "itemContaDetalhe": "Usuário, senha e 2º fator",
-  "itemVpsDetalhe": "Endereço e domínio",
-  "itemPastas": "Pastas de mídia",
-  "itemPastasDetalhe": "Imagens, vídeos, áudio, produção",
-  "itemCraftDetalhe": "{instalados} de {total} instalados",
-  "@itemCraftDetalhe": {"placeholders": {"instalados": {"type": "int"}, "total": {"type": "int"}}},
+  "navRunLog": "Registro",
+  "appearance": "Aparência",
+  "theme": "Tema",
+  "themeSystem": "Do sistema",
+  "themeLight": "Claro",
+  "themeDark": "Escuro",
+  "language": "Idioma",
+  "homeVersion": "Configurador {versao} · protocolo {protocolo} · {so} {arquitetura}",
+  "@homeVersion": {
+    "placeholders": {
+      "versao": {},
+      "protocolo": {},
+      "so": {},
+      "arquitetura": {}
+    }
+  },
+  "homeManifest": "Manifesto: {caminho}",
+  "@homeManifest": {
+    "placeholders": {
+      "caminho": {}
+    }
+  },
+  "itemAccount": "Conta e autenticador",
+  "itemAccountDetail": "Usuário, senha e 2º fator",
+  "itemVpsDetail": "Endereço e domínio",
+  "itemFolders": "Pastas de mídia",
+  "itemFoldersDetail": "Imagens, vídeos, áudio, produção",
+  "itemCraftDetail": "{instalados} de {total} instalados",
+  "@itemCraftDetail": {
+    "placeholders": {
+      "instalados": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
   "itemApps": "Apps Solumia",
-  "itemAppsDetalhe": "Celular, relógio, PC e notebook",
-  "inicioConvivencia": "Serviços do Solumia usam nomes e portas próprios (prefixo {prefixo}, gateway {gateway}, túnel {tunel}) e não interferem na instalação atual.",
-  "@inicioConvivencia": {"placeholders": {"prefixo": {}, "gateway": {}, "tunel": {}}},
-
-  "contaTitulo": "Conta de acesso",
-  "contaDescricao": "Usuário e senha do app, com segundo fator (Google Authenticator ou similar). A senha nunca sai deste computador: só o hash vai para a VPS.",
-  "usuario": "Usuário",
-  "senha": "Senha",
-  "senhaAjuda": "Mínimo 12 caracteres, maiúsculas, minúsculas e número",
-  "confirmarSenha": "Confirmar senha",
-  "salvarConta": "Salvar conta",
-  "senhasNaoConferem": "As senhas não conferem",
-  "contaSalva": "Conta salva no cofre (só o hash da senha)",
-  "qrInstrucao": "Escaneie no autenticador. Este QR só aparece agora: ele não é mostrado de novo.",
-  "codigo6": "Código de 6 dígitos",
-  "conferir": "Conferir",
+  "itemAppsDetail": "Celular, relógio, PC e notebook",
+  "homeCoexistence": "Serviços do Solumia usam nomes e portas próprios (prefixo {prefixo}, gateway {gateway}, túnel {tunel}) e não interferem na instalação atual.",
+  "@homeCoexistence": {
+    "placeholders": {
+      "prefixo": {},
+      "gateway": {},
+      "tunel": {}
+    }
+  },
+  "accountTitle": "Conta de acesso",
+  "accountDescription": "Usuário e senha do app, com segundo fator (Google Authenticator ou similar). A senha nunca sai deste computador: só o hash vai para a VPS.",
+  "user": "Usuário",
+  "password": "Senha",
+  "passwordHelp": "Mínimo 12 caracteres, maiúsculas, minúsculas e número",
+  "confirmPassword": "Confirmar senha",
+  "saveAccount": "Salvar conta",
+  "passwordsDoNotMatch": "As senhas não conferem",
+  "accountSaved": "Conta salva no cofre (só o hash da senha)",
+  "qrInstruction": "Escaneie no autenticador. Este QR só aparece agora: ele não é mostrado de novo.",
+  "code6": "Código de 6 dígitos",
+  "check": "Conferir",
   "totpOk": "Autenticador configurado corretamente.",
-  "totpFalhou": "Código não confere. Confira o relógio do celular.",
-
-  "vpsDescricao": "Instala gateway, túnel, Collabora, nginx e TLS, e endurece SSH e firewall. Tudo com nomes e portas do Solumia, sem tocar na instalação atual.",
-  "topologia": "Topologia",
-  "topoHibrida": "Híbrida (VPS + este PC)",
-  "topoNuvem": "Só nuvem (só VPS)",
-  "dominio": "Domínio",
-  "dominioAjuda": "ex.: solumia.seudominio.com (registro A apontando para a VPS)",
+  "totpFailed": "Código não confere. Confira o relógio do celular.",
+  "vpsDescription": "Instala gateway, túnel, Collabora, nginx e TLS, e endurece SSH e firewall. Tudo com nomes e portas do Solumia, sem tocar na instalação atual.",
+  "topology": "Topologia",
+  "topologyHybrid": "Híbrida (VPS + este PC)",
+  "topologyCloud": "Só nuvem (só VPS)",
+  "domain": "Domínio",
+  "domainHelp": "ex.: solumia.seudominio.com (registro A apontando para a VPS)",
   "emailTls": "E-mail para o certificado TLS",
-  "emailTlsAjuda": "avisos de expiração do Let's Encrypt",
+  "emailTlsHelp": "avisos de expiração do Let's Encrypt",
   "cloudflare": "Domínio atrás da Cloudflare (proxy)",
-  "acessoSsh": "Acesso SSH",
-  "hostVps": "IP ou nome da VPS",
-  "porta": "Porta",
-  "lerImpressao": "Ler impressão digital da VPS",
-  "impressaoConfirmada": "Confirmada: {impressao}",
-  "@impressaoConfirmada": {"placeholders": {"impressao": {}}},
-  "conferirImpressao": "Confira se é a sua VPS antes de confirmar. No painel do provedor (console web) rode:",
-  "confirmoVps": "Confirmo: é a minha VPS",
-  "primeiroAcesso": "Primeiro acesso",
-  "primeiroAcessoDescricao": "A senha é usada uma vez para instalar a chave do configurador e não é gravada. Depois disso o acesso é só por chave.",
-  "senhaVps": "Senha da VPS (só no 1º acesso)",
-  "senhaSudo": "Senha do sudo (se o usuário não for root)",
-  "desativarSenha": "Desativar login por senha no SSH (recomendado)",
-  "desativarSenhaAjuda": "Com desfazer automático em 5 min se o acesso por chave falhar",
+  "sshAccess": "Acesso SSH",
+  "vpsHost": "IP ou nome da VPS",
+  "port": "Porta",
+  "readFingerprint": "Ler impressão digital da VPS",
+  "fingerprintConfirmed": "Confirmada: {impressao}",
+  "@fingerprintConfirmed": {
+    "placeholders": {
+      "impressao": {}
+    }
+  },
+  "checkFingerprint": "Confira se é a sua VPS antes de confirmar. No painel do provedor (console web) rode:",
+  "confirmVps": "Confirmo: é a minha VPS",
+  "firstAccess": "Primeiro acesso",
+  "firstAccessDescription": "A senha é usada uma vez para instalar a chave do configurador e não é gravada. Depois disso o acesso é só por chave.",
+  "vpsPassword": "Senha da VPS (só no 1º acesso)",
+  "sudoPassword": "Senha do sudo (se o usuário não for root)",
+  "disablePassword": "Desativar login por senha no SSH (recomendado)",
+  "disablePasswordHelp": "Com desfazer automático em 5 min se o acesso por chave falhar",
   "nginxAuto": "detectar",
   "nginxDocker": "em contêiner (VPS dedicada)",
   "nginxHost": "nginx já instalado na VPS",
-  "salvar": "Salvar",
-  "verPlano": "Ver plano de instalação",
-  "confirmeImpressao": "Confirme a impressão digital primeiro",
-  "vpsSalva": "Configuração da VPS salva",
-
-  "pastasTitulo": "Pastas de mídia",
-  "pastasDescricao": "Onde ficam imagens, vídeos e áudio neste computador ({so}). Podem estar em outro disco. Não podem ser iguais nem uma dentro da outra.",
-  "@pastasDescricao": {"placeholders": {"so": {}}},
-  "pastaImagens": "Imagens",
-  "pastaVideos": "Vídeos",
-  "pastaAudio": "Áudio",
-  "pastaProducao": "Vídeos para produção",
-  "pastaProduzidos": "Vídeos produzidos",
-  "ajudaImagens": "Imagens usadas nos vídeos (acervo e geradas)",
-  "ajudaVideos": "Acervo de vídeos brutos",
-  "ajudaAudio": "Trilhas, efeitos e narrações",
-  "ajudaProducao": "Vídeos em produção (entrada da esteira)",
-  "ajudaProduzidos": "Vídeos prontos (saída)",
-  "escolherPasta": "Escolher pasta",
-  "usarEstaPasta": "Usar esta pasta",
-  "validar": "Validar",
-  "salvarECriar": "Salvar e criar pastas",
-  "corrijaPastas": "Corrija as pastas marcadas",
-
-  "craftDescricao": "Baixados do GitHub de cada projeto. Antes de instalar, o configurador confere a assinatura (chave fixada) e o SHA-256: um arquivo adulterado nunca é instalado.",
+  "save": "Salvar",
+  "viewPlan": "Ver plano de instalação",
+  "confirmFingerprint": "Confirme a impressão digital primeiro",
+  "vpsSaved": "Configuração da VPS salva",
+  "foldersTitle": "Pastas de mídia",
+  "foldersDescription": "Onde ficam imagens, vídeos e áudio neste computador ({so}). Podem estar em outro disco. Não podem ser iguais nem uma dentro da outra.",
+  "@foldersDescription": {
+    "placeholders": {
+      "so": {}
+    }
+  },
+  "folderImages": "Imagens",
+  "folderVideos": "Vídeos",
+  "folderAudio": "Áudio",
+  "folderProduction": "Vídeos para produção",
+  "folderProduced": "Vídeos produzidos",
+  "helpImages": "Imagens usadas nos vídeos (acervo e geradas)",
+  "helpVideos": "Acervo de vídeos brutos",
+  "helpAudio": "Trilhas, efeitos e narrações",
+  "helpProduction": "Vídeos em produção (entrada da esteira)",
+  "helpProduced": "Vídeos prontos (saída)",
+  "pickFolder": "Escolher pasta",
+  "useThisFolder": "Usar esta pasta",
+  "validate": "Validar",
+  "saveAndCreate": "Salvar e criar pastas",
+  "fixFolders": "Corrija as pastas marcadas",
+  "craftDescription": "Baixados do GitHub de cada projeto. Antes de instalar, o configurador confere a assinatura (chave fixada) e o SHA-256: um arquivo adulterado nunca é instalado.",
   "craftFilmcraft": "Editor de vídeo não linear",
   "craftSoundcraft": "Estação de áudio digital (DAW)",
   "craftEffectcraft": "Motion graphics e composição",
   "craftPhotocraft": "Editor de fotos",
-  "consultandoVersao": "Consultando a última versão…",
-  "ultimaVersao": "Última: {versao} · {arquivo}",
-  "@ultimaVersao": {"placeholders": {"versao": {}, "arquivo": {}}},
-  "naoInstalado": "Não instalado",
-  "instaladoEm": "Instalado: {versao} em {caminho}",
-  "@instaladoEm": {"placeholders": {"versao": {}, "caminho": {}}},
-  "formatoPortatil": "Portátil (sem administrador)",
-  "formatoMsi": "Instalador .msi",
-  "formatoAppimage": "AppImage (sem administrador)",
-  "formatoDeb": ".deb (pede administrador)",
-  "baixarInstalar": "Baixar e instalar",
-  "atualizar": "Atualizar",
-  "reinstalar": "Reinstalar",
-
-  "appsTitulo": "Apps Solumia",
-  "appsDescricao": "O app do Solumia para cada dispositivo, das releases oficiais no GitHub. O configurador confere assinatura e SHA-256 antes de salvar ou instalar.",
-  "appCelular": "Celular e tablet",
-  "appCelularDetalhe": "Android (APK)",
-  "appRelogio": "Relógio",
-  "appRelogioDetalhe": "Wear OS (APK)",
+  "checkingVersion": "Consultando a última versão…",
+  "latestVersion": "Última: {versao} · {arquivo}",
+  "@latestVersion": {
+    "placeholders": {
+      "versao": {},
+      "arquivo": {}
+    }
+  },
+  "notInstalled": "Não instalado",
+  "installedAt": "Instalado: {versao} em {caminho}",
+  "@installedAt": {
+    "placeholders": {
+      "versao": {},
+      "caminho": {}
+    }
+  },
+  "formatPortable": "Portátil (sem administrador)",
+  "formatMsi": "Instalador .msi",
+  "formatAppimage": "AppImage (sem administrador)",
+  "formatDeb": ".deb (pede administrador)",
+  "downloadInstall": "Baixar e instalar",
+  "update": "Atualizar",
+  "reinstall": "Reinstalar",
+  "appsTitle": "Apps Solumia",
+  "appsDescription": "O app do Solumia para cada dispositivo, das releases oficiais no GitHub. O configurador confere assinatura e SHA-256 antes de salvar ou instalar.",
+  "appPhone": "Celular e tablet",
+  "appPhoneDetail": "Android (APK)",
+  "appWatch": "Relógio",
+  "appWatchDetail": "Wear OS (APK)",
   "appLinux": "PC e notebook",
-  "appLinuxDetalhe": "Linux (AppImage)",
+  "appLinuxDetail": "Linux (AppImage)",
   "appWindows": "PC e notebook",
-  "appWindowsDetalhe": "Windows (instalador)",
-  "appsVersao": "Versão publicada: {versao}",
-  "@appsVersao": {"placeholders": {"versao": {}}},
-  "appsSemRelease": "Nenhuma release encontrada. Os arquivos aparecem aqui assim que forem publicados.",
-  "appsSemAssinatura": "Downloads bloqueados por segurança: a chave que assina as releases do Solumia ainda não foi fixada no configurador.",
-  "appsPasta": "Arquivos salvos em {pasta}",
-  "@appsPasta": {"placeholders": {"pasta": {}}},
-  "abrirReleases": "Abrir releases no GitHub",
-  "arquivoIndisponivel": "Arquivo não publicado nesta versão",
-  "baixarParaEstePc": "Baixar para este PC",
-  "instalarNestePc": "Instalar neste PC",
-  "mostrarQr": "QR para o celular",
-  "qrCelular": "Aponte a câmera do celular para baixar direto do GitHub. O Android confere a assinatura do APK ao instalar.",
-  "relogioInstrucao": "Baixe o APK aqui e envie ao relógio pelo app do celular ou instale no próprio relógio.",
-
-  "planoNadaAlterado": "Nada foi alterado ainda. Confira o que vai acontecer:",
-  "planoExecucao": "Execução: {estado}",
-  "@planoExecucao": {"placeholders": {"estado": {}}},
-  "codigoDestrutivo": "Código do autenticador (ação destrutiva)",
-  "cancelar": "Cancelar",
-  "aplicar": "Aplicar",
-  "pararAposPasso": "Parar após o passo atual",
-  "fechar": "Fechar",
-  "estadoRodando": "em andamento…",
-  "estadoConcluida": "concluída",
-  "estadoFalhou": "falhou (pode corrigir e aplicar de novo: retoma de onde parou)",
-  "estadoCancelada": "parada",
-
-  "registroTitulo": "Registro",
-  "registroVazio": "Nenhuma aplicação ainda."
+  "appWindowsDetail": "Windows (instalador)",
+  "appsVersion": "Versão publicada: {versao}",
+  "@appsVersion": {
+    "placeholders": {
+      "versao": {}
+    }
+  },
+  "appsNoRelease": "Nenhuma release encontrada. Os arquivos aparecem aqui assim que forem publicados.",
+  "appsUnsigned": "Downloads bloqueados por segurança: a chave que assina as releases do Solumia ainda não foi fixada no configurador.",
+  "appsFolder": "Arquivos salvos em {pasta}",
+  "@appsFolder": {
+    "placeholders": {
+      "pasta": {}
+    }
+  },
+  "openReleases": "Abrir releases no GitHub",
+  "fileUnavailable": "Arquivo não publicado nesta versão",
+  "downloadToThisPc": "Baixar para este PC",
+  "installOnThisPc": "Instalar neste PC",
+  "showQr": "QR para o celular",
+  "qrPhone": "Aponte a câmera do celular para baixar direto do GitHub. O Android confere a assinatura do APK ao instalar.",
+  "watchInstruction": "Baixe o APK aqui e envie ao relógio pelo app do celular ou instale no próprio relógio.",
+  "planNothingChanged": "Nada foi alterado ainda. Confira o que vai acontecer:",
+  "planRun": "Execução: {estado}",
+  "@planRun": {
+    "placeholders": {
+      "estado": {}
+    }
+  },
+  "destructiveCode": "Código do autenticador (ação destrutiva)",
+  "cancel": "Cancelar",
+  "apply": "Aplicar",
+  "stopAfterStep": "Parar após o passo atual",
+  "close": "Fechar",
+  "stateRunning": "em andamento…",
+  "stateFinished": "concluída",
+  "stateFailed": "falhou (pode corrigir e aplicar de novo: retoma de onde parou)",
+  "stateCancelled": "parada",
+  "runLogTitle": "Registro",
+  "runLogEmpty": "Nenhuma aplicação ainda.",
+  "navWorker": "Worker",
+  "navAssistant": "Assistente",
+  "itemWorker": "Worker neste PC",
+  "itemWorkerDetail": "Serviço solumia-worker, em paralelo ao agent-worker",
+  "workerIntro": "O worker roda neste PC como serviço do usuário e conecta ao gateway da sua VPS. Ele tem nome, porta e configuração próprios: o worker da instalação antiga continua como está.",
+  "workerState": "{unidade}: {estado}",
+  "workerLlama": "llama-server do Solumia na porta {porta} (o antigo usa 8081). Os dois dividem a GPU: evite usar os dois ao mesmo tempo com modelos grandes.",
+  "workerInstall": "Instalar ou atualizar o worker",
+  "assistantIntro": "O Claude Code deste PC ajuda você a seguir as etapas. Ele não tem ferramentas: não lê arquivos, não roda comandos e não aplica nada. Recebe só o estado resumido abaixo, sem senhas, chaves, IPs, domínio ou usuários, e a conversa fica só na memória desta sessão.",
+  "assistantUnavailable": "Claude Code não encontrado neste computador. Instale e faça login no Claude Code para usar o assistente.",
+  "assistantHint": "Pergunte, por exemplo: por onde eu começo?",
+  "assistantSend": "Enviar",
+  "assistantClear": "Limpar conversa",
+  "assistantContext": "O que o Claude recebe",
+  "assistantOpenScreen": "Abrir a tela sugerida",
+  "assistantThinking": "O Claude está pensando…",
+  "assistantNoSecrets": "Não cole senhas, chaves ou códigos aqui: o que parecer segredo é ocultado antes de sair do PC.",
+  "@workerState": {
+    "placeholders": {
+      "unidade": {
+        "type": "String"
+      },
+      "estado": {
+        "type": "String"
+      }
+    }
+  },
+  "@workerLlama": {
+    "placeholders": {
+      "porta": {
+        "type": "String"
+      }
+    }
+  },
+  "updateConfigurator": "Atualizar o configurador",
+  "updateConfiguratorDetail": "Compila e reinstala a partir do código deste repositório; a versão nova abre no próximo início.",
+  "updateButton": "Atualizar"
 }

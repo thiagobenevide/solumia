@@ -29,10 +29,10 @@ def channels(vault):
     return sorted(p.name for p in folder_channels(vault).iterdir() if (p / "Roteiros").is_dir())
 
 
-def _number(nome, meta):
+def _number(name, meta):
     if isinstance(meta.get("video"), int):
         return meta["video"]
-    m = re.search(r"\b(\d{3})\b", nome)
+    m = re.search(r"\b(\d{3})\b", name)
     return int(m.group(1)) if m else None
 
 
@@ -41,19 +41,19 @@ def title_clean(h1):
     return re.sub(r"\s*\([^)]*\)\s*$", "", t).strip()
 
 
-def short(nome, meta):
+def short(name, meta):
     """Letra do Short ("a" em `Short 005a — ...`), ou "" para vídeo longo."""
-    if meta.get("tipo") != "short" and not re.match(r"Short\b", nome):
+    if meta.get("tipo") != "short" and not re.match(r"Short\b", name):
         return ""
-    m = re.search(r"\b\d{3}([a-z])\b", nome)
+    m = re.search(r"\b\d{3}([a-z])\b", name)
     return str(meta.get("short") or (m.group(1) if m else "a"))
 
 
-def list_all(vault, canal=None):
+def list_all(vault, channel=None):
     """Roteiros (16:9, pasta Roteiros/) e Shorts (9:16, pasta Shorts/) do vault: [{canal, numero, short,
     formato, titulo, status, caminho, atualizado}] ordenados."""
     output = []
-    for c in [canal] if canal else channels(vault):
+    for c in [channel] if channel else channels(vault):
         for md in [*(folder_channels(vault) / c / "Roteiros").glob("*.md"), *(folder_channels(vault) / c / "Shorts").glob("*.md")]:
             post = frontmatter.load(md)
             h1 = next((l for l in post.content.splitlines() if l.startswith("# ")), md.stem)
@@ -66,11 +66,11 @@ def list_all(vault, canal=None):
     return sorted(output, key=lambda r: (r["canal"], r["numero"] or 0, r["short"]))
 
 
-def _inline(texto):
+def _inline(text):
     """Markdown da fala → marcação da esteira: **x** vira *x* (destaque), links viram texto."""
-    texto = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", texto)
-    texto = re.sub(r"\*\*(.+?)\*\*", r"*\1*", texto)
-    return texto.replace("’", "'").strip()
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
+    return text.replace("’", "'").strip()
 
 
 def _quote(cit):
@@ -140,15 +140,15 @@ def convert(md_text):
     return title, lines, notes, sources, quotes
 
 
-def script_txt(titulo, linhas):
+def script_txt(title, lines):
     """Texto no formato lido por `cenas.ler_roteiro` (uma fala por linha)."""
-    return "\n".join([f"# {titulo}", ""] + [l["fala"] for l in linhas if "fala" in l]) + "\n"
+    return "\n".join([f"# {title}", ""] + [l["fala"] for l in lines if "fala" in l]) + "\n"
 
 
-def chapters(linhas):
+def chapters(lines):
     """[(parte, nome, índice da 1ª fala)] para títulos de capítulo e marcadores."""
     output, k = [], 0
-    for l in linhas:
+    for l in lines:
         if "capitulo" in l:
             output.append({"parte": l["parte"], "nome": l["capitulo"], "fala": k})
         else:
@@ -156,8 +156,8 @@ def chapters(linhas):
     return output
 
 
-def _norm_slug(texto):
+def _norm_slug(text):
     import unicodedata
-    s = unicodedata.normalize("NFKD", texto.lower())
+    s = unicodedata.normalize("NFKD", text.lower())
     s = "".join(c for c in s if not unicodedata.combining(c))
     return re.sub(r"[^a-z0-9]+", "-", s).strip("-")[:40]

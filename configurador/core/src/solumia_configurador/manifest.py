@@ -1,6 +1,6 @@
-"""Manifesto `solumia.toml`: a descrição declarativa da instalação. Nunca guarda segredo.
+"""Manifest `solumia.toml`: the declarative description of the installation. Never holds secrets.
 
-Segredos (senhas, chaves, tokens) ficam no cofre e são referenciados aqui só pelo nome.
+Secrets (passwords, keys, tokens) live in the vault and are referenced here only by name.
 """
 
 from __future__ import annotations
@@ -16,26 +16,26 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from . import names
 
-ESQUEMA = 1
+SCHEMA = 1
 
-Papel = Literal["gateway", "worker", "tunnel", "collabora", "pipeline"]
-_DOMINIO = re.compile(r"^(?=.{1,253}$)(?!-)([a-z0-9-]{1,63}(?<!-)\.)+[a-z]{2,63}$")
+Role = Literal["gateway", "worker", "tunnel", "collabora", "pipeline"]
+_DOMAIN = re.compile(r"^(?=.{1,253}$)(?!-)([a-z0-9-]{1,63}(?<!-)\.)+[a-z]{2,63}$")
 _HOST = re.compile(r"^[A-Za-z0-9.-]{1,253}$|^\[[0-9a-fA-F:]+\]$|^[0-9a-fA-F:]+$")
-_USUARIO = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+_USER = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class _Base(BaseModel):
-    # Chave desconhecida é erro: um erro de digitação no TOML não pode passar calado.
+    # An unknown key is an error: a typo in the TOML must not pass silently.
     model_config = ConfigDict(extra="forbid")
 
 
-class Conta(_Base):
+class Account(_Base):
     usuario: str = "admin"
 
     @field_validator("usuario")
     @classmethod
-    def _usuario(cls, v: str) -> str:
+    def _user(cls, v: str) -> str:
         if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", v):
             raise ValueError("usuário: 3 a 32 caracteres (letras, números, _ . -)")
         return v
@@ -48,15 +48,15 @@ class TopologiaLocal(_Base):
 class Topologia(_Base):
     tipo: Literal["local", "hibrida", "nuvem"] = "hibrida"
     dominio: str = ""
-    email_tls: str = ""  # avisos do Let's Encrypt
+    email_tls: str = ""  # Let's Encrypt notices
     cloudflare: bool = False
     local: TopologiaLocal = Field(default_factory=TopologiaLocal)
 
     @field_validator("dominio")
     @classmethod
-    def _dominio(cls, v: str) -> str:
+    def _domain(cls, v: str) -> str:
         v = v.strip().lower().rstrip(".")
-        if v and not _DOMINIO.match(v):
+        if v and not _DOMAIN.match(v):
             raise ValueError(f"domínio inválido: {v!r}")
         return v
 
@@ -69,33 +69,33 @@ class Topologia(_Base):
         return v
 
     @model_validator(mode="after")
-    def _exige_dominio(self) -> Topologia:
+    def _requires_domain(self) -> Topologia:
         if self.tipo in ("hibrida", "nuvem") and not self.dominio:
             raise ValueError("topologia híbrida ou nuvem exige um domínio")
         return self
 
 
-class Pastas(_Base):
-    """Pastas de mídia do nó (Linux ou Windows). Caminhos absolutos; `~` é aceito."""
+class Folders(_Base):
+    """Media folders of the node (Linux or Windows). Absolute paths; `~` is accepted."""
 
     imagens: str = ""
     videos: str = ""
     audio: str = ""
-    producao: str = ""  # vídeos para produção (entrada da esteira)
-    produzidos: str = ""  # vídeos já produzidos (saída)
+    producao: str = ""  # videos to produce (pipeline input)
+    produzidos: str = ""  # videos already produced (output)
 
 
-class AcessoSSH(_Base):
+class SSHAccess(_Base):
     usuario: str = "root"
     host: str = ""
     porta: int = 22
-    # Impressão digital SHA256 da chave do servidor, confirmada pela pessoa no 1º acesso.
+    # SHA256 fingerprint of the server key, confirmed by the person on first access.
     impressao_host: str = ""
 
     @field_validator("usuario")
     @classmethod
-    def _usuario(cls, v: str) -> str:
-        if not _USUARIO.match(v):
+    def _user(cls, v: str) -> str:
+        if not _USER.match(v):
             raise ValueError(f"usuário SSH inválido: {v!r}")
         return v
 
@@ -109,22 +109,22 @@ class AcessoSSH(_Base):
 
     @field_validator("porta")
     @classmethod
-    def _porta(cls, v: int) -> int:
+    def _port(cls, v: int) -> int:
         if not 1 <= v <= 65535:
             raise ValueError("porta fora de 1–65535")
         return v
 
 
-class No(_Base):
+class Node(_Base):
     endereco: Literal["local", "ssh"] = "local"
-    ssh: AcessoSSH | None = None
+    ssh: SSHAccess | None = None
     entrega: Literal["ssh", "pacote"] = "ssh"
-    papeis: list[Papel] = Field(default_factory=list)
+    papeis: list[Role] = Field(default_factory=list)
     dir_dados: str = ""
-    pastas: Pastas | None = None
+    pastas: Folders | None = None
 
     @model_validator(mode="after")
-    def _coerente(self) -> No:
+    def _coherent(self) -> Node:
         if self.endereco == "ssh" and (self.ssh is None or not self.ssh.host):
             raise ValueError("nó remoto precisa de [ssh] com host")
         if len(set(self.papeis)) != len(self.papeis):
@@ -132,13 +132,13 @@ class No(_Base):
         return self
 
 
-class IALocal(_Base):
+class LocalAi(_Base):
     ativa: bool = False
     gpu: str = "auto"
     modelos: list[str] = Field(default_factory=list)
 
 
-class IANuvem(_Base):
+class CloudAi(_Base):
     ativa: bool = False
     provedores: list[Literal["claude-code", "anthropic", "openai", "gemini", "xai", "deepseek"]] = Field(
         default_factory=list
@@ -147,18 +147,18 @@ class IANuvem(_Base):
 
 
 class IA(_Base):
-    local: IALocal = Field(default_factory=IALocal)
-    nuvem: IANuvem = Field(default_factory=IANuvem)
+    local: LocalAi = Field(default_factory=LocalAi)
+    nuvem: CloudAi = Field(default_factory=CloudAi)
 
 
 class CraftApp(_Base):
     instalar: bool = False
-    versao: str = "ultima"  # "ultima" ou uma versão fixa como "0.20.1"
+    versao: str = "ultima"  # "ultima" (latest) or a pinned version such as "0.20.1"
     formato: Literal["auto", "appimage", "deb", "tar.gz", "msi", "portatil"] = "auto"
 
     @field_validator("versao")
     @classmethod
-    def _versao(cls, v: str) -> str:
+    def _version(cls, v: str) -> str:
         if v != "ultima" and not re.fullmatch(r"\d+\.\d+\.\d+", v):
             raise ValueError("versão: 'ultima' ou X.Y.Z")
         return v
@@ -174,11 +174,11 @@ class Atualizacoes(_Base):
     origem: Literal["github", "propria"] = "github"
 
 
-class Manifesto(_Base):
-    esquema: int = ESQUEMA
-    conta: Conta = Field(default_factory=Conta)
+class Manifest(_Base):
+    esquema: int = SCHEMA
+    conta: Account = Field(default_factory=Account)
     topologia: Topologia = Field(default_factory=lambda: Topologia(tipo="local"))
-    nos: dict[str, No] = Field(default_factory=dict)
+    nos: dict[str, Node] = Field(default_factory=dict)
     ia: IA = Field(default_factory=IA)
     modulos: list[str] = Field(default_factory=list)
     craft_apps: dict[str, CraftApp] = Field(default_factory=dict)
@@ -187,33 +187,33 @@ class Manifesto(_Base):
 
     @field_validator("esquema")
     @classmethod
-    def _esquema(cls, v: int) -> int:
-        if v != ESQUEMA:
-            raise ValueError(f"esquema {v} não suportado (esperado {ESQUEMA})")
+    def _schema(cls, v: int) -> int:
+        if v != SCHEMA:
+            raise ValueError(f"esquema {v} não suportado (esperado {SCHEMA})")
         return v
 
     @field_validator("nos")
     @classmethod
-    def _nomes_nos(cls, v: dict[str, No]) -> dict[str, No]:
-        for nome in v:
-            if not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", nome):
-                raise ValueError(f"nome de nó inválido: {nome!r}")
+    def _node_names(cls, v: dict[str, Node]) -> dict[str, Node]:
+        for name in v:
+            if not re.fullmatch(r"[a-z][a-z0-9-]{0,31}", name):
+                raise ValueError(f"nome de nó inválido: {name!r}")
         return v
 
     @model_validator(mode="after")
-    def _regras_de_papel(self) -> Manifesto:
-        donos: dict[str, list[str]] = {}
-        for nome, no in self.nos.items():
-            for papel in no.papeis:
-                donos.setdefault(papel, []).append(nome)
-        for papel in ("gateway", "collabora", "pipeline"):
-            if len(donos.get(papel, [])) > 1:
-                raise ValueError(f"papel {papel!r} em mais de um nó: {donos[papel]}")
-        # Rascunho (nós sem papéis, ex.: só as pastas salvas) é aceito; com papéis, o gateway é obrigatório.
-        if donos and "gateway" not in donos:
+    def _role_rules(self) -> Manifest:
+        owners: dict[str, list[str]] = {}
+        for name, no in self.nos.items():
+            for role in no.papeis:
+                owners.setdefault(role, []).append(name)
+        for role in ("gateway", "collabora", "pipeline"):
+            if len(owners.get(role, [])) > 1:
+                raise ValueError(f"papel {role!r} em mais de um nó: {owners[role]}")
+        # A draft (nodes without roles, e.g. only the saved folders) is accepted; with roles, the gateway is required.
+        if owners and "gateway" not in owners:
             raise ValueError("nenhum nó tem o papel 'gateway'")
-        gw, pl = donos.get("gateway", []), donos.get("pipeline", [])
-        if "tunnel" in donos and not (gw and pl and gw != pl):
+        gw, pl = owners.get("gateway", []), owners.get("pipeline", [])
+        if "tunnel" in owners and not (gw and pl and gw != pl):
             raise ValueError("papel 'tunnel' só existe com gateway e pipeline em nós diferentes")
         if self.topologia.tipo == "nuvem" and self.ia.local.ativa:
             raise ValueError("topologia nuvem não tem GPU: IA local indisponível")
@@ -221,30 +221,30 @@ class Manifesto(_Base):
             raise ValueError("topologia nuvem não suporta a esteira (pipeline)")
         return self
 
-    def no_com(self, papel: str) -> tuple[str, No] | None:
-        for nome, no in self.nos.items():
-            if papel in no.papeis:
-                return nome, no
+    def node_with(self, role: str) -> tuple[str, Node] | None:
+        for name, no in self.nos.items():
+            if role in no.papeis:
+                return name, no
         return None
 
 
-def caminho_padrao() -> Path:
+def default_path() -> Path:
     from .platform_setup import dir_config
 
-    return dir_config() / names.ARQUIVO_MANIFESTO
+    return dir_config() / names.MANIFEST_FILE
 
 
-def carregar(caminho: Path) -> Manifesto:
-    with caminho.open("rb") as f:
-        return Manifesto.model_validate(tomllib.load(f))
+def load(path: Path) -> Manifest:
+    with path.open("rb") as f:
+        return Manifest.model_validate(tomllib.load(f))
 
 
-def salvar(manifesto: Manifesto, caminho: Path) -> None:
-    """Escrita atômica: um arquivo pela metade nunca substitui o anterior."""
-    caminho.parent.mkdir(parents=True, exist_ok=True)
-    dados = manifesto.model_dump(mode="json", exclude_none=True)
-    texto = "# Gerado pelo configurador do Solumia. Sem segredos: eles ficam no cofre.\n"
-    texto += tomli_w.dumps(dados)
-    temporario = caminho.with_suffix(".tmp")
-    temporario.write_text(texto, encoding="utf-8")
-    os.replace(temporario, caminho)
+def save(manifest: Manifest, path: Path) -> None:
+    """Atomic write: a half-written file never replaces the previous one."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = manifest.model_dump(mode="json", exclude_none=True)
+    text = "# Gerado pelo configurador do Solumia. Sem segredos: eles ficam no cofre.\n"
+    text += tomli_w.dumps(data)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(text, encoding="utf-8")
+    os.replace(temporary, path)

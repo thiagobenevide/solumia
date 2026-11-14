@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Configuração do Gateway, lida de variáveis de ambiente (prefixo GATEWAY_)."""
+    """Gateway configuration, read from environment variables (GATEWAY_ prefix)."""
 
     model_config = SettingsConfigDict(
         env_prefix="GATEWAY_",
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
 
     # --- Segredos ---
-    # SecretStr para nunca vazar o valor em logs, repr() ou tracebacks.
+    # SecretStr so the value never leaks into logs, repr() or tracebacks.
     client_api_keys: SecretStr = SecretStr("")
     """Chaves aceitas de clientes OpenAI-compatible (formato sk_live_...), separadas por vírgula."""
 
@@ -57,8 +57,8 @@ class Settings(BaseSettings):
     """O módulo Código (comandos no PC) exige um código do Authenticator digitado nas últimas N
     horas: só o token de sessão não basta."""
 
-    # --- Login do app (senha + Google Authenticator) ---
-    # Gerar tudo com: .venv/bin/python -m backend.auth.security
+    # --- App login (password + Google Authenticator) ---
+    # Generate everything with: .venv/bin/python -m backend.auth.security
     admin_usuario: str = "admin"
     admin_senha_hash: SecretStr = SecretStr("")
     """Hash scrypt da senha; vazio = login desligado (fail-secure)."""
@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     login_max_tentativas: int = 5
     login_bloqueio_minutos: int = 15
 
-    # --- Worker (Etapa 3) ---
+    # --- Worker (Stage 3) ---
     worker_heartbeat_interval_seconds: int = 20
     """Intervalo sugerido ao Worker entre heartbeats, enviado no worker_hello_ack."""
 
@@ -79,11 +79,11 @@ class Settings(BaseSettings):
     chat_request_timeout_seconds: float = 120.0
     """Timeout aguardando a resposta do worker para um chat completion."""
 
-    # --- Notas ---
+    # --- Notes ---
     notas_dir: str = "~/agent-data/notas"
     """Pasta dos Markdown das notas (pode ser o vault do Obsidian ou uma subpasta dele)."""
 
-    # --- Arquivos ---
+    # --- Files ---
     arquivos_dir: str = "~/agent-data/arquivos"
     """Pasta da biblioteca de arquivos (PDF, DOCX, PPTX) e das anotações feitas no app."""
 
@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     pdftoppm_bin: str = "pdftoppm"
     """Poppler usado para gerar a miniatura da primeira página."""
 
-    # --- Collabora Online (edição de DOCX/XLSX/PPTX no app, via WOPI) ---
+    # --- Collabora Online (DOCX/XLSX/PPTX editing in the app, through WOPI) ---
     collabora_url: str = ""
     """URL pública do Collabora (a que o navegador/webview abre); vazio = edição desligada."""
 
@@ -109,11 +109,11 @@ class Settings(BaseSettings):
     wopi_token_minutos: int = 600
     """Validade do access_token entregue ao Collabora."""
 
-    # --- Atualização do app ---
+    # --- App update ---
     atualizacoes_dir: str = "~/agent-data/atualizacoes"
     """APK, pacote Linux e versao.json publicados por infra/scripts/publicar_app."""
 
-    # --- Saúde ---
+    # --- Health ---
     saude_dir: str = "~/agent-data/saude"
     """Catálogo de exercícios, agenda de treinos e imagens do módulo Saúde."""
 
@@ -124,11 +124,11 @@ class Settings(BaseSettings):
     youtube_vault: str = "~/Documents/github/obsidian"
     """Vault do Obsidian de onde `POST /api/youtube/importar` traz os canais para o cofre."""
 
-    # --- Estudos ---
+    # --- Studies ---
     estudos_dir: str = "~/agent-data/estudos"
     """Leituras (livros e artigos) e trilhas de idiomas com as sessões registradas."""
 
-    # --- Finanças ---
+    # --- Finance ---
     financas_dir: str = "~/agent-data/financas"
     """Contas, extrato, orçamento, metas, empresas analisadas e carteira do módulo Finanças."""
 
@@ -136,11 +136,11 @@ class Settings(BaseSettings):
     design_dir: str = "~/agent-data/design"
     """Quadros brancos do módulo Design (`quadros/<id>.json`) e imagens (`imagens/`)."""
 
-    # --- Eletrônica ---
+    # --- Electronics ---
     eletronica_dir: str = "~/agent-data/eletronica"
     """Projetos de circuito do módulo Eletrônica (`projetos/<id>.json`) e bibliotecas importadas."""
 
-    # --- Código ---
+    # --- Code ---
     codigo_dir: str = "~/agent-data/codigo"
     """Abas do módulo Código (`sessoes/<id>/`: meta, etapas do Claude Code, imagens enviadas)."""
 
@@ -159,7 +159,7 @@ class Settings(BaseSettings):
     google_busca_cx: str = ""
     """Id do Programmable Search Engine com "Pesquisa de imagens" ligada e "a Web inteira"."""
 
-    # --- Concursos ---
+    # --- Exams ---
     concursos_dir: str = "~/agent-data/concursos"
     concursos_origem_cidade: str = "Custódia"
     concursos_origem_uf: str = "PE"
@@ -177,7 +177,7 @@ class Settings(BaseSettings):
     llm_config: str = "~/agent-data/plataforma/llm.json"
     """Modelo do LLM escolhido no app (tela Modelo de IA); sobrepõe GATEWAY_ROTINAS_MODELO."""
 
-    # --- Painel (Cobrador) ---
+    # --- Panel (Nagger) ---
     painel_dir: str = "~/agent-data/painel"
     """Metas, ações registradas e agendas do dia do cobrador (`cobrador.json`)."""
 
@@ -222,13 +222,13 @@ class Settings(BaseSettings):
 
     @property
     def client_api_key_list(self) -> list[str]:
-        """Só as chaves (sem o prefixo de escopo); ver `client_api_key_escopos`."""
+        """Only the keys (without the scope prefix); see `client_api_key_scopes`."""
         return list(self.client_api_key_scopes)
 
     @property
     def client_api_key_scopes(self) -> dict[str, str]:
-        """Chave → escopo. `relogio:<chave>` só abre as rotas do relógio; sem prefixo = tudo
-        (escopo vazio, como as chaves antigas)."""
+        """Key → scope. `relogio:<chave>` only opens the watch routes; no prefix = everything
+        (empty scope, like the old keys)."""
         scopes: dict[str, str] = {}
         for item in self.client_api_keys.get_secret_value().split(","):
             item = item.strip()
@@ -246,5 +246,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Retorna a instância cacheada de Settings (lida uma única vez por processo)."""
+    """Returns the cached Settings instance (read only once per process)."""
     return Settings()

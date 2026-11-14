@@ -1,13 +1,13 @@
-"""Biblioteca de arquivos de estudo: PDF, documentos e apresentações, com anotações à tinta.
+"""Library of study files: PDFs, documents and presentations, with ink annotations.
 
-Cada arquivo é uma pasta `<raiz>/<id>/` com `meta.json`, o `original.<ext>`, o `documento.pdf`
-que o app exibe (o próprio original quando já é PDF; senão, convertido pelo LibreOffice), a
-`miniatura.png` da primeira página e `anotacoes.json` (traços, destaques e textos, em pontos PDF
-da página).
+Each file is a folder `<root>/<id>/` with `meta.json`, the `original.<ext>`, the `documento.pdf`
+the app displays (the original itself when it is already a PDF; otherwise, converted by
+LibreOffice), the `miniatura.png` of the first page and `anotacoes.json` (strokes, highlights and
+texts, in PDF points of the page).
 
-As anotações têm `versao`: quem salva manda a versão em que se baseou e recebe conflito se outro
-aparelho salvou antes. Toda alteração entra em `mudancas.jsonl` com um `seq` crescente, para os
-aparelhos (PC, tablet, celular, web) saberem o que mudou desde a última vez que olharam.
+Annotations have `versao`: whoever saves sends the version they based it on and gets a conflict if
+another device saved first. Every change goes into `mudancas.jsonl` with an increasing `seq`, so the
+devices (PC, tablet, phone, web) know what changed since they last looked.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ KINDS_POR_EXTENSION = {
     "pptx": "apresentacao",
     "ppt": "apresentacao",
     "odp": "apresentacao",
-    # extratos bancários guardados pelo módulo Finanças (o LibreOffice gera o PDF para ler)
+    # bank statements stored by the Finance module (LibreOffice generates the PDF to read)
     "csv": "planilha",
     "xls": "planilha",
     "xlsx": "planilha",
@@ -46,12 +46,12 @@ KINDS_POR_EXTENSION = {
     "ofx": "extrato",
     "qfx": "extrato",
     "txt": "extrato",
-    # dados estruturados: o app mostra o original em árvore, sem PDF
+    # structured data: the app shows the original as a tree, without PDF
     "xml": "xml",
 }
-# Tipos que não viram PDF (o app lê o próprio original).
+# Types that do not become PDF (the app reads the original itself).
 SEM_PDF = ("xml",)
-# Apresentação em branco (ODP plano, um slide de título + subtítulo) que o LibreOffice vira .pptx.
+# Blank presentation (flat ODP, one title + subtitle slide) that LibreOffice turns into .pptx.
 PRESENTATION_EMPTY = """<?xml version="1.0" encoding="UTF-8"?>
 <office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
  xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
@@ -85,7 +85,7 @@ PRESENTATION_EMPTY = """<?xml version="1.0" encoding="UTF-8"?>
 </office:document>
 """.encode()
 SEM_SOFFICE = "LibreOffice (soffice) não está instalado neste servidor"
-# Exportação pelo LibreOffice: formato → filtro do `--convert-to` (por tipo de arquivo).
+# Export through LibreOffice: format → `--convert-to` filter (per file type).
 EXPORTS = {
     "documento": {
         "pdf": "pdf", "docx": "docx:MS Word 2007 XML", "odt": "odt", "rtf": "rtf",
@@ -131,14 +131,14 @@ def _read_json(caminho: Path, default: Any) -> Any:
 
 
 def _write_json(caminho: Path, dados: Any) -> None:
-    """Grava num temporário e renomeia: um leitor nunca vê o arquivo pela metade."""
+    """Writes to a temporary file and renames: a reader never sees a half-written file."""
     tmp = caminho.with_suffix(caminho.suffix + ".tmp")
     tmp.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, caminho)
 
 
 def reference(titulo: str, highlight: dict[str, Any]) -> str:
-    """Citação em Markdown pronta para colar numa nota."""
+    """Markdown citation ready to paste into a note."""
     text = " ".join(str(highlight.get("texto", "")).split())
     quote = f"> {text}\n" if text else ""
     return f"{quote}— [[{titulo}]], p. {int(highlight.get('pagina', 0)) + 1}"
@@ -153,7 +153,7 @@ class Collection:
         self._lock = threading.RLock()
         self._log = self.root / "mudancas.jsonl"
 
-    # --- caminhos ---
+    # --- paths ---
 
     def _folder(self, id_: str) -> Path:
         if not re.fullmatch(r"[a-z0-9]{12}", id_):
@@ -175,7 +175,7 @@ class Collection:
         png = self._folder(id_) / "miniatura.png"
         return png if png.is_file() else None
 
-    # --- mudanças ---
+    # --- changes ---
 
     def _register(self, action: str, id_: str, **extra: Any) -> int:
         with self._lock:
@@ -202,9 +202,11 @@ class Collection:
                         items.append(item)
         return {"seq": self.seq_current(), "mudancas": items[-limite:]}
 
-    # --- arquivos ---
+    # --- files ---
 
-    def list_all(self, q: str = "", tipo: str | None = None, pasta: str | None = None) -> list[dict]:
+    def list_all(
+        self, q: str = "", tipo: str | None = None, pasta: str | None = None
+    ) -> list[dict]:
         term = _key(q)
         items = []
         for meta_json in self.root.glob("*/meta.json"):
@@ -229,8 +231,9 @@ class Collection:
         return meta
 
     def adicionar(self, nome: str, content: bytes, pasta: str = "") -> dict[str, Any]:
-        """Guarda o arquivo e devolve o meta. PDF já sai `pronto`; o resto fica `convertendo`
-        até [converter] rodar. Um arquivo idêntico já guardado é devolvido com `duplicado`."""
+        """Stores the file and returns the meta. A PDF comes out `pronto` right away; the rest stays
+        `convertendo` until the conversion runs. An identical file already stored is returned with
+        `duplicado`."""
         extension = Path(nome).suffix.lower().lstrip(".")
         kind = KINDS_POR_EXTENSION.get(extension)
         if not kind:
@@ -286,8 +289,8 @@ class Collection:
             return meta
 
     def substituir(self, id_: str, content: bytes) -> dict[str, Any]:
-        """Troca o original por uma versão editada (no app ou num editor de fora). O que vira PDF
-        volta a `convertendo`; quem chama roda [converter]."""
+        """Replaces the original with an edited version (in the app or an external editor). What
+        becomes PDF goes back to `convertendo`; the caller runs the conversion."""
         if not content:
             raise FileInvalid("Arquivo vazio")
         with self._lock:
@@ -311,8 +314,8 @@ class Collection:
         return meta
 
     def duplicate(self, id_: str) -> dict[str, Any]:
-        """Cópia com id novo (original, PDF, miniatura e anotações); o envio comum recusaria por
-        ser idêntico."""
+        """Copy with a new id (original, PDF, thumbnail and annotations); the regular upload would
+        refuse it for being identical."""
         with self._lock:
             origin = self._folder(id_)
             new = secrets.token_hex(6)
@@ -330,8 +333,8 @@ class Collection:
             self._register("excluido", id_)
 
     def convert(self, id_: str) -> dict[str, Any]:
-        """Gera `documento.pdf` de um DOCX/PPTX/planilha/extrato pelo LibreOffice headless (demora
-        segundos)."""
+        """Generates `documento.pdf` from a DOCX/PPTX/spreadsheet/statement through headless
+        LibreOffice (takes seconds)."""
         folder = self._folder(id_)
         meta = self.obter(id_)
         if meta["tipo"] == "pdf" or meta["tipo"] in SEM_PDF:
@@ -340,15 +343,22 @@ class Collection:
         error: str | None = None
         with tempfile.TemporaryDirectory() as tmp:
             if meta["extensao"] in ("ofx", "qfx"):
-                # OFX é texto (SGML): o Writer converte a cópia .txt.
+                # OFX is text (SGML): Writer converts the .txt copy.
                 copy = Path(tmp, "original.txt")
                 shutil.copyfile(original, copy)
                 original = copy
-            # Perfil próprio por conversão: duas conversões juntas não brigam pelo mesmo perfil.
+            # Own profile per conversion: two simultaneous conversions do not fight over the same
+            # profile.
             profile = Path(tmp, "perfil").as_uri()
             command = [
-                self.soffice, f"-env:UserInstallation={profile}", "--headless",
-                "--convert-to", "pdf", "--outdir", tmp, str(original),
+                self.soffice,
+                f"-env:UserInstallation={profile}",
+                "--headless",
+                "--convert-to",
+                "pdf",
+                "--outdir",
+                tmp,
+                str(original),
             ]
             try:
                 r = subprocess.run(command, capture_output=True, timeout=TIME_CONVERSION, text=True)
@@ -373,7 +383,7 @@ class Collection:
         return meta
 
     def export(self, id_: str, fmt: str) -> tuple[bytes, str]:
-        """Original convertido para [formato] (ver `EXPORTACOES`) e o nome do arquivo gerado."""
+        """Original converted to the format (see the exports table) and the generated file name."""
         meta = self.obter(id_)
         filters = EXPORTS.get(meta["tipo"], {})
         if fmt not in filters:
@@ -386,8 +396,14 @@ class Collection:
         with tempfile.TemporaryDirectory() as tmp:
             profile = Path(tmp, "perfil").as_uri()
             command = [
-                self.soffice, f"-env:UserInstallation={profile}", "--headless",
-                "--convert-to", filters[fmt], "--outdir", tmp, str(original),
+                self.soffice,
+                f"-env:UserInstallation={profile}",
+                "--headless",
+                "--convert-to",
+                filters[fmt],
+                "--outdir",
+                tmp,
+                str(original),
             ]
             try:
                 r = subprocess.run(command, capture_output=True, timeout=TIME_CONVERSION, text=True)
@@ -402,8 +418,8 @@ class Collection:
             return gerado.read_bytes(), f"{base}.{fmt}"
 
     def create_empty(self, tipo: str, titulo: str, pasta: str = "") -> dict[str, Any]:
-        """Documento (.docx), planilha (.xlsx) ou apresentação (.pptx) em branco, gerado pelo
-        LibreOffice a partir de um modelo mínimo, e guardado como um envio comum."""
+        """Blank document (.docx), spreadsheet (.xlsx) or presentation (.pptx), generated by
+        LibreOffice from a minimal template, and stored as a regular upload."""
         models = {
             "documento": ("txt", "docx:MS Word 2007 XML", b""),
             "planilha": ("csv", "xlsx:Calc MS Excel 2007 XML", b"\n"),
@@ -418,8 +434,14 @@ class Collection:
             model = Path(tmp, f"vazio.{ext_model}")
             model.write_bytes(content)
             command = [
-                self.soffice, f"-env:UserInstallation={Path(tmp, 'perfil').as_uri()}", "--headless",
-                "--convert-to", criteria, "--outdir", tmp, str(model),
+                self.soffice,
+                f"-env:UserInstallation={Path(tmp, 'perfil').as_uri()}",
+                "--headless",
+                "--convert-to",
+                criteria,
+                "--outdir",
+                tmp,
+                str(model),
             ]
             try:
                 subprocess.run(command, capture_output=True, timeout=TIME_CONVERSION)
@@ -441,15 +463,24 @@ class Collection:
 
     def _generate_thumbnail(self, pasta: Path) -> None:
         command = [
-            self.pdftoppm, "-png", "-singlefile", "-f", "1", "-l", "1", "-scale-to", "360",
-            str(pasta / "documento.pdf"), str(pasta / "miniatura"),
+            self.pdftoppm,
+            "-png",
+            "-singlefile",
+            "-f",
+            "1",
+            "-l",
+            "1",
+            "-scale-to",
+            "360",
+            str(pasta / "documento.pdf"),
+            str(pasta / "miniatura"),
         ]
         try:
             subprocess.run(command, capture_output=True, timeout=60, check=False)
         except (FileNotFoundError, subprocess.TimeoutExpired):
             logger.info("Sem miniatura para %s (pdftoppm indisponível)", pasta.name)
 
-    # --- anotações ---
+    # --- annotations ---
 
     @staticmethod
     def _annotations_empty() -> dict[str, Any]:
@@ -462,8 +493,8 @@ class Collection:
         return data
 
     def traducao(self, id_: str) -> dict[str, Any]:
-        """Tradução para o português por página (0-based, como chave texto):
-        `{"3": {"segmentos": [...], "traducoes": [...]}}`, alinhada frase a frase."""
+        """Portuguese translation per page (0-based, as a text key):
+        `{"3": {"segmentos": [...], "traducoes": [...]}}`, aligned sentence by sentence."""
         data: dict[str, Any] = _read_json(self._folder(id_) / "traducao.json", {})
         return data
 
@@ -496,7 +527,7 @@ class Collection:
             return data
 
     def destaques(self, q: str = "", file_id: str | None = None) -> list[dict[str, Any]]:
-        """Trechos marcados com o marca-texto em todos os arquivos, cada um com a citação pronta."""
+        """Excerpts marked with the highlighter in all files, each one with a ready citation."""
         term = _key(q)
         goals = [self.obter(file_id)] if file_id else self.list_all()
         items = []
@@ -504,17 +535,20 @@ class Collection:
             for d in self.annotations(meta["id"])["destaques"]:
                 if term and term not in _key(f"{d.get('texto', '')} {d.get('comentario', '')}"):
                     continue
-                items.append({
-                    **d,
-                    "arquivo_id": meta["id"],
-                    "arquivo_titulo": meta["titulo"],
-                    "referencia": reference(meta["titulo"], d),
-                })
+                items.append(
+                    {
+                        **d,
+                        "arquivo_id": meta["id"],
+                        "arquivo_titulo": meta["titulo"],
+                        "referencia": reference(meta["titulo"], d),
+                    }
+                )
         return sorted(items, key=lambda d: str(d.get("criado") or ""), reverse=True)
 
     def markings_of_project(self, project_id: str) -> list[dict[str, Any]]:
-        """Destaques, textos e traços à mão ligados ao projeto de leitura (campo `projetos` de cada
-        elemento), com `tipo` (`destaque`/`texto`/`traco`) e o arquivo de origem."""
+        """Highlights, texts and handwritten strokes linked to the reading project (each element's
+        `projetos` field), with `tipo` (`destaque`/`texto`/`traco`) and the source file."""
+
         items = []
         for meta in self.list_all():
             anot = self.annotations(meta["id"])
@@ -522,10 +556,12 @@ class Collection:
             for kind, lista in pairs:
                 for e in anot.get(lista) or []:
                     if project_id in (e.get("projetos") or []):
-                        items.append({
-                            **e,
-                            "tipo": kind,
-                            "arquivo_id": meta["id"],
-                            "arquivo_titulo": meta["titulo"],
-                        })
+                        items.append(
+                            {
+                                **e,
+                                "tipo": kind,
+                                "arquivo_id": meta["id"],
+                                "arquivo_titulo": meta["titulo"],
+                            }
+                        )
         return items

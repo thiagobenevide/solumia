@@ -7,15 +7,15 @@ from pydantic import ValidationError
 from esteira.filmcraft import ticks
 from esteira.n1 import filmcraft as N1
 
-ESTILO = {"fonte": "Inter", "fonte_estilo": "Bold", "cores": {"texto": "#ffffff", "destaque": "#ff0", "acento": "#0ff"}}
+STYLE = {"fonte": "Inter", "fonte_estilo": "Bold", "cores": {"texto": "#ffffff", "destaque": "#ff0", "acento": "#0ff"}}
 
 
 class FC:
     def __init__(self):
-        self.chamadas, self.n = [], itertools.count(1)
+        self.calls, self.n = [], itertools.count(1)
 
     def run(self, cmd, **p):
-        self.chamadas.append((cmd, p))
+        self.calls.append((cmd, p))
         if cmd == "file.import":
             return {"items": [f"i{next(self.n)}" for _ in p["paths"]], "errors": []}
         if cmd == "timeline.place":
@@ -27,17 +27,17 @@ class FC:
         return {}
 
 
-def _executar(ops, midias=None):
+def _execute(ops, medias=None):
     fc = FC()
-    midias = midias or {"narracao": {"caminho": "/n.wav"}, "cena:1": {"caminho": "/a.mp4"},
+    medias = medias or {"narracao": {"caminho": "/n.wav"}, "cena:1": {"caminho": "/a.mp4"},
                         "musica": {"caminho": "/m.mp3", "dur": 40}}
-    ex = N1.Executor(fc, midias, ESTILO)
-    ex.executar({"ops": ops})
-    return fc.chamadas
+    ex = N1.Executor(fc, medias, STYLE)
+    ex.apply_doc({"ops": ops})
+    return fc.calls
 
 
-def test_montagem_basica_resolve_nomes_trilhas_e_ticks():
-    cmds = _executar([
+def test_basic_assembly_resolves_names_tracks_and_ticks():
+    cmds = _execute([
         {"op": "sequencia", "nome": "ep", "formato": "9:16"},
         {"op": "colocar", "id": "narracao", "midia": "narracao", "trilha": "narracao", "em": 0},
         {"op": "colocar", "id": "c1", "midia": "cena:1", "trilha": "base", "em": 2, "dur": 3},
@@ -59,8 +59,8 @@ def test_montagem_basica_resolve_nomes_trilhas_e_ticks():
     assert ("essentialSound.generateDucking" in names)
 
 
-def test_texto_pop_e_correcoes():
-    cmds = _executar([
+def test_pop_text_and_fixes():
+    cmds = _execute([
         {"op": "sequencia", "nome": "ep"},
         {"op": "texto", "id": "k", "conteudo": "JUROS", "em": 1, "dur": 1.5, "tamanho": 0.1, "pos": [0.5, 0.8],
          "cor": "acento", "estilo": "pop"},
@@ -73,14 +73,14 @@ def test_texto_pop_e_correcoes():
     assert next(p for c, p in cmds if c == "markers.add")["color"] == "Red"
 
 
-def test_esquema_fechado_e_erros():
+def test_closed_schema_and_errors():
     with pytest.raises(ValidationError):  # transição fora do catálogo
         N1.Assembly.model_validate({"ops": [{"op": "transicao", "alvo": "x", "tipo": "explosao"}]})
     with pytest.raises(ValidationError):  # campo desconhecido
         N1.Assembly.model_validate({"ops": [{"op": "cortar", "em": 1, "pixels": 3}]})
     with pytest.raises(N1.ErrorN1):
-        _executar([{"op": "sequencia", "nome": "e"}, {"op": "remover", "alvo": "fantasma"}])
+        _execute([{"op": "sequencia", "nome": "e"}, {"op": "remover", "alvo": "fantasma"}])
     with pytest.raises(N1.ErrorN1):
-        _executar([{"op": "colocar", "id": "x", "midia": "cena:999", "trilha": "base", "em": 0}])
+        _execute([{"op": "colocar", "id": "x", "midia": "cena:999", "trilha": "base", "em": 0}])
     schema = N1.esquema_json(N1.Assembly) if hasattr(N1, "esquema_json") else N1.Assembly.model_json_schema()
     assert "ops" in schema["properties"]

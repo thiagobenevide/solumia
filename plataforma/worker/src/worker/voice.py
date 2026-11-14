@@ -1,8 +1,8 @@
-"""Voz do Worker: transcrição com faster-whisper (GPU se houver) e fala com XTTS-v2 (reservas:
-Kokoro, Piper e espeak-ng).
+"""Worker voice: transcription with faster-whisper (GPU if available) and speech with XTTS-v2
+(fallbacks: Kokoro, Piper and espeak-ng).
 
-O faster-whisper é dependência opcional (`uv sync --extra voz`, + `--extra voz-gpu` para a GPU); o
-modelo carrega na primeira transcrição e fica na memória."""
+faster-whisper is an optional dependency (`uv sync --extra voz`, + `--extra voz-gpu` for the GPU);
+the model loads on the first transcription and stays in memory."""
 
 import asyncio
 import base64
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 TASKS = ("transcrever", "falar", "falar_marcado", "avaliar_leitura")
 
-# Leitura guiada (Estudos › Linguagem): voz e código de idioma do Kokoro por idioma estudado.
+# Guided reading (Studies › Language): Kokoro voice and language code per studied language.
 VOICES_KOKORO = {
     "en": ("af_heart", "en-us"),
     "es": ("ef_dora", "es"),
@@ -41,7 +41,7 @@ VOICES_KOKORO = {
 _XTTS_DIR = Path(__file__).resolve().parents[2] / "xtts"
 _XTTS_PYTHON = _XTTS_DIR / ".venv" / "bin" / "python"
 
-# Frases que o Whisper inventa em silêncio ou ruído (legendas do YouTube no treino).
+# Phrases Whisper makes up on silence or noise (YouTube captions in its training).
 _HALLUCINATIONS = re.compile(
     r"legendas? (pela|por)|amara\.org|inscreva-se|obrigado por assistir|tchau,? tchau|"
     r"thanks? (you )?for watching|subscribe to|subtitles by|"
@@ -49,22 +49,22 @@ _HALLUCINATIONS = re.compile(
     re.IGNORECASE,
 )
 
-# Contexto inicial por idioma: o prompt em português puxaria a fala em inglês para o português.
+# Initial context per language: a Portuguese prompt would pull English speech into Portuguese.
 _PROMPT_EN = "Conversation in English with a personal assistant about schedule, tasks and code."
 
 
 def choose_language(
     probabilidades: list[tuple[str, float]], aceitos: list[str], default: str
 ) -> str:
-    """O idioma mais provável entre os [aceitos]: o Whisper solto confunde o português do Brasil
-    com galego ou espanhol e viaja na tradução."""
+    """The most likely language among the accepted ones: unconstrained Whisper confuses Brazilian
+    Portuguese with Galician or Spanish and drifts into translation."""
     melhores = {i: p for i, p in probabilidades if i in aceitos}
     return max(melhores, key=lambda i: melhores[i]) if melhores else default
 
 
 def _load_libs_cuda() -> None:
-    # As libs CUDA vêm dos pacotes pip nvidia-* (extra voz-gpu); o ctranslate2 só as acha
-    # pré-carregadas.
+    # The CUDA libs come from the nvidia-* pip packages (voz-gpu extra); ctranslate2 only finds
+    # them preloaded.
     for base in site.getsitepackages():
         for default in ("nvidia/cublas/lib/libcublas*.so.*", "nvidia/cudnn/lib/libcudnn*.so.*"):
             for lib in sorted(glob.glob(os.path.join(base, default))):
@@ -96,15 +96,15 @@ def _ordinal(n: int) -> str:
 
 
 def _lines_spoken(t: str) -> list[str]:
-    """Estrutura do markdown em fala didática: títulos viram "Tópico 1, …" (havendo mais de um) e
-    itens de lista viram "Primeiro, …", "Segundo, …" (sub-itens só o texto)."""
+    """Markdown structure as didactic speech: headings become "Tópico 1, …" (when there is more than
+    one) and list items become "Primeiro, …", "Segundo, …" (sub-items just the text)."""
     lines = t.split("\n")
     titulos = sum(1 for line in lines if re.match(r"\s*#+\s+\S", line))
     output: list[str] = []
     n_title = n_item = 0
     for line in lines:
         if not line.strip():
-            n_item = 0  # linha em branco encerra a lista
+            n_item = 0  # a blank line ends the list
             continue
         if m := re.match(r"\s*#+\s+(.*)", line):
             n_title += 1
@@ -138,21 +138,22 @@ def _data(m: re.Match[str]) -> str:
 
 
 def text_to_speech(text: str, limite: int) -> str:
-    """Texto que o sintetizador lê sem dizer "ponto", "asterisco" etc.: tira markdown, links e
-    emojis, transforma listas e títulos em fala didática, escreve por extenso horários, datas e
-    símbolos e só deixa passar letras, números e . , ! ?. Texto longo é cortado no fim de frase."""
+    """Text the synthesizer reads without saying "ponto", "asterisco" etc.: strips markdown, links
+    and
+    emojis, turns lists and headings into didactic speech, spells out times, dates and symbols and
+    only lets letters, digits and . , ! ? through. Long text is cut at the end of a sentence."""
     t = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
-    t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)  # [texto](link) → texto
+    t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)  # [text](link) → text
     t = re.sub(r"\[\[([^\]|]+)(\|([^\]]+))?\]\]", lambda m: m.group(3) or m.group(1), t)
     t = re.sub(r"https?://\S+|www\.\S+", " ", t)
     t = re.sub(r"\*\*|__|~~|`", "", t)
     t = _EMOJIS.sub(" ", t)
     t = re.sub(r"^\s*>\s?", "", t, flags=re.MULTILINE)
-    t = re.sub(r"^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$", "", t, flags=re.MULTILINE)  # linha de tabela
+    t = re.sub(r"^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$", "", t, flags=re.MULTILINE)  # table row
     t = " ".join(_score(line) for line in _lines_spoken(t))
     for default, swap in _ABBREVIATIONS.items():
         t = re.sub(default, swap, t, flags=re.IGNORECASE)
-    # Horários, datas e símbolos por extenso (senão vira "dois pontos", "barra", "cifrão").
+    # Times, dates and symbols spelled out (otherwise they become "dois pontos", "barra", "cifrão").
     t = re.sub(r"\b(\d{1,2})[:h](\d{2})\b", lambda m: f"{int(m[1])} e {m[2]}", t)
     t = re.sub(r"\b(\d{1,2})h\b", lambda m: f"{m[1]} {'hora' if m[1] == '1' else 'horas'}", t)
     t = re.sub(r"\b(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\b", _data, t)
@@ -162,10 +163,10 @@ def text_to_speech(text: str, limite: int) -> str:
     t = re.sub(r"(\d)\s*[x×]\s*(\d)", r"\1 vezes \2", t)
     t = re.sub(r"\s&\s", " e ", t)
     t = re.sub(r"\be/ou\b", "e ou", t)
-    # Pausas: reticências, travessões, ponto e vírgula, parênteses e dois pontos viram vírgula.
+    # Pauses: ellipses, dashes, semicolons, parentheses and colons become commas.
     t = re.sub(r"\.{2,}|…|\s[–—-]\s|[;()\[\]{}]", ", ", t)
     t = re.sub(r":(?=\s|$)", ",", t)
-    # Lista branca: qualquer outro símbolo o modelo leria em voz alta.
+    # Allow list: the model would read any other symbol aloud.
     t = re.sub(r"[^\w\s.,!?]|_", " ", t)
     t = re.sub(r"(\d)([.,])(\d)", lambda m: m[1] + {".": "\x01", ",": "\x02"}[m[2]] + m[3], t)
     t = re.sub(r"\s+([.,!?])", r"\1", t)
@@ -180,13 +181,13 @@ def text_to_speech(text: str, limite: int) -> str:
 
 
 def divide_spans(text: str, tamanho: int = 260) -> list[str]:
-    """Trechos para tocar enquanto o próximo é sintetizado: o primeiro é uma frase só (a voz
-    começa logo); os outros juntam frases até ~[tamanho] caracteres."""
+    """Chunks to play while the next one is synthesized: the first is a single sentence (the voice
+    starts right away); the others join sentences up to ~size characters."""
     spans: list[str] = []
     for sentence in re.split(r"(?<=[.!?])\s+", text):
         if not sentence.strip():
             continue
-        if len(spans) == 1 and len(spans[0]) < 40:  # primeira frase curta demais
+        if len(spans) == 1 and len(spans[0]) < 40:  # first sentence too short
             spans[0] += " " + sentence
         elif len(spans) > 1 and len(spans[-1]) + len(sentence) < tamanho:
             spans[-1] += " " + sentence
@@ -196,7 +197,8 @@ def divide_spans(text: str, tamanho: int = 260) -> list[str]:
 
 
 def compress(wav: bytes) -> tuple[bytes, str]:
-    """WAV → AAC (.m4a, toca em todo aparelho e é ~10x menor) pelo ffmpeg; sem ele, o WAV."""
+    """WAV → AAC (.m4a, plays on every device and is ~10x smaller) through ffmpeg; without it, the
+    WAV."""
     if not shutil.which("ffmpeg"):
         return wav, "audio/wav"
     with tempfile.TemporaryDirectory() as tmp:
@@ -273,7 +275,7 @@ class Voice:
     def _words_whisper(
         self, caminho: str, language: str, dica: str | None = None, vad: bool = False
     ) -> list[dict[str, Any]]:
-        """Palavras ouvidas com o tempo de cada uma (s) e a confiança do Whisper."""
+        """Words heard with each one's timing (s) and Whisper's confidence."""
         segments, _ = self._whisper().transcribe(
             caminho,
             language=language,
@@ -290,9 +292,9 @@ class Voice:
         ]
 
     def _speak_marcado(self, text: str, language: str, speed: float) -> dict[str, Any]:
-        """Leitura guiada: a fala do texto no idioma dele e o tempo de cada palavra. O Whisper
-        ouve a própria fala (com o texto de dica) e `align_word_times` casa com as palavras do
-        texto; sem Whisper, o tempo sai proporcional ao tamanho das palavras."""
+        """Guided reading: the speech of the text in its language and each word's timing. Whisper
+        listens to its own speech (with the text as a hint) and `align_word_times` matches it to
+        the text words; without Whisper, timing is proportional to word length."""
         tts = self._kokoro()
         if tts is None:
             raise RuntimeError("Leitura guiada indisponível: o Kokoro não carregou no worker.")
@@ -319,8 +321,8 @@ class Voice:
     def _evaluate_reading(
         self, audio: bytes, mime: str, language: str, reference: str
     ) -> dict[str, Any]:
-        """Leitura em voz alta: o que o Whisper ouviu (palavra, tempo, confiança) e, com o modelo
-        fonético, o acerto de pronúncia de cada palavra da [referencia]."""
+        """Reading aloud: what Whisper heard (word, time, confidence) and, with the phonetic model,
+        the pronunciation accuracy of each word of the reference."""
         from faster_whisper import decode_audio
 
         suffix = {"audio/wav": ".wav", "audio/mp4": ".m4a", "audio/ogg": ".ogg"}.get(mime, ".audio")
@@ -329,7 +331,9 @@ class Voice:
             f.flush()
             spoken = self._words_whisper(f.name, language, vad=True)
             pronunciation = self._pronunciation.evaluate(decode_audio(f.name), reference, language)
-        warning = "" if pronunciation is not None else "Pronúncia por fonema indisponível no worker."
+        warning = ""
+        if pronunciation is None:
+            warning = "Pronúncia por fonema indisponível no worker."
         return {"palavras": spoken, "pronuncia": pronunciation, "aviso": warning}
 
     def _whisper(self) -> Any:
@@ -359,10 +363,11 @@ class Voice:
         return self._model
 
     async def aquecer(self) -> None:
-        """Carrega o modelo ao ligar o worker: a primeira fala não espera o load (10–30 s)."""
+        """Loads the model when the worker starts: the first speech does not wait for the load
+        (10–30 s)."""
         try:
             await asyncio.to_thread(self._whisper)
-        except Exception as e:  # sem o extra de voz o worker segue só com o LLM
+        except Exception as e:  # without the voice extra the worker runs with the LLM only
             logger.info("Whisper não pré-carregado: %s", e)
         await asyncio.to_thread(self._aquecer_xtts)
 
@@ -379,7 +384,7 @@ class Voice:
         try:
             from faster_whisper import decode_audio
 
-            # Os primeiros 30 s bastam para detectar; restringe a pt/en em vez das 99 línguas.
+            # The first 30 s are enough to detect; restricts to pt/en instead of the 99 languages.
             sample = decode_audio(caminho)[: 16000 * 30]
             _, _, probabilidades = modelo.detect_language(sample)
         except (ImportError, ValueError, RuntimeError) as e:
@@ -398,8 +403,8 @@ class Voice:
             segments, _ = model.transcribe(
                 f.name,
                 language=language,
-                # Busca gulosa: no large-v3-turbo a diferença de acerto é mínima e sai 2–3x mais
-                # rápido que beam 5 (o que pesa na conversa por voz).
+                # Greedy search: on large-v3-turbo the accuracy difference is minimal and it is 2–3x
+                # faster than beam 5 (which matters in voice conversations).
                 beam_size=self._s.whisper_beam,
                 vad_filter=True,
                 vad_parameters={"min_silence_duration_ms": 500},
@@ -413,11 +418,11 @@ class Voice:
                 if not (s.no_speech_prob > 0.6 and s.avg_logprob < -1.0)
                 and not _HALLUCINATIONS.search(s.text.strip())
             ]
-            # Vazio vira "não entendi" no servidor, em vez de uma resposta a um áudio inventado.
+            # Empty becomes "não entendi" on the server, instead of an answer to made-up audio.
             return " ".join(p for p in parts if p).strip(), language
 
     def _kokoro(self) -> Any:
-        """Kokoro carregado uma vez; None (e não tenta de novo) sem o pacote ou os arquivos."""
+        """Kokoro loaded once; None (and no retry) without the package or the files."""
         if self._tts is None:
             self._tts = False
             model = Path(self._s.kokoro_modelo).expanduser()
@@ -428,7 +433,7 @@ class Voice:
 
                     self._tts = Kokoro(str(model), str(voices))
                     logger.info("Fala com Kokoro (%s)", self._s.kokoro_voz)
-                except Exception as e:  # pacote ausente ou modelo inválido: cai no Piper
+                except Exception as e:  # missing package or invalid model: fall back to Piper
                     logger.warning("Kokoro indisponível (%s); usando o Piper", e)
         return self._tts or None
 
@@ -460,7 +465,7 @@ class Voice:
         return buf.getvalue()
 
     def _xtts(self) -> subprocess.Popen[str] | None:
-        """Processo do XTTS com o modelo carregado; None sem o venv ou se não subir."""
+        """XTTS process with the model loaded; None without the venv or if it does not start."""
         if self._xtts_process is not None and self._xtts_process.poll() is None:
             return self._xtts_process
         if self._xtts_failed:
@@ -483,7 +488,7 @@ class Voice:
             text=True,
         )
         assert process.stdout is not None
-        if '"pronto"' not in process.stdout.readline():  # linha vazia = morreu ao carregar
+        if '"pronto"' not in process.stdout.readline():  # empty line = it died while loading
             process.kill()
             self._xtts_failed = True
             logger.warning("XTTS não subiu; usando o Kokoro")
@@ -505,15 +510,15 @@ class Voice:
             return output.read_bytes()
 
     def _speak(self, text: str, span: int | None = None) -> bytes:
-        """WAV do texto inteiro ou só do [trecho] n (`dividir_trechos`); trecho além do fim = vazio,
-        o app toca um enquanto pede o próximo."""
+        """WAV of the whole text or only of chunk n; a chunk past the end = empty,
+        the app plays one while it requests the next."""
         text = text_to_speech(text, self._s.fala_max_caracteres) or "Pronto."
         if span is not None:
             spans = divide_spans(text)
             if span >= len(spans):
                 return b""
             text = spans[span]
-        with self._xtts_lock:  # um pedido por vez no mesmo processo
+        with self._xtts_lock:  # one request at a time in the same process
             process = self._xtts()
             wav = self._speak_xtts(process, text) if process else None
         if wav:

@@ -8,11 +8,11 @@ from esteira.studio import factory as F
 from esteira.studio import piece as P
 from esteira.studio import rhythm as R
 
-PECAS_25D = ("monitor_perspectiva", "cartoes_profundidade", "planos_camera")
+PIECES_25D = ("monitor_perspectiva", "cartoes_profundidade", "planos_camera")
 
 
-@pytest.mark.parametrize("id_", PECAS_25D)
-def test_pecas_25d_usam_css_3d_e_passam_no_portao_estatico(id_):
+@pytest.mark.parametrize("id_", PIECES_25D)
+def test_25d_pieces_use_css_3d_and_pass_static_gate(id_):
     f = P.load(id_)
     assert f.peso == "2_5d" and P.check_code(id_, f) == ([], [])
     css = (P.folder(id_) / "peca.css").read_text()
@@ -20,23 +20,23 @@ def test_pecas_25d_usam_css_3d_e_passam_no_portao_estatico(id_):
     assert "perspective" in css and ("rotationY" in js or " z:" in js)
 
 
-def test_direcao_usa_25d_no_tratamento_sobre_a_camera():
-    cards = ([P.load(i).model_copy(update={"estado": "aprovada"}) for i in PECAS_25D]
+def test_direction_uses_25d_in_camera_overlay_treatment():
+    cards = ([P.load(i).model_copy(update={"estado": "aprovada"}) for i in PIECES_25D]
               # só as 2D do acervo: outras 2,5D aprovadas depois mudariam o pódio sem a direção errar
-              + [f for f in P.list_all("aprovada") if f.id not in PECAS_25D and f.peso != "2_5d"])
+              + [f for f in P.list_all("aprovada") if f.id not in PIECES_25D and f.peso != "2_5d"])
     m = {"ini": 10.0, "fim": 18.0, "texto": "Olha o que aparece quando você abre o aplicativo do banco"}
     cs = D.candidates(m, D.ReadingMoment(intencao="conceito"), "camera_2_5d", cards, None, None, {}, ["16:9"],
                       R.load("longo"), [])
-    assert {f.id for _, f in cs[:3]} == set(PECAS_25D)
+    assert {f.id for _, f in cs[:3]} == set(PIECES_25D)
     assert cs[0][1].id == "monitor_perspectiva"   # o exemplo da ficha é o mais parecido com a fala
 
 
-def test_preenchimento_maximo_nao_deixa_destaque_solto():
+def test_maximum_fill_leaves_no_loose_highlight():
     assert P._fill("Simulação do *empréstimo*", 30).count("*") % 2 == 0
 
 
 @pytest.fixture
-def ambiente(tmp_path, monkeypatch):
+def environment(tmp_path, monkeypatch):
     pieces = tmp_path / "pecas"
     pieces.mkdir()
     shutil.copytree(P.folder("numero_impacto"), pieces / "numero_impacto", ignore=shutil.ignore_patterns("prova"))
@@ -51,8 +51,8 @@ def ambiente(tmp_path, monkeypatch):
     return queues
 
 
-def test_ampliacao_cria_um_pedido_por_dia_e_respeita_os_freios(ambiente, monkeypatch):
-    queues = ambiente
+def test_expansion_creates_one_request_per_day_and_respects_brakes(environment, monkeypatch):
+    queues = environment
     assert F.expand() == (None, "desligada")
     F.save_expansion(ativo=True, pecas_por_dia=2, teto_dia_usd=1.5, motor="auto")
     p, reason = F.expand()
@@ -69,6 +69,6 @@ def test_ampliacao_cria_um_pedido_por_dia_e_respeita_os_freios(ambiente, monkeyp
         F.save_expansion(pecas_por_dia=0)
 
 
-def test_lacunas_incluem_25d(monkeypatch):
+def test_gaps_include_25d(monkeypatch):
     monkeypatch.setattr(F, "_in_library", lambda: [])  # acervo vazio: o acervo real já cobre as 2,5D
     assert any(x["peso"] == "2_5d" for x in F.gaps())

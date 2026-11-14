@@ -14,13 +14,13 @@ logger = logging.getLogger("worker.llamacpp")
 
 
 class LlamaCppProvider(Provider):
-    """Provider llama.cpp em modo roteador: um só `llama-server` serve todos os modelos.
+    """llama.cpp provider in router mode: a single `llama-server` serves every model.
 
-    Modelos vêm de [modelos_dir]: `.gguf` solto (id = nome sem extensão) ou subpasta com o modelo
-    e o `mmproj-*` (visão; id = nome da pasta). O roteador carrega sob demanda e descarrega quando
-    fica ocioso.
-    O servidor é compartilhado com a esteira (quem chegar primeiro sobe) e sobrevive ao worker.
-    Trocar o modelo é recusado enquanto algum modelo estiver processando (de qualquer cliente).
+    Models come from the models folder: a loose `.gguf` (id = name without extension) or a subfolder
+    with the model and the `mmproj-*` (vision; id = folder name). The router loads on demand and
+    unloads when idle.
+    The server is shared with the pipeline (whoever comes first starts it) and outlives the worker.
+    Switching models is refused while any model is processing (from any client).
     """
 
     def __init__(
@@ -48,7 +48,7 @@ class LlamaCppProvider(Provider):
         return list(r.json().get("data") or [])
 
     async def _ensure(self) -> None:
-        """Sobe o roteador se ainda não houver um na porta (a esteira pode já ter subido)."""
+        """Starts the router if there is none on the port yet (the pipeline may have started it)."""
         try:
             await self._models()
             return
@@ -57,7 +57,7 @@ class LlamaCppProvider(Provider):
         self._dir.mkdir(parents=True, exist_ok=True)
         logger.info("Subindo llama-server (roteador) com os modelos de %s", self._dir)
         with (self._dir / "llama-server.log").open("ab") as log:
-            subprocess.Popen(  # noqa: ASYNC220 - só dispara; o processo segue sozinho
+            subprocess.Popen(  # noqa: ASYNC220 - fire and forget; the process runs on its own
                 [
                     self._binario,
                     "--models-dir", str(self._dir),
@@ -84,7 +84,7 @@ class LlamaCppProvider(Provider):
         return sorted(m["id"] for m in await self._models())
 
     async def estado(self) -> dict[str, Any]:
-        """Modelos disponíveis, os carregados na GPU e os que estão processando agora."""
+        """Available models, the ones loaded on the GPU and the ones processing right now."""
         await self._ensure()
         models = await self._models()
         carregados = [m["id"] for m in models if m["status"]["value"] == "loaded"]
@@ -116,7 +116,7 @@ class LlamaCppProvider(Provider):
         return {"modelo": modelo}
 
     async def _esperar_load(self, modelo: str) -> None:
-        # Carregar o modelo na GPU leva de segundos a minutos.
+        # Loading the model onto the GPU takes from seconds to minutes.
         for _ in range(600):
             st = next((m["status"] for m in await self._models() if m["id"] == modelo), {})
             if st.get("value") == "loaded":
@@ -132,8 +132,8 @@ class LlamaCppProvider(Provider):
         await self._ensure()
         if not payload.get("model"):
             est = await self.estado()
-            # embedding (busca das notas) e as pastas adaptadores/ (LoRA) e voz/ não conversam:
-            # chat neles dá HTTP 500
+            # embedding (notes search) and the adaptadores/ (LoRA) and voz/ folders do not chat:
+            # chatting with them gives HTTP 500
             def chat(ids: list[str]) -> list[str]:
                 return [
                     m for m in ids if "embed" not in m.lower() and m not in ("adaptadores", "voz")
@@ -141,7 +141,7 @@ class LlamaCppProvider(Provider):
 
             default = (chat(est["carregados"]) or chat(est["modelos"]) or [""])[0]
             payload = {**payload, "model": default}
-        # Espera uma troca em curso terminar antes de começar.
+        # Wait for a switch in progress to finish before starting.
         async with self._lock:
             self._active += 1
         try:

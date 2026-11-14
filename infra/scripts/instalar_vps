@@ -1,54 +1,54 @@
 #!/usr/bin/env bash
-# Instala (ou atualiza) a VPS num comando: Docker, segredos, gateway, túnel da esteira, nginx e TLS.
+# Installs (or updates) the VPS in one command: Docker, secrets, gateway, esteira tunnel, nginx and TLS.
 #
 #   git clone <repo> agent && cd agent
-#   cp .env.prd.example .env.prd   # preencher DOMINIO, EMAIL e ADMIN_SENHA
+#   cp .env.prd.example .env.prd   # fill in DOMINIO, EMAIL and ADMIN_SENHA
 #   sudo infra/scripts/instalar_vps
 #
-# Rodar de novo é seguro: reaproveita segredos, chaves e certificado; só reconstrói e reinicia.
-# No fim grava .env.pc e infra/docker/tunel/chave_pc, que o PC busca com infra/scripts/conectar_vps.
+# Running it again is safe: it reuses secrets, keys and certificate; it only rebuilds and restarts.
+# At the end it writes .env.pc and infra/docker/tunel/chave_pc, which the PC fetches with infra/scripts/conectar_vps.
 set -euo pipefail
 
 [ "$(id -u)" -eq 0 ] || exec sudo "$0" "$@"
 
-raiz="$(cd "$(dirname "$0")/../.." && pwd)"
-cd "$raiz"
-prd="$raiz/.env.prd"
-env_backend="$raiz/plataforma/backend/.env"
-tunel_dir="$raiz/infra/docker/tunel"
-dono="${SUDO_USER:-root}"
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$root"
+prd="$root/.env.prd"
+env_backend="$root/plataforma/backend/.env"
+tunnel_dir="$root/infra/docker/tunel"
+owner="${SUDO_USER:-root}"
 
-dc() { docker compose -f "$raiz/infra/docker/docker-compose.yml" "$@"; }
-passo() { printf '\n\033[1m▶ %s\033[0m\n' "$*"; }
-aviso() { printf '\033[33m! %s\033[0m\n' "$*"; }
-falha() { printf '\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
+dc() { docker compose -f "$root/infra/docker/docker-compose.yml" "$@"; }
+step() { printf '\n\033[1m▶ %s\033[0m\n' "$*"; }
+warn() { printf '\033[33m! %s\033[0m\n' "$*"; }
+fail() { printf '\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
-# ler ARQUIVO CHAVE: último valor da chave, sem aspas em volta.
-ler() {
+# read_key FILE KEY: last value of the key, without surrounding quotes.
+read_key() {
     [ -f "$1" ] || return 0
     sed -n "s/^$2=//p" "$1" | tail -n 1 | sed -e "s/^'\(.*\)'$/\1/" -e 's/^"\(.*\)"$/\1/'
 }
-# valor CHAVE [PADRÃO]: .env.prd > .env de uma instalação anterior (segredos) > padrão.
-valor() {
+# setting KEY [DEFAULT]: .env.prd > .env from a previous install (secrets) > default.
+setting() {
     local v
-    v="$(ler "$prd" "$1")"
-    [ -n "$v" ] || v="$(ler "$env_backend" "$1")"
+    v="$(read_key "$prd" "$1")"
+    [ -n "$v" ] || v="$(read_key "$env_backend" "$1")"
     printf '%s' "${v:-${2:-}}"
 }
-aleatorio() { head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 43; }
-no_gateway() { dc run --rm --no-deps -T "$@"; }
+random_token() { head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 43; }
+in_gateway() { dc run --rm --no-deps -T "$@"; }
 
-[ -f "$prd" ] || falha ".env.prd não encontrado: cp .env.prd.example .env.prd e preencha."
-dominio="$(ler "$prd" DOMINIO)"
-email="$(ler "$prd" EMAIL)"
-[ -n "$dominio" ] && [ "$dominio" != "agent.seu-dominio.com" ] || falha "Defina DOMINIO no .env.prd."
-[ -n "$email" ] || falha "Defina EMAIL no .env.prd (avisos do Let's Encrypt)."
-tunel_host="$(ler "$prd" TUNEL_HOST)"; tunel_host="${tunel_host:-$dominio}"
-tunel_porta="$(ler "$prd" TUNEL_PORTA)"; tunel_porta="${tunel_porta:-2222}"
-export TUNEL_PORTA="$tunel_porta"
+[ -f "$prd" ] || fail ".env.prd not found: cp .env.prd.example .env.prd and fill it in."
+domain="$(read_key "$prd" DOMINIO)"
+email="$(read_key "$prd" EMAIL)"
+[ -n "$domain" ] && [ "$domain" != "agent.seu-dominio.com" ] || fail "Set DOMINIO in .env.prd."
+[ -n "$email" ] || fail "Set EMAIL in .env.prd (Let's Encrypt notices)."
+tunnel_host="$(read_key "$prd" TUNEL_HOST)"; tunnel_host="${tunnel_host:-$domain}"
+tunnel_port="$(read_key "$prd" TUNEL_PORTA)"; tunnel_port="${tunnel_port:-2222}"
+export TUNEL_PORTA="$tunnel_port"
 
 # ---------------------------------------------------------------------------------------------
-passo "Pacotes do sistema"
+step "System packages"
 if command -v apt-get >/dev/null; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
@@ -58,120 +58,120 @@ if ! command -v docker >/dev/null; then
     curl -fsSL https://get.docker.com | sh
 fi
 systemctl enable --now docker >/dev/null 2>&1 || true
-docker compose version >/dev/null || falha "docker compose (plugin v2) não encontrado."
+docker compose version >/dev/null || fail "docker compose (plugin v2) not found."
 
-modo="$(ler "$prd" NGINX_MODO)"
-if [ -z "$modo" ]; then
-    systemctl is-active --quiet nginx 2>/dev/null && modo=host || modo=docker
+mode="$(read_key "$prd" NGINX_MODO)"
+if [ -z "$mode" ]; then
+    systemctl is-active --quiet nginx 2>/dev/null && mode=host || mode=docker
 fi
-echo "nginx: $modo"
+echo "nginx: $mode"
 
 # ---------------------------------------------------------------------------------------------
-passo "Imagens"
-[ -f "$tunel_dir/authorized_keys" ] || : > "$tunel_dir/authorized_keys"
+step "Images"
+[ -f "$tunnel_dir/authorized_keys" ] || : > "$tunnel_dir/authorized_keys"
 dc build -q gateway tunel
-# Versões fixas do Collabora e do certbot: na 1ª vez grava o digest das imagens já baixadas (as que
-# estão rodando). Para atualizar de propósito: apague infra/docker/imagens.env e rode de novo.
-imagens_env="$raiz/infra/docker/imagens.env"
-if [ ! -f "$imagens_env" ]; then
-    for par in COLLABORA_IMAGEM=collabora/code:latest CERTBOT_IMAGEM=certbot/certbot:latest; do
-        img="${par#*=}"
+# Pinned Collabora and certbot versions: the first time it records the digest of the images already pulled (the
+# running ones). To update on purpose: delete infra/docker/imagens.env and run again.
+images_env="$root/infra/docker/imagens.env"
+if [ ! -f "$images_env" ]; then
+    for pair in COLLABORA_IMAGEM=collabora/code:latest CERTBOT_IMAGEM=certbot/certbot:latest; do
+        img="${pair#*=}"
         docker image inspect "$img" >/dev/null 2>&1 || docker pull -q "$img" >/dev/null
-        echo "${par%%=*}=$(docker image inspect -f '{{index .RepoDigests 0}}' "$img")"
-    done > "$imagens_env.novo"
-    mv "$imagens_env.novo" "$imagens_env"
+        echo "${pair%%=*}=$(docker image inspect -f '{{index .RepoDigests 0}}' "$img")"
+    done > "$images_env.new"
+    mv "$images_env.new" "$images_env"
 fi
-set -a; . "$imagens_env"; set +a
-echo "imagens: $(cut -d@ -f2 "$imagens_env" | cut -c1-19 | tr '\n' ' ')"
+set -a; . "$images_env"; set +a
+echo "images: $(cut -d@ -f2 "$images_env" | cut -c1-19 | tr '\n' ' ')"
 
 # ---------------------------------------------------------------------------------------------
-passo "Segredos e plataforma/backend/.env"
-senha="$(ler "$prd" ADMIN_SENHA)"
-hash_senha="$(ler "$env_backend" GATEWAY_ADMIN_SENHA_HASH)"
-if [ -z "$senha" ] && [ -z "$hash_senha" ]; then
-    [ -t 0 ] || falha "Defina ADMIN_SENHA no .env.prd (primeira instalação)."
-    read -rsp "Senha do app (mín. 12 caracteres): " senha; echo
+step "Secrets and plataforma/backend/.env"
+password="$(read_key "$prd" ADMIN_SENHA)"
+password_hash="$(read_key "$env_backend" GATEWAY_ADMIN_SENHA_HASH)"
+if [ -z "$password" ] && [ -z "$password_hash" ]; then
+    [ -t 0 ] || fail "Set ADMIN_SENHA in .env.prd (first install)."
+    read -rsp "App password (min. 12 characters): " password; echo
 fi
-if [ -n "$senha" ]; then
-    [ "${#senha}" -ge 12 ] || falha "ADMIN_SENHA precisa de ao menos 12 caracteres."
-    hash_senha="$(SENHA="$senha" no_gateway -e SENHA gateway python -c \
-        'import os; from backend.auth.security import generate_hash_password as g; print(g(os.environ["SENHA"]))')"
+if [ -n "$password" ]; then
+    [ "${#password}" -ge 12 ] || fail "ADMIN_SENHA needs at least 12 characters."
+    password_hash="$(PASSWORD="$password" in_gateway -e PASSWORD gateway python -c \
+        'import os; from backend.auth.security import generate_hash_password as g; print(g(os.environ["PASSWORD"]))')"
 fi
-totp="$(valor GATEWAY_ADMIN_TOTP_SEGREDO)"
-totp_novo=0
+totp="$(setting GATEWAY_ADMIN_TOTP_SEGREDO)"
+totp_new=0
 if [ -z "$totp" ]; then
-    totp="$(no_gateway gateway python -c 'from backend.auth.security import generate_secret_totp as g; print(g())')"
-    totp_novo=1
+    totp="$(in_gateway gateway python -c 'from backend.auth.security import generate_secret_totp as g; print(g())')"
+    totp_new=1
 fi
-usuario="$(valor GATEWAY_ADMIN_USUARIO admin)"
-jwt="$(valor GATEWAY_JWT_SECRET_KEY "$(aleatorio)$(aleatorio)")"
-chave_cliente="$(valor GATEWAY_CLIENT_API_KEYS "sk_live_$(aleatorio)")"
-chave_worker="$(valor GATEWAY_WORKER_API_KEYS "worker_$(aleatorio)")"
+username="$(setting GATEWAY_ADMIN_USUARIO admin)"
+jwt="$(setting GATEWAY_JWT_SECRET_KEY "$(random_token)$(random_token)")"
+client_key="$(setting GATEWAY_CLIENT_API_KEYS "sk_live_$(random_token)")"
+worker_key="$(setting GATEWAY_WORKER_API_KEYS "worker_$(random_token)")"
 
-fixas=(GATEWAY_ENVIRONMENT GATEWAY_DEBUG GATEWAY_LOG_FORMAT GATEWAY_LOG_LEVEL GATEWAY_CORS_ORIGINS
+fixed_keys=(GATEWAY_ENVIRONMENT GATEWAY_DEBUG GATEWAY_LOG_FORMAT GATEWAY_LOG_LEVEL GATEWAY_CORS_ORIGINS
     GATEWAY_CLIENT_API_KEYS GATEWAY_WORKER_API_KEYS GATEWAY_ADMIN_USUARIO GATEWAY_ADMIN_SENHA_HASH
     GATEWAY_ADMIN_TOTP_SEGREDO GATEWAY_JWT_SECRET_KEY GATEWAY_YOUTUBE_VAULT)
 umask 077
 {
-    echo "# Gerado por infra/scripts/instalar_vps — edite o .env.prd e rode de novo."
+    echo "# Generated by infra/scripts/instalar_vps — edit .env.prd and run again."
     echo "GATEWAY_ENVIRONMENT=production"
     echo "GATEWAY_DEBUG=false"
-    echo "GATEWAY_LOG_FORMAT=$(valor GATEWAY_LOG_FORMAT json)"
-    echo "GATEWAY_LOG_LEVEL=$(valor GATEWAY_LOG_LEVEL info)"
-    echo "GATEWAY_CORS_ORIGINS=$(valor GATEWAY_CORS_ORIGINS "https://$dominio")"
-    echo "GATEWAY_CLIENT_API_KEYS=$chave_cliente"
-    echo "GATEWAY_WORKER_API_KEYS=$chave_worker"
-    echo "GATEWAY_ADMIN_USUARIO=$usuario"
-    echo "GATEWAY_ADMIN_SENHA_HASH='$hash_senha'"
+    echo "GATEWAY_LOG_FORMAT=$(setting GATEWAY_LOG_FORMAT json)"
+    echo "GATEWAY_LOG_LEVEL=$(setting GATEWAY_LOG_LEVEL info)"
+    echo "GATEWAY_CORS_ORIGINS=$(setting GATEWAY_CORS_ORIGINS "https://$domain")"
+    echo "GATEWAY_CLIENT_API_KEYS=$client_key"
+    echo "GATEWAY_WORKER_API_KEYS=$worker_key"
+    echo "GATEWAY_ADMIN_USUARIO=$username"
+    echo "GATEWAY_ADMIN_SENHA_HASH='$password_hash'"
     echo "GATEWAY_ADMIN_TOTP_SEGREDO=$totp"
     echo "GATEWAY_JWT_SECRET_KEY=$jwt"
-    echo "GATEWAY_YOUTUBE_VAULT=$(valor GATEWAY_YOUTUBE_VAULT '~/agent-data/obsidian')"
-    # Os demais GATEWAY_* do .env.prd passam como estão (ver plataforma/backend/.env.example).
-    grep -E '^GATEWAY_[A-Z0-9_]+=' "$prd" | while IFS= read -r linha; do
-        [[ " ${fixas[*]} " == *" ${linha%%=*} "* ]] || echo "$linha"
+    echo "GATEWAY_YOUTUBE_VAULT=$(setting GATEWAY_YOUTUBE_VAULT '~/agent-data/obsidian')"
+    # The other GATEWAY_* in .env.prd pass through as they are (see plataforma/backend/.env.example).
+    grep -E '^GATEWAY_[A-Z0-9_]+=' "$prd" | while IFS= read -r line; do
+        [[ " ${fixed_keys[*]} " == *" ${line%%=*} "* ]] || echo "$line"
     done || true
-} > "$env_backend.novo"
+} > "$env_backend.new"
 umask 022
-mv "$env_backend.novo" "$env_backend"
+mv "$env_backend.new" "$env_backend"
 
 # ---------------------------------------------------------------------------------------------
-passo "Chave do túnel da esteira"
-chave_pub="$(ler "$prd" TUNEL_CHAVE_PUBLICA)"
-if [ -z "$chave_pub" ]; then
-    [ -f "$tunel_dir/chave_pc" ] || ssh-keygen -q -t ed25519 -N '' -C agent-tunel -f "$tunel_dir/chave_pc"
-    chown "$dono" "$tunel_dir/chave_pc" "$tunel_dir/chave_pc.pub"
-    chave_pub="$(cat "$tunel_dir/chave_pc.pub")"
+step "Esteira tunnel key"
+public_key="$(read_key "$prd" TUNEL_CHAVE_PUBLICA)"
+if [ -z "$public_key" ]; then
+    [ -f "$tunnel_dir/chave_pc" ] || ssh-keygen -q -t ed25519 -N '' -C agent-tunel -f "$tunnel_dir/chave_pc"
+    chown "$owner" "$tunnel_dir/chave_pc" "$tunnel_dir/chave_pc.pub"
+    public_key="$(cat "$tunnel_dir/chave_pc.pub")"
 fi
-# restrict: a chave só abre o encaminhamento reverso da esteira, nada mais.
-echo "restrict,port-forwarding,permitlisten=\"0.0.0.0:8765\" $chave_pub" > "$tunel_dir/authorized_keys"
-chmod 644 "$tunel_dir/authorized_keys"
+# restrict: the key only opens the esteira reverse forwarding, nothing else.
+echo "restrict,port-forwarding,permitlisten=\"0.0.0.0:8765\" $public_key" > "$tunnel_dir/authorized_keys"
+chmod 644 "$tunnel_dir/authorized_keys"
 
 # ---------------------------------------------------------------------------------------------
-passo "Gateway e túnel"
+step "Gateway and tunnel"
 dc up -d --force-recreate gateway tunel
 for _ in $(seq 30); do
     curl -fsS http://127.0.0.1:48080/health >/dev/null 2>&1 && break
     sleep 2
 done
-curl -fsS http://127.0.0.1:48080/health >/dev/null || { dc logs --tail 40 gateway; falha "Gateway não respondeu."; }
+curl -fsS http://127.0.0.1:48080/health >/dev/null || { dc logs --tail 40 gateway; fail "Gateway did not respond."; }
 echo "gateway ok"
 
 # ---------------------------------------------------------------------------------------------
-passo "nginx e certificado TLS ($dominio)"
+step "nginx and TLS certificate ($domain)"
 ip_vps="$(curl -fsS4 --max-time 5 https://api.ipify.org || true)"
-ip_dns="$(getent ahostsv4 "$dominio" | awk 'NR==1{print $1}' || true)"
-[ -n "$ip_dns" ] || aviso "$dominio ainda não resolve no DNS: o certificado vai falhar."
+ip_dns="$(getent ahostsv4 "$domain" | awk 'NR==1{print $1}' || true)"
+[ -n "$ip_dns" ] || warn "$domain does not resolve in DNS yet: the certificate will fail."
 [ -z "$ip_vps" ] || [ -z "$ip_dns" ] || [ "$ip_vps" = "$ip_dns" ] ||
-    aviso "$dominio aponta para $ip_dns, a VPS é $ip_vps (ok se for Cloudflare Proxied)."
+    warn "$domain points to $ip_dns, the VPS is $ip_vps (ok if Cloudflare Proxied)."
 
-if [ "$modo" = docker ]; then
-    conf="$raiz/infra/docker/nginx/nginx.conf"
-    if ! dc run --rm --no-deps --entrypoint test certbot -f "/etc/letsencrypt/live/$dominio/fullchain.pem"; then
-        # Antes do certificado: só a porta 80 com o desafio do Let's Encrypt.
+if [ "$mode" = docker ]; then
+    conf="$root/infra/docker/nginx/nginx.conf"
+    if ! dc run --rm --no-deps --entrypoint test certbot -f "/etc/letsencrypt/live/$domain/fullchain.pem"; then
+        # Before the certificate: only port 80 with the Let's Encrypt challenge.
         cat > "$conf" <<EOF
 server {
     listen 80;
-    server_name $dominio;
+    server_name $domain;
     location /.well-known/acme-challenge/ { root /var/www/certbot; }
     location / { return 503; }
 }
@@ -179,98 +179,98 @@ EOF
         dc up -d nginx
         dc restart nginx
         dc run --rm --no-deps --entrypoint certbot certbot certonly --webroot -w /var/www/certbot \
-            -d "$dominio" --email "$email" --agree-tos --non-interactive --no-eff-email
+            -d "$domain" --email "$email" --agree-tos --non-interactive --no-eff-email
     fi
-    cp "$conf" "$conf.anterior" 2>/dev/null || : > "$conf.anterior"
-    sed "s/seu-dominio\.exemplo\.com/$dominio/g" "$raiz/infra/docker/nginx/nginx.conf.example" > "$conf"
-    # Valida num contêiner à parte antes de trocar o que está no ar; inválido = volta o anterior.
+    cp "$conf" "$conf.prev" 2>/dev/null || : > "$conf.prev"
+    sed "s/seu-dominio\.exemplo\.com/$domain/g" "$root/infra/docker/nginx/nginx.conf.example" > "$conf"
+    # Validates in a separate container before replacing what is live; invalid = restore the previous one.
     if ! dc run --rm --no-deps --entrypoint nginx nginx -t -q; then
-        mv "$conf.anterior" "$conf"
-        falha "nginx.conf novo inválido: mantido o anterior (o site segue no ar)."
+        mv "$conf.prev" "$conf"
+        fail "new nginx.conf is invalid: kept the previous one (the site stays up)."
     fi
-    rm -f "$conf.anterior"
+    rm -f "$conf.prev"
     dc up -d nginx certbot
     dc restart nginx
 else
     dpkg -s python3-certbot-nginx >/dev/null 2>&1 || apt-get install -y -qq certbot python3-certbot-nginx >/dev/null
-    site="/etc/nginx/sites-available/agent-$dominio.conf"
-    # Depois do certbot o arquivo tem as linhas do TLS: só é escrito na primeira vez.
-    [ -f "$site" ] || sed "s/seu-dominio\.exemplo\.com/$dominio/g" \
-        "$raiz/infra/docker/nginx/host-nginx-site.conf.example" > "$site"
-    ln -sf "$site" "/etc/nginx/sites-enabled/agent-$dominio.conf"
-    # IP real (Cloudflare) e limite do login; o site antigo (escrito só na 1ª vez) recebe as mesmas
-    # correções: X-Forwarded-For sem o que o cliente mandou e os locations de login/admin.
-    cp "$site" "$site.anterior"
-    cp "$raiz/infra/docker/nginx/seguranca-http.conf" /etc/nginx/conf.d/agent-seguranca.conf
-    # IP real da Cloudflare posto à mão em instalações antigas: o agent-seguranca.conf o substitui
-    # (duas diretivas real_ip_header derrubam o nginx -t).
-    antigo=/etc/nginx/conf.d/cloudflare-realip.conf
-    [ -f "$antigo" ] && grep -q real_ip_header "$antigo" && mv "$antigo" "$antigo.desativado"
+    site="/etc/nginx/sites-available/agent-$domain.conf"
+    # After certbot the file has the TLS lines: it is only written the first time.
+    [ -f "$site" ] || sed "s/seu-dominio\.exemplo\.com/$domain/g" \
+        "$root/infra/docker/nginx/host-nginx-site.conf.example" > "$site"
+    ln -sf "$site" "/etc/nginx/sites-enabled/agent-$domain.conf"
+    # Real IP (Cloudflare) and login rate limit; the old site (written only the first time) gets the same
+    # fixes: X-Forwarded-For without what the client sent, and the login/admin locations.
+    cp "$site" "$site.prev"
+    cp "$root/infra/docker/nginx/seguranca-http.conf" /etc/nginx/conf.d/agent-seguranca.conf
+    # Cloudflare real IP set by hand on old installs: agent-seguranca.conf replaces it
+    # (two real_ip_header directives break nginx -t).
+    old_conf=/etc/nginx/conf.d/cloudflare-realip.conf
+    [ -f "$old_conf" ] && grep -q real_ip_header "$old_conf" && mv "$old_conf" "$old_conf.desativado"
     sed -i 's/\$proxy_add_x_forwarded_for/$remote_addr/' "$site"
     if ! grep -q 'agent_login' "$site"; then
-        sed -n '/# Login com limite por IP real/,/cool\/adminws/p' \
-            "$raiz/infra/docker/nginx/host-nginx-site.conf.example" > "$site.trecho"
-        sed -i "/client_max_body_size/r $site.trecho" "$site"
-        rm -f "$site.trecho"
+        sed -n '/# Login rate-limited by real IP/,/cool\/adminws/p' \
+            "$root/infra/docker/nginx/host-nginx-site.conf.example" > "$site.snippet"
+        sed -i "/client_max_body_size/r $site.snippet" "$site"
+        rm -f "$site.snippet"
     fi
     if ! nginx -t -q; then
-        mv "$site.anterior" "$site"; rm -f /etc/nginx/conf.d/agent-seguranca.conf
-        [ -f "$antigo.desativado" ] && mv "$antigo.desativado" "$antigo"
-        falha "Configuração nova do nginx inválida: mantida a anterior (o site segue no ar)."
+        mv "$site.prev" "$site"; rm -f /etc/nginx/conf.d/agent-seguranca.conf
+        [ -f "$old_conf.desativado" ] && mv "$old_conf.desativado" "$old_conf"
+        fail "New nginx configuration is invalid: kept the previous one (the site stays up)."
     fi
-    rm -f "$site.anterior"
+    rm -f "$site.prev"
     systemctl reload nginx
-    certbot --nginx -d "$dominio" -m "$email" --agree-tos --non-interactive --no-eff-email \
+    certbot --nginx -d "$domain" -m "$email" --agree-tos --non-interactive --no-eff-email \
         --redirect --keep-until-expiring
 fi
 
 # ---------------------------------------------------------------------------------------------
-passo "Firewall"
+step "Firewall"
 if command -v ufw >/dev/null && ufw status | grep -q 'Status: active'; then
-    ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw allow "$tunel_porta/tcp" >/dev/null
-    echo "ufw: 80, 443 e $tunel_porta liberadas"
+    ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw allow "$tunnel_port/tcp" >/dev/null
+    echo "ufw: 80, 443 and $tunnel_port opened"
 else
-    echo "ufw inativo; libere 80, 443 e $tunel_porta/tcp no firewall do provedor, se houver"
+    echo "ufw inactive; open 80, 443 and $tunnel_port/tcp in the provider firewall, if any"
 fi
 
 # ---------------------------------------------------------------------------------------------
-passo "Conferindo https://$dominio"
+step "Checking https://$domain"
 ok=0
 for _ in $(seq 10); do
-    curl -fsS "https://$dominio/health" >/dev/null 2>&1 && { ok=1; break; }
+    curl -fsS "https://$domain/health" >/dev/null 2>&1 && { ok=1; break; }
     sleep 3
 done
-[ "$ok" = 1 ] && echo "https ok" || aviso "https://$dominio/health não respondeu ainda (DNS/Cloudflare?)."
+[ "$ok" = 1 ] && echo "https ok" || warn "https://$domain/health has not responded yet (DNS/Cloudflare?)."
 
-cat > "$raiz/.env.pc" <<EOF
-# Lido por infra/scripts/conectar_vps no PC. Contém a chave do worker: não versionar.
-WORKER_GATEWAY_URL=wss://$dominio/ws/worker
-WORKER_API_KEY=${chave_worker%%,*}
-TUNEL_HOST=$tunel_host
-TUNEL_PORTA=$tunel_porta
+cat > "$root/.env.pc" <<EOF
+# Read by infra/scripts/conectar_vps on the PC. Contains the worker key: do not commit.
+WORKER_GATEWAY_URL=wss://$domain/ws/worker
+WORKER_API_KEY=${worker_key%%,*}
+TUNEL_HOST=$tunnel_host
+TUNEL_PORTA=$tunnel_port
 EOF
-chmod 600 "$raiz/.env.pc"
-chown "$dono" "$raiz/.env.pc"
+chmod 600 "$root/.env.pc"
+chown "$owner" "$root/.env.pc"
 
 # ---------------------------------------------------------------------------------------------
-passo "Pronto"
+step "Done"
 cat <<EOF
-API:            https://$dominio   (login: $usuario + senha + Google Authenticator)
-Esteira:        https://$dominio/esteira/   (via túnel do PC, mesmo login)
-Chave /v1:      $chave_cliente
-Dados:          volume docker agent-data (notas, finanças, arquivos...)
+API:            https://$domain   (login: $username + password + Google Authenticator)
+Esteira:        https://$domain/esteira/   (via the PC tunnel, same login)
+/v1 key:        $client_key
+Data:           docker volume agent-data (notes, finances, files...)
 
-No PC, na raiz do repo:
-  infra/scripts/conectar_vps $dono@$tunel_host $raiz
+On the PC, at the repo root:
+  infra/scripts/conectar_vps $owner@$tunnel_host $root
 
-Apps (celular/tablet):
-  flutter build apk --release --dart-define=API_URL=https://$dominio
+Apps (phone/tablet):
+  flutter build apk --release --dart-define=API_URL=https://$domain
 EOF
-if [ "$totp_novo" = 1 ]; then
-    uri="$(no_gateway gateway python -c \
-        "from backend.auth.security import uri_totp; print(uri_totp('$totp', '$usuario'))")"
+if [ "$totp_new" = 1 ]; then
+    uri="$(in_gateway gateway python -c \
+        "from backend.auth.security import uri_totp; print(uri_totp('$totp', '$username'))")"
     echo
-    echo "Google Authenticator: escaneie o QR ou use a chave $totp"
+    echo "Google Authenticator: scan the QR or use the key $totp"
     command -v qrencode >/dev/null && qrencode -t ansiutf8 "$uri"
 fi
-[ -z "$(ler "$prd" ADMIN_SENHA)" ] || aviso "Apague ADMIN_SENHA do .env.prd: o hash já está no .env."
+[ -z "$(read_key "$prd" ADMIN_SENHA)" ] || warn "Delete ADMIN_SENHA from .env.prd: the hash is already in .env."

@@ -33,27 +33,27 @@ void main() => runApp(const AgentApp());
 
 /// Módulos montados com o token da sessão aberta no login.
 List<Modulo> modulosDaSessao(String token) {
-  final arquivos = ModuloArquivos(url: urlApi, token: token);
+  final arquivos = FilesModule(url: urlApi, token: token);
   return [
-    ModuloPainel(url: urlApi, token: token),
-    ModuloEmpreendimento(urlEsteira: urlEsteira, url: urlApi, token: token),
-    ModuloNotas(url: urlApi, token: token),
+    PanelModule(url: urlApi, token: token),
+    BusinessModule(pipelineUrl: urlEsteira, url: urlApi, token: token),
+    NotesModule(url: urlApi, token: token),
     arquivos,
-    ModuloSaude(url: urlApi, token: token),
+    HealthModule(url: urlApi, token: token),
     // Projetos de leitura abrem o trecho na página do PDF, no leitor de Arquivos.
-    ModuloEstudos(
+    StudiesModule(
       url: urlApi,
       token: token,
-      abrirNoArquivo: (context, id, pagina) async {
-        final arquivo = await arquivos.api.obter(id);
-        if (context.mounted) await abrirArquivo(context, arquivos.api, arquivo, pagina: pagina, ler: true);
+      openInFile: (context, id, pagina) async {
+        final arquivo = await arquivos.api.fetch(id);
+        if (context.mounted) await openFile(context, arquivos.api, arquivo, page: pagina, read: true);
       },
     ),
-    ModuloRotinas(url: urlApi, token: token),
-    ModuloFinancas(url: urlApi, token: token),
+    RoutinesModule(url: urlApi, token: token),
+    FinanceModule(url: urlApi, token: token),
     ModuloDesign(url: urlApi, token: token),
-    ModuloEletronica(url: urlApi, token: token),
-    ModuloCodigo(url: urlApi, token: token),
+    ElectronicsModule(url: urlApi, token: token),
+    CodeModule(url: urlApi, token: token),
     ...modulosEmBreve,
   ];
 }
@@ -152,7 +152,7 @@ class _AgentAppState extends State<AgentApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Agent',
+    title: 'Solumia',
     debugShowCheckedModeBanner: false,
     navigatorKey: Tarefas.navegador,
     scaffoldMessengerKey: Tarefas.mensagens,

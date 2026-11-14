@@ -13,11 +13,11 @@ logger = logging.getLogger("gateway.worker_registry")
 
 
 class WorkerDisconnected(Exception):
-    """O worker que estava processando o request caiu antes de responder."""
+    """The worker processing the request went down before answering."""
 
 
 class WorkerRespondedWithError(Exception):
-    """O worker respondeu explicitamente com uma mensagem de erro."""
+    """The worker explicitly answered with an error message."""
 
 
 @dataclass
@@ -31,11 +31,11 @@ class ConnectedWorker:
 
 
 class WorkerRegistry:
-    """Registro em memória dos workers conectados neste processo.
+    """In-memory registry of the workers connected to this process.
 
-    Single-node, sem persistência: se o processo do Gateway reiniciar, todos
-    os workers precisam reconectar (comportamento aceitável nesta etapa —
-    Postgres/Redis para presença distribuída ficam para etapas futuras).
+    Single-node, no persistence: if the Gateway process restarts, every worker
+    has to reconnect (acceptable at this stage — Postgres/Redis for distributed
+    presence are left for future stages).
     """
 
     def __init__(self) -> None:
@@ -81,7 +81,7 @@ class WorkerRegistry:
                 worker.recursos = recursos
 
     def describe(self) -> list[dict[str, Any]]:
-        """Workers conectados, para o dashboard: modelos, último sinal e uso da máquina."""
+        """Connected workers, for the dashboard: models, last heartbeat and machine usage."""
         now = time.monotonic()
         return [
             {
@@ -104,7 +104,7 @@ class WorkerRegistry:
         return next(iter(self._workers.values()))
 
     def in_usage(self) -> list[dict[str, Any]]:
-        """Quem está usando o LLM agora (módulo, tarefa, modelo, há quantos segundos)."""
+        """Who is using the LLM right now (module, task, model, for how many seconds)."""
         now = time.monotonic()
         return [
             {
@@ -135,13 +135,13 @@ class WorkerRegistry:
         timeout_seconds: float,
         origem: str = "",
     ) -> dict[str, Any]:
-        """Envia um chat_request ao worker e aguarda o chat_response correspondente.
+        """Sends a chat_request to the worker and waits for the matching chat_response.
 
-        Com [origem] (o módulo que pediu), o pedido aparece em `em_uso()` até terminar.
+        With an origin (the requesting module), the request shows up as in use until it ends.
 
-        Levanta `TimeoutError` se o worker não responder a tempo, ou a exceção
-        registrada via `reject()` (ex.: `WorkerDisconnected`,
-        `WorkerRespondedWithError`) se o worker cair ou reportar erro antes.
+        Raises `TimeoutError` if the worker does not answer in time, or the exception
+        registered through `reject()` (e.g. `WorkerDisconnected`,
+        `WorkerRespondedWithError`) if the worker goes down or reports an error first.
         """
         loop = asyncio.get_running_loop()
         future: asyncio.Future[dict[str, Any]] = loop.create_future()
@@ -200,7 +200,8 @@ class WorkerRegistry:
             future.set_exception(exc)
 
     async def run_staleness_sweeper(self, interval: float, stale_after: float) -> None:
-        """Loop de fundo: derruba workers sem heartbeat há mais de `stale_after` segundos."""
+        """Background loop: drops workers without a heartbeat for more than `stale_after`
+        seconds."""
         while True:
             await asyncio.sleep(interval)
             now = time.monotonic()

@@ -166,14 +166,14 @@ def _catalog():
     return "\n".join(f"- {k}: {v}" for k, v in SCENES.items())
 
 
-def _prompt_n1(tarefa, instance):
+def _prompt_n1(task, instance):
     from esteira.dataset import export, infer
-    return infer.prompt(tarefa, instance["contexto"], fora=export.gold(tarefa))
+    return infer.prompt(task, instance["contexto"], outside=export.gold(task))
 
 
-def _schema_n1(tarefa):
+def _schema_n1(task):
     from esteira.dataset import export
-    return export.schema(tarefa)
+    return export.schema(task)
 
 
 def _f1(a, b):
@@ -183,13 +183,13 @@ def _f1(a, b):
     return 0.0 if not common else 2 * common / (sum(ca.values()) + sum(cb.values()))
 
 
-def score_n1(tarefa, instance, r):
+def score_n1(task, instance, r):
     """Nota estrutural 0–1: metade "roda" (executor/compilador aceita), metade semelhança com a referência."""
     ref, d = instance["referencia"], r.model_dump(mode="json")
-    if tarefa == "foto_tratar":
+    if task == "foto_tratar":
         near = abs(d["foco"][0] - ref["foco"][0]) + abs(d["foco"][1] - ref["foco"][1]) < 0.3
         return (near + (d["recortar"] == ref["recortar"]) + (d["separar_planos"] == ref["separar_planos"])) / 3
-    if tarefa in ("montar", "corrigir_montagem"):
+    if task in ("montar", "corrigir_montagem"):
         from esteira.n1 import filmcraft as FC
         key = lambda o: (o["op"], o.get("trilha") or o.get("tipo") or o.get("movimento"))  # noqa: E731
         try:
@@ -200,16 +200,16 @@ def score_n1(tarefa, instance, r):
             medias = {o["midia"]: {"caminho": "/x", "dur": 60} for o in d["ops"] if o.get("midia")}
             medias.setdefault("legendas", {"caminho": "/x"})
             FC.Executor(_Falso(), medias, {"fonte": "x", "fonte_estilo": "x",
-                                          "cores": {"texto": "#fff", "destaque": "#fff", "acento": "#fff"}}).executar(d)
+                                          "cores": {"texto": "#fff", "destaque": "#fff", "acento": "#fff"}}).apply_doc(d)
             roda = 1.0
         except (FC.ErrorN1, KeyError, ValueError):
             roda = 0.0
         return 0.5 * roda + 0.5 * _f1([key(o) for o in d["ops"]], [key(o) for o in ref["ops"]])
-    if tarefa == "thumb_compor":
+    if task == "thumb_compor":
         kinds = lambda x: [e["tipo"] for e in x["elementos"]]  # noqa: E731
         tit = lambda x: next((e["conteudo"] for e in x["elementos"] if e["tipo"] == "titulo"), "")  # noqa: E731
         return 0.5 * _f1(kinds(d), kinds(ref)) + 0.5 * (len(tit(d).split()) <= 4 and bool(tit(d)))
-    if tarefa == "peca_animar":
+    if task == "peca_animar":
         from esteira.n1 import effectcraft as EC
         try:
             EC.build(d, {"encaixes": {}, "botoes": {}, "batidas": {}, "t0": 0.3, "dur": 6, "w": 1920, "h": 1080})
@@ -222,20 +222,20 @@ def score_n1(tarefa, instance, r):
 
 
 TASKS = {
-    "intencao": (lambda c: (prompt("estudio_intencao", frase=c["frase"], antes=c.get("antes", "")), Intent, None),
+    "intencao": (lambda c: (prompt("studio_intent", frase=c["frase"], antes=c.get("antes", "")), Intent, None),
                  lambda c, r: float(r.intencao in c["aceitas"])),
-    "cena": (lambda c: (prompt("estudio_cena", frase=c["frase"], antes=c.get("antes", ""), catalogo=_catalog(),
+    "cena": (lambda c: (prompt("studio_scene", frase=c["frase"], antes=c.get("antes", ""), catalogo=_catalog(),
                                        guia="", exemplos="(nenhum)"),
                         Scene, None), score_scene),
-    "legenda": (lambda c: (prompt("estudio_legenda", texto=c["whisper"], canal=c.get("canal", "")), Caption, None),
+    "legenda": (lambda c: (prompt("studio_caption", texto=c["whisper"], canal=c.get("canal", "")), Caption, None),
                 score_caption),
-    "corte": (lambda c: (prompt("corte", **c["campos"]), Decision, None),
+    "corte": (lambda c: (prompt("cut", **c["campos"]), Decision, None),
               lambda c, r: float(r.manter == c["manter"])),
-    "visao": (lambda c: (prompt("estudio_visao"), Vision, [str(ANSWER_KEY / c["imagem"])]), score_vision),
+    "visao": (lambda c: (prompt("studio_vision"), Vision, [str(ANSWER_KEY / c["imagem"])]), score_vision),
     # direção por bloco: o momento e as 5 candidatas que o código achou → a peça que a pessoa aprovou ou trocou
     **{f"n1_{t}": (lambda c, t=t: (_prompt_n1(t, c), _schema_n1(t), None), lambda c, r, t=t: score_n1(t, c, r))
        for t in ("peca_animar", "montar", "corrigir_montagem", "thumb_compor", "foto_tratar")},
-    "bloco_peca": (lambda c: (prompt("direcao_escolha", texto=c["texto"], intencao=c.get("intencao", ""),
+    "bloco_peca": (lambda c: (prompt("direction_choice", texto=c["texto"], intencao=c.get("intencao", ""),
                                      tom=c.get("tom", ""), tratamento=c.get("tratamento", ""),
                                      numeros=c.get("numeros", "") or "nenhum", candidatas=c["candidatas"]),
                               ChoicePiece, None),
@@ -243,23 +243,23 @@ TASKS = {
 }
 
 
-def cases(tarefa):
-    if tarefa.startswith("n1_"):  # tarefas das Craft Apps: o ouro do dataset (docs/PLANO-DATASET.md)
+def cases(task):
+    if task.startswith("n1_"):  # tarefas das Craft Apps: o ouro do dataset (docs/PLANO-DATASET.md)
         from esteira.dataset import export
-        return export.cases_eval(tarefa[3:])
-    file = ANSWER_KEY / f"{tarefa}.jsonl"
+        return export.cases_eval(task[3:])
+    file = ANSWER_KEY / f"{task}.jsonl"
     return [json.loads(line) for line in file.read_text().splitlines() if line.strip()] if file.exists() else []
 
 
 # ── gerar corte e legenda a partir dos episódios ──
 
-def generate(canal="finlumia"):
+def generate(channel="finlumia"):
     """Reescreve corte.jsonl e legenda.jsonl do canal; devolve {tarefa: n}."""
     rev = json.loads((ANSWER_KEY / "revisao.json").read_text()) if (ANSWER_KEY / "revisao.json").exists() else {}
     outside, fixed = set(rev.get("excluir", [])), rev.get("manter", {})
     outside_caption = set(rev.get("excluir_legenda", []))
     cut, caption = [], []
-    for ep in sorted(p for p in (PROJECTS / canal).iterdir() if (p / "cortes.json").exists()):
+    for ep in sorted(p for p in (PROJECTS / channel).iterdir() if (p / "cortes.json").exists()):
         sentences = json.loads((ep / "frases.json").read_text())
         spans = json.loads((ep / "cortes.json").read_text())["trechos"]
         for k, t in enumerate(spans):
@@ -279,7 +279,7 @@ def generate(canal="finlumia"):
         for i, f in enumerate(sentences):
             spoken = " ".join(p["p"] for p in words if f["ini"] - 0.05 <= p["ini"] < f["fim"])
             if spoken and only_swaps(spoken, f["texto"]) and f"{ep.name}:{i}" not in outside_caption:
-                caption.append({"id": f"{ep.name}:{i}", "whisper": spoken, "certo": f["texto"], "canal": canal})
+                caption.append({"id": f"{ep.name}:{i}", "whisper": spoken, "certo": f["texto"], "canal": channel})
     ANSWER_KEY.mkdir(parents=True, exist_ok=True)
     for name, items in (("corte", cut), ("legenda", caption)):
         (ANSWER_KEY / f"{name}.jsonl").write_text("".join(json.dumps(c, ensure_ascii=False) + "\n" for c in items))
@@ -297,10 +297,10 @@ def _vram_gb():
         return None
 
 
-def _call(model, texto, schema, images=None, max_tokens=1200):
-    msg = {"role": "user", "content": str(texto)}
+def _call(model, text, schema, images=None, max_tokens=1200):
+    msg = {"role": "user", "content": str(text)}
     if images:
-        msg["content"] = [{"type": "text", "text": str(texto)}] + [
+        msg["content"] = [{"type": "text", "text": str(text)}] + [
             {"type": "image_url", "image_url": {"url": _data_url(i)}} for i in images]
     body = {"model": model, "messages": [msg], "temperature": 0.1, "max_tokens": max_tokens,
              "response_format": {"type": "json_object", "schema": schema.model_json_schema()},
@@ -313,7 +313,7 @@ def _call(model, texto, schema, images=None, max_tokens=1200):
     return d["choices"][0]["message"].get("content") or "", time.monotonic() - t, tim.get("predicted_per_second")
 
 
-def run(models, tarefas=None, n=None, progresso=print):
+def run(models, tarefas=None, n=None, progress=print):
     """Roda cada modelo em cada tarefa; devolve e grava o resultado."""
     if not llama.server():
         raise RuntimeError("llama-server fora do ar")
@@ -322,14 +322,14 @@ def run(models, tarefas=None, n=None, progresso=print):
     res = {"data": datetime.now().isoformat(timespec="seconds"), "modelos": {}}
     for model in models:
         if model not in available:
-            progresso(f"{model}: ausente no roteador, pulado")
+            progress(f"{model}: ausente no roteador, pulado")
             continue
         llama.unload()
         t0 = time.monotonic()
         try:
-            _call(model, "Responda ok.", Caption)  # carrega o modelo
+            _call(model, "Reply ok.", Caption)  # carrega o modelo
         except requests.RequestException as e:
-            progresso(f"{model}: não carregou ({str(e)[:120]})")
+            progress(f"{model}: não carregou ({str(e)[:120]})")
             continue
         info = {"carga_s": round(time.monotonic() - t0, 1), "vram_gb": _vram_gb(), "tarefas": {}}
         for task in tarefas:
@@ -357,16 +357,16 @@ def run(models, tarefas=None, n=None, progresso=print):
                 if v:
                     tps.append(v)
                 if i % 10 == 0:
-                    progresso(f"{model} · {task} {i}/{len(items)}")
+                    progress(f"{model} · {task} {i}/{len(items)}")
             item = {"n": len(items), "nota": round(sum(notes) / len(notes), 3),
                     "json_ok": round(valid / len(items), 3),
                     "ms": round(1000 * sum(times) / max(len([t for t in times if t]), 1)),
                     "tok_s": round(sum(tps) / len(tps), 1) if tps else None, "respostas": answers}
             if task == "corte":  # gabarito desequilibrado (mais "sai"): acurácia balanceada
-                por = {b: [r["nota"] for r, c in zip(answers, items, strict=True) if c["manter"] == b] for b in (True, False)}
-                item["balanceada"] = round(sum(sum(v) / len(v) for v in por.values() if v) / 2, 3)
+                by_choice = {b: [r["nota"] for r, c in zip(answers, items, strict=True) if c["manter"] == b] for b in (True, False)}
+                item["balanceada"] = round(sum(sum(v) / len(v) for v in by_choice.values() if v) / 2, 3)
             info["tarefas"][task] = item
-            progresso(f"{model} · {task}: nota {item['nota']} · json {item['json_ok']} · {item['ms']} ms")
+            progress(f"{model} · {task}: nota {item['nota']} · json {item['json_ok']} · {item['ms']} ms")
         info["vram_gb"] = max(filter(None, [info["vram_gb"], _vram_gb()]), default=None)
         res["modelos"][model] = info
         # grava a cada modelo: uma falha no meio não perde o que já foi medido

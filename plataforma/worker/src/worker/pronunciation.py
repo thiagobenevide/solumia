@@ -1,7 +1,7 @@
-"""Pronúncia por fonema da leitura em voz alta: o IPA esperado de cada palavra vem do espeak-ng
-(o mesmo que o Kokoro usa) e o que foi dito, do wav2vec2 fonético no processo de
-`pronuncia/servidor.py` (venv com torch). Sem esse venv, devolve None e a avaliação fica só nas
-palavras."""
+"""Per-phoneme pronunciation of reading aloud: the expected IPA of each word comes from espeak-ng
+(the same one Kokoro uses) and what was said, from the phonetic wav2vec2 in the
+`pronuncia/servidor.py` process (venv with torch). Without that venv, it returns None and the
+assessment stays at the word level."""
 
 import json
 import logging
@@ -21,7 +21,7 @@ ESPEAK = {"en": "en-us", "es": "es", "fr": "fr-fr", "pt": "pt-br"}
 
 
 def ipa(items: list[str], language: str) -> list[str]:
-    """IPA de cada palavra, sem marcas de tônica."""
+    """IPA of each word, without stress marks."""
     import espeakng_loader
     from phonemizer import phonemize
     from phonemizer.backend.espeak.wrapper import EspeakWrapper
@@ -67,8 +67,11 @@ class Pronunciation:
         self._process = process
         return process
 
-    def evaluate(self, audio_16k: Any, reference: str, language: str) -> list[dict[str, Any]] | None:
-        """Acerto de cada palavra da [referencia] (na ordem de `palavras`), ou None sem o modelo."""
+    def evaluate(
+        self, audio_16k: Any, reference: str, language: str
+    ) -> list[dict[str, Any]] | None:
+        """Accuracy of each word of the reference (in `palavras` order), or None without the
+        model."""
         import numpy as np
 
         items = [p for p, _, _ in split_words(reference)]

@@ -15,9 +15,9 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api/v1/episodios/{ep}/editor", tags=["editor"])
 
 
-def _context(p, tipo):
-    rot = api._json(p.caminho("roteiro.json"), {}) or {}
-    return {"tipo": tipo, "motor": p.cfg.get("editor", {}).get("motor_ia", "claude"),
+def _context(p, kind):
+    rot = api._json(p.path_of("roteiro.json"), {}) or {}
+    return {"tipo": kind, "motor": p.cfg.get("editor", {}).get("motor_ia", "claude"),
             "cor": p.cfg.get("graficos", {}).get("cor", "#ffd400"),
             "citacoes": [{k: c.get(k) for k in ("autores", "ano", "revista", "pt")} for c in rot.get("citacoes", [])]}
 

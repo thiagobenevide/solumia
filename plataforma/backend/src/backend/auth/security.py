@@ -1,7 +1,7 @@
-"""Hash de senha (scrypt), segundo fator TOTP (Google Authenticator) e token de sessão (JWT HS256),
-só com a biblioteca padrão.
+"""Password hash (scrypt), TOTP second factor (Google Authenticator) and session token
+(JWT HS256), with the standard library only.
 
-Gerar as variáveis do login (hash da senha, segredo TOTP e chave do JWT):
+Generate the login variables (password hash, TOTP secret and JWT key):
 
     .venv/bin/python -m backend.auth.security
 """
@@ -14,24 +14,24 @@ import secrets
 import time
 from pathlib import Path
 
-# Custo do scrypt (~16 MiB de memória por verificação): caro para força bruta, rápido para um login.
+# scrypt cost (~16 MiB of memory per check): expensive for brute force, fast for one login.
 _N, _R, _P = 2**14, 8, 1
 SIZE_MINIMUM_SECRET = 32
 
 
 def generate_hash_password(password: str) -> str:
-    sal = secrets.token_bytes(16)
-    key = hashlib.scrypt(password.encode(), salt=sal, n=_N, r=_R, p=_P, dklen=32)
-    return f"scrypt${_N}${_R}${_P}${_b64(sal)}${_b64(key)}"
+    salt = secrets.token_bytes(16)
+    key = hashlib.scrypt(password.encode(), salt=salt, n=_N, r=_R, p=_P, dklen=32)
+    return f"scrypt${_N}${_R}${_P}${_b64(salt)}${_b64(key)}"
 
 
 def verify_password(password: str, hash_salvo: str) -> bool:
     try:
-        algoritmo, n, r, p, sal, expected = hash_salvo.split("$")
+        algoritmo, n, r, p, salt, expected = hash_salvo.split("$")
         if algoritmo != "scrypt":
             return False
         key = hashlib.scrypt(
-            password.encode(), salt=_d64(sal), n=int(n), r=int(r), p=int(p), dklen=32
+            password.encode(), salt=_d64(salt), n=int(n), r=int(r), p=int(p), dklen=32
         )
     except (ValueError, TypeError):
         return False
@@ -41,8 +41,8 @@ def verify_password(password: str, hash_salvo: str) -> bool:
 def issue_token(
     subject: str, secret: str, minutos: int, extras: dict[str, object] | None = None
 ) -> tuple[str, int]:
-    """Devolve o token e o instante (epoch) em que expira. [extras]: claims a mais (geração,
-    escopo, hora do último código TOTP...)."""
+    """Returns the token and the instant (epoch) it expires. Extras: additional claims
+    (generation, scope, time of the last TOTP code...)."""
     now = int(time.time())
     expira = now + minutos * 60
     cabecalho = {"alg": "HS256", "typ": "JWT"}
@@ -58,14 +58,14 @@ def issue_token(
 
 
 def validate_token(token: str, secret: str) -> dict[str, object] | None:
-    """Payload do token se a assinatura e a validade conferem; senão None."""
+    """Token payload if the signature and the validity check out; otherwise None."""
     if len(secret) < SIZE_MINIMUM_SECRET:
         return None
     try:
         header, body, signature = token.split(".")
         if not hmac.compare_digest(_d64(signature), _sign(f"{header}.{body}", secret)):
             return None
-        # Só HS256: impede o truque de trocar o "alg" (ex.: "none").
+        # Only HS256: prevents the "alg" swap trick (e.g. "none").
         if json.loads(_d64(header)).get("alg") != "HS256":
             return None
         payload: dict[str, object] = json.loads(_d64(body))
@@ -77,22 +77,22 @@ def validate_token(token: str, secret: str) -> dict[str, object] | None:
     return payload
 
 
-def read_generation(arquivo: str) -> int:
-    """Geração atual das sessões (0 sem o arquivo ou com conteúdo inválido)."""
+def read_generation(file: str) -> int:
+    """Current session generation (0 without the file or with invalid content)."""
     try:
-        return int(Path(arquivo).expanduser().read_text().strip() or 0)
+        return int(Path(file).expanduser().read_text().strip() or 0)
     except (OSError, ValueError):
         return 0
 
 
-def upload_generation(arquivo: str) -> int:
-    """Invalida todos os tokens emitidos até agora; devolve a geração nova."""
-    path = Path(arquivo).expanduser()
-    new = read_generation(arquivo) + 1
+def upload_generation(file: str) -> int:
+    """Invalidates every token issued so far; returns the new generation."""
+    path = Path(file).expanduser()
+    new = read_generation(file) + 1
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporario = path.with_suffix(".novo")
-    temporario.write_text(str(new))
-    temporario.replace(path)
+    temporary = path.with_suffix(".novo")
+    temporary.write_text(str(new))
+    temporary.replace(path)
     return new
 
 
@@ -100,13 +100,13 @@ def generate_secret_totp() -> str:
     return base64.b32encode(secrets.token_bytes(20)).decode()
 
 
-def uri_totp(secret: str, usuario: str, emissor: str = "Agent") -> str:
-    """URI `otpauth://` para cadastrar no Google Authenticator (QR code ou chave manual)."""
+def uri_totp(secret: str, usuario: str, issuer: str = "Agent") -> str:
+    """`otpauth://` URI to register in Google Authenticator (QR code or manual key)."""
     from urllib.parse import quote
 
     return (
-        f"otpauth://totp/{quote(emissor)}:{quote(usuario)}"
-        f"?secret={secret}&issuer={quote(emissor)}&algorithm=SHA1&digits=6&period=30"
+        f"otpauth://totp/{quote(issuer)}:{quote(usuario)}"
+        f"?secret={secret}&issuer={quote(issuer)}&algorithm=SHA1&digits=6&period=30"
     )
 
 
@@ -118,14 +118,14 @@ def code_totp(secret: str, step: int) -> str:
     return f"{number % 1_000_000:06d}"
 
 
-def verify_totp(secret: str, codigo: str, agora: float | None = None) -> int | None:
-    """Passo de tempo (janela de 30 s) em que o código confere, com ±1 de folga; senão None."""
-    if not secret or len(codigo) != 6 or not codigo.isdigit():
+def verify_totp(secret: str, code: str, now: float | None = None) -> int | None:
+    """Time step (30 s window) in which the code matches, with ±1 tolerance; otherwise None."""
+    if not secret or len(code) != 6 or not code.isdigit():
         return None
-    current = int((time.time() if agora is None else agora) // 30)
+    current = int((time.time() if now is None else now) // 30)
     try:
         for step in (current - 1, current, current + 1):
-            if hmac.compare_digest(code_totp(secret, step), codigo):
+            if hmac.compare_digest(code_totp(secret, step), code):
                 return step
     except ValueError:
         return None
@@ -148,7 +148,7 @@ def _d64(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
-# Hash de uma senha aleatória: usuário inexistente gasta o mesmo tempo que um existente.
+# Hash of a random password: a missing user takes the same time as an existing one.
 HASH_FICTITIOUS = generate_hash_password(secrets.token_urlsafe(16))
 
 

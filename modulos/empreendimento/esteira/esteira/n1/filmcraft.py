@@ -206,9 +206,9 @@ class Executor:
     """Aplica uma `Montagem` numa sessão do FilmCraft. `midias`: ref → {"caminho", "dur"?}. `estilo`: fonte,
     fonte_estilo e cores por papel. `rastro` guarda os comandos N0 enviados (o dataset grava)."""
 
-    def __init__(self, fc, medias: dict, estilo: dict):
-        self.fc, self.medias, self.estilo = fc, medias, estilo
-        self.itens: dict[str, str] = {}   # ref → item importado
+    def __init__(self, fc, medias: dict, style: dict):
+        self.fc, self.medias, self.style = fc, medias, style
+        self.items: dict[str, str] = {}   # ref → item importado
         self.clips: dict[str, list] = {}  # nome → ids de clipe
         self.inicio: dict[str, tuple[float, float]] = {}  # nome → (em, dur), para animações relativas
         self.w, self.h = 1920, 1080
@@ -218,16 +218,16 @@ class Executor:
         self.trace.append({"command": cmd, "params": params})
         return self.fc.run(cmd, **params)
 
-    def _clipes(self, nome):
-        if nome not in self.clips:
-            raise ErrorN1(f"clipe desconhecido: {nome}")
-        return self.clips[nome]
+    def _clips(self, name):
+        if name not in self.clips:
+            raise ErrorN1(f"clipe desconhecido: {name}")
+        return self.clips[name]
 
-    def importar(self, doc: Assembly):
+    def import_media(self, doc: Assembly):
         refs = []
         for o in doc.ops:
             ref = getattr(o, "midia", None)
-            if ref and ref not in refs and ref not in self.itens:
+            if ref and ref not in refs and ref not in self.items:
                 refs.append(ref)
         missing = [r for r in refs if r not in self.medias]
         if missing:
@@ -236,28 +236,37 @@ class Executor:
             imp = self.run("file.import", paths=[str(self.medias[r]["caminho"]) for r in refs])
             if imp.get("errors"):
                 raise ErrorN1(f"erro ao importar: {imp['errors']}")
-            self.itens.update(zip(refs, imp["items"]))
+            self.items.update(zip(refs, imp["items"]))
 
-    def executar(self, doc: Assembly | dict) -> list[dict]:
+    def apply_doc(self, doc: Assembly | dict) -> list[dict]:
         doc = doc if isinstance(doc, Assembly) else Assembly.model_validate(doc)
-        self._usa_sfx = any(getattr(o, "trilha", None) == "sfx" for o in doc.ops)
-        self.importar(doc)
+        self._uses_sfx = any(getattr(o, "trilha", None) == "sfx" for o in doc.ops)
+        self.import_media(doc)
+        methods = self._op_methods()
         for o in doc.ops:
-            getattr(self, f"_{o.op}")(o)
+            methods[o.op](o)
         return self.trace
+
+    def _op_methods(self):
+        # the keys are the N1 `op` values (data contract); the methods are the code
+        return {"sequencia": self._sequence, "colocar": self._place, "enquadrar": self._frame,
+                "ken_burns": self._ken_burns, "transicao": self._transition, "cor": self._color, "texto": self._text,
+                "musica": self._music, "tipo_audio": self._audio_type, "legendas": self._captions,
+                "cortar": self._cut, "remover": self._remove, "aparar": self._trim, "mover": self._move,
+                "velocidade": self._speed, "ganho": self._gain, "fade": self._fade, "marcar": self._mark}
 
     # ---------- operações ----------
 
-    def _sequencia(self, o: Sequence):
+    def _sequence(self, o: Sequence):
         self.w, self.h = (o.largura, o.altura) if o.largura and o.altura else FORMATS[o.formato]
         self.run("file.newSequence", name=o.nome, width=self.w, height=self.h, fps=o.fps, video=4,
-                 audio=3 if self._usa_sfx else 2)
+                 audio=3 if self._uses_sfx else 2)
 
-    _usa_sfx = False
+    _uses_sfx = False
 
-    def _colocar(self, o: Place):
+    def _place(self, o: Place):
         track = TRACKS[o.trilha]
-        p = {"item": self.itens[o.midia], "track": track, "seconds": o.em, "insert": False}
+        p = {"item": self.items[o.midia], "track": track, "seconds": o.em, "insert": False}
         if o.origem is not None:
             p["sourceIn"] = ticks(o.origem)
         if o.dur is not None:
@@ -269,12 +278,12 @@ class Executor:
         self.clips[o.id] = self.run("timeline.place", **p)["clips"]
         self.inicio[o.id] = (o.em, o.dur or float(self.medias[o.midia].get("dur") or 0))
 
-    def _enquadrar(self, o: Frame):
-        for c in self._clipes(o.alvo):
+    def _frame(self, o: Frame):
+        for c in self._clips(o.alvo):
             self.run("effects.setParam", clip=c, effect="motion", param="scale", value=o.zoom)
 
     def _ken_burns(self, o: KenBurns):
-        clip = self._clipes(o.alvo)[0]
+        clip = self._clips(o.alvo)[0]
         start, duration = self.inicio[o.alvo]
         end = start + duration
         z = o.zoom
@@ -302,22 +311,23 @@ class Executor:
             self.run("effects.setParam", clip=clip, effect="motion", param="position", value=[cx - signal * dx, cy],
                      time=ticks(end), keyframe=True)
 
-    def _transicao(self, o: TransitionOp):
-        self.run("sequence.applyVideoTransition", clip=self._clipes(o.alvo)[0], effect=o.tipo,
+    def _transition(self, o: TransitionOp):
+        self.run("sequence.applyVideoTransition", clip=self._clips(o.alvo)[0], effect=o.tipo,
                  edge="in" if o.borda == "entrada" else "out", frames=o.quadros)
 
-    def _cor(self, o: Color):
+    def _color(self, o: Color):
         item = self.run("file.newAdjustmentLayer", seconds=o.dur)
         item = item["item"] if isinstance(item, dict) else item
         track = "V2" if o.acima_de == "base" else "V3"
         aj = self.run("timeline.place", item=item, track=track, seconds=o.em, duration=ticks(o.dur),
                       insert=False)["clips"][0]
         self.run("effects.apply", clips=[aj], effect="lumetri")
+        adjustments = o.ajustes.model_dump()
         for field, param in _LUMETRI.items():
-            self.run("effects.setParam", clip=aj, effect="lumetri", param=param, value=getattr(o.ajustes, field))
+            self.run("effects.setParam", clip=aj, effect="lumetri", param=param, value=adjustments[field])
 
-    def _texto(self, o: Text):
-        e = self.estilo
+    def _text(self, o: Text):
+        e = self.style
         size = round(o.tamanho * self.h, 1)
         size = int(size) if size == int(size) else size
         x, y = o.pos[0] * self.w, o.pos[1] * self.h
@@ -349,14 +359,14 @@ class Executor:
         for t, v in ((t0, 0), (tin, 100), (tout, 100), (t1, 0)):
             self.run("effects.setParam", clip=clip, effect="opacity", param="opacity", value=v, time=t, keyframe=True)
 
-    def _musica(self, o: Music):
+    def _music(self, o: Music):
         duration_m = float(self.medias[o.midia].get("dur") or 0)
         if duration_m <= 0:
             raise ErrorN1("música sem duração conhecida")
         t, track = o.de, []
         while t < o.ate:
             d = min(duration_m, o.ate - t)
-            track += self.run("timeline.place", item=self.itens[o.midia], track="A2", seconds=t, duration=ticks(d),
+            track += self.run("timeline.place", item=self.items[o.midia], track="A2", seconds=t, duration=ticks(d),
                                insert=False, video=False)["clips"]
             t += d
         self.clips[o.midia] = track
@@ -365,50 +375,50 @@ class Executor:
         if o.ducking:
             self.run("essentialSound.generateDucking", clips=track)
 
-    def _tipo_audio(self, o: KindAudio):
-        self.run("essentialSound.setType", clips=self._clipes(o.alvo), type=_KIND_AUDIO[o.tipo])
+    def _audio_type(self, o: KindAudio):
+        self.run("essentialSound.setType", clips=self._clips(o.alvo), type=_KIND_AUDIO[o.tipo])
 
-    def _legendas(self, o: Captions):
-        e = self.estilo
+    def _captions(self, o: Captions):
+        e = self.style
         self.run("captions.import", path=str(self.medias[o.arquivo]["caminho"]))
         size = round(o.tamanho * self.h)
         self.run("captions.setStyle", track="C1", font=e["fonte"], size=size, color=e["cores"]["texto"],
                  background=o.fundo, backgroundColor="#000000aa", anchor="bottom", margin=o.margem)
 
-    def _cortar(self, o: Cut):
+    def _cut(self, o: Cut):
         p = {"time": ticks(o.em)}
         if o.trilha:
             p["track"] = TRACKS[o.trilha]
         self.run("timeline.razor", **p)
 
-    def _remover(self, o: Remove):
-        self.run("timeline.delete", clips=self._clipes(o.alvo), ripple=o.fechar)
+    def _remove(self, o: Remove):
+        self.run("timeline.delete", clips=self._clips(o.alvo), ripple=o.fechar)
 
-    def _aparar(self, o: Trim):
-        for c in self._clipes(o.alvo):
+    def _trim(self, o: Trim):
+        for c in self._clips(o.alvo):
             self.run("timeline.trim", clip=c, edge="in" if o.borda == "entrada" else "out",
                      mode="ripple" if o.fechar else "regular", delta=ticks(o.delta))
 
-    def _mover(self, o: Move):
+    def _move(self, o: Move):
         movs = [{"clip": c, "time": {"seconds": o.para}, **({"track": TRACKS[o.trilha]} if o.trilha else {})}
-                for c in self._clipes(o.alvo)]
+                for c in self._clips(o.alvo)]
         self.run("timeline.move", moves=movs, insert=False)
 
-    def _velocidade(self, o: Speed):
-        self.run("clip.speedDuration", clips=self._clipes(o.alvo), speed=round(o.fator * 100, 2), reverse=False,
+    def _speed(self, o: Speed):
+        self.run("clip.speedDuration", clips=self._clips(o.alvo), speed=round(o.fator * 100, 2), reverse=False,
                  ripple=False)
 
-    def _ganho(self, o: Gain):
-        self.run("clip.audioGain", clips=self._clipes(o.alvo), mode="set", db=o.db)
+    def _gain(self, o: Gain):
+        self.run("clip.audioGain", clips=self._clips(o.alvo), mode="set", db=o.db)
 
     def _fade(self, o: Fade):
         fps = 30
         for edge, s in (("in", o.entrada), ("out", o.saida)):
             if s > 0:
-                for c in self._clipes(o.alvo):
+                for c in self._clips(o.alvo):
                     self.run("sequence.applyAudioTransition", clip=c, effect="constant_power", edge=edge,
                              frames=max(1, round(s * fps)))
 
-    def _marcar(self, o: Mark):
+    def _mark(self, o: Mark):
         self.run("markers.add", target="program", time=ticks(o.em), name=o.nome, color=_COLORS_MARK[o.cor])
 

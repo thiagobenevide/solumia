@@ -1,68 +1,68 @@
 #!/usr/bin/env bash
-# Valida só o que mudou (ou os caminhos dados) com saída mínima: uma linha por checagem
-# e, quando falha, só as linhas de erro. Feito para o Claude gastar poucos tokens.
-#   infra/scripts/verificar                 # arquivos alterados/novos desde o HEAD
-#   infra/scripts/verificar <caminho>...    # força o escopo (arquivos ou pastas)
+# Validates only what changed (or the given paths) with minimal output: one line per check
+# and, on failure, only the error lines. Made so Claude spends few tokens.
+#   infra/scripts/verificar                 # files changed/new since HEAD
+#   infra/scripts/verificar <path>...       # forces the scope (files or folders)
 #   VERIFICAR_LINHAS=60 infra/scripts/verificar
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-LINHAS=${VERIFICAR_LINHAS:-30}
+MAX_LINES=${VERIFICAR_LINHAS:-30}
 FLUTTER=$(command -v flutter || echo "$HOME/development/flutter/bin/flutter")
 RUFF=.venv/bin/ruff
 PY=.venv/bin/python
-PY_ESTEIRA=modulos/empreendimento/esteira/.venv/bin/python
-falhas=0
+PY_PIPELINE=modulos/empreendimento/esteira/.venv/bin/python
+failures=0
 
 if [ $# -gt 0 ]; then
-  mapfile -t arqs < <(git ls-files --cached --others --exclude-standard -- "$@")
+  mapfile -t files < <(git ls-files --cached --others --exclude-standard -- "$@")
 else
-  mapfile -t arqs < <({ git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
+  mapfile -t files < <({ git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u)
 fi
-mapfile -t arqs < <(for a in "${arqs[@]}"; do [ -f "$a" ] && echo "$a"; done)
-[ ${#arqs[@]} -eq 0 ] && { echo "nada alterado"; exit 0; }
+mapfile -t files < <(for f in "${files[@]}"; do [ -f "$f" ] && echo "$f"; done)
+[ ${#files[@]} -eq 0 ] && { echo "nothing changed"; exit 0; }
 
-rodar() {  # rodar <rótulo> <comando...>: imprime "ok" ou as últimas linhas da saída
-  local rotulo=$1; shift
-  local saida
-  if saida=$("$@" 2>&1); then
-    echo "ok     $rotulo"
+run() {  # run <label> <command...>: prints "ok" or the last lines of the output
+  local label=$1; shift
+  local output
+  if output=$("$@" 2>&1); then
+    echo "ok     $label"
   else
-    echo "FALHOU $rotulo"
-    echo "$saida" | grep -vE '^\s*$' | tail -n "$LINHAS" | sed 's/^/  /'
-    falhas=$((falhas + 1))
+    echo "FAILED $label"
+    echo "$output" | grep -vE '^\s*$' | tail -n "$MAX_LINES" | sed 's/^/  /'
+    failures=$((failures + 1))
   fi
 }
 
-py=(); py_plat=(); py_esteira=(); py_capture=(); declare -A dart_pacotes=()
-for a in "${arqs[@]}"; do
+py=(); py_plat=(); py_pipeline=(); py_capture=(); declare -A dart_packages=()
+for a in "${files[@]}"; do
   case "$a" in
     *.py) py+=("$a")
           case "$a" in
             plataforma/*|modulos/*/backend/*) py_plat+=("$a") ;;
-            modulos/empreendimento/esteira/*) py_esteira+=("$a") ;;
+            modulos/empreendimento/esteira/*) py_pipeline+=("$a") ;;
             modulos/empreendimento/capture/*) py_capture+=("$a") ;;
           esac ;;
     *.dart|*/pubspec.yaml)
           for p in plataforma/app_core plataforma/app_notas plataforma/app modulos/*/app; do
-            [[ "$a" == "$p/"* ]] && { dart_pacotes[$p]=1; break; }
+            [[ "$a" == "$p/"* ]] && { dart_packages[$p]=1; break; }
           done ;;
   esac
 done
 
-[ ${#py[@]} -gt 0 ] && rodar "ruff (${#py[@]} arquivos)" "$RUFF" check -q --output-format concise "${py[@]}"
-[ ${#py_plat[@]} -gt 0 ] && rodar "pytest plataforma" "$PY" -m pytest -q -x --no-header -p no:cacheprovider
-# motor do Estúdio: roda no Python do sistema (GStreamer do apt); os testes do modelo não precisam dele
-[ ${#py_capture[@]} -gt 0 ] && rodar "pytest capture" \
+[ ${#py[@]} -gt 0 ] && run "ruff (${#py[@]} files)" "$RUFF" check -q --output-format concise "${py[@]}"
+[ ${#py_plat[@]} -gt 0 ] && run "pytest plataforma" "$PY" -m pytest -q -x --no-header -p no:cacheprovider
+# Studio engine: runs on the system Python (GStreamer from apt); the model tests do not need it
+[ ${#py_capture[@]} -gt 0 ] && run "pytest capture" \
   bash -c "cd modulos/empreendimento/capture && PYTHONPATH=. '$PWD/$PY' -m pytest -q -x --no-header -p no:cacheprovider tests"
-[ ${#py_esteira[@]} -gt 0 ] && rodar "pytest esteira" \
-  bash -c "cd modulos/empreendimento/esteira && '$PWD/$PY_ESTEIRA' -m pytest -q -x --no-header -p no:cacheprovider tests"
+[ ${#py_pipeline[@]} -gt 0 ] && run "pytest esteira" \
+  bash -c "cd modulos/empreendimento/esteira && '$PWD/$PY_PIPELINE' -m pytest -q -x --no-header -p no:cacheprovider tests"
 
-for p in "${!dart_pacotes[@]}"; do
-  # "nível • mensagem. Try … • arq:l:c • código" vira "arq:l:c código: mensagem" (sem a sugestão).
-  rodar "flutter analyze $p" bash -c "'$FLUTTER' analyze --no-pub '$p' 2>&1 \
+for p in "${!dart_packages[@]}"; do
+  # "level • message. Try … • file:l:c • code" becomes "file:l:c code: message" (without the hint).
+  run "flutter analyze $p" bash -c "'$FLUTTER' analyze --no-pub '$p' 2>&1 \
     | awk -F ' • ' 'NF>=4 { sub(/\\. .*/, \"\", \$2); print \$3, \$4\": \"\$2; next } /issues? found/'; \
     exit \${PIPESTATUS[0]}"
 done
 
-[ $falhas -eq 0 ] && exit 0 || exit 1
+[ $failures -eq 0 ] && exit 0 || exit 1

@@ -29,18 +29,18 @@ def _number_of_path(rel):
     return set()
 
 
-def candidates(raiz, canal, numero, titulo, n=5, short=False, exts=(".wav",)):
+def candidates(root, channel, number, title, n=5, short=False, exts=(".wav",)):
     """[{caminho, nota, mb, modificado}] do mais provável para o menos. O WAV de um Short tem "short" no
     caminho (ex.: `<Canal>/Shorts/005a - ...`); o do vídeo longo, não."""
-    raiz = Path(raiz).expanduser()
-    folders = [p for p in raiz.iterdir() if p.is_dir() and _norm(p.name).strip() == _norm(canal).strip()] \
-        if raiz.exists() else []
+    root = Path(root).expanduser()
+    folders = [p for p in root.iterdir() if p.is_dir() and _norm(p.name).strip() == _norm(channel).strip()] \
+        if root.exists() else []
     output = []
     for folder in folders:
         for wav in (f for f in folder.rglob("*") if f.suffix.lower() in exts):
             rel = _norm(str(wav.relative_to(folder)))
             nums = _number_of_path(wav.relative_to(folder))
-            note = (0.6 if numero in nums else 0) + 0.4 * SequenceMatcher(None, _norm(titulo), rel).ratio()
+            note = (0.6 if number in nums else 0) + 0.4 * SequenceMatcher(None, _norm(title), rel).ratio()
             note -= 0.1 if "Audio Files" in wav.parts else 0
             note += 0.3 if ("short" in rel) == short else -0.3
             st = wav.stat()
@@ -57,7 +57,7 @@ def update(project):
     import shutil
     import time
 
-    rot = project.caminho("roteiro.json")
+    rot = project.path_of("roteiro.json")
     if not rot.exists() or project.cfg.get("producao", {}).get("modo") == "apresentador":
         return None  # apresentador: câmera e WAV são sincronizados na importação
     r = json.loads(rot.read_text())
@@ -69,19 +69,19 @@ def update(project):
     new = max(cands, key=lambda c: c["modificado"])
     st = Path(new["caminho"]).stat()
     origin = {"caminho": new["caminho"], "tamanho": st.st_size, "modificado": st.st_mtime}
-    reg = project.caminho("origem_audio.json")
+    reg = project.path_of("origem_audio.json")
     if reg.exists():
         ant = json.loads(reg.read_text())
         if (ant["caminho"], ant["tamanho"]) == (new["caminho"], st.st_size) or st.st_mtime <= ant["modificado"]:
             return None
     else:  # episódio importado antes deste registro: compara com a gravação que está no projeto
-        current = next(iter(sorted(project.pasta.glob("narracao_bruta.*"))), None) or \
-            next((p for p in sorted(project.pasta.glob("narracao.*")) if p.suffix.lower() == ".wav"), None)
+        current = next(iter(sorted(project.folder_path.glob("narracao_bruta.*"))), None) or \
+            next((p for p in sorted(project.folder_path.glob("narracao.*")) if p.suffix.lower() == ".wav"), None)
         if current and current.stat().st_size == st.st_size:  # é a mesma gravação: só registra a origem
             reg.write_text(json.dumps(origin, ensure_ascii=False))
             return None
         if current and st.st_mtime <= current.stat().st_mtime:
             return None
-    shutil.copy(new["caminho"], project.caminho("narracao.wav"))  # mtime novo: o limpar vê como gravação nova
+    shutil.copy(new["caminho"], project.path_of("narracao.wav"))  # mtime novo: o limpar vê como gravação nova
     reg.write_text(json.dumps(origin, ensure_ascii=False))
     return Path(new["caminho"])

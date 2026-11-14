@@ -46,7 +46,7 @@ def _serve():
                 fut.set_exception(e)
 
 
-def frame(html, w, h, t=0.0, transparente=True, espera=30):
+def frame(html, w, h, t=0.0, transparente=True, wait=30):
     """PNG do HTML no instante `t` (segundos)."""
     global _thread
     with _start:
@@ -55,4 +55,4 @@ def frame(html, w, h, t=0.0, transparente=True, espera=30):
             _thread.start()
     fut = Future()
     _requests.put((html, w, h, t, transparente, fut))
-    return fut.result(timeout=espera)
+    return fut.result(timeout=wait)

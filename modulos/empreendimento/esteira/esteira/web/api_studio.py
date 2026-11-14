@@ -199,11 +199,11 @@ def test_style(id_: str, corpo: Test):
     if corpo.ep:
         from esteira.project import Project
         pr = Project(_ep(corpo.ep))
-        if (pr.pasta / "frases.json").is_file():
+        if (pr.folder_path / "frases.json").is_file():
             from esteira.studio import cut
             sentences = cut.sentences(pr)
-        elif pr.roteiro():
-            sentences = triggers.sentences_of_text(pr.roteiro().read_text())
+        elif pr.script_path():
+            sentences = triggers.sentences_of_text(pr.script_path().read_text())
     elif corpo.texto.strip():
         sentences = triggers.sentences_of_text(corpo.texto)
     if not sentences:
@@ -246,7 +246,7 @@ def lock_style(id_: str, corpo: Lock):
     from esteira.studio import style
     e = _style(id_)
     e.travado = corpo.travado
-    return style.save(e, forcar=True, nova_versao=False)
+    return style.save(e, forcar=True, new_version=False)
 
 
 @router.post("/estilos/{id_}/referencias")
@@ -292,7 +292,7 @@ def _preview_to_background(final):
         return
     _generating.add(final)
 
-    def rodar():
+    def run_job():
         try:
             compiler.preview(final)
         except Exception as e:  # noqa: BLE001 — sem prévia o app toca o final.mp4
@@ -300,7 +300,7 @@ def _preview_to_background(final):
         finally:
             _generating.discard(final)  # final refeito depois gera prévia nova
 
-    threading.Thread(target=rodar, daemon=True).start()
+    threading.Thread(target=run_job, daemon=True).start()
 
 @router.get("/producoes")
 def productions(canal: str):
@@ -381,9 +381,9 @@ def show_cut(ep: str):
     c = cut.load(project) or {}
 
     def url(file):
-        return f"/arq/{ep}/{file.relative_to(project.pasta)}?v={file.stat().st_mtime_ns}" if file.exists() else None
+        return f"/arq/{ep}/{file.relative_to(project.folder_path)}?v={file.stat().st_mtime_ns}" if file.exists() else None
     return {"estado": cut.state(project), "emendas": c.get("emendas", []), "revertidas": c.get("revertidas", []),
-            "conferencia": c.get("conferencia"), "editada": url(project.pasta / "narracao.wav"),
+            "conferencia": c.get("conferencia"), "editada": url(project.folder_path / "narracao.wav"),
             "cortada": url(cut.folder(project) / "narracao.wav")}
 
 
@@ -764,7 +764,7 @@ def factory_comparison():
 def factory_engines(corpo: Engines):
     """Aplica a decisão de motor por intenção (usada pelos pedidos com motor "auto")."""
     from esteira.studio import factory
-    return factory.aplicar_engines(corpo.por_intencao, corpo.padrao)
+    return factory.apply_engines(corpo.por_intencao, corpo.padrao)
 
 
 # ── perfis de ritmo (studio/rhythm.py): longo e curto, como dado ──

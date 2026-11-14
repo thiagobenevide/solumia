@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:agent_arquivos/src/editores/pptx.dart';
+import 'package:agent_arquivos/src/editors/pptx.dart';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,7 +14,7 @@ const _rels = 'xmlns="http://schemas.openxmlformats.org/package/2006/relationshi
 
 Uint8List _pptx() {
   final zip = Archive();
-  void add(String nome, String texto) => zip.add(ArchiveFile.bytes(nome, utf8.encode(texto)));
+  void add(String name, String text) => zip.add(ArchiveFile.bytes(name, utf8.encode(text)));
   add(
     '[Content_Types].xml',
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
@@ -49,31 +49,31 @@ Uint8List _pptx() {
 
 void main() {
   test('lê slide com posição herdada do layout, edita, duplica e regrava', () {
-    final ap = Apresentacao.ler(_pptx());
+    final ap = Presentation.read(_pptx());
     expect(ap.slides, hasLength(1));
-    final titulo = ap.slides.single.formas.single;
-    expect((titulo.x, titulo.y, titulo.w), (100, 200, 3000));
-    expect(titulo.texto, 'Olá');
-    expect(titulo.tamanho, 36);
-    expect(titulo.negrito, isTrue);
+    final title = ap.slides.single.shapes.single;
+    expect((title.x, title.y, title.w), (100, 200, 3000));
+    expect(title.text, 'Olá');
+    expect(title.size, 36);
+    expect(title.bold, isTrue);
 
-    titulo.texto = 'Resultados\nSegunda linha';
-    titulo.estilo(tamanho: 40, cor: 'C00000', alinhamento: 'ctr');
-    titulo.posicionar(500, 600, 4000, 800);
-    ap.slides.first.novaCaixa().texto = 'Nota';
-    ap.duplicar(0);
-    ap.mover(1, 0);
+    title.text = 'Resultados\nSegunda linha';
+    title.estilo(size: 40, color: 'C00000', alignmentMode: 'ctr');
+    title.placeAt(500, 600, 4000, 800);
+    ap.slides.first.newBox().text = 'Nota';
+    ap.duplicate(0);
+    ap.move(1, 0);
 
-    final relida = Apresentacao.ler(ap.gravar());
-    expect(relida.slides, hasLength(2));
-    final f = relida.slides[1].formas.first;
-    expect(f.texto, 'Resultados\nSegunda linha');
-    expect((f.tamanho, f.cor, f.alinhamento, f.x, f.w), (40, 'C00000', 'ctr', 500, 4000));
-    expect(relida.slides[1].formas.last.texto, 'Nota');
-    expect(relida.slides[0].formas.first.texto, 'Resultados\nSegunda linha');
+    final reread = Presentation.read(ap.save());
+    expect(reread.slides, hasLength(2));
+    final f = reread.slides[1].shapes.first;
+    expect(f.text, 'Resultados\nSegunda linha');
+    expect((f.size, f.color, f.alignmentMode, f.x, f.w), (40, 'C00000', 'ctr', 500, 4000));
+    expect(reread.slides[1].shapes.last.text, 'Nota');
+    expect(reread.slides[0].shapes.first.text, 'Resultados\nSegunda linha');
 
-    relida.excluir(0);
-    final final_ = Apresentacao.ler(relida.gravar());
+    reread.delete(0);
+    final final_ = Presentation.read(reread.save());
     expect(final_.slides, hasLength(1));
   });
 }

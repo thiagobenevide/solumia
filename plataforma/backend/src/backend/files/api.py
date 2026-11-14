@@ -18,9 +18,9 @@ from pydantic import BaseModel, Field
 from backend.api.deps import require_client_api_key
 from backend.files.library import (
     AnnotationsConflict,
+    Collection,
     FileInvalid,
     FileNotFound,
-    Collection,
 )
 from backend.files.wopi import session as sessao_collabora
 
@@ -85,7 +85,7 @@ class NewFile(BaseModel):
 
 @router.post("/novo", status_code=201)
 def new(entrada: NewFile, biblioteca: CollectionDep, tarefas: BackgroundTasks) -> Any:
-    """Documento/planilha/apresentação em branco para editar no app."""
+    """Blank document/spreadsheet/presentation to edit in the app."""
     try:
         meta = biblioteca.create_empty(entrada.tipo, entrada.titulo, entrada.pasta)
     except FileInvalid as e:
@@ -188,7 +188,7 @@ async def replace(
 
 @router.get("/{id_}/exportar")
 def export(id_: str, formato: str, biblioteca: CollectionDep) -> Response:
-    """Original convertido pelo LibreOffice (DOCX→ODT/PDF/RTF/TXT/HTML, XLSX→ODS/CSV/PDF…)."""
+    """Original converted by LibreOffice (DOCX→ODT/PDF/RTF/TXT/HTML, XLSX→ODS/CSV/PDF…)."""
     try:
         content, name = biblioteca.export(id_, formato.lower())
     except FileNotFound as e:
@@ -204,8 +204,8 @@ def export(id_: str, formato: str, biblioteca: CollectionDep) -> Response:
 
 @router.post("/{id_}/collabora")
 async def collabora(id_: str, request: Request) -> Any:
-    """Sessão de edição no Collabora: `{url, access_token, access_token_ttl}`; o app faz POST
-    do formulário com o token na `url` (padrão WOPI)."""
+    """Collabora editing session: `{url, access_token, access_token_ttl}`; the app POSTs the
+    form with the token to the `url` (WOPI standard)."""
     return await sessao_collabora(request, id_)
 
 
@@ -228,7 +228,7 @@ def thumbnail(id_: str, biblioteca: CollectionDep) -> FileResponse:
         raise _404(e) from e
     if path is None:
         raise HTTPException(404, "Sem miniatura")
-    # O app pede com ?v=<atualizado>: a mesma URL nunca muda de conteúdo.
+    # The app requests with ?v=<atualizado>: the same URL never changes content.
     return FileResponse(
         path,
         media_type="image/png",
@@ -253,5 +253,5 @@ def save_annotations(id_: str, entrada: AnnotationsInput, biblioteca: Collection
     except FileNotFound as e:
         raise _404(e) from e
     except AnnotationsConflict as e:
-        # Devolve as anotações atuais para o app mesclar sem outra ida ao servidor.
+        # Return the current annotations so the app merges without another round trip.
         return JSONResponse(status_code=409, content={"detail": str(e), "atuais": e.current})

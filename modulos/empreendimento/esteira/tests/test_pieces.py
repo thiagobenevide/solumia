@@ -8,35 +8,35 @@ from esteira.studio import style as E
 from esteira.studio import piece as P
 
 
-def _ficha(**mudar):
+def _card(**mudar):
     d = json.loads((P.folder("numero_impacto") / "ficha.json").read_text())
     d.update(mudar)
     return d
 
 
-def test_cardapio_antigo_vira_filtro_e_nivel_padrao_alto():
+def test_old_menu_becomes_filter_and_default_level_high():
     r = E.Rules(cenas=["contador", "frase_destaque"])
     assert "contador" in r.cardapio() and "versus" in r.filtro and "versus" not in r.cardapio()
     assert E.Rules().filtro == [] and set(E.Rules().niveis.values()) == {"alta"}
     assert "cenas" not in E.Rules().model_dump()
 
 
-def test_modo_vem_do_video_e_nao_muda_o_estilo():
+def test_mode_comes_from_video_and_does_not_change_style():
     est = E.Style(id="teste-dark", nome="Teste", canal="teste")
     ap = E.with_mode(est, "apresentador")
     assert ap.modo == "apresentador" and est.modo == "dark" and E.with_mode(est, None) is est
 
 
-def test_ficha_de_referencia_valida_e_coerencia():
-    f = P.Card.model_validate(_ficha())
+def test_reference_card_valid_and_coherent():
+    f = P.Card.model_validate(_card())
     assert f.id == "numero_impacto" and f.batidas == ["numero"]
     for bad in ({"batidas": ["inexistente"]}, {"duracao_min": 9.0}, {"neutra": False}, {"exemplos_sim": ["a"]},
                  {"botoes": [{"nome": "x", "valores": ["a", "b"], "padrao": "c"}]}):
         with pytest.raises(ValueError):
-            P.Card.model_validate(_ficha(**bad))
+            P.Card.model_validate(_card(**bad))
 
 
-def test_validar_dados_confere_limites_e_volta_erro_claro():
+def test_validate_data_checks_limits_and_returns_clear_error():
     f = P.load("numero_impacto")
     assert P.validate_data(f, {"numero": "81%", "rotulo": "endividadas"}, {"enfase": "anel"}) == []
     errors = P.validate_data(f, {"numero": "oitenta", "rotulo": "x" * 40, "extra": "?"}, {"enfase": "brilho"})
@@ -45,21 +45,21 @@ def test_validar_dados_confere_limites_e_volta_erro_claro():
     assert P.validate_data(f, {"numero": "81"}) == ["numero: número com unidade (%, R$, anos…)"]
 
 
-def test_maximos_enchem_no_limite():
+def test_maximums_fill_to_limit():
     f = P.load("numero_impacto")
     m = P.maximums(f)
     assert len(m["rotulo"]) <= 24 and len(m["rotulo"]) >= 20 and P.validate_data(f, m) == []
 
 
-def test_maximos_itens_objeto():  # porte de linha do tempo: itens {ano, texto} quebravam o portão
+def test_maximums_object_items():  # porte de linha do tempo: itens {ano, texto} quebravam o portão
     f = P.load("numero_impacto").model_copy(update={"encaixes": [P.Fit(
         nome="marcos", tipo="itens", max_car=20, max_itens=3, exemplo=[{"ano": "1990", "texto": "Plano Real"}])]})
     m = P.maximums(f)["marcos"]
     assert len(m) == 3 and set(m[0]) == {"ano", "texto"} and len(m[0]["texto"]) <= 20
 
 
-def _peca(tmp_path, monkeypatch, js, css="", **ficha):
-    data = _ficha(id="teste_peca", **ficha)
+def _piece(tmp_path, monkeypatch, js, css="", **card):
+    data = _card(id="teste_peca", **card)
     monkeypatch.setattr(P, "FOLDER", tmp_path)
     d = tmp_path / "teste_peca"
     d.mkdir()
@@ -74,8 +74,8 @@ BOM = 'ESTUDIO.peca("teste_peca", (k, c, box) => { const { numero, rotulo, conte
       '  const b = c.botoes; k.$("div", "tp-n", box, numero + rotulo + contexto + b.alinhamento + b.enfase + b.velocidade); });'
 
 
-def test_codigo_bom_passa(tmp_path, monkeypatch):
-    errors, warnings = _peca(tmp_path, monkeypatch, BOM, ".p-teste_peca .tp-n { color: var(--destaque); font-family: var(--fD); }"
+def test_good_code_passes(tmp_path, monkeypatch):
+    errors, warnings = _piece(tmp_path, monkeypatch, BOM, ".p-teste_peca .tp-n { color: var(--destaque); font-family: var(--fD); }"
                           "\n@keyframes tp { from { opacity: 0 } to { opacity: 1 } }")
     assert errors == [] and warnings == []
 
@@ -90,19 +90,19 @@ def test_codigo_bom_passa(tmp_path, monkeypatch):
     (BOM.replace("b.velocidade", "c.botoes.tamanho"), "", "botões que a ficha não declara"),
     (BOM + " box.style.background = 'rgb(10, 20, 30)';", "", "cor fixa"),
 ])
-def test_portao_estatico_reprova(tmp_path, monkeypatch, js, css, trecho):
-    errors, _ = _peca(tmp_path, monkeypatch, js, css)
+def test_static_gate_rejects(tmp_path, monkeypatch, js, css, trecho):
+    errors, _ = _piece(tmp_path, monkeypatch, js, css)
     assert any(trecho in e for e in errors), errors
 
 
-def test_sombra_preta_e_comentario_nao_reprovam(tmp_path, monkeypatch):
-    errors, _ = _peca(tmp_path, monkeypatch, BOM + "\n// cor antiga era #123456",
+def test_black_shadow_and_comment_do_not_reject(tmp_path, monkeypatch):
+    errors, _ = _piece(tmp_path, monkeypatch, BOM + "\n// cor antiga era #123456",
                      ".p-teste_peca .tp-n { box-shadow: 0 0 4px rgba(0,0,0,.5); } /* white */")
     assert errors == []
 
 
-def test_filtro_do_canal_tira_peca_por_id_intencao_ou_tema():
-    f = P.Card.model_validate(_ficha(estado="aprovada"))
+def test_channel_filter_removes_piece_by_id_intent_or_theme():
+    f = P.Card.model_validate(_card(estado="aprovada"))
     est = E.Style(id="teste-dark", nome="Teste", canal="teste")
     assert P.in_channel([f], est) == [f]
     for criteria in (["numero_impacto"], ["alerta"]):
@@ -113,7 +113,7 @@ def test_filtro_do_canal_tira_peca_por_id_intencao_ou_tema():
 
 @pytest.mark.skipif(not __import__("esteira.studio.engine", fromlist=["x"])._chromium(),
                     reason="sem Chromium")
-def test_portao_completo_na_peca_de_referencia(tmp_path, monkeypatch):
+def test_full_gate_on_reference_piece(tmp_path, monkeypatch):
     import shutil
     shutil.copytree(P.folder("numero_impacto"), tmp_path / "numero_impacto",
                     ignore=shutil.ignore_patterns("prova"))

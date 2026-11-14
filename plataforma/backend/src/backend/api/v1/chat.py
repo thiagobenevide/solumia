@@ -21,12 +21,12 @@ router = APIRouter(tags=["chat"])
 async def create_chat_completion(
     request: Request, registry: WorkerRegistryDep, settings: SettingsDep
 ) -> JSONResponse | StreamingResponse:
-    """Encaminha um chat completion OpenAI-compatible para um worker conectado.
+    """Forwards an OpenAI-compatible chat completion to a connected worker.
 
-    `stream: true` não gera streaming incremental de verdade nesta etapa —
-    a resposta completa do worker é embrulhada num único chunk SSE, para que
-    clientes que sempre pedem streaming (Cursor, Continue.dev, ...) continuem
-    funcionando sem precisar de suporte especial.
+    `stream: true` does not produce real incremental streaming at this stage —
+    the full worker answer is wrapped in a single SSE chunk, so clients that
+    always ask for streaming (Cursor, Continue.dev, ...) keep working without
+    special support.
     """
     body: dict[str, Any] = await request.json()
     model = body.get("model")

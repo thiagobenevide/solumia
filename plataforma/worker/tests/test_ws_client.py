@@ -30,7 +30,8 @@ class _StubProvider(Provider):
 
 
 class _FakeWebSocket:
-    """Duck-types apenas o método usado por WorkerClient._handle_chat_request: send()."""
+    """Duck-types only the method used by WorkerClient._handle_chat_request: send()."""
+
 
     def __init__(self) -> None:
         self.sent: list[dict[str, Any]] = []
@@ -77,7 +78,7 @@ class _VozFalsa(Voice):
         return {"texto": f"{tarefa}:{payload['audio_b64']}"}
 
 
-async def test_tarefa_de_voz_vai_para_a_voz_e_nao_ao_provider() -> None:
+async def test_voice_task_goes_to_voice_not_provider() -> None:
     settings = WorkerSettings(api_key="test-key")
     client = WorkerClient(settings, _StubProvider(), _VozFalsa(settings))
     fake_ws = _FakeWebSocket()
@@ -88,6 +89,6 @@ async def test_tarefa_de_voz_vai_para_a_voz_e_nao_ao_provider() -> None:
     assert fake_ws.sent[0]["payload"] == {"texto": "transcrever:QQ=="}
 
 
-def test_recursos_tem_cpu_ram_e_gpus() -> None:
+def test_resources_have_cpu_ram_and_gpus() -> None:
     usage = resources.collect()
     assert set(usage) == {"cpu_pct", "ram_pct", "gpus"}

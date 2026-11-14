@@ -1,11 +1,11 @@
-"""Motor de plano e aplicação.
+"""Plan and apply engine.
 
-- Um **plano** é uma lista ordenada de passos legíveis. A pessoa vê o plano antes de qualquer coisa.
-- A aplicação só roda o plano com o mesmo `hash` que foi mostrado (nada muda entre ver e confirmar).
-- Cada passo tem `ja_feito` (idempotência: pula o que já está no estado desejado) e `executar`.
-- O registro (JSONL por execução) guarda cada passo concluído; reaplicar o mesmo plano depois de uma
-  queda retoma do primeiro passo não concluído.
-- Todo texto de log passa por `mascarar`, que troca qualquer valor do cofre por `•••`.
+- A **plan** is an ordered list of readable steps. The person sees the plan before anything happens.
+- Applying only runs the plan with the same `hash` that was shown (nothing changes between viewing and confirming).
+- Each step has `ja_feito` (idempotency: skips what is already in the desired state) and `executar`.
+- The run log (one JSONL per run) records each finished step; reapplying the same plan after a
+  crash resumes from the first unfinished step.
+- All log text goes through the `Mask`, which replaces any vault value with `•••`.
 """
 
 from __future__ import annotations
@@ -23,14 +23,14 @@ from typing import Any
 
 
 @dataclass
-class Contexto:
+class Context:
     """Passado a cada passo: log, recursos compartilhados entre passos e cancelamento."""
 
     log: Callable[[str], None]
     recursos: dict[str, Any] = field(default_factory=dict)
     cancelado: threading.Event = field(default_factory=threading.Event)
 
-    def checar_cancelamento(self) -> None:
+    def check_cancelled(self) -> None:
         if self.cancelado.is_set():
             raise Cancelado()
 
@@ -40,52 +40,52 @@ class Cancelado(Exception):
 
 
 @dataclass
-class Passo:
+class Step:
     id: str
     titulo: str
     detalhe: str = ""
-    executar: Callable[[Contexto], None] = lambda ctx: None
-    ja_feito: Callable[[Contexto], bool] | None = None
-    destrutivo: bool = False  # exige reconfirmação com TOTP na API
-    sempre: bool = False  # roda mesmo na retomada (prepara recursos usados pelos passos seguintes)
+    executar: Callable[[Context], None] = lambda ctx: None
+    ja_feito: Callable[[Context], bool] | None = None
+    destrutivo: bool = False  # requires TOTP reconfirmation in the API
+    sempre: bool = False  # runs even when resuming (prepares resources used by the following steps)
 
-    def resumo(self) -> dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         return {"id": self.id, "titulo": self.titulo, "detalhe": self.detalhe, "destrutivo": self.destrutivo}
 
 
 @dataclass
-class Plano:
+class Plan:
     titulo: str
-    passos: list[Passo]
+    passos: list[Step]
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
 
     @property
     def hash(self) -> str:
-        bruto = json.dumps([p.resumo() for p in self.passos], ensure_ascii=False, sort_keys=True)
-        return hashlib.sha256(f"{self.titulo}\n{bruto}".encode()).hexdigest()[:16]
+        raw = json.dumps([p.summary() for p in self.passos], ensure_ascii=False, sort_keys=True)
+        return hashlib.sha256(f"{self.titulo}\n{raw}".encode()).hexdigest()[:16]
 
     @property
     def destrutivo(self) -> bool:
         return any(p.destrutivo for p in self.passos)
 
-    def resumo(self) -> dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         return {"id": self.id, "titulo": self.titulo, "hash": self.hash, "destrutivo": self.destrutivo,
-                "passos": [p.resumo() for p in self.passos]}
+                "passos": [p.summary() for p in self.passos]}
 
 
-class Mascara:
-    def __init__(self, fonte: Callable[[], list[str]] | None = None) -> None:
-        self._fonte = fonte or (lambda: [])
+class Mask:
+    def __init__(self, source: Callable[[], list[str]] | None = None) -> None:
+        self._source = source or (lambda: [])
 
-    def __call__(self, texto: str) -> str:
-        for valor in sorted(self._fonte(), key=len, reverse=True):
-            if valor and valor in texto:
-                texto = texto.replace(valor, "•••")
-        return texto
+    def __call__(self, text: str) -> str:
+        for value in sorted(self._source(), key=len, reverse=True):
+            if value and value in text:
+                text = text.replace(value, "•••")
+        return text
 
 
 @dataclass
-class Evento:
+class Event:
     n: int
     instante: float
     tipo: str  # inicio | passo | log | pulado | ok | falha | fim
@@ -97,122 +97,122 @@ class Evento:
 
 
 class Execucao:
-    def __init__(self, plano: Plano, dir_registro: Path, mascara: Mascara | None = None,
+    def __init__(self, plan: Plan, dir_record: Path, mask: Mask | None = None,
                  recursos: dict[str, Any] | None = None) -> None:
-        self.plano = plano
-        self.id = f"{time.strftime('%Y%m%d-%H%M%S')}-{plano.hash}"
-        self.mascara = mascara or Mascara()
-        self.eventos: list[Evento] = []
-        self.estado = "pendente"  # pendente | rodando | concluida | falhou | cancelada
+        self.plano = plan
+        self.id = f"{time.strftime('%Y%m%d-%H%M%S')}-{plan.hash}"
+        self.mask = mask or Mask()
+        self.events: list[Event] = []
+        self.state = "pendente"  # pendente | rodando | concluida | falhou | cancelada
         self._lock = threading.Lock()
-        self._dir = dir_registro
+        self._dir = dir_record
         self._dir.mkdir(parents=True, exist_ok=True)
-        self._arquivo = self._dir / f"{self.id}.jsonl"
-        self.ctx = Contexto(log=self._log_passo, recursos=recursos or {})
-        self._passo_atual: str | None = None
+        self._file = self._dir / f"{self.id}.jsonl"
+        self.ctx = Context(log=self._log_step, recursos=recursos or {})
+        self._current_step: str | None = None
         self._thread: threading.Thread | None = None
 
     # --- eventos -----------------------------------------------------------------------------
-    def _emitir(self, tipo: str, texto: str, passo: str | None = None) -> None:
+    def _issue(self, tipo: str, text: str, step: str | None = None) -> None:
         with self._lock:
-            ev = Evento(len(self.eventos), time.time(), tipo, passo, self.mascara(texto))
-            self.eventos.append(ev)
-            with self._arquivo.open("a", encoding="utf-8") as f:
+            ev = Event(len(self.events), time.time(), tipo, step, self.mask(text))
+            self.events.append(ev)
+            with self._file.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(ev.dict(), ensure_ascii=False) + "\n")
 
-    def _log_passo(self, texto: str) -> None:
-        for linha in str(texto).splitlines() or [""]:
-            self._emitir("log", linha, self._passo_atual)
+    def _log_step(self, text: str) -> None:
+        for line in str(text).splitlines() or [""]:
+            self._issue("log", line, self._current_step)
 
-    def eventos_desde(self, n: int) -> list[dict[str, Any]]:
+    def events_since(self, n: int) -> list[dict[str, Any]]:
         with self._lock:
-            return [e.dict() for e in self.eventos[n:]]
+            return [e.dict() for e in self.events[n:]]
 
     # --- retomada ------------------------------------------------------------------------------
-    def _concluidos_anteriores(self) -> set[str]:
-        """Passos concluídos na última execução do mesmo plano (mesmo hash) que não terminou."""
-        anteriores = sorted(self._dir.glob(f"*-{self.plano.hash}.jsonl"))
-        anteriores = [a for a in anteriores if a != self._arquivo]
-        if not anteriores:
+    def _previous_done(self) -> set[str]:
+        """Steps finished in the last unfinished run of the same plan (same hash)."""
+        previous = sorted(self._dir.glob(f"*-{self.plano.hash}.jsonl"))
+        previous = [a for a in previous if a != self._file]
+        if not previous:
             return set()
-        feitos: set[str] = set()
-        terminou = False
-        for linha in anteriores[-1].read_text(encoding="utf-8").splitlines():
+        done: set[str] = set()
+        finished = False
+        for line in previous[-1].read_text(encoding="utf-8").splitlines():
             try:
-                ev = json.loads(linha)
+                ev = json.loads(line)
             except ValueError:
                 continue
             if ev["tipo"] == "ok" and ev["passo"]:
-                feitos.add(ev["passo"])
+                done.add(ev["passo"])
             if ev["tipo"] == "fim" and ev["texto"] == "concluida":
-                terminou = True
-        return set() if terminou else feitos
+                finished = True
+        return set() if finished else done
 
-    # --- execução ------------------------------------------------------------------------------
+    # --- run ------------------------------------------------------------------------------------
     def rodar(self) -> str:
-        self.estado = "rodando"
-        self._emitir("inicio", f"{self.plano.titulo} ({len(self.plano.passos)} passos)")
-        retomar = self._concluidos_anteriores()
-        if retomar:
-            self._emitir("log", f"Retomando: {len(retomar)} passo(s) já concluído(s) na tentativa anterior")
+        self.state = "rodando"
+        self._issue("inicio", f"{self.plano.titulo} ({len(self.plano.passos)} passos)")
+        resume = self._previous_done()
+        if resume:
+            self._issue("log", f"Retomando: {len(resume)} passo(s) já concluído(s) na tentativa anterior")
         try:
-            for passo in self.plano.passos:
-                self.ctx.checar_cancelamento()
-                self._passo_atual = passo.id
-                self._emitir("passo", passo.titulo, passo.id)
-                if passo.id in retomar and not passo.sempre:
-                    self._emitir("pulado", "concluído na tentativa anterior", passo.id)
-                    self._emitir("ok", "", passo.id)
+            for step in self.plano.passos:
+                self.ctx.check_cancelled()
+                self._current_step = step.id
+                self._issue("passo", step.titulo, step.id)
+                if step.id in resume and not step.sempre:
+                    self._issue("pulado", "concluído na tentativa anterior", step.id)
+                    self._issue("ok", "", step.id)
                     continue
-                if passo.ja_feito is not None and passo.ja_feito(self.ctx):
-                    self._emitir("pulado", "já está como deveria", passo.id)
-                    self._emitir("ok", "", passo.id)
+                if step.ja_feito is not None and step.ja_feito(self.ctx):
+                    self._issue("pulado", "já está como deveria", step.id)
+                    self._issue("ok", "", step.id)
                     continue
-                passo.executar(self.ctx)
-                self._emitir("ok", "", passo.id)
-            self.estado = "concluida"
+                step.executar(self.ctx)
+                self._issue("ok", "", step.id)
+            self.state = "concluida"
         except Cancelado:
-            self.estado = "cancelada"
-            self._emitir("falha", "cancelado pela pessoa", self._passo_atual)
-        except Exception as e:  # noqa: BLE001 — qualquer falha vira evento; o detalhe vai ao registro
-            self.estado = "falhou"
-            self._emitir("falha", f"{type(e).__name__}: {e}", self._passo_atual)
-            self._emitir("log", traceback.format_exc(limit=4), self._passo_atual)
+            self.state = "cancelada"
+            self._issue("falha", "cancelado pela pessoa", self._current_step)
+        except Exception as e:  # noqa: BLE001 — any failure becomes an event; the details go to the run log
+            self.state = "falhou"
+            self._issue("falha", f"{type(e).__name__}: {e}", self._current_step)
+            self._issue("log", traceback.format_exc(limit=4), self._current_step)
         finally:
-            self._passo_atual = None
-            self._emitir("fim", self.estado)
-            fechar = self.ctx.recursos.get("_fechar")
-            if callable(fechar):
+            self._current_step = None
+            self._issue("fim", self.state)
+            close = self.ctx.recursos.get("_fechar")
+            if callable(close):
                 try:
-                    fechar()
+                    close()
                 except Exception:  # noqa: BLE001, S110
                     pass
-        return self.estado
+        return self.state
 
     def iniciar(self) -> None:
         self._thread = threading.Thread(target=self.rodar, name=f"execucao-{self.id}", daemon=True)
         self._thread.start()
 
-    def cancelar(self) -> None:
+    def cancel(self) -> None:
         self.ctx.cancelado.set()
 
-    def resumo(self) -> dict[str, Any]:
-        return {"id": self.id, "plano": self.plano.resumo(), "estado": self.estado, "eventos": len(self.eventos)}
+    def summary(self) -> dict[str, Any]:
+        return {"id": self.id, "plano": self.plano.summary(), "estado": self.state, "eventos": len(self.events)}
 
 
-def listar_registro(dir_registro: Path, limite: int = 50) -> list[dict[str, Any]]:
-    """Tela Registro: últimas execuções com título e estado final."""
-    saida = []
-    for arquivo in sorted(dir_registro.glob("*.jsonl"), reverse=True)[:limite]:
-        titulo, estado = "", "interrompida"
-        for linha in arquivo.read_text(encoding="utf-8").splitlines():
+def list_runs(dir_record: Path, limit: int = 50) -> list[dict[str, Any]]:
+    """Log screen: latest runs with title and final state."""
+    output = []
+    for file in sorted(dir_record.glob("*.jsonl"), reverse=True)[:limit]:
+        title, state = "", "interrompida"
+        for line in file.read_text(encoding="utf-8").splitlines():
             try:
-                ev = json.loads(linha)
+                ev = json.loads(line)
             except ValueError:
                 continue
             if ev["tipo"] == "inicio":
-                titulo = ev["texto"]
+                title = ev["texto"]
             elif ev["tipo"] == "fim":
-                estado = ev["texto"]
-        saida.append({"id": arquivo.stem, "titulo": titulo, "estado": estado})
-    return saida
+                state = ev["texto"]
+        output.append({"id": file.stem, "titulo": title, "estado": state})
+    return output
