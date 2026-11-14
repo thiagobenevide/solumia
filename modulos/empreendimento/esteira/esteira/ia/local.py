@@ -82,9 +82,9 @@ def _operacao(texto, operacao):
     if operacao:
         return operacao
     if nome.startswith("acervo"):
-        return "acervo"
+        return "library"
     if nome.startswith("roteiro"):
-        return "roteiro"
+        return "script"
     return events._current.name if events._current else None
 
 
@@ -95,8 +95,8 @@ def perguntar(texto, esquema: type[BaseModel], modelo=TEXTO, imagens=None, pensa
     op = options.operation(_operacao(texto, operacao) or "")
     tipo = "vision" if modelo == VISAO or imagens else "text"
     modelo = LEGADO.get(op[tipo] or modelo, op[tipo] or modelo)
-    motor = os.environ.get("ESTEIRA_MOTOR", "local")
-    if op["engine"] != "default" and not os.environ.get("ESTEIRA_MOTOR_FIXO") and os.environ.get("ESTEIRA_VAGA") != "claude":
+    motor = os.environ.get("ESTEIRA_ENGINE", "local")
+    if op["engine"] != "default" and not os.environ.get("ESTEIRA_ENGINE_FIXED") and os.environ.get("ESTEIRA_SLOT") != "claude":
         motor = op["engine"]  # sem a vaga da máquina (processo na pista do Claude) não dá para usar a GPU
     # imagens entram na chave pelo conteúdo (a mídia de uma cena muda sem mudar o caminho)
     assinaturas = [hashlib.sha1(Path(i).read_bytes()).hexdigest() for i in imagens or []]
@@ -110,7 +110,7 @@ def perguntar(texto, esquema: type[BaseModel], modelo=TEXTO, imagens=None, pensa
     if motor == "claude":
         r = _pelo_claude(texto, esquema, nome, imagens)
         # sem resposta (teto de custo, erro): quem tem a vaga da máquina cai no LLM local
-        if r is not None or os.environ.get("ESTEIRA_VAGA") != "machine":
+        if r is not None or os.environ.get("ESTEIRA_SLOT") != "machine":
             return r
     if not _servidor():
         events.debug("llm indisponível")

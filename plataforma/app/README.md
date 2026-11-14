@@ -11,5 +11,5 @@ flutter run -d web-server --web-port 5577     # abrir http://localhost:5577 no n
 flutter run -d linux                          # precisa de clang, cmake, ninja e libgtk-3-dev
 ```
 
-O módulo Empreendimento fala com o painel da esteira (`./dark painel`, padrão `http://localhost:8765`).
+O módulo Empreendimento fala com o painel da esteira (`./dark panel`, padrão `http://localhost:8765`).
 Outro endereço: `--dart-define=ESTEIRA_URL=http://<ip-do-pc>:8765`.

@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1", tags=["app"])
 
-ACOES = painel.PIPELINE + ["tudo", "quadros", "transcrever", "exportar"]
+ACOES = painel.PIPELINE + ["all", "frames", "transcribe", "export"]
 
 
 def _episodios(canal=""):
@@ -133,12 +133,12 @@ class GerarRoteiro(BaseModel):
 
 @router.post("/roteiros/gerar")
 def gerar_roteiro(corpo: GerarRoteiro):
-    """Roteiro(s) do plano do canal na fila (`./dark roteiro canal:N [--ate M] [--motor claude]`)."""
+    """Roteiro(s) do plano do canal na fila (`./dark script canal:N [--to M] [--engine claude]`)."""
     alvo = corpo.alvo.strip()
     if not re.fullmatch(r"[a-z0-9_-]+:\d+", alvo):
         raise HTTPException(400, "use canal:N, ex.: finlumia:51")
     ate = corpo.ate.strip()
-    return fila.adicionar(alvo, "roteiro", ["--ate", ate] if ate.isdigit() else [], corpo.motor)
+    return fila.adicionar(alvo, "script", ["--to", ate] if ate.isdigit() else [], corpo.motor)
 
 
 class Produzir(BaseModel):
@@ -165,7 +165,7 @@ def produzir(corpo: Produzir):
         ep = painel._projeto_do_roteiro(caminho) or ep_id(importar(Path(caminho)))
         if ref := corpo.templates.get(caminho):
             estudio.escolher_template(Projeto(pasta_ep(ep)), ref)
-        tarefas.append(fila.adicionar(ep, "tudo"))
+        tarefas.append(fila.adicionar(ep, "all"))
     return tarefas
 
 
@@ -215,9 +215,9 @@ def rodar(ep: str, etapa: str, corpo: Rodar | None = None):
     if etapa not in ACOES:
         raise HTTPException(400, "etapa desconhecida")
     corpo = corpo or Rodar()
-    args = ["--refazer"] if corpo.refazer and etapa in ("limpar", "curar", "buscar", "tudo") else []
-    if corpo.so_render and etapa == "graficos":
-        args = ["--so-render"]
+    args = ["--redo"] if corpo.refazer and etapa in ("clean", "curate", "fetch", "all") else []
+    if corpo.so_render and etapa == "graphics":
+        args = ["--render-only"]
     return fila.adicionar(ep, etapa, args, corpo.motor or options.read()["engine"])
 
 
@@ -344,7 +344,7 @@ def trocar_midia(ep: str, cid: int, corpo: Trocar):
             if c["id"] == cid:
                 c["busca_en"] = corpo.busca_en.strip()
         arq.write_text(json.dumps(plano, ensure_ascii=False, indent=2))
-    return fila.adicionar(ep, "buscar", ["--refazer", "--cenas", str(cid)])
+    return fila.adicionar(ep, "fetch", ["--redo", "--scenes", str(cid)])
 
 
 # ---------- Episódio: gráficos animados ----------
@@ -558,10 +558,10 @@ def ver_bancada():
 
 @router.post("/bancada/rodar")
 def rodar_bancada(corpo: RodarBancada):
-    """Põe `./dark bancada rodar` na fila (vaga da máquina: usa a GPU)."""
+    """Põe `./dark bench run` na fila (vaga da máquina: usa a GPU)."""
     from esteira import bancada
     if any(t not in bancada.TAREFAS for t in corpo.tarefas):
         raise HTTPException(400, f"tarefas válidas: {', '.join(bancada.TAREFAS)}")
-    args = (["--modelos", ",".join(corpo.modelos)] if corpo.modelos else []) + (
-        ["--tarefas", ",".join(corpo.tarefas)] if corpo.tarefas else [])
-    return fila.adicionar("rodar", "bancada", args)
+    args = (["--models", ",".join(corpo.modelos)] if corpo.modelos else []) + (
+        ["--tasks", ",".join(corpo.tarefas)] if corpo.tarefas else [])
+    return fila.adicionar("run", "bench", args)

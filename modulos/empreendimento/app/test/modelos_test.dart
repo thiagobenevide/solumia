@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 // Amostras no formato que `esteira/web/api.py` devolve.
 const _prog = {
-  'feitas': 5, 'total': 8, 'rodando': 'graficos', 'erro': null, //
+  'feitas': 5, 'total': 8, 'rodando': 'graphics', 'erro': null, //
   'desatualizado': false, 'final': false, 'thumb': false,
 };
 
@@ -20,7 +20,7 @@ void main() {
       ],
       'etapas': [
         {
-          'id': 'limpar',
+          'id': 'clean',
           'nome': 'Cortes da narração',
           'status': 'ok',
           'start': '2026-10-27T21:18:29.418',
@@ -31,7 +31,7 @@ void main() {
           'remaining': 0.0,
           'duration': 142.7,
         },
-        {'id': 'graficos', 'nome': 'Gráficos animados', 'status': 'running', 'i': 4, 'n': 17, 'remaining': 30},
+        {'id': 'graphics', 'nome': 'Gráficos animados', 'status': 'running', 'i': 4, 'n': 17, 'remaining': 30},
         {'id': 'thumb', 'nome': 'Thumbnail', 'status': 'pending'},
       ],
       'eventos': [
@@ -57,8 +57,8 @@ void main() {
         {
           'id': 1793146709366,
           'ep': 'finlumia-003',
-          'comando': 'tudo',
-          'args': ['--refazer'],
+          'comando': 'all',
+          'args': ['--redo'],
           'vaga': 'machine',
           'estado': 'rodando',
           'criado': '2026-10-27T21:18:29',
@@ -68,7 +68,7 @@ void main() {
         {
           'id': 2,
           'ep': 'finlumia:51',
-          'comando': 'roteiro',
+          'comando': 'script',
           'args': [],
           'vaga': 'claude',
           'estado': 'ok',

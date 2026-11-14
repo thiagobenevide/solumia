@@ -43,7 +43,7 @@ def listar():
 def adicionar(ep, comando, args=(), motor="local"):
     """`ep`: episódio (canal-NNN) ou, para `roteiro`, o alvo canal:N. motor="claude" só vale em locks.CLAUDE_OK."""
     v = locks.slot(comando, motor)
-    args = list(args) + (["--motor", "claude"] if v == "claude" else [])
+    args = list(args) + (["--engine", "claude"] if v == "claude" else [])
     with _trava:
         fila = _ler()
         if any(t["ep"] == ep and t["comando"] == comando and t["estado"] in ("na fila", "rodando") for t in fila):

@@ -119,7 +119,7 @@ class _TarefaLinha extends StatelessWidget {
   }
 }
 
-/// `./dark roteiro canal:N [--ate M]`: escreve roteiros do plano do canal no vault (LLM local ou Claude).
+/// `./dark script canal:N [--to M]`: escreve roteiros do plano do canal no vault (LLM local ou Claude).
 class _GerarRoteiro extends StatefulWidget {
   const _GerarRoteiro({required this.api});
 

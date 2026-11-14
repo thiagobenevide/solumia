@@ -5,7 +5,7 @@ from datetime import datetime
 
 from esteira.projeto import ep_id
 
-ORDER = ["transcrever", "limpar", "cenas", "curar", "buscar", "avaliar", "graficos", "montar", "quadros", "thumb"]
+ORDER = ["transcribe", "clean", "scenes", "curate", "fetch", "evaluate", "graphics", "assemble", "frames", "thumb"]
 _MARKS = {"ok": "✓", "error": "✗", "running": "▶", "aborted": "⚠", "?": "?"}
 _BASE_KEYS = ("t", "ep", "stage", "kind", "message", "traceback")
 

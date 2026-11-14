@@ -109,7 +109,7 @@ class _AcervoAbaState extends State<AcervoAba> {
                   SliverToBoxAdapter(
                     child: Vazio(
                       _q.text.isEmpty
-                          ? 'Acervo vazio: rode ./dark acervo importar ou produza um episódio.'
+                          ? 'Acervo vazio: rode ./dark library import ou produza um episódio.'
                           : 'Nada encontrado para "${_q.text}".',
                     ),
                   ),

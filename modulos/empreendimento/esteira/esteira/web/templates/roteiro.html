@@ -9,7 +9,7 @@ mark { background: transparent; color: #93c5fd; font-weight: 600; }
 {% set aba = "roteiro" %}{% include "_abas_ep.html" %}
 <div class="mt-6 cartao rounded-2xl p-6">
   <h1 class="text-3xl font-semibold tracking-tight text-white leading-tight">{{ rot.titulo }}</h1>
-<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Importar e conferir citações: {{ motor([('py', 'Python')]) }} · rascunhos em lote (./dark roteiro): {{ motor(MOTORES.roteiro) }}</p>
+<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Importar e conferir citações: {{ motor([('py', 'Python')]) }} · rascunhos em lote (./dark script): {{ motor(MOTORES["script"]) }}</p>
   <p class="mt-1 text-sm text-slate-400">Como a esteira leu o roteiro do vault: é isto que vira o vídeo.</p>
   {% set nc = rot.citacoes|length %}
   <div class="mt-4 flex flex-wrap gap-2 text-[11px]">

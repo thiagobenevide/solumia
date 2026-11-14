@@ -259,5 +259,5 @@ def gerar_cenas(projeto):
 
     plano = {"titulo": titulo, "audio": transc["audio"], "duracao": transc["duracao"], "cenas": cenas}
     projeto.salvar_json("plano.json", plano)
-    print(f"  {len(cenas)} cenas → plano.json (ver com: ./dark resumo {projeto.ep})")
+    print(f"  {len(cenas)} cenas → plano.json (ver com: ./dark summary {projeto.ep})")
     return plano

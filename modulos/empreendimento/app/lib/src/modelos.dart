@@ -21,7 +21,7 @@ String estadoDaApi(Object? v) => _estadosDaApi['$v'] ?? '${v ?? ''}';
 String tipoDaApi(Object? v) => _tiposDaApi['$v'] ?? '${v ?? ''}';
 
 const etapasDoPipeline = [
-  'limpar', 'cenas', 'curar', 'buscar', 'avaliar', 'graficos', 'montar', 'thumb', //
+  'clean', 'scenes', 'curate', 'fetch', 'evaluate', 'graphics', 'assemble', 'thumb', //
 ];
 
 class Canal {

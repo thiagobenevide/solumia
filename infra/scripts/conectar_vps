@@ -39,7 +39,7 @@ Description=Painel da esteira (agent)
 
 [Service]
 WorkingDirectory=$raiz/modulos/empreendimento/esteira
-ExecStart=$raiz/modulos/empreendimento/esteira/dark painel --porta 8765
+ExecStart=$raiz/modulos/empreendimento/esteira/dark panel --port 8765
 Restart=always
 RestartSec=10
 

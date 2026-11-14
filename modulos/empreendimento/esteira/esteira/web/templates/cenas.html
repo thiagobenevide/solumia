@@ -5,7 +5,7 @@
 {% set aba = "cenas" %}{% include "_abas_ep.html" %}
 <div class="mt-6"></div>
 <h1 class="mt-3 text-3xl font-semibold tracking-tight text-white">Linha do tempo</h1>
-<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Mídia: {{ motor(MOTORES.buscar) }} {{ motor(MOTORES.avaliar) }} · trocar mídia aqui: {{ motor([('py', 'Python + APIs dos bancos')]) }}</p>
+<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Mídia: {{ motor(MOTORES["fetch"]) }} {{ motor(MOTORES["evaluate"]) }} · trocar mídia aqui: {{ motor([('py', 'Python + APIs dos bancos')]) }}</p>
 <p class="mt-2 text-sm text-slate-400">{{ cenas|length }} cenas · {{ graficos|length }} gráficos. Nota da mídia pelo modelo de visão (1–5); troque a mídia de uma cena com outro termo de busca.</p>
 
 {% if graficos %}

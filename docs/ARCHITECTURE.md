@@ -123,7 +123,7 @@ Contratos entre plataforma e módulos:
 |---|---|---|
 | **0a. Migração** ✅ | merge do `llm_gateway` com histórico; esteira em `modulos/empreendimento/esteira`; `AGENT_DATA`; workspace uv | 20 testes da plataforma e 32 da esteira passando; `./dark status` lista os episódios; FilmCraft abre os projetos migrados |
 | **App Empreendimento** ✅ | app Flutter (shell + `app_core` + telas do Empreendimento) sobre a API JSON da esteira | produção, roteiros, fila e máquina com dados reais; web rodando |
-| **0b. Ponte** | OllamaProvider; Postgres + Alembic (etapa 6 do gateway); mensagens de job | um chat do celular é respondido pela GPU de casa; `./dark tudo` disparado pela fila |
+| **0b. Ponte** | OllamaProvider; Postgres + Alembic (etapa 6 do gateway); mensagens de job | um chat do celular é respondido pela GPU de casa; `./dark all` disparado pela fila |
 | 1. Rotina | Kanban, timer, Cobrador, Dashboard básico no Flutter | uso diário real |
 | 2. Conhecimento | índice do vault, backlinks, grafo, RAG, idiomas | — |
 | 3. Conteúdo na plataforma | fila, status e aprovação humana no Flutter; upload pela YouTube Data API | 5 canais publicando com revisão humana |

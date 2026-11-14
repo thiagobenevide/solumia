@@ -1,6 +1,6 @@
 """API JSON da aba Estúdio do app (canais da rede, estilos, produções, portões, dependências).
 
-Trabalho pesado vai para a fila (`./dark estudio`, `estudio-estilo`, `estudio-instalar`, `bancada`); aqui só lê e
+Trabalho pesado vai para a fila (`./dark studio`, `studio-style`, `studio-install`, `bench`); aqui só lê e
 grava dados. Arquivos da produção (final.mp4, folha.jpg, quadros) saem por `/arq/<ep>/estudio/...`.
 """
 import json
@@ -84,7 +84,7 @@ def novo_template(corpo: NovoTemplate):
 def gerar_amostra(ref: str):
     """Exemplo de 30 s da versão nos formatos dela, na fila (render na GPU)."""
     e = _estilo(ref)
-    t = fila.adicionar(f"{e.id}@{e.versao}", "estudio-amostra")
+    t = fila.adicionar(f"{e.id}@{e.versao}", "studio-sample")
     if t is None:
         raise HTTPException(409, "o exemplo desta versão já está na fila")
     return t
@@ -277,7 +277,7 @@ class Propor(BaseModel):
 def propor_estilo(id_: str, corpo: Propor):
     """Fluxo A na fila (pista do Claude): proposta de identidade a partir das referências."""
     _estilo(id_)
-    return fila.adicionar(id_, "estudio-estilo", ["--nicho", corpo.nicho] if corpo.nicho else [], "claude")
+    return fila.adicionar(id_, "studio-style", ["--niche", corpo.nicho] if corpo.nicho else [], "claude")
 
 
 # ── produções ──
@@ -345,13 +345,13 @@ def produzir(ep: str, corpo: Produzir):
     _ep(ep)
     if any(f not in ("16:9", "9:16") for f in corpo.formatos) or any(e not in estudio.ETAPAS for e in corpo.etapas):
         raise HTTPException(400, "formatos: 16:9, 9:16 · etapas: " + ", ".join(estudio.ETAPAS))
-    args = (["--estilo", corpo.estilo] if corpo.estilo else []) + (["--formatos", ",".join(corpo.formatos)] if corpo.formatos else []) \
-        + (["--etapas", ",".join(corpo.etapas)] if corpo.etapas else [])
+    args = (["--style", corpo.estilo] if corpo.estilo else []) + (["--formats", ",".join(corpo.formatos)] if corpo.formatos else []) \
+        + (["--stages", ",".join(corpo.etapas)] if corpo.etapas else [])
     if any(k not in ("sfx", "motion", "efeitos") or v not in ("baixa", "media", "alta") for k, v in corpo.intensidade.items()):
         raise HTTPException(400, "intensidade: sfx/motion/efeitos = baixa/media/alta")
     if corpo.intensidade:
-        args += ["--intensidade", ",".join(f"{k}={v}" for k, v in corpo.intensidade.items())]
-    t = fila.adicionar(ep, "estudio", args)
+        args += ["--intensity", ",".join(f"{k}={v}" for k, v in corpo.intensidade.items())]
+    t = fila.adicionar(ep, "studio", args)
     if t is None:
         raise HTTPException(409, "esta produção já está na fila")
     return t
@@ -390,7 +390,7 @@ def ver_corte(ep: str):
 @router.post("/producoes/{ep}/corte")
 def cortar(ep: str):
     _ep(ep)
-    return fila.adicionar(ep, "estudio-corte") or {"ok": True, "ja_na_fila": True}
+    return fila.adicionar(ep, "studio-cut") or {"ok": True, "ja_na_fila": True}
 
 
 class Reversao(BaseModel):
@@ -412,7 +412,7 @@ def reverter_emenda(ep: str, corpo: Reversao):
         raise HTTPException(409, str(e)) from None
     if estudio.aprovacoes(projeto).get("corte", {}).get("aprovado"):
         estudio.aprovar(ep, "corte", False, "emenda revertida")
-    return fila.adicionar(ep, "estudio-corte") or {"ok": True, "ja_na_fila": True}
+    return fila.adicionar(ep, "studio-cut") or {"ok": True, "ja_na_fila": True}
 
 
 @router.get("/producoes/{ep}/apontamento")
@@ -508,7 +508,7 @@ def dependencias():
 
 @router.post("/dependencias/instalar")
 def instalar():
-    return fila.adicionar("motor", "estudio-instalar") or {"ok": True, "ja_na_fila": True}
+    return fila.adicionar("motor", "studio-install") or {"ok": True, "ja_na_fila": True}
 
 
 # ── acervo de peças (estudio/pecas; docs/PLANO-ACERVO.md) ──
@@ -698,8 +698,8 @@ def previa_peca(id_: str, corpo: Previa):
     """MP4 curto da peça na pele do estilo (fila, motor de render)."""
     _peca(id_)
     _estilo(corpo.estilo)
-    args = ["--estilo", corpo.estilo] + (["--formato", corpo.formato] if corpo.formato in ("16:9", "9:16") else [])
-    return fila.adicionar(f"peca:{id_}:{corpo.estilo}", "estudio-peca-previa", args) or {"ok": True, "ja_na_fila": True}
+    args = ["--style", corpo.estilo] + (["--format", corpo.formato] if corpo.formato in ("16:9", "9:16") else [])
+    return fila.adicionar(f"peca:{id_}:{corpo.estilo}", "studio-piece-preview", args) or {"ok": True, "ja_na_fila": True}
 
 
 @router.get("/pecas/{id_}/previas")
@@ -730,7 +730,7 @@ def prova_canais(corpo: ProvaCanais):
         raise HTTPException(400, "escolha ao menos um estilo")
     for e in corpo.estilos:
         _estilo(e)
-    return fila.adicionar("acervo:prova", "estudio-prova-canais", ["--estilos", *corpo.estilos]) or {"ok": True, "ja_na_fila": True}
+    return fila.adicionar("acervo:prova", "studio-channel-proof", ["--styles", *corpo.estilos]) or {"ok": True, "ja_na_fila": True}
 
 
 @router.get("/pecas/prova-canais")
@@ -845,8 +845,8 @@ class RenderBloco(BaseModel):
 def render_bloco(ep: str, bloco: int, corpo: RenderBloco):
     """Render só do bloco (fila): trecho → emenda no vídeo já renderizado → loudness e prévia."""
     _ep(ep)
-    args = ["--bloco", str(bloco)] + (["--formatos", *corpo.formatos] if corpo.formatos else [])
-    return fila.adicionar(ep, "estudio-bloco", args) or {"ok": True, "ja_na_fila": True}
+    args = ["--block", str(bloco)] + (["--formats", *corpo.formatos] if corpo.formatos else [])
+    return fila.adicionar(ep, "studio-block", args) or {"ok": True, "ja_na_fila": True}
 
 
 # ── base de aprovações → fine-tune (estudio/treino.py) ──
@@ -869,4 +869,4 @@ def treino_treinar():
     from esteira.estudio import treino
     if not treino.ambiente().exists():
         raise HTTPException(409, "ambiente de treino ausente (.venv-treino com unsloth)")
-    return fila.adicionar("treino:lora", "treino", ["treinar"]) or {"ok": True, "ja_na_fila": True}
+    return fila.adicionar("treino:lora", "training", ["train"]) or {"ok": True, "ja_na_fila": True}

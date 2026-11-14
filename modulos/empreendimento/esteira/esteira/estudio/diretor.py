@@ -95,16 +95,16 @@ def escolher(frases, estilo, marcas=None, gat=None):
                                 "Responda com essa cena e preencha só a âncora, o título e os valores ditos.")
             base.nome = "estudio_cena"
             perm = permitidas + [cena]
-            r = local.perguntar(base, Cena, max_tokens=400, operacao="estudio_cena")
+            r = local.perguntar(base, Cena, max_tokens=400, operacao="studio_scene")
             ok = r and not problemas(f["texto"], r, perm)
             escolhas.append((i, _marcada(f["texto"], cena, r if ok else None), por_fixo))
             continue
-        r = local.perguntar(base, Cena, max_tokens=400, operacao="estudio_cena")
+        r = local.perguntar(base, Cena, max_tokens=400, operacao="studio_scene")
         erros = problemas(f["texto"], r, permitidas) if r else ["sem resposta"]
         if erros and r:
             texto = local.Prompt(f"{base}\n\nSua resposta anterior foi recusada: {'; '.join(erros)}. Corrija.")
             texto.nome = "estudio_cena"
-            r = local.perguntar(texto, Cena, max_tokens=400, operacao="estudio_cena")
+            r = local.perguntar(texto, Cena, max_tokens=400, operacao="studio_scene")
             erros = problemas(f["texto"], r, permitidas) if r else ["sem resposta"]
         if erros:
             falhas.append(i)

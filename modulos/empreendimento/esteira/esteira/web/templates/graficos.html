@@ -8,7 +8,7 @@
 <p class="mt-2 text-sm text-slate-400">{{ graficos|length }} peças ({{ '9:16' if vertical else '16:9' }}):
   {% for t, n in por_tipo.items() %}{{ n }} {{ t }}{{ ', ' if not loop.last }}{% endfor %}. Quadro de cada uma aos 65% da duração, sobre fundo cinza (no vídeo fica sobre a cena).
   Clique numa peça para editar texto, tempo, efeitos e caixas de texto.</p>
-<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Etapa: {{ motor(MOTORES.graficos) }} · editor: {{ motor([('py', 'Python')]) }} + assistente {{ motor([('claude', 'Claude')]) }} ou {{ motor([('local', 'LLM local')]) }}</p>
+<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Etapa: {{ motor(MOTORES["graphics"]) }} · editor: {{ motor([('py', 'Python')]) }} + assistente {{ motor([('claude', 'Claude')]) }} ou {{ motor([('local', 'LLM local')]) }}</p>
 <form method="get" action="/ep/{{ ep }}/graficos/-1/editar" class="mt-4 flex flex-wrap items-center gap-2 text-sm">
   <span class="text-slate-400">Nova caixa de texto aos</span>
   <input name="t" type="number" step="0.1" min="0" value="0" class="w-24 bg-tinta-850 border border-azul-400/20 rounded-lg px-3 py-1.5 text-slate-200">
@@ -17,7 +17,7 @@
 </form>
 
 {% if editados_ec %}
-<form method="post" action="/ep/{{ ep }}/rodar/graficos" class="mt-4 cartao rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
+<form method="post" action="/ep/{{ ep }}/rodar/graphics" class="mt-4 cartao rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-sm">
   <input type="hidden" name="so_render" value="1">
   <span class="text-amarelo-300">{{ editados_ec }} peça(s) salva(s) no EffectCraft.</span>
   <button class="px-3 py-1.5 rounded-lg bg-azul-500/15 text-azul-200 ring-1 ring-azul-400/30 hover:bg-azul-500/25">Renderizar as edições</button>

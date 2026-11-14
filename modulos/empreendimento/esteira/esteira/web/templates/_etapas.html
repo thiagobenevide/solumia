@@ -25,11 +25,11 @@
     </div>
     <div class="text-right shrink-0">
       {% if e and e.duration is not none and e.status != 'running' %}<div class="text-xs font-mono text-slate-500">{{ (e.duration // 60)|int }}m{{ '%02d' % (e.duration % 60)|int }}s</div>{% endif %}
-      {% if nome in ("limpar", "curar", "buscar", "avaliar", "graficos", "montar", "thumb", "cenas") %}
+      {% if nome in ("clean", "curate", "fetch", "evaluate", "graphics", "assemble", "thumb", "scenes") %}
       <form method="post" action="/ep/{{ ep }}/rodar/{{ nome }}" class="mt-1">
-        {% if nome in ("limpar", "curar") %}<input type="hidden" name="refazer" value="{{ '1' if nome == 'curar' else '' }}">{% endif %}
+        {% if nome in ("clean", "curate") %}<input type="hidden" name="refazer" value="{{ '1' if nome == 'curate' else '' }}">{% endif %}
         <button class="text-[11px] text-slate-500 hover:text-azul-300">{{ 'refazer' if e else 'rodar' }}</button>
-        {% if nome == "curar" %}<button name="motor" value="claude" class="ml-2 text-[11px] text-slate-500 hover:text-violet-300" title="usa o Claude (não ocupa a GPU; roda junto com outro processo; conta no teto)">com Claude</button>{% endif %}
+        {% if nome == "curate" %}<button name="motor" value="claude" class="ml-2 text-[11px] text-slate-500 hover:text-violet-300" title="usa o Claude (não ocupa a GPU; roda junto com outro processo; conta no teto)">com Claude</button>{% endif %}
       </form>
       {% endif %}
     </div>

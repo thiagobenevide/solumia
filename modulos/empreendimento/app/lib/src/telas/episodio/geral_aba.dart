@@ -16,7 +16,7 @@ class GeralAba extends StatelessWidget {
   final String ep;
 
   /// Etapas com botão rodar/refazer na lista (as outras só rodam pelo "Produzir tudo").
-  static const _comBotao = {'limpar', 'curar', 'buscar', 'avaliar', 'graficos', 'montar', 'thumb', 'cenas'};
+  static const _comBotao = {'clean', 'curate', 'fetch', 'evaluate', 'graphics', 'assemble', 'thumb', 'scenes'};
 
   @override
   Widget build(BuildContext context) => FutureBuilder(
@@ -99,7 +99,7 @@ class GeralAba extends StatelessWidget {
           FilledButton.icon(
             icon: const Icon(Icons.play_arrow),
             label: const Text('Produzir tudo'),
-            onPressed: p.rodando != null ? null : () => _rodar(context, 'tudo'),
+            onPressed: p.rodando != null ? null : () => _rodar(context, 'all'),
           ),
           OutlinedButton.icon(
             icon: const Icon(Icons.restart_alt),
@@ -163,7 +163,7 @@ class GeralAba extends StatelessWidget {
                     feito: 'Projeto enviado: use "Reexportar vídeo" para refazer o final.mp4.',
                   ),
                   FilledButton.tonal(
-                    onPressed: () => _rodar(context, 'exportar'),
+                    onPressed: () => _rodar(context, 'export'),
                     child: const Text('Reexportar vídeo'),
                   ),
                   // veredito da montagem gerada: vira dado de treino (tarefa `montar` do dataset)
@@ -307,9 +307,9 @@ class GeralAba extends StatelessWidget {
               },
               itemBuilder: (_) => [
                 PopupMenuItem(value: 'rodar', child: Text(feita ? 'Rodar de novo' : 'Rodar')),
-                if (const {'limpar', 'curar', 'buscar'}.contains(etapa.id))
+                if (const {'clean', 'curate', 'fetch'}.contains(etapa.id))
                   const PopupMenuItem(value: 'refazer', child: Text('Refazer do zero')),
-                if (etapa.id == 'curar')
+                if (etapa.id == 'curate')
                   const PopupMenuItem(
                     value: 'claude',
                     child: Text('Refazer com Claude (em paralelo, conta no teto)'),
@@ -371,6 +371,6 @@ class GeralAba extends StatelessWidget {
         ],
       ),
     );
-    if (ok == true && context.mounted) await _rodar(context, 'tudo', refazer: true);
+    if (ok == true && context.mounted) await _rodar(context, 'all', refazer: true);
   }
 }

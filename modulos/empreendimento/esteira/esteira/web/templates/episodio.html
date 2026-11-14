@@ -29,9 +29,9 @@
       </div>
     </div>
     <div class="flex flex-col items-end gap-2">
-      <form method="post" action="/ep/{{ ep }}/rodar/tudo">
+      <form method="post" action="/ep/{{ ep }}/rodar/all">
         <button class="px-5 py-2.5 rounded-xl bg-azul-500 text-white font-semibold hover:bg-azul-400 shadow-[0_8px_24px_-8px_#2563eb]">▶ Produzir tudo</button></form>
-      <form method="post" action="/ep/{{ ep }}/rodar/tudo"
+      <form method="post" action="/ep/{{ ep }}/rodar/all"
             onsubmit="return confirm('Refazer o vídeo do zero?\n\nA transcrição e os cortes da narração são decididos de novo (ajustes de corte feitos no painel se perdem), a curadoria é refeita e todas as etapas rodam outra vez. Gráficos e thumbs editados à mão são mantidos.')">
         <input type="hidden" name="refazer" value="1">
         <button class="px-4 py-2 rounded-xl border border-amber-400/40 text-amber-200 text-sm hover:bg-amber-500/10"
@@ -60,7 +60,7 @@
       <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
         {% if fcproj %}
         <form method="post" action="/ep/{{ ep }}/abrir"><button class="w-full px-3 py-2 rounded-lg border border-azul-400/25 text-slate-200 hover:bg-azul-500/10">Vídeo no FilmCraft</button></form>
-        <form method="post" action="/ep/{{ ep }}/rodar/exportar"><button class="w-full px-3 py-2 rounded-lg bg-azul-500/15 text-azul-200 ring-1 ring-azul-400/30 hover:bg-azul-500/25">Reexportar vídeo</button></form>
+        <form method="post" action="/ep/{{ ep }}/rodar/export"><button class="w-full px-3 py-2 rounded-lg bg-azul-500/15 text-azul-200 ring-1 ring-azul-400/30 hover:bg-azul-500/25">Reexportar vídeo</button></form>
         {% endif %}
         <a href="/ep/{{ ep }}/graficos" class="text-center px-3 py-2 rounded-lg border border-azul-400/25 text-slate-200 hover:bg-azul-500/10">Gráficos no EffectCraft</a>
         <a href="/ep/{{ ep }}/thumbs" class="text-center px-3 py-2 rounded-lg border border-azul-400/25 text-slate-200 hover:bg-azul-500/10">Thumbs no PhotoCraft</a>

@@ -4,8 +4,8 @@ the old keys. Run with the panel and every `./dark` stopped:
     python -m esteira.migrate_english            # rewrites
     python -m esteira.migrate_english --dry-run  # only lists what it would do
 
-Safe to run again: a file already migrated has no old file left, so it is skipped. Each unit of the migration
-adds its files here.
+Safe to run again: the conversions are idempotent and a file is only rewritten when something changes. Each
+unit of the migration adds its files and values here.
 """
 import argparse
 import json
@@ -30,6 +30,25 @@ OPTION_KEYS = {"motor": "engine", "modelo_claude": "claude_model", "teto_episodi
                "direcao": "direction", "limite_cota": "quota_limit"}
 OPERATION_KEYS = {"motor": "engine", "texto": "text", "visao": "vision"}
 ENGINES = {"padrao": "default"}
+# CLI commands; the stage ids recorded in events, trace nodes, processes and the queue are the same names
+COMMANDS = {"tudo": "all", "transcrever": "transcribe", "limpar": "clean", "partes": "parts", "cenas": "scenes",
+            "curar": "curate", "avaliar": "evaluate", "graficos": "graphics", "buscar": "fetch", "revisar": "review",
+            "resumo": "summary", "palavras": "words", "ajustar": "adjust", "quadros": "frames", "montar": "assemble",
+            "abrir": "open", "exportar": "export", "roteiros": "scripts", "importar": "import", "roteiro": "script",
+            "acervo": "library", "painel": "panel", "estudio": "studio", "estudio-corte": "studio-cut",
+            "estudio-instalar": "studio-install", "estudio-estilo": "studio-style",
+            "estudio-fabrica": "studio-factory", "estudio-peca-previa": "studio-piece-preview",
+            "estudio-prova-canais": "studio-channel-proof", "estudio-bloco": "studio-block",
+            "estudio-amostra": "studio-sample", "treino": "training", "bancada": "bench"}
+FLAGS = {"--refazer": "--redo", "--motor": "--engine", "--cenas": "--scenes", "--so-render": "--render-only",
+         "--sem-exportar": "--no-export", "--ate": "--to", "--estilo": "--style", "--formatos": "--formats",
+         "--etapas": "--stages", "--sem-portao": "--no-gate", "--intensidade": "--intensity", "--nicho": "--niche",
+         "--sem-visao": "--no-vision", "--formato": "--format", "--estilos": "--styles", "--bloco": "--block",
+         "--epocas": "--epochs", "--tarefas": "--tasks", "--modelos": "--models", "treinar": "train",
+         "rodar": "run"}
+OPERATIONS = {"limpar": "clean", "curar": "curate", "avaliar": "evaluate", "graficos": "graphics",
+              "acervo": "library", "roteiro": "script", "estudio_cena": "studio_scene", "direcao": "direction",
+              "estudio_visao": "studio_vision"}
 DIRECTIONS = {"blocos": "blocks", "frases": "sentences"}
 
 
@@ -45,9 +64,17 @@ def _translate(record, key, values):
         record[key] = values[record[key]]
 
 
+def _arguments(args):
+    translated = []
+    for arg in args or []:
+        translated.append(FLAGS.get(arg, arg))
+    return translated
+
+
 def _event(record):
     record = _rename(record, EVENT_KEYS)
     _translate(record, "kind", EVENT_KINDS)
+    _translate(record, "stage", COMMANDS)
     if record.get("kind") == "error" and record.get("message") == "interrompido":
         record["message"] = "interrupted"
     return record
@@ -57,12 +84,16 @@ def _process(record):
     record = _rename(record, PROCESS_KEYS)
     _translate(record, "event", PROCESS_EVENTS)
     _translate(record, "slot", SLOTS)
+    _translate(record, "command", COMMANDS)
+    if "args" in record:
+        record["args"] = _arguments(record["args"])
     return record
 
 
 def _trace(record):
     record = _rename(record, TRACE_KEYS)
     _translate(record, "kind", TRACE_KINDS)
+    _translate(record, "node", COMMANDS)
     return record
 
 
@@ -73,7 +104,7 @@ def _options(record):
     for name, chosen in (record.get("operations") or {}).items():
         chosen = _rename(chosen, OPERATION_KEYS)
         _translate(chosen, "engine", ENGINES)
-        operations[name] = chosen
+        operations[OPERATIONS.get(name, name)] = chosen
     record["operations"] = operations
     return record
 
@@ -84,57 +115,78 @@ def _write(path, text):
     tmp.replace(path)
 
 
-def migrate_jsonl(old, new, convert, dry_run):
-    """Old lines converted first, then whatever the new code already appended to the new file."""
-    if not old.exists():
-        return False
-    print(f"{old} → {new.name}")
-    if dry_run:
-        return True
+def _converted(text, convert):
     lines = []
-    for line in old.read_text().splitlines():
+    for line in text.splitlines():
         if not line.strip():
             continue
         try:
             lines.append(json.dumps(convert(json.loads(line)), ensure_ascii=False))
         except ValueError:
             lines.append(line)
+    return lines
+
+
+def migrate_jsonl(old, new, convert, dry_run):
+    """Old lines first, then what is already in the new file; `convert` is applied to both (it is idempotent)."""
+    lines = []
+    current = ""
+    if old.exists():
+        lines.extend(_converted(old.read_text(), convert))
     if new.exists():
-        lines.extend(new.read_text().splitlines())
-    _write(new, "\n".join(lines) + "\n")
-    old.unlink()
+        current = new.read_text()
+        lines.extend(_converted(current, convert))
+    if not lines:
+        return False
+    text = "\n".join(lines) + "\n"
+    if not old.exists() and text == current:
+        return False
+    print(f"{old if old.exists() else new} → {new.name}")
+    if dry_run:
+        return True
+    _write(new, text)
+    old.unlink(missing_ok=True)
     return True
 
 
 def migrate_options(dry_run):
     """The old file wins over an `options.json` created before this migration ran."""
     old, new = CACHE / "opcoes.json", CACHE / "options.json"
+    source = old
     if not old.exists():
+        source = new
+    if not source.exists():
         return False
-    print(f"{old} → {new.name}")
+    current = source.read_text()
+    text = json.dumps(_options(json.loads(current)), ensure_ascii=False, indent=1)
+    if source == new and text == current:
+        return False
+    print(f"{source} → {new.name}")
     if dry_run:
         return True
-    _write(new, json.dumps(_options(json.loads(old.read_text())), ensure_ascii=False, indent=1))
-    old.unlink()
+    _write(new, text)
+    old.unlink(missing_ok=True)
     return True
 
 
 def migrate_queue(dry_run):
-    """`cache/fila.json` keeps its own keys for now; only the slot value comes from the core."""
+    """`cache/fila.json` keeps its own keys for now; slot, command and flags come from the core and the CLI."""
     path = CACHE / "fila.json"
     if not path.exists():
         return False
-    tasks = json.loads(path.read_text())
-    changed = False
+    current = path.read_text()
+    tasks = json.loads(current)
     for task in tasks:
-        if task.get("vaga") in SLOTS:
-            task["vaga"] = SLOTS[task["vaga"]]
-            changed = True
-    if not changed:
+        _translate(task, "vaga", SLOTS)
+        _translate(task, "comando", COMMANDS)
+        if "args" in task:
+            task["args"] = _arguments(task["args"])
+    text = json.dumps(tasks, ensure_ascii=False, indent=1)
+    if text == current:
         return False
-    print(f"{path}: slot values")
+    print(f"{path}: slot, command and flag values")
     if not dry_run:
-        _write(path, json.dumps(tasks, ensure_ascii=False, indent=1))
+        _write(path, text)
     return True
 
 
@@ -147,8 +199,12 @@ def main():
     done += migrate_queue(args.dry_run)
     done += migrate_jsonl(CACHE / "processos.jsonl", CACHE / "processes.jsonl", _process, args.dry_run)
     done += migrate_jsonl(CACHE / "rastro.jsonl", CACHE / "trace.jsonl", _trace, args.dry_run)
-    for old in sorted(PROJETOS.glob("*/*/log/eventos.jsonl")):
-        done += migrate_jsonl(old, old.with_name("events.jsonl"), _event, args.dry_run)
+    logs = set()
+    for name in ("eventos.jsonl", "events.jsonl"):
+        for path in PROJETOS.glob(f"*/*/log/{name}"):
+            logs.add(path.parent)
+    for folder in sorted(logs):
+        done += migrate_jsonl(folder / "eventos.jsonl", folder / "events.jsonl", _event, args.dry_run)
     print(f"{done} file(s) {'to migrate' if args.dry_run else 'migrated'}")
 
 

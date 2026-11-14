@@ -1,6 +1,6 @@
 """Estúdio: produção de vídeo por estilo (vídeo + estilo → corte aprovado → diretor → render → portão final).
 
-Plano e decisões: `docs/PLANO-ESTUDIO.md`. Fluxo de uma produção (`./dark estudio <ep>`, ou o botão Produzir da aba
+Plano e decisões: `docs/PLANO-ESTUDIO.md`. Fluxo de uma produção (`./dark studio <ep>`, ou o botão Produzir da aba
 Estúdio): `corte.analisar` (corte pelo som da narração editada) → portão 1 (emendas revisadas e corte aprovado) →
 apontamento no roteiro (`apontamento.py`: cena por trecho, confirmado pela pessoa) → `diretor.dirigir` (mapa.json, IA local) → por formato: `compilar` →
 `render` (HyperFrames, GPU) → `audio` (−14 LUFS) → `verificar` (relatório; portão final).

@@ -5,7 +5,7 @@
   sem marcador       → não é usada (se uma parte ficar sem nenhum "corte", procura-se a leitura dela no que
                        não foi cancelado e fica um aviso).
 
-Parte = parágrafo do roteiro (linha não vazia que não é título); `./dark partes <ep>` gera a lista numerada
+Parte = parágrafo do roteiro (linha não vazia que não é título); `./dark parts <ep>` gera a lista numerada
 para a leitura. "Corte parte N" dito mais de uma vez: vale o último. "Cancela parte N" logo depois de
 "Corte parte N" (sem ler nada entre os dois) desfaz aquele corte.
 

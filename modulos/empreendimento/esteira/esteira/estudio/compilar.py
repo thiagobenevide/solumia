@@ -316,7 +316,7 @@ def verificar(projeto, estilo, formato, n_visao=8):
     for n, (c, arq) in enumerate(quadros[:n_visao], 1):
         events.progress(n, min(n_visao, len(quadros)), f"conferindo {c['cena']}")
         r = local.perguntar(local.prompt("estudio_visao"), Visao, modelo=local.VISAO, imagens=[str(arq)], max_tokens=200,
-                            operacao="estudio_visao")
+                            operacao="studio_vision")
         if r:
             ruins = [k for k, v in r.model_dump().items() if v]
             if ruins:

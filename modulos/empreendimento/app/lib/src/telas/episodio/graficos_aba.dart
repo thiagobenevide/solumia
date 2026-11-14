@@ -227,7 +227,7 @@ class _GraficosAbaState extends State<GraficosAba> {
   });
 
   Future<void> _renderizar() => acaoComAviso(context, () async {
-    final entrou = await widget.api.rodar(widget.ep, 'graficos', soRender: true);
+    final entrou = await widget.api.rodar(widget.ep, 'graphics', soRender: true);
     return entrou ? 'Renderização das edições na fila.' : 'A renderização já estava na fila.';
   });
 }

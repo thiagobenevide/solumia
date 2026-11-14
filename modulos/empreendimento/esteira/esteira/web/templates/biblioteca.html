@@ -12,7 +12,7 @@
   <div>
     <p class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Vault Obsidian · {{ canal }}</p>
     <h1 class="mt-2 text-3xl sm:text-4xl font-semibold tracking-tight text-white">Roteiros para produzir</h1>
-<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Produzir: {{ motor(MOTORES.tudo) }} (cada etapa mostra o seu motor no episódio)</p>
+<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Produzir: {{ motor(MOTORES["all"]) }} (cada etapa mostra o seu motor no episódio)</p>
     <p class="mt-2 text-sm text-slate-400 max-w-2xl">Cada roteiro do vault vira um vídeo: marque os que já têm áudio gravado e envie para a esteira.
       O que o roteiro define (falas, cenas, citações com PDF) aparece em cada episódio, na aba <b class="text-slate-200">Roteiro</b>.</p>
   </div>

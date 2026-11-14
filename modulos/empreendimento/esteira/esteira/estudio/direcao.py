@@ -180,7 +180,7 @@ def ler(bloco, ms, modo, perfil, antes=""):
                          regras_tratamento=REGRAS_TRATAMENTO.get(modo, REGRAS_TRATAMENTO["dark"]), modo=modo,
                          ritmo=perfil.id, antes=antes[-300:], n=len(ms),
                          momentos="\n".join(f"{k + 1}. {m['texto']}" for k, m in enumerate(ms)))
-    r = local.perguntar(texto, LeituraBloco, max_tokens=300 + 160 * len(ms), operacao="direcao")
+    r = local.perguntar(texto, LeituraBloco, max_tokens=300 + 160 * len(ms), operacao="direction")
     if not r or len(r.momentos) != len(ms):
         return [_regra(m) for m in ms], "regra"
     return [_corrigir(x, m) for x, m in zip(r.momentos, ms, strict=True)], "local"
@@ -300,7 +300,7 @@ def escolher(m, leitura, tratamento, cands):
     texto = local.prompt("direcao_escolha", texto=m["texto"], intencao=leitura.intencao, tom=leitura.tom,
                          tratamento=tratamento, numeros=", ".join(leitura.entidades.numeros) or "nenhum",
                          candidatas=linhas)
-    r = local.perguntar(texto, Escolha, max_tokens=200, operacao="direcao")
+    r = local.perguntar(texto, Escolha, max_tokens=200, operacao="direction")
     por_id = {f.id: f for _, f in cands}
     if r and r.escolha in por_id:
         return por_id[r.escolha], r.motivo[:200], "local"
@@ -356,7 +356,7 @@ def conferir(f, enc, m, contexto):
     """Segunda passada da LLM local: o texto de tela diz o que a fala diz? Sem resposta, passa."""
     r = local.perguntar(local.prompt("direcao_conferir", texto=m["texto"], contexto=contexto[-300:], peca=f.id,
                                      comunica=f.comunica, tela=json.dumps(enc, ensure_ascii=False)),
-                        Conferencia, max_tokens=300, operacao="direcao")
+                        Conferencia, max_tokens=300, operacao="direction")
     return [f"o texto de tela não bate com a fala: {r.problema}"] if getattr(r, "fiel", True) is False else []
 
 
@@ -411,7 +411,7 @@ def preencher(f, m, leitura, cits=(), contexto=""):
             nomes=", ".join(leitura.entidades.nomes) or "nenhum", encaixes=_descrever_encaixes(f),
             botoes="\n".join(f"- {b.nome}: {b.valores} (padrão {b.padrao})" for b in f.botoes) or "(nenhum)",
             erros=("\nSua resposta anterior foi recusada: " + "; ".join(erros) + ". Corrija.\n") if erros else "")
-        r = local.perguntar(texto, Preenchimento, max_tokens=500, operacao="direcao")
+        r = local.perguntar(texto, Preenchimento, max_tokens=500, operacao="direction")
         if not r:
             erros = ["resposta vazia"]
             continue

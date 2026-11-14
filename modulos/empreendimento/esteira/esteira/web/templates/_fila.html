@@ -21,7 +21,7 @@
       <span class="ml-2 font-mono text-xs text-slate-500">./dark {{ t.comando }} {{ t.args|join(' ') }}</span>
       <span class="ml-2 inline-flex gap-1 align-middle">{% if t.vaga == 'claude' %}{{ motor([("claude", "Claude")]) }}{% else %}{{ motor(MOTORES.get(t.comando, [])) }}{% endif %}</span>
       {% if t.proc %}<a href="/processos/{{ t.proc }}" class="ml-2 text-xs text-azul-400 hover:underline">monitor do processo →</a>{% endif %}
-      {% if t.prog and t.comando == 'tudo' %}
+      {% if t.prog and t.comando == 'all' %}
       <div class="mt-2 flex items-center gap-3">
         <div class="h-1.5 w-56 rounded-full bg-white/5 overflow-hidden"><div class="h-full bg-azul-400 transition-all" style="width: {{ (100 * t.prog.feitas / t.prog.total)|round }}%"></div></div>
         <span class="text-xs text-slate-400">{{ t.prog.feitas }}/{{ t.prog.total }}{% if t.prog.rodando %} · {{ NOMES.get(t.prog.rodando, t.prog.rodando) }}{% endif %}</span>

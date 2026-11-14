@@ -35,7 +35,7 @@
 </div>
 
 {% if not itens %}
-<div class="mt-8 cartao rounded-xl p-10 text-center text-slate-400">{{ 'Nada encontrado para "%s".' % q if q else 'Acervo vazio: rode ./dark acervo importar ou produza um episódio.' }}</div>
+<div class="mt-8 cartao rounded-xl p-10 text-center text-slate-400">{{ 'Nada encontrado para "%s".' % q if q else 'Acervo vazio: rode ./dark library import ou produza um episódio.' }}</div>
 {% endif %}
 <div class="mt-8 grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
   {% for it in itens %}

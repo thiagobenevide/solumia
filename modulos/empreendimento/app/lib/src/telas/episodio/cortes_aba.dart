@@ -182,7 +182,7 @@ class _CortesAbaState extends State<CortesAba> {
   });
 
   Future<void> _aplicar() => acaoComAviso(context, () async {
-    final entrou = await widget.api.rodar(widget.ep, 'limpar');
+    final entrou = await widget.api.rodar(widget.ep, 'clean');
     return entrou ? 'Cortes na fila (etapa limpar).' : 'O limpar já estava na fila.';
   });
 }

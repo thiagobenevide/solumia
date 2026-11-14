@@ -166,7 +166,7 @@ def montar(projeto, exportar=True):
         fcproj = projeto.caminho("projeto.fcproj")
         fc.run("file.saveAs", path=str(fcproj))
         _assinar(projeto)
-        print(f"  projeto salvo: {fcproj} (`./dark abrir {projeto.ep}` para editar à mão)")
+        print(f"  projeto salvo: {fcproj} (`./dark open {projeto.ep}` para editar à mão)")
 
         _dataset(projeto, plano, doc, ex.rastro, cam, midias)
         if exportar:
@@ -358,7 +358,7 @@ def _abrir_religado(fc, projeto):
     pasta do projeto e salva. Mantém a assinatura se o arquivo ainda era o gerado pela esteira."""
     fcproj, assinatura = projeto.caminho("projeto.fcproj"), projeto.caminho("log/fcproj.sha1")
     if not fcproj.exists():
-        raise SystemExit("sem projeto.fcproj: rode `./dark montar` antes")
+        raise SystemExit("sem projeto.fcproj: rode `./dark assemble` antes")
     da_esteira = assinatura.exists() and assinatura.read_text() == _hash(fcproj)
     faltando = fc.run("file.open", path=str(fcproj)).get("missingMedia", 0)
     if faltando:
@@ -388,4 +388,4 @@ def abrir(projeto):
         fc.fechar()
     fcproj = projeto.caminho("projeto.fcproj")
     open_program("filmcraft", str(fcproj))
-    print(f"  FilmCraft aberto: {fcproj}\n  depois de editar e salvar: ./dark exportar {projeto.ep}")
+    print(f"  FilmCraft aberto: {fcproj}\n  depois de editar e salvar: ./dark export {projeto.ep}")

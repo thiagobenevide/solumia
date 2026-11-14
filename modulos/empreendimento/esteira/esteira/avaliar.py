@@ -2,7 +2,7 @@
 
 Rodadas: avalia → cenas com nota ≤ 2 ganham o termo sugerido pelo modelo e a mídia vai para `rejeitados`
 → busca de novo só essas → avalia só essas. Depois de `rodadas`, o que ainda estiver fraco fica no
-relatório (`./dark revisar <ep> --cenas ...` mostra a folha delas).
+relatório (`./dark review <ep> --scenes ...` mostra a folha delas).
 """
 import subprocess
 

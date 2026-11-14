@@ -189,7 +189,7 @@ def test_painel_mostra_etapa_quem_fez_e_categorias(ambiente, monkeypatch, tmp_pa
     p = F.pedido_hibrido("ideias", 8, "finanças")
     F._mudar(p.id, conceitos=[{"ficha": {"id": "ideia_a", "descricao": "uma ideia"}, "conceito": "c"}],
              etapa=F._etapa("n1", "ideia_a", 2))
-    monkeypatch.setattr(fila, "listar", lambda: [{"ep": f"fabrica:{p.id}", "estado": "rodando", "comando": "estudio-fabrica"}])
+    monkeypatch.setattr(fila, "listar", lambda: [{"ep": f"fabrica:{p.id}", "estado": "rodando", "comando": "studio-factory"}])
     F._registrar("descartada", pedido=p.id, peca="ideia_a", motor="effectcraft", ia="local", custo=0.0,
                  motivo="escura 16:9: sai da área segura com o texto máximo: ['T']")
     F._registrar("revisao", peca="ideia_b", aprovada=False, problemas=["itens empilhados"], custo=0.05)

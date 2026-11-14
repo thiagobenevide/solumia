@@ -15,13 +15,13 @@ from esteira.projeto import CACHE, PROJETOS, RAIZ
 
 PROMPTS = RAIZ / "esteira" / "ia" / "prompts"
 PROMPTS_DO_NO = {
-    "r_fatos": ["roteiro_trechos"], "r_partes": ["roteiro_parte"], "limpar": ["corte", "corte_par"],
-    "curar": ["curadoria"], "avaliar": ["avaliar"], "graficos": ["grafico_numero", "grafico_nota", "grafico_citacao", "termos_en"],
+    "r_fatos": ["roteiro_trechos"], "r_partes": ["roteiro_parte"], "clean": ["corte", "corte_par"],
+    "curate": ["curadoria"], "evaluate": ["avaliar"], "graphics": ["grafico_numero", "grafico_nota", "grafico_citacao", "termos_en"],
     "thumb": ["thumb_conceitos"],
 }
 MODELOS = {"qwen3": "qwen3-14b", "qwen_vl": "qwen2.5vl-7b"}  # ids no llama.cpp
 ANTIGOS = {"qwen3-14b": "qwen3:14b", "qwen2.5vl-7b": "qwen2.5vl:7b"}  # mesmo modelo no tempo do Ollama
-ETAPAS = {"transcrever", "limpar", "cenas", "curar", "buscar", "avaliar", "graficos", "montar", "thumb"}
+ETAPAS = {"transcribe", "clean", "scenes", "curate", "fetch", "evaluate", "graphics", "assemble", "thumb"}
 _memo = {}
 
 

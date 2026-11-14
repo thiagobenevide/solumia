@@ -1,6 +1,6 @@
 """Roteiro do vault gerado sem tokens do Claude: Python + LLM local (llama.cpp `qwen3-14b`).
 
-Fluxo (`./dark roteiro finlumia:41 [--ate 50]`):
+Fluxo (`./dark script finlumia:41 [--to 50]`):
 1. Python lê a linha do plano (Arco do canal): título, gancho, artigos-base, busca em inglês, evidência, formato.
 2. Python acha estudos de ACESSO ABERTO no OpenAlex (os artigos-base do plano primeiro, depois a busca
    em inglês) e baixa os PDFs com `.claude/scripts/artigo` (que recusa o que não é aberto).
@@ -331,7 +331,7 @@ modo: dark
 ## Notas de produção
 
 - Fontes: {', '.join(rotulo(f) for f in fontes)}.
-- Gerado por `./dark roteiro` (esteira-dark) em {hoje}.
+- Gerado por `./dark script` (esteira-dark) em {hoje}.
 """
     return md, palavras
 

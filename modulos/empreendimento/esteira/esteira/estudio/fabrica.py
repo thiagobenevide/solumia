@@ -3,7 +3,7 @@ lugar em que o Claude trabalha no Estúdio; depois, a produção de cada vídeo 
 
 - Pedido (app → Estúdio → Fábrica): `livre` ("3 linhas do tempo com fotos de época"), `referencia` (imagem
   enviada) ou `lacunas` (o código conta o acervo por intenção × peso e pede o que falta); quantidade (o freio é a cota da assinatura, `claude.LIMITE_COTA`).
-- `./dark estudio-fabrica fabrica:<pedido>` (fila, vaga "claude"): primeiro as tarefas pedidas na revisão (ajuste,
+- `./dark studio-factory fabrica:<pedido>` (fila, vaga "claude"): primeiro as tarefas pedidas na revisão (ajuste,
   variação), depois gera até o pedido ter `quantidade` peças aprovadas + em revisão, ou até a cota do Claude chegar a 90%.
 - Cada geração: Claude (`ia/claude.consultar`) escreve peça + ficha seguindo `pecas/GUIA.md` → portão de entrada
   (`peca.portao`) + checagem visual local nos quadros da prova → reprovou: volta ao Claude uma vez com o erro;
@@ -217,7 +217,7 @@ def guardar_referencia(nome, dados):
 def enfileirar(pid):
     """Põe o pedido na fila da vaga "claude" (não duplica se já está lá)."""
     from esteira.web import fila
-    return fila.adicionar(f"fabrica:{pid}", "estudio-fabrica", [], "claude")
+    return fila.adicionar(f"fabrica:{pid}", "studio-factory", [], "claude")
 
 
 def pausar(pid, pausado=True):
@@ -420,8 +420,8 @@ def checagem_visual(id_):
     from esteira.ia import local
     problemas = []
     # o processo roda com `--motor claude`: sem fixar, a visão iria ao Claude e gastaria a cota da assinatura
-    antes = {k: os.environ.get(k) for k in ("ESTEIRA_MOTOR", "ESTEIRA_MOTOR_FIXO")}
-    os.environ.update(ESTEIRA_MOTOR="local", ESTEIRA_MOTOR_FIXO="1")
+    antes = {k: os.environ.get(k) for k in ("ESTEIRA_ENGINE", "ESTEIRA_ENGINE_FIXED")}
+    os.environ.update(ESTEIRA_ENGINE="local", ESTEIRA_ENGINE_FIXED="1")
     try:
         return _checar_quadros(id_, Visao, local, problemas)
     finally:
@@ -436,7 +436,7 @@ def _checar_quadros(id_, Visao, local, problemas):
     for q in sorted((P.pasta(id_) / "prova").glob("*.jpg")):
         try:
             r = local.perguntar(local.prompt("estudio_visao_prova"), Visao, modelo=local.VISAO, imagens=[str(q)],
-                                max_tokens=200, operacao="estudio_visao")
+                                max_tokens=200, operacao="studio_vision")
         except Exception as e:  # noqa: BLE001 — llama fora do ar não pode travar a fábrica
             events.warning(f"checagem visual pulada: {str(e)[:100]}")
             return []
@@ -480,12 +480,12 @@ def _consultar_local(texto):
     """A peça pelo LLM local (JSON forçado pelo esquema). Sem imagem de referência. O processo da fábrica
     roda na vaga "claude" com `--motor claude`: aqui o motor local é fixado só durante a chamada."""
     from esteira.ia import local
-    antes = {k: os.environ.get(k) for k in ("ESTEIRA_MOTOR", "ESTEIRA_MOTOR_FIXO")}
-    os.environ.update(ESTEIRA_MOTOR="local", ESTEIRA_MOTOR_FIXO="1")
+    antes = {k: os.environ.get(k) for k in ("ESTEIRA_ENGINE", "ESTEIRA_ENGINE_FIXED")}
+    os.environ.update(ESTEIRA_ENGINE="local", ESTEIRA_ENGINE_FIXED="1")
     try:
         # o número da tentativa muda o texto: sem ele o cache devolveria a mesma peça descartada
         r = local.perguntar(f"{texto}\n\n(tentativa {time.time_ns()})", PecaLocal, modelo=MODELO_LOCAL,
-                            temperatura=0.5, max_tokens=9000, operacao="fabrica")
+                            temperatura=0.5, max_tokens=9000, operacao="factory")
         return r and PecaGerada(**r.model_dump(mode="json"))
     finally:
         for k, v in antes.items():
@@ -678,8 +678,8 @@ def _consultar_n1_local(texto):
     class Resposta(BaseModel):
         peca_n1: N1EC.Peca
         comunica: str = ""
-    antes = {k: os.environ.get(k) for k in ("ESTEIRA_MOTOR", "ESTEIRA_MOTOR_FIXO")}
-    os.environ.update(ESTEIRA_MOTOR="local", ESTEIRA_MOTOR_FIXO="1")
+    antes = {k: os.environ.get(k) for k in ("ESTEIRA_ENGINE", "ESTEIRA_ENGINE_FIXED")}
+    os.environ.update(ESTEIRA_ENGINE="local", ESTEIRA_ENGINE_FIXED="1")
     try:
         r = local.perguntar(f"{texto}\n\n(tentativa {time.time_ns()})", Resposta, modelo=MODELO_LOCAL, temperatura=0.4,
                             max_tokens=7000, operacao="fabrica_n1")

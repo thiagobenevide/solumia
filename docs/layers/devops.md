@@ -6,7 +6,7 @@
 
 | Environment | Where | How it starts |
 |---|---|---|
-| Development | PC | `uv sync --all-packages`, `flutter run`, `./dark painel` |
+| Development | PC | `uv sync --all-packages`, `flutter run`, `./dark panel` |
 | VPS | Ubuntu/Debian + Docker | `sudo infra/scripts/instalar_vps` |
 | PC (production) | systemd `--user` | `infra/scripts/conectar_vps` |
 | Apps | phone, watch, Linux | `infra/scripts/publicar_app` |

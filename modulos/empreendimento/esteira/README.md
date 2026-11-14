@@ -26,9 +26,9 @@ Dados fora do repositório: `projetos/`, `acervo/` e `cache/` ficam em `$AGENT_D
 ~/.local/bin/uv venv --python 3.12 .venv
 ~/.local/bin/uv pip install --python .venv/bin/python -r requirements.txt
 cp .env.example .env            # chaves do Pexels/Pixabay (sem elas, só fotos do Openverse)
-./dark roteiros finlumia        # roteiros do vault
-./dark importar finlumia:3      # → projetos/finlumia/003
-./dark tudo finlumia-003        # ou pelo painel: ./dark painel → http://localhost:8765
+./dark scripts finlumia        # roteiros do vault
+./dark import finlumia:3      # → projetos/finlumia/003
+./dark all finlumia-003        # ou pelo painel: ./dark panel → http://localhost:8765
 ```
 
 Thumbs precisam do `.venv-img` (`requirements-img.txt`, PyTorch cu128). LLM local: llama.cpp em `~/development/llama.cpp` (roteador, modelos em `~/agent-data/modelos`).
@@ -43,13 +43,13 @@ Thumbs precisam do `.venv-img` (`requirements-img.txt`, PyTorch cu128). LLM loca
 
 | Comando | O que faz |
 |---|---|
-| `./dark importar canal:NNN [--audio X.wav]` | cria `projetos/<canal>/<NNN>/` |
-| `./dark tudo <ep>` | todas as etapas (diagnóstico automático se falhar) |
-| `./dark status [<ep>]` / `./dark log <ep> [--erros]` | andamento e erros |
-| `./dark limpar <ep> [--refazer]` | cortes; reaproveita `cortes.json` (editável no painel) |
-| `./dark graficos <ep> [--so-render]` | replaneja e renderiza só o que mudou |
-| `./dark resumo` / `palavras` / `ajustar <ep>` | ver e editar o plano sem abrir o JSON |
-| `./dark quadros <ep>` | `quadros.jpg` com quadros do `final.mp4` |
+| `./dark import canal:NNN [--audio X.wav]` | cria `projetos/<canal>/<NNN>/` |
+| `./dark all <ep>` | todas as etapas (diagnóstico automático se falhar) |
+| `./dark status [<ep>]` / `./dark log <ep> [--errors]` | andamento e erros |
+| `./dark clean <ep> [--redo]` | cortes; reaproveita `cortes.json` (editável no painel) |
+| `./dark graphics <ep> [--render-only]` | replaneja e renderiza só o que mudou |
+| `./dark summary` / `words` / `ajustar <ep>` | ver e editar o plano sem abrir o JSON |
+| `./dark frames <ep>` | `quadros.jpg` com quadros do `final.mp4` |
 
 `<ep>` é `canal-NNN` (ex.: `finlumia-003`).
 

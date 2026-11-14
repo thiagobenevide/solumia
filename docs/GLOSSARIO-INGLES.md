@@ -26,6 +26,31 @@ antigas.
 | thumb | thumb |
 | roteiro | script |
 | partes | parts |
+| tudo | all |
+| revisar | review |
+| resumo, palavras, ajustar | summary, words, adjust |
+| abrir, exportar, importar | open, export, import |
+| roteiros | scripts |
+| acervo (`buscar`, `importar`, `descrever`) | library (`search`, `import`, `describe`) |
+| painel | panel |
+| estudio, estudio-corte, estudio-instalar | studio, studio-cut, studio-install |
+| estudio-estilo, estudio-fabrica, estudio-amostra | studio-style, studio-factory, studio-sample |
+| estudio-peca-previa, estudio-prova-canais, estudio-bloco | studio-piece-preview, studio-channel-proof, studio-block |
+| treino (`exportar`, `treinar`) | training (`export`, `train`) |
+| bancada (`ver`, `gerar`, `rodar`) | bench (`show`, `generate`, `run`) |
+| dataset (`situacao`, `reindexar`, `exportar`, `traduzir`, `edicoes`, `treinar`, `promover`) | dataset (`status`, `reindex`, `export`, `translate`, `edits`, `train`, `promote`) |
+
+Flags: `--refazer` → `--redo`, `--motor` → `--engine`, `--cenas` → `--scenes`, `--so-render` → `--render-only`,
+`--sem-exportar` → `--no-export`, `--sem-texto` → `--no-text`, `--de`/`--ate` → `--from`/`--to`, `--estilo(s)` →
+`--style(s)`, `--formato(s)` → `--format(s)`, `--etapas` → `--stages`, `--etapa` → `--stage`, `--sem-portao` →
+`--no-gate`, `--intensidade` → `--intensity`, `--nicho` → `--niche`, `--sem-visao` → `--no-vision`, `--bloco` →
+`--block`, `--epocas` → `--epochs`, `--tarefas` → `--tasks`, `--modelos` → `--models`, `--forcar` → `--force`,
+`--nome` → `--name`, `--modo` → `--mode`, `--erros` → `--errors`, `--porta` → `--port`.
+
+Ids das operações nas opções (`operations`): os das etapas acima mais `acervo` → `library`, `estudio_cena` →
+`studio_scene`, `direcao` → `direction`, `estudio_visao` → `studio_vision`, `fabrica` → `factory`.
+Variáveis de ambiente: `ESTEIRA_MOTOR` → `ESTEIRA_ENGINE`, `ESTEIRA_MOTOR_FIXO` → `ESTEIRA_ENGINE_FIXED`,
+`ESTEIRA_VAGA` → `ESTEIRA_SLOT`.
 
 ## Esteira — núcleo (`esteira/nucleo/` → `esteira/core/`)
 
@@ -58,9 +83,12 @@ antigas.
 | custo, seg | cost, seconds | evento `claude`, chamada do rastro |
 | ESTEIRA_PROC, ESTEIRA_FILA | ESTEIRA_PROCESS, ESTEIRA_QUEUE | variáveis de ambiente |
 
-Estado da migração da esteira: `core/` feito (código, arquivos em `cache/`, `log/events.jsonl`, painel e app lendo as
-chaves novas). Ainda em português, cada um no seu passo: nomes das etapas/comandos da CLI (inclusive os valores de
-`stage` e os ids das operações nas opções), chaves próprias da API web (`processos`, `vagas`, `etapas`…), chaves de
-`[claude]` no `config.toml`, as métricas que `ia/` grava nas chamadas (`tokens_saida`, `custo_usd`…) e o nome do
-pacote `esteira`. O script `artigo` do vault ainda grava a barra externa com `rotulo`/`feito`/`unidade`
-(`grafo._tarefa_externa` converte).
+Estado da migração da esteira: `core/` e a CLI (`esteira.py`: comandos, flags, ids das etapas e das operações)
+feitos, com painel, fila, grafo do monitor e app usando os nomes novos. Ainda em português, cada um no seu passo:
+os módulos fora de `core/` (nomes de arquivo, funções, mensagens), as etapas internas do Estúdio (`dirigir`,
+`compilar`… e os eventos `estudio-<etapa>`), rótulos de alvo da fila (`fabrica:`, `peca:`, `treino:`, `roteiro:`),
+valores de `--mode`/`--intensity`, chaves próprias da API web (`processos`, `vagas`, `etapas`…) e da fila
+(`comando`, `vaga`, `estado`), chaves do `config.toml`, as métricas que `ia/` grava nas chamadas (`tokens_saida`,
+`custo_usd`…) e o nome do pacote `esteira`. O script `artigo` do vault ainda grava a barra externa com
+`rotulo`/`feito`/`unidade` (`grafo._tarefa_externa` converte). O serviço do painel instalado por
+`infra/scripts/conectar_vps` precisa ser reinstalado: o comando agora é `dark panel --port 8765`.

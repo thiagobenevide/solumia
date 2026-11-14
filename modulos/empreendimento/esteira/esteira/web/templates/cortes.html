@@ -7,11 +7,11 @@
 <div class="mt-3 flex flex-wrap items-end justify-between gap-4 mb-6">
   <div>
     <h1 class="text-3xl font-semibold tracking-tight text-white">Cortes da narração</h1>
-<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Cortes: {{ motor(MOTORES.limpar) }} · alternar um corte aqui: {{ motor([('py', 'Python')]) }}</p>
+<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Cortes: {{ motor(MOTORES["clean"]) }} · alternar um corte aqui: {{ motor([('py', 'Python')]) }}</p>
     <p class="mt-2 text-sm text-slate-400 max-w-2xl">Clique no tempo para ouvir o trecho na gravação bruta. <b class="text-slate-200">Fica/Sai</b> inverte a decisão;
       depois, <b class="text-slate-200">Aplicar</b> refaz o áudio com as suas escolhas.</p>
   </div>
-  <form method="post" action="/ep/{{ ep }}/rodar/limpar">
+  <form method="post" action="/ep/{{ ep }}/rodar/clean">
     <button class="px-4 py-2 rounded-md text-sm font-semibold {{ 'bg-azul-500 text-white hover:bg-azul-400' if editado else 'border border-white/10 text-slate-300 hover:bg-white/5' }}">Aplicar cortes</button>
   </form>
 </div>

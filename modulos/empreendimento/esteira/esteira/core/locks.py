@@ -1,5 +1,5 @@
 """Machine slots: only one heavy process at a time (16 GB GPU, CPU and disk are a single resource). Exception: a
-process that only uses Claude (`--motor claude` on `curar` or `roteiro`, no GPU or local LLM) takes the "claude"
+process that only uses Claude (`--engine claude` on `curate` or `script`, no GPU or local LLM) takes the "claude"
 slot and can run alongside the one holding the "machine" slot.
 
 fcntl lock on `cache/locks/<slot>.lock` (the system releases it if the process dies, even with kill -9); the
@@ -16,7 +16,7 @@ import psutil
 from esteira.projeto import CACHE
 
 DIR = CACHE / "locks"
-CLAUDE_OK = {"curar", "roteiro", "estudio-estilo", "estudio-fabrica"}  # stages whose only heavy work is the LLM; the others use GPU/ffmpeg/render
+CLAUDE_OK = {"curate", "script", "studio-style", "studio-factory"}  # stages whose only heavy work is the LLM; the others use GPU/ffmpeg/render
 SLOTS = ("machine", "claude")
 _held = {}
 

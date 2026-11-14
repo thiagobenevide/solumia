@@ -4,7 +4,7 @@ import 'package:agent_core/agent_core.dart';
 
 import 'modelos.dart';
 
-/// Chamadas ao painel da esteira (`./dark painel`, padrão `http://localhost:8765`), API `/api/v1`.
+/// Chamadas ao painel da esteira (`./dark panel`, padrão `http://localhost:8765`), API `/api/v1`.
 ///
 /// Leituras de estrutura variável (roteiro, editor, grafo, processo, opções) voltam como [Json]: o app
 /// só exibe e devolve esses dados, quem os interpreta é a esteira.
@@ -74,7 +74,7 @@ class ApiEsteira {
   Future<int> produzir(List<String> caminhos, {Map<String, String> templates = const {}}) async =>
       (await _post('produzir', {'roteiros': caminhos, 'templates': templates}) as List).where((t) => t != null).length;
 
-  /// `./dark roteiro canal:N [--ate M]` na fila. `false`: já estava na fila.
+  /// `./dark script canal:N [--to M]` na fila. `false`: já estava na fila.
   Future<bool> gerarRoteiro(String alvo, {String ate = '', String motor = 'local'}) async =>
       await _post('roteiros/gerar', {'alvo': alvo, 'ate': ate, 'motor': motor}) != null;
 

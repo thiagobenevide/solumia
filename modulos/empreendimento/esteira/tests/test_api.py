@@ -7,7 +7,7 @@ c = TestClient(app, base_url="http://localhost")
 
 def test_episodio_inexistente_da_404():
     assert c.get("/api/v1/episodios/canal-que-nao-existe-999").status_code == 404
-    assert c.post("/api/v1/episodios/canal-que-nao-existe-999/rodar/tudo").status_code == 404
+    assert c.post("/api/v1/episodios/canal-que-nao-existe-999/rodar/all").status_code == 404
 
 
 def test_produzir_recusa_roteiro_fora_do_vault():

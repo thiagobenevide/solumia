@@ -1,7 +1,7 @@
 """Options chosen in the panel (Options menu), stored in `cache/options.json` and read by every `./dark`:
 
 - `engine`: who does the LLM tasks by default. "local" (llama.cpp on the GPU, Claude only as escalation) or
-  "claude" (every LLM question goes to Claude; Whisper, SDXL and render stay on the machine). `--motor` on the
+  "claude" (every LLM question goes to Claude; Whisper, SDXL and render stay on the machine). `--engine` on the
   command line takes priority.
 - `operations`: per operation (cuts, curation, evaluation…), the engine ("default", "local", "claude") and the
   local text and/or vision model. Empty = the default (`local.TEXTO` / `local.VISAO`).
@@ -21,18 +21,18 @@ MODELS = [("claude-sonnet-5-5", "Sonnet 5.5", "equilíbrio entre qualidade e cus
           ("claude-fable-5-1", "Fable 5.1", "")]
 # operation → (name, what the LLM does in it, model kinds it uses)
 OPERATIONS = {
-    "limpar": ("Cortes da narração", "decide se trechos em dúvida (improviso, retake) ficam ou saem", ["text"]),
-    "curar": ("Curadoria", "termo de busca, tipo de mídia e clima de cada cena", ["text"]),
-    "avaliar": ("Avaliação visual", "dá nota à mídia de cada cena olhando o quadro", ["vision"]),
-    "graficos": ("Gráficos animados", "acha números, citações e notas que viram gráfico", ["text"]),
+    "clean": ("Cortes da narração", "decide se trechos em dúvida (improviso, retake) ficam ou saem", ["text"]),
+    "curate": ("Curadoria", "termo de busca, tipo de mídia e clima de cada cena", ["text"]),
+    "evaluate": ("Avaliação visual", "dá nota à mídia de cada cena olhando o quadro", ["vision"]),
+    "graphics": ("Gráficos animados", "acha números, citações e notas que viram gráfico", ["text"]),
     "thumb": ("Thumbnail", "cria os conceitos (texto) e avalia as thumbs prontas (visão)", ["text", "vision"]),
-    "acervo": ("Descrição do acervo", "descreve as imagens baixadas para reaproveitar depois", ["vision"]),
-    "roteiro": ("Roteiros", "escreve os roteiros do vault a partir das fontes", ["text"]),
+    "library": ("Descrição do acervo", "descreve as imagens baixadas para reaproveitar depois", ["vision"]),
+    "script": ("Roteiros", "escreve os roteiros do vault a partir das fontes", ["text"]),
     "editor": ("Assistente do editor", "sugere textos e ajustes no editor de gráficos e thumbs", ["text"]),
-    "estudio_cena": ("Estúdio · diretor", "escolhe a cena de cada frase seguindo o estilo do canal", ["text"]),
-    "direcao": ("Estúdio · direção por bloco", "lê cada bloco, escolhe 1 de 5 peças do acervo e preenche os encaixes",
+    "studio_scene": ("Estúdio · diretor", "escolhe a cena de cada frase seguindo o estilo do canal", ["text"]),
+    "direction": ("Estúdio · direção por bloco", "lê cada bloco, escolhe 1 de 5 peças do acervo e preenche os encaixes",
                 ["text"]),
-    "estudio_visao": ("Estúdio · conferência", "confere os quadros do vídeo final (texto cortado, sobreposição…)", ["vision"]),
+    "studio_vision": ("Estúdio · conferência", "confere os quadros do vídeo final (texto cortado, sobreposição…)", ["vision"]),
 }
 # download suggestions (Hugging Face → llama.cpp, `user/repo:QUANT`); they fit in 16 GB of VRAM. Any Hugging Face
 # GGUF repo also works; with a projector (mmproj) the model reads images.

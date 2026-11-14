@@ -77,7 +77,7 @@ def salvar_grafico(ep: str, i: int, estado: dict):
         novo = editor.salvar_grafico(p, i, estado)
     except (ValueError, KeyError, TypeError, IndexError) as e:
         raise HTTPException(400, str(e))
-    fila.adicionar(ep, "graficos", ["--so-render"])
+    fila.adicionar(ep, "graphics", ["--render-only"])
     return {"i": novo}
 
 

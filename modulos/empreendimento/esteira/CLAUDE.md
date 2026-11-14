@@ -1,16 +1,16 @@
 # Esteira de vídeos dark
 
 Roteiro do vault Obsidian + WAV → vídeo final (cortes, cenas, mídia, gráficos animados, FilmCraft, thumbs).
-Entrada: `./dark <etapa> <projeto>` (`./dark -h` lista tudo); painel: `./dark painel`. Episódios em
+Entrada: `./dark <etapa> <projeto>` (`./dark -h` lista tudo); painel: `./dark panel`. Episódios em
 `projetos/<canal>/<NNN>/` (id na CLI: `canal-NNN`); configuração: `config.toml` ← `perfis/<canal>.toml` ← `config.toml` do projeto.
 Dados fora do repositório: `projetos/`, `acervo/` e `cache/` ficam em `$AGENT_DATA/empreendimento/` (padrão `~/agent-data`, ver `esteira/projeto.py`); todo caminho `projetos/...` ou `cache/...` abaixo é relativo a ela.
 Para produzir um episódio, usar a skill `produzir-episodio`. Plano e decisões: `docs/PLANO.md`.
 Craft Apps por N1 (`docs/PLANO-DATASET.md`): `esteira/n1/{filmcraft,photocraft,effectcraft}.py` = esquema (Pydantic → JSON
-Schema/gramática) + executor/compilador N1 → comandos; `montar` e a thumb geram N1 e executam; peça EC com
+Schema/gramática) + executor/compilador N1 → comandos; `assemble` e a thumb geram N1 e executam; peça EC com
 `peca.n1.json` é compilada (`ec.corpo`; guia `pecas/GUIA_N1_EC.md`); fotos pela receita `[foto]` (`esteira/fotos.py`).
 Dataset em `$AGENT_DATA/.../dataset/` (`esteira/dataset/`: `registro` JSONL que só cresce, `indice` SQLite, `exportar`,
 `edicoes` (edição à mão → N1), `traduzir`, `inferir`, `treino_app` (LoRA por app, ≤12B, promoção pela bancada
-`n1_*`)); CLI `./dark dataset [situacao|exportar|traduzir|edicoes|treinar|promover]`. Os testes usam dataset temporário (`tests/conftest.py`).
+`n1_*`)); CLI `./dark dataset [status|export|translate|edits|train|promote]`. Os testes usam dataset temporário (`tests/conftest.py`).
 Formatos: `[video] formato = "16:9" | "9:16"` (Shorts do vault em `<canal>/Shorts/`, id `canal-NNNx`;
 sobrescritas em `[vertical.*]` do `config.toml`). Citações vêm dos blocos `> [!cite]` do roteiro (PDF, página,
 trecho EN, tradução PT; gerados por `.claude/scripts/artigo` no vault); sem bloco, o código tenta achar.
@@ -18,19 +18,19 @@ Modos (`[producao] modo` ou `modo:` no roteiro): `dark` (narração + bancos) ou
 câmera na V1 cortado igual à narração, WAV sincronizado por correlação, B-roll dos bancos na V2 em ~45% do
 tempo; `esteira/producao.py`). Mídia: `esteira/acervo.py` guarda todo download com metadados (SQLite/FTS5
 em `acervo/`) e é consultado antes das APIs; notas do modelo de visão ficam no acervo e não são refeitas.
-Ver com `./dark acervo [buscar termos]`, nunca abrindo `acervo.db`.
+Ver com `./dark library [search termos]`, nunca abrindo `acervo.db`.
 Editor do painel (`esteira/editor.py`): gráficos (dados, tempo, efeitos de entrada/saída, caixas de texto livres
 com *destaque*, presets das citações do roteiro) e thumbs (texto, layout, fundo enviado, caixas, vagas A/B), com
 prévia ao vivo e assistente de IA (`[editor] motor_ia`). Gráfico salvo vira `manual: true` (o replanejamento o mantém).
 Monitor do painel (`/monitor`, `esteira/monitor.py` + `esteira/grafo.py`): GPU/CPU/energia e grafo da operação; o
 rastro vem de `esteira/core/trace.py` (`cache/live/<pid>.json` e `cache/trace.jsonl`), gravado por
 `local.perguntar` (stream), `claude.consultar`, `events.stage` e `roteirista`. Não ler esses arquivos inteiros.
-Vagas (`esteira/core/locks.py`, vagas `machine` e `claude`): só um `./dark` pesado por vez na máquina; `--motor claude` em `curar`/`roteiro`
+Vagas (`esteira/core/locks.py`, vagas `machine` e `claude`): só um `./dark` pesado por vez na máquina; `--engine claude` em `curate`/`script`
 usa a vaga "claude" e roda em paralelo. A fila do painel tem as duas pistas. Cada processo pesado fica em
 `cache/processes.jsonl` (`esteira/core/processes.py`); monitor individual em `/processos/<id>` (`esteira/monitor_processo.py`).
 Opções de IA (painel → Opções, `esteira/core/options.py`, `cache/options.json`): motor padrão local/Claude, modelo
 e tetos do Claude, motor e modelo local por operação (`local.perguntar` resolve pela etapa/prompt) e download
-de modelos GGUF do Hugging Face (`llama.baixar`). `--motor` explícito vale para tudo. `./dark tudo <ep> --refazer` (botão "Refazer tudo
+de modelos GGUF do Hugging Face (`llama.baixar`). `--engine` explícito vale para tudo. `./dark all <ep> --redo` (botão "Refazer tudo
 do zero") retranscreve, refaz cortes e curadoria; com estilo do canal no Estúdio, troca
 graficos+montar pelo corte pelo som + `estudio.produzir` (acervo de peças, sem os portões; para se o corte cortar palavra). Cortes: `transcrever._refinar` retranscreve regiões com palavras
 esticadas (retakes que o Whisper engoliu); `cortes.repeticoes` corta retakes que sobraram na narração editada.
@@ -44,7 +44,7 @@ descrição"; `descricao.txt` (montar) traz as fontes com DOI. Testes das regras
 Gaguejos de 1–3 palavras dentro da tomada saem (`cortes._gaguejos`); o comparador de pares do LLM nunca tira uma
 tomada do roteiro; o fim de `cortes.txt` traz a conferência da narração editada (frases faltando/incompletas).
 Claquete falada (`esteira/claquete.py`): na gravação, "Corte parte N" confirma a leitura da parte N (parágrafo do
-roteiro; `./dark partes <ep>` → `partes.txt` numerado), "Cancela parte N" descarta, sem marcador não usa; vale o
+roteiro; `./dark parts <ep>` → `partes.txt` numerado), "Cancela parte N" descarta, sem marcador não usa; vale o
 último corte. Com marcadores, `cortes.aplicar` usa esse caminho; sem eles, o antigo. Narração nova (`narracao.*`
 que não é a editada, ver `narracao.render.json`) manda a bruta anterior para `gravacoes_anteriores/<data>/`.
 O limpar puxa sozinho o WAV mais novo do episódio em `~/Music/Youtube/<Canal>/` (`gravacoes.atualizar`, origem em
@@ -58,7 +58,7 @@ Dinamismo: todo número com unidade dito vira gráfico (`plano._numeros_da_frase
 Direção por bloco (padrão; `estudio/direcao.py`, embeddings em `ia/embeddings.py` na porta 8082): blocos do roteiro →
 momentos → leitura → 5 candidatas do acervo → escolha → preenchimento validado; tarefa `bloco_peca` na bancada.
 Estúdio (`esteira/estudio/`, plano em `docs/PLANO-ESTUDIO.md`): vídeo + estilo → corte pelo som da narração editada
-(`estudio/corte.py`, `./dark estudio-corte`; emendas com reversão; tempos remapeados por `corte.palavras/frases/novo`) → portão do corte → apontamento (`estudio/apontamento.py`: cena por trecho marcada pela pessoa; confirmar libera) → `diretor` (frase/trecho →
+(`estudio/corte.py`, `./dark studio-cut`; emendas com reversão; tempos remapeados por `corte.palavras/frases/novo`) → portão do corte → apontamento (`estudio/apontamento.py`: cena por trecho marcada pela pessoa; confirmar libera) → `diretor` (frase/trecho →
 cena do cardápio, IA local; erro volta ao modelo, 2ª falha vai ao Claude em lote) → `compilar` (HyperFrames: `kit/`
 estudio.js/css + mapa + mídia curada do plano) → render na GPU → loudnorm −14 LUFS → `verificar` (folha + visão local).
 Gatilhos (`estudio/gatilhos.py`, dado do estilo): padrão da fala → layout + peça + cor, prioridade menor vence; o diretor
@@ -68,25 +68,25 @@ Estilo também guarda `movimento`, `layouts`, `presenca`, `regras_cor`, `pecas` 
 perfil de ritmo (`estudio/ritmo.py`: `ritmo:` do roteiro ou curto para Short, longo para o resto).
 Acervo de peças (`docs/PLANO-ACERVO.md`): `estudio/pecas/<id>/` (peca.js + peca.css + ficha.json), contrato em
 `estudio/pecas/GUIA.md`, esquema e portão de entrada em `estudio/peca.py` (`/api/v1/estudio/pecas`). Fábrica
-(`estudio/fabrica.py`, `./dark estudio-fabrica fabrica:<pedido>`, vaga "claude"; dados em `$AGENT_DATA/.../estudio/fabrica/`):
+(`estudio/fabrica.py`, `./dark studio-factory fabrica:<pedido>`, vaga "claude"; dados em `$AGENT_DATA/.../estudio/fabrica/`):
 o Claude gera peça + ficha, portão + visão local, revisão no app (aba Estúdio → Fábrica de peças). As cenas do
 cardápio (`bancada.CENAS`) são peças `origem: kit` em `estudio/pecas/`; o `kit/` tem só o núcleo comum. Motor
 EffectCraft das peças: `peca.jsx` + `pecas/_ec/` + `estudio/ec.py` (`GUIA_EC.md`); na produção vira WebM com alfa na
 camada `#ec`; comparação e decisão de motor por intenção em `fabrica.comparacao`/`aplicar_motores`. Ampliação
 contínua do acervo pelas lacunas: `fabrica.ampliar` (relógio de 15 min em `web/fila.py`; ligada no app). Render só
-do bloco: `./dark estudio-bloco <ep> --bloco N` (`compilar.render_trecho` + `emendar`); troca de peça na linha do
+do bloco: `./dark studio-block <ep> --block N` (`compilar.render_trecho` + `emendar`); troca de peça na linha do
 tempo: `POST /producoes/<ep>/cenas/<id>/trocar`.
 Modo apresentador (`estudio/camera.py`, estilo com `modo: apresentador`): câmera cortada igual ao áudio, rosto (OpenCV) e
 layouts FULL/SPLIT/B-roll/tela por trecho, na camada `#cam` do kit. Estilo = template: fontes por papel (`estudio/fontes.py`, catálogo OFL + enviadas), legenda e intensidade
-baixa/média/alta de som, motion e efeitos (`estilo.NIVEIS`; `--intensidade` por produção). Estilos são dados (`estudio/estilo.py`, `$AGENT_DATA/.../estudio/estilos/*.json`, semente `estudio/estilos/`;
+baixa/média/alta de som, motion e efeitos (`estilo.NIVEIS`; `--intensity` por produção). Estilos são dados (`estudio/estilo.py`, `$AGENT_DATA/.../estudio/estilos/*.json`, semente `estudio/estilos/`;
 cada salvamento é versão guardada em `estilos/versoes/<id>/vN.json`, ref `id@N`; exemplo de 30 s por versão em
-`estudio/amostra.py`, `./dark estudio-amostra id@N`; template do episódio em `<ep>/estudio/template.json`, escolhido
+`estudio/amostra.py`, `./dark studio-sample id@N`; template do episódio em `<ep>/estudio/template.json`, escolhido
 na aba Roteiros; `previa.mp4` 540p ao lado de cada `final.mp4` para o player do app); Fluxo A
-(`identidade.py`) = Claude propõe só dados pelas referências (pele, `regras.visual`, guia, exemplos); por vídeo, zero Claude (socorro do diretor só com `options.claude_fallback`). CLI: `./dark estudio <ep>`, `estudio-instalar`,
+(`identidade.py`) = Claude propõe só dados pelas referências (pele, `regras.visual`, guia, exemplos); por vídeo, zero Claude (socorro do diretor só com `options.claude_fallback`). CLI: `./dark studio <ep>`, `studio-install`,
 `estudio-estilo <id>`; API em `web/api_estudio.py` (`/api/v1/estudio`); app: `lib/src/estudio/`. Motor (Node,
-HyperFrames, Chromium) em `estudio/motor.py`. Bancada de LLM: `esteira/bancada.py` (`./dark bancada [gerar|rodar]`,
+HyperFrames, Chromium) em `estudio/motor.py`. Bancada de LLM: `esteira/bancada.py` (`./dark bench [generate|run]`,
 gabarito em `$AGENT_DATA/.../bancada/`).
-Edição manual: `./dark abrir <ep>` → FilmCraft; `./dark exportar <ep>` reexporta; `montar` guarda o
+Edição manual: `./dark open <ep>` → FilmCraft; `./dark export <ep>` reexporta; `assemble` guarda o
 `.fcproj` editado à mão como `projeto.manual-*.fcproj` antes de gerar outro.
 
 Migração para inglês em andamento (`docs/GLOSSARIO-INGLES.md` na raiz): `esteira/core/` já migrado; dados gravados
@@ -102,8 +102,8 @@ antes dela são reescritos por `python -m esteira.migrate_english` (com o painel
 
 ## Economia de tokens (prioridade)
 
-- Ler dados do episódio só pelas visões compactas: `./dark resumo <ep> [--cenas 3,5] [--sem-texto]`,
-  `./dark palavras <ep> --de S --ate S`. Editar o plano só com `./dark ajustar <ep>` (JSON Lines, um
+- Ler dados do episódio só pelas visões compactas: `./dark summary <ep> [--scenes 3,5] [--no-text]`,
+  `./dark words <ep> --from S --to S`. Editar o plano só com `./dark adjust <ep>` (JSON Lines, um
   comando para várias cenas). Nunca Read/cat em `plano.json`, `transcricao.json`, `alinhamento.json`.
 - Imagens: uma folha por vez (`revisao_NN.jpg`, `quadros.jpg`); após refazer, revisar só as cenas
   refeitas. Não extrair quadros soltos com ffmpeg.

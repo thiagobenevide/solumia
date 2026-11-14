@@ -1,4 +1,4 @@
-"""Painel da esteira (`./dark painel`): biblioteca de roteiros do vault com seleção → fila de produção,
+"""Painel da esteira (`./dark panel`): biblioteca de roteiros do vault com seleção → fila de produção,
 acompanhamento ao vivo de cada etapa, estrutura do roteiro (partes, falas, cenas, citações com o PDF),
 prévia dos gráficos, revisão de cortes, linha do tempo das cenas, edição manual e custos do Claude.
 
@@ -30,10 +30,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 AQUI = Path(__file__).parent
-PIPELINE = ["limpar", "cenas", "curar", "buscar", "avaliar", "graficos", "montar", "thumb"]
-NOMES = {"limpar": "Cortes da narração", "cenas": "Cenas", "curar": "Curadoria (LLM)", "buscar": "Busca de mídia",
-         "avaliar": "Avaliação visual", "graficos": "Gráficos animados", "montar": "Montagem e exportação",
-         "thumb": "Thumbnail", "transcrever": "Transcrição", "quadros": "Quadros", "revisar": "Folhas de revisão"}
+PIPELINE = ["clean", "scenes", "curate", "fetch", "evaluate", "graphics", "assemble", "thumb"]
+NOMES = {"clean": "Cortes da narração", "scenes": "Cenas", "curate": "Curadoria (LLM)", "fetch": "Busca de mídia",
+         "evaluate": "Avaliação visual", "graphics": "Gráficos animados", "assemble": "Montagem e exportação",
+         "thumb": "Thumbnail", "transcribe": "Transcrição", "frames": "Quadros", "review": "Folhas de revisão"}
 
 app = FastAPI(title="Esteira dark")
 
@@ -70,18 +70,18 @@ app.mount("/graf", StaticFiles(directory=AQUI.parent / "graficos"), name="graf")
 tpl = Jinja2Templates(directory=AQUI / "templates")
 # Quem faz cada operação: Python puro, LLM local (Ollama na GPU), outro modelo na GPU ou Claude (assinatura).
 MOTORES = {
-    "transcrever": [("gpu", "Whisper na GPU"), ("py", "Python")],
-    "limpar": [("py", "Python"), ("local", "LLM local"), ("claude", "Claude só se houver dúvida")],
-    "cenas": [("py", "Python")],
-    "curar": [("local", "LLM local")],
-    "buscar": [("py", "Python + APIs dos bancos")],
-    "avaliar": [("local", "visão local"), ("claude", "Claude só se houver dúvida")],
-    "revisar": [("py", "Python")], "quadros": [("py", "Python")], "exportar": [("py", "Python + FilmCraft")],
-    "graficos": [("local", "LLM local planeja"), ("py", "Python renderiza (CPU)")],
-    "montar": [("py", "Python + FilmCraft")],
+    "transcribe": [("gpu", "Whisper na GPU"), ("py", "Python")],
+    "clean": [("py", "Python"), ("local", "LLM local"), ("claude", "Claude só se houver dúvida")],
+    "scenes": [("py", "Python")],
+    "curate": [("local", "LLM local")],
+    "fetch": [("py", "Python + APIs dos bancos")],
+    "evaluate": [("local", "visão local"), ("claude", "Claude só se houver dúvida")],
+    "review": [("py", "Python")], "frames": [("py", "Python")], "export": [("py", "Python + FilmCraft")],
+    "graphics": [("local", "LLM local planeja"), ("py", "Python renderiza (CPU)")],
+    "assemble": [("py", "Python + FilmCraft")],
     "thumb": [("local", "LLM local"), ("gpu", "RealVisXL na GPU"), ("claude", "Claude escolhe as 3")],
-    "tudo": [("py", "Python"), ("local", "LLM local"), ("gpu", "GPU"), ("claude", "Claude só se houver dúvida")],
-    "roteiro": [("py", "Python + OpenAlex"), ("local", "LLM local")],
+    "all": [("py", "Python"), ("local", "LLM local"), ("gpu", "GPU"), ("claude", "Claude só se houver dúvida")],
+    "script": [("py", "Python + OpenAlex"), ("local", "LLM local")],
     "painel": [("py", "Python")], "importar": [("py", "Python")],
 }
 
@@ -134,7 +134,7 @@ def _resumo_ep(ep):
     final = final_do_ep(pasta)
     de_estudio = final.parent != pasta
     feitas = sum(1 for e in PIPELINE if est.get(e, {}).get("status") == "ok"
-                 or de_estudio and e in ("graficos", "montar"))
+                 or de_estudio and e in ("graphics", "assemble"))
     rodando = next((e for e, v in est.items() if v["status"] == "running"), None)
     erro = next((e for e, v in est.items() if v["status"] == "error"), None)
     # roteiro reimportado ou gráficos refeitos depois da exportação: o vídeo não tem as mudanças
@@ -142,7 +142,7 @@ def _resumo_ep(ep):
     desatualizado = final.exists() and any((pasta / a).exists() and (pasta / a).stat().st_mtime > final.stat().st_mtime
                                            for a in (*fontes, "plano.json", "roteiro.json"))
     return {"feitas": feitas, "total": len(PIPELINE), "rodando": rodando, "erro": erro, "desatualizado": desatualizado,
-            "final": final.exists() and (de_estudio or est.get("montar", {}).get("status") == "ok"),
+            "final": final.exists() and (de_estudio or est.get("assemble", {}).get("status") == "ok"),
             "thumb": (pasta / "thumb.png").exists()}
 
 
@@ -198,7 +198,7 @@ async def produzir(request: Request):
     form = await request.form()
     for caminho in form.getlist("roteiro"):
         ep = _projeto_do_roteiro(caminho) or ep_id(importar(Path(caminho)))
-        fila.adicionar(ep, "tudo")
+        fila.adicionar(ep, "all")
     return RedirectResponse("/fila", status_code=303)
 
 
@@ -221,10 +221,10 @@ def fragmento_fila(request: Request):
 
 @app.post("/fila/roteiro")
 def fila_roteiro(alvo: str = Form(...), ate: str = Form(""), motor: str = Form("local")):
-    """Roteiro(s) do plano do canal na fila (`./dark roteiro canal:N [--ate M] [--motor claude]`)."""
+    """Roteiro(s) do plano do canal na fila (`./dark script canal:N [--to M] [--engine claude]`)."""
     if not re.fullmatch(r"[a-z0-9_-]+:\d+", alvo.strip()):
         raise HTTPException(400, "use canal:N, ex.: finlumia:51")
-    fila.adicionar(alvo.strip(), "roteiro", ["--ate", ate.strip()] if ate.strip().isdigit() else [], motor)
+    fila.adicionar(alvo.strip(), "script", ["--to", ate.strip()] if ate.strip().isdigit() else [], motor)
     return RedirectResponse("/fila", status_code=303)
 
 
@@ -543,7 +543,7 @@ async def editor_salvar_grafico(request: Request, ep: str, i: int):
         novo = editor.salvar_grafico(p, i, await request.json())
     except (ValueError, KeyError, TypeError, IndexError) as e:
         return _erro(e)
-    fila.adicionar(ep, "graficos", ["--so-render"])  # só a peça editada é renderizada; o resto está em cache
+    fila.adicionar(ep, "graphics", ["--render-only"])  # só a peça editada é renderizada; o resto está em cache
     return {"i": novo}
 
 
@@ -687,12 +687,12 @@ def fragmento_etapas(request: Request, ep: str):
 def rodar(ep: str, etapa: str, refazer: str = Form(""), motor: str = Form(""), so_render: str = Form("")):
     from esteira.core import options
     _pasta(ep)
-    if etapa not in PIPELINE + ["tudo", "quadros", "transcrever", "exportar"]:
+    if etapa not in PIPELINE + ["all", "frames", "transcribe", "export"]:
         raise HTTPException(400, "etapa desconhecida")
     motor = motor or options.read()["engine"]
-    args = ["--refazer"] if refazer and etapa in ("limpar", "curar", "buscar", "tudo") else []
-    if so_render and etapa == "graficos":
-        args = ["--so-render"]
+    args = ["--redo"] if refazer and etapa in ("clean", "curate", "fetch", "all") else []
+    if so_render and etapa == "graphics":
+        args = ["--render-only"]
     fila.adicionar(ep, etapa, args, motor)
     return RedirectResponse(f"/ep/{ep}/graficos" if so_render else f"/ep/{ep}", status_code=303)
 
@@ -823,7 +823,7 @@ def trocar_midia(ep: str, cid: int, busca_en: str = Form("")):
             if c["id"] == cid:
                 c["busca_en"] = busca_en.strip()
         arq.write_text(json.dumps(plano, ensure_ascii=False, indent=2))
-    fila.adicionar(ep, "buscar", ["--refazer", "--cenas", str(cid)])
+    fila.adicionar(ep, "fetch", ["--redo", "--scenes", str(cid)])
     return RedirectResponse(f"/ep/{ep}/cenas#c{cid}", status_code=303)
 
 
