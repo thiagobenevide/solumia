@@ -86,8 +86,8 @@ def node_id(flow, no):
     return no if no in IDS else None
 
 
-def resource_of_model(motor, model):
-    if motor == "claude":
+def resource_of_model(engine, model):
+    if engine == "claude":
         return "claude"
     return "qwen_vl" if model and "vl" in model else "qwen3"
 

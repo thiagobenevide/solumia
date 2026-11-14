@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:agent_arquivos/src/editores/xlsx.dart';
+import 'package:agent_arquivos/src/editors/xlsx.dart';
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,9 +10,9 @@ const _ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
 const _rel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
-/// XLSX mínimo: duas abas, sharedStrings com texto rico, célula com estilo, fórmula e calcChain.
+/// Minimal XLSX: two sheets, sharedStrings with rich text, a styled cell, formula and calcChain.
 Uint8List _xlsx() {
-  final arquivos = {
+  final files = {
     '[Content_Types].xml': '<?xml version="1.0" encoding="UTF-8"?>'
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
@@ -60,104 +60,104 @@ Uint8List _xlsx() {
         '</sheetData></worksheet>',
   };
   final zip = Archive();
-  arquivos.forEach((nome, texto) => zip.add(ArchiveFile.bytes(nome, utf8.encode(texto))));
+  files.forEach((name, text) => zip.add(ArchiveFile.bytes(name, utf8.encode(text))));
   return ZipEncoder().encodeBytes(zip);
 }
 
-String _texto(Uint8List xlsx, String caminho) =>
-    utf8.decode(ZipDecoder().decodeBytes(xlsx).find(caminho)!.content);
+String _text(Uint8List xlsx, String path) =>
+    utf8.decode(ZipDecoder().decodeBytes(xlsx).find(path)!.content);
 
 void main() {
   test('referências A1', () {
-    expect(refCelula(2, 1), 'B3');
-    expect(refCelula(0, 27), 'AB1');
-    expect(colunaDeLetras('AB'), 27);
-    expect(letrasDaColuna(16383), 'XFD');
-    expect(lerRef(r'$C$10'), (9, 2));
+    expect(cellRef(2, 1), 'B3');
+    expect(cellRef(0, 27), 'AB1');
+    expect(columnFromLetters('AB'), 27);
+    expect(columnLetters(16383), 'XFD');
+    expect(readRef(r'$C$10'), (9, 2));
   });
 
   test('lê abas, textos compartilhados, texto rico, booleano e fórmula', () {
-    final p = Pasta.ler(_xlsx());
-    expect(p.abas.map((a) => a.nome), ['Vendas', 'Resumo']);
-    final v = p.abas.first;
-    expect((v.linhas, v.colunas), (4, 2));
-    expect(v.celula(0, 0), 'Produto');
-    expect(v.celula(1, 0), 'Café forte');
-    expect(v.celula(2, 0), 'Chá');
-    expect(v.celula(3, 0), 'VERDADEIRO');
-    expect(v.celula(3, 1), '7');
-    expect(v.conteudo(3, 1), '=SUM(B2:B3)');
-    // Fórmula compartilhada expandida a partir da mestre.
-    expect(p.abas[1].conteudo(1, 1), '=A2+1');
+    final p = Pasta.read(_xlsx());
+    expect(p.tabs.map((a) => a.name), ['Vendas', 'Resumo']);
+    final v = p.tabs.first;
+    expect((v.lines, v.columns), (4, 2));
+    expect(v.cell(0, 0), 'Produto');
+    expect(v.cell(1, 0), 'Café forte');
+    expect(v.cell(2, 0), 'Chá');
+    expect(v.cell(3, 0), 'VERDADEIRO');
+    expect(v.cell(3, 1), '7');
+    expect(v.content(3, 1), '=SUM(B2:B3)');
+    // Shared formula expanded from the master.
+    expect(p.tabs[1].content(1, 1), '=A2+1');
   });
 
   test('edita, grava e relê preservando estilo, abas e removendo o calcChain', () {
-    final p = Pasta.ler(_xlsx());
-    final v = p.abas.first;
-    v.definir(0, 0, 'Item & cia');
-    v.definir(1, 1, '2,5');
-    v.definir(4, 0, 'Total novo');
-    v.definir(4, 1, '=B4*10');
-    expect(p.alterada, isTrue);
-    final bytes = p.gravar();
+    final p = Pasta.read(_xlsx());
+    final v = p.tabs.first;
+    v.setValue(0, 0, 'Item & cia');
+    v.setValue(1, 1, '2,5');
+    v.setValue(4, 0, 'Total novo');
+    v.setValue(4, 1, '=B4*10');
+    expect(p.changedFlag, isTrue);
+    final bytes = p.save();
 
     final zip = ZipDecoder().decodeBytes(bytes);
     expect(zip.find('xl/calcChain.xml'), isNull);
-    expect(_texto(bytes, '[Content_Types].xml'), isNot(contains('calcChain')));
-    expect(_texto(bytes, 'xl/_rels/workbook.xml.rels'), isNot(contains('calcChain')));
-    expect(_texto(bytes, 'xl/workbook.xml'), contains('<calcPr fullCalcOnLoad="1"/>'));
-    // Aba sem alteração e estilos ficam byte a byte.
-    expect(_texto(bytes, 'xl/worksheets/sheet2.xml'), contains('<f t="shared" si="0"/>'));
-    expect(_texto(bytes, 'xl/styles.xml'), contains('applyFont="1"'));
-    final folha = _texto(bytes, 'xl/worksheets/sheet1.xml');
-    expect(folha, contains('<c r="A1" s="1" t="inlineStr">'));
-    expect(folha, contains('<c r="B1" s="1" t="s"><v>1</v></c>'));
-    expect(folha, contains('<row r="3" ht="30" customHeight="1">'));
-    expect(folha, contains('<dimension ref="A1:B5"/>'));
+    expect(_text(bytes, '[Content_Types].xml'), isNot(contains('calcChain')));
+    expect(_text(bytes, 'xl/_rels/workbook.xml.rels'), isNot(contains('calcChain')));
+    expect(_text(bytes, 'xl/workbook.xml'), contains('<calcPr fullCalcOnLoad="1"/>'));
+    // An unchanged sheet and the styles stay byte for byte.
+    expect(_text(bytes, 'xl/worksheets/sheet2.xml'), contains('<f t="shared" si="0"/>'));
+    expect(_text(bytes, 'xl/styles.xml'), contains('applyFont="1"'));
+    final sheet = _text(bytes, 'xl/worksheets/sheet1.xml');
+    expect(sheet, contains('<c r="A1" s="1" t="inlineStr">'));
+    expect(sheet, contains('<c r="B1" s="1" t="s"><v>1</v></c>'));
+    expect(sheet, contains('<row r="3" ht="30" customHeight="1">'));
+    expect(sheet, contains('<dimension ref="A1:B5"/>'));
 
-    final de = Pasta.ler(bytes);
-    expect(de.abas.map((a) => a.nome), ['Vendas', 'Resumo']);
-    final a = de.abas.first;
-    expect(a.celula(0, 0), 'Item & cia');
-    expect(a.celula(1, 1), '2.5');
-    expect(a.celula(4, 0), 'Total novo');
-    expect(a.conteudo(4, 1), '=B4*10');
-    expect(a.celula(1, 0), 'Café forte');
-    expect(de.abas[1].conteudo(1, 1), '=A2+1');
+    final de = Pasta.read(bytes);
+    expect(de.tabs.map((a) => a.name), ['Vendas', 'Resumo']);
+    final a = de.tabs.first;
+    expect(a.cell(0, 0), 'Item & cia');
+    expect(a.cell(1, 1), '2.5');
+    expect(a.cell(4, 0), 'Total novo');
+    expect(a.content(4, 1), '=B4*10');
+    expect(a.cell(1, 0), 'Café forte');
+    expect(de.tabs[1].content(1, 1), '=A2+1');
   });
 
   test('inserir e excluir linha e coluna no meio renumera células, fórmulas e mesclas', () {
-    final p = Pasta.ler(_xlsx());
-    final v = p.abas.first;
-    v.inserirLinha(1); // nova linha 2: Café vai para A3, a soma para B5
-    expect(v.celula(2, 0), 'Café forte');
-    expect(v.conteudo(4, 1), '=SUM(B3:B4)');
-    expect(p.abas[1].conteudo(0, 0), '=Vendas!B5*2');
-    v.inserirColuna(0);
-    expect(v.celula(2, 1), 'Café forte');
-    expect(v.conteudo(4, 2), '=SUM(C3:C4)');
-    v.excluirLinha(2);
-    expect(v.conteudo(3, 2), '=SUM(C3:C3)');
-    final bytes = p.gravar();
-    final folha = _texto(bytes, 'xl/worksheets/sheet1.xml');
-    expect(folha, contains('<mergeCell ref="D3:E4"/>'));
-    expect(folha, contains('<col min="3" max="3"'));
-    expect(folha, contains('<row r="3" ht="30" customHeight="1">'));
-    // A aba Resumo apontava para Vendas e foi reescrita; a compartilhada virou explícita.
-    final resumo = _texto(bytes, 'xl/worksheets/sheet2.xml');
-    expect(resumo, contains('<f>Vendas!C4*2</f>'));
-    expect(resumo, contains('<f>A2+1</f>'));
-    final de = Pasta.ler(bytes).abas.first;
-    expect(de.celula(0, 1), 'Produto');
-    expect(de.conteudo(3, 2), '=SUM(C3:C3)');
+    final p = Pasta.read(_xlsx());
+    final v = p.tabs.first;
+    v.insertRow(1); // new row 2: Café goes to A3, the sum to B5
+    expect(v.cell(2, 0), 'Café forte');
+    expect(v.content(4, 1), '=SUM(B3:B4)');
+    expect(p.tabs[1].content(0, 0), '=Vendas!B5*2');
+    v.insertColumn(0);
+    expect(v.cell(2, 1), 'Café forte');
+    expect(v.content(4, 2), '=SUM(C3:C4)');
+    v.deleteRow(2);
+    expect(v.content(3, 2), '=SUM(C3:C3)');
+    final bytes = p.save();
+    final sheet = _text(bytes, 'xl/worksheets/sheet1.xml');
+    expect(sheet, contains('<mergeCell ref="D3:E4"/>'));
+    expect(sheet, contains('<col min="3" max="3"'));
+    expect(sheet, contains('<row r="3" ht="30" customHeight="1">'));
+    // The Resumo sheet pointed at Vendas and was rewritten; the shared one became explicit.
+    final summary = _text(bytes, 'xl/worksheets/sheet2.xml');
+    expect(summary, contains('<f>Vendas!C4*2</f>'));
+    expect(summary, contains('<f>A2+1</f>'));
+    final de = Pasta.read(bytes).tabs.first;
+    expect(de.cell(0, 1), 'Produto');
+    expect(de.content(3, 2), '=SUM(C3:C3)');
   });
 
   test('arquivo que não é XLSX dá erro em português', () {
-    expect(() => Pasta.ler(Uint8List.fromList([1, 2, 3])), throwsA(isA<XlsxInvalido>()));
+    expect(() => Pasta.read(Uint8List.fromList([1, 2, 3])), throwsA(isA<InvalidXlsx>()));
     final soZip = ZipEncoder().encodeBytes(Archive()..add(ArchiveFile.bytes('a.txt', [65])));
     expect(
-      () => Pasta.ler(soZip),
-      throwsA(isA<XlsxInvalido>().having((e) => e.mensagem, 'mensagem', contains('workbook'))),
+      () => Pasta.read(soZip),
+      throwsA(isA<InvalidXlsx>().having((e) => e.mensagem, 'mensagem', contains('workbook'))),
     );
   });
 
@@ -165,9 +165,9 @@ void main() {
   test('LibreOffice abre o resultado e recalcula a fórmula nova', () async {
     final dir = await Directory.systemTemp.createTemp('xlsx_teste');
     try {
-      final p = Pasta.ler(_xlsx());
-      p.abas.first.definir(4, 1, '=B4*10');
-      await File('${dir.path}/p.xlsx').writeAsBytes(p.gravar());
+      final p = Pasta.read(_xlsx());
+      p.tabs.first.setValue(4, 1, '=B4*10');
+      await File('${dir.path}/p.xlsx').writeAsBytes(p.save());
       final r = await Process.run('soffice', [
         '--headless',
         '-env:UserInstallation=file://${dir.path}/perfil',

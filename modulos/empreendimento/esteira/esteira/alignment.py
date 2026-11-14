@@ -23,37 +23,37 @@ def enabled(cfg):
     return cfg.get("cortes", {}).get("alinhamento", True) and PY_IMG.exists()
 
 
-def _signature(audio, palavras):
+def _signature(audio, words):
     st = Path(audio).stat()
-    h = hashlib.sha1(json.dumps([str(audio), st.st_size, st.st_mtime_ns, palavras]).encode()).hexdigest()
+    h = hashlib.sha1(json.dumps([str(audio), st.st_size, st.st_mtime_ns, words]).encode()).hexdigest()
     return h[:16]
 
 
-def refine(audio, palavras, cache=None, cfg=None):
+def refine(audio, words, cache=None, cfg=None):
     """palavras [[ini, fim, texto]] → mesma lista com ini/fim do alinhamento forçado onde ele deu certo."""
-    if not palavras or (cfg is not None and not enabled(cfg)) or not PY_IMG.exists():
-        return palavras
-    key = _signature(audio, palavras)
+    if not words or (cfg is not None and not enabled(cfg)) or not PY_IMG.exists():
+        return words
+    key = _signature(audio, words)
     if cache and Path(cache).exists():
         d = json.loads(Path(cache).read_text())
         if d.get("chave") == key:
             return d["palavras"]
     try:
-        times = _run(audio, palavras)
+        times = _run(audio, words)
     except (subprocess.CalledProcessError, OSError, ValueError) as e:
         error = (getattr(e, "stderr", None) or str(e)).strip()[-200:]
         events.warning(f"alinhamento forçado falhou ({error}); bordas pelo tempo do Whisper")
-        return palavras
-    output = combine(palavras, times)
+        return words
+    output = combine(words, times)
     if cache:
         Path(cache).write_text(json.dumps({"chave": key, "palavras": output}, ensure_ascii=False))
     return output
 
 
-def combine(palavras, tempos):
+def combine(words, times):
     """Aplica os tempos alinhados (None = não alinhou) sem deixar uma palavra passar por cima da vizinha."""
     output = []
-    for (start, end, t), al in zip(palavras, tempos, strict=True):
+    for (start, end, t), al in zip(words, times, strict=True):
         if al and abs(al[0] - start) <= DEVIATION_MAX and abs(al[1] - end) <= DEVIATION_MAX and al[1] > al[0]:
             start, end = al
         output.append([start, end, t])
@@ -63,7 +63,7 @@ def combine(palavras, tempos):
     return output
 
 
-def _run(audio, palavras):
+def _run(audio, words):
     from esteira.ai.local import free_gpu
     from esteira.transcribe import _decode
     free_gpu()
@@ -71,10 +71,10 @@ def _run(audio, palavras):
         raw = Path(tmp) / "audio.f32"
         _decode(audio).tofile(raw)
         request = Path(tmp) / "pedido.json"
-        request.write_text(json.dumps({"audio": str(raw), "words": palavras, "model": MODEL}))
+        request.write_text(json.dumps({"audio": str(raw), "words": words, "model": MODEL}))
         r = subprocess.run([str(PY_IMG), "-I", str(ROOT / "esteira/ai/ctc_align.py"), str(request)],
                            capture_output=True, text=True, check=True)
     times = json.loads(r.stdout.strip().splitlines()[-1])
-    if len(times) != len(palavras):
+    if len(times) != len(words):
         raise ValueError("alinhamento devolveu outro número de palavras")
     return times

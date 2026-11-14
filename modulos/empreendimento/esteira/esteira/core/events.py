@@ -40,7 +40,7 @@ class _Output:
 
 class Stage:
     def __init__(self, project, name):
-        folder = project.pasta / "log"
+        folder = project.folder_path / "log"
         folder.mkdir(exist_ok=True)
         self.file = folder / "events.jsonl"
         self.ep, self.name = project.ep, name

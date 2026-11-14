@@ -1,5 +1,5 @@
-"""Rotas do módulo Design. A plataforma monta o router em `/api/design` com a autenticação e guarda
-os [Quadros] em `app.state.quadros_design`."""
+"""Routes of the Design module. The platform mounts the router at `/api/design` with
+authentication and stores the [Frames] in `app.state`."""
 
 import json
 import re
@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, 
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from design.boards import Conflict, Frames, NotFound
 from design.images import Images, Invalid
-from design.boards import Conflict, NotFound, Frames
 
 router = APIRouter(tags=["design"])
 
@@ -63,7 +63,7 @@ def create(entrada: FrameInput, quadros: FramesDep) -> Any:
 
 @router.post("/quadros/importar-drawio", status_code=201)
 async def import_drawio(quadros: FramesDep, arquivo: UploadFile = File(...)) -> Any:
-    """Cria um quadro a partir de um `.drawio`/`.xml` do draw.io (todas as páginas)."""
+    """Creates a board from a draw.io `.drawio`/`.xml` (all pages)."""
     from design import drawio
 
     raw = await arquivo.read()
@@ -84,7 +84,7 @@ async def import_drawio(quadros: FramesDep, arquivo: UploadFile = File(...)) -> 
 
 @router.get("/quadros/{id_}/drawio")
 def export_drawio(id_: str, quadros: FramesDep) -> Response:
-    """O quadro como `.drawio`, para abrir e editar no draw.io/diagrams.net."""
+    """The board as `.drawio`, to open and edit in draw.io/diagrams.net."""
     from design import drawio
 
     try:
@@ -119,7 +119,7 @@ def edit(id_: str, edicao: FrameEdit, quadros: FramesDep) -> Any:
 
 @router.put("/quadros/{id_}/elementos")
 def save(id_: str, g: Recording, quadros: FramesDep) -> Any:
-    """409 traz o quadro atual em `quadro`: o app mescla e grava de novo com a versão dele."""
+    """409 brings the current board in `quadro`: the app merges and saves again with its version."""
     try:
         return quadros.salvar(id_, g.elementos, g.versao)
     except Conflict as e:
@@ -166,7 +166,7 @@ def delete(id_: str, quadros: FramesDep) -> Response:
 
 
 # ---------- Wireframes ----------
-# Mesma guarda dos quadros (`wireframes/`), com os componentes de `wireframe_ia` como elementos.
+# Same storage as the boards (`wireframes/`), with the `ai_wireframe` components as elements.
 
 
 def get_wireframes(request: Request) -> Frames:
@@ -192,13 +192,15 @@ def create_wireframe(entrada: WireframeInput, wireframes: WireframesDep) -> Any:
     from design.ai_wireframe import screen_default
 
     title = entrada.titulo or "Wireframe sem título"
-    return wireframes.criar({"titulo": title, "pasta": entrada.pasta, "paginas": [screen_default()]})
+    return wireframes.criar(
+        {"titulo": title, "pasta": entrada.pasta, "paginas": [screen_default()]}
+    )
 
 
-async def _read_package(arquivo: UploadFile) -> dict[str, Any]:
+async def _read_package(file: UploadFile) -> dict[str, Any]:
     from design import ai_wireframe
 
-    raw = await arquivo.read()
+    raw = await file.read()
     if len(raw) > 20 * 1024 * 1024:
         raise HTTPException(413, "Arquivo maior que 20 MB.")
     try:
@@ -209,7 +211,7 @@ async def _read_package(arquivo: UploadFile) -> dict[str, Any]:
 
 @router.post("/wireframes/importar-ia", status_code=201)
 async def import_wireframe(wireframes: WireframesDep, arquivo: UploadFile = File(...)) -> Any:
-    """Cria um wireframe do `wireframe.json` (ou do ZIP) que voltou de outra IA."""
+    """Creates a wireframe from the `wireframe.json` (or the ZIP) that came back from another AI."""
     return wireframes.criar(await _read_package(arquivo))
 
 
@@ -242,8 +244,8 @@ def save_wireframe(id_: str, g: Recording, wireframes: WireframesDep) -> Any:
 
 @router.get("/wireframes/{id_}/ia")
 def export_wireframe(id_: str, wireframes: WireframesDep, formato: str = "zip") -> Response:
-    """Pacote para outra IA editar: `zip` (AGENTS.md + schema + wireframe.json + PNGs das telas)
-    ou só o `json`. Os PNGs são os últimos que o app enviou em `…/telas/{tela}/png`."""
+    """Package for another AI to edit: `zip` (AGENTS.md + schema + wireframe.json + screen PNGs)
+    or just the `json`. The PNGs are the last ones the app sent to `…/telas/{tela}/png`."""
     from urllib.parse import quote
 
     from design import ai_wireframe
@@ -267,7 +269,7 @@ def export_wireframe(id_: str, wireframes: WireframesDep, formato: str = "zip") 
 async def store_png_screen(
     id_: str, tela: str, wireframes: WireframesDep, arquivo: Annotated[UploadFile, File()]
 ) -> Response:
-    """Render da tela feito pelo app (mesmo pintor do editor), para ir no pacote da IA."""
+    """Screen render made by the app (same painter as the editor), to go into the AI package."""
     try:
         wireframes.store_png(id_, tela, await arquivo.read())
     except Exception as e:
@@ -279,7 +281,7 @@ async def store_png_screen(
 async def reimport_wireframe(
     id_: str, wireframes: WireframesDep, arquivo: UploadFile = File(...)
 ) -> Any:
-    """Troca o conteúdo pelo que a IA devolveu (mesmo id, versão nova)."""
+    """Replaces the content with what the AI returned (same id, new version)."""
     read = await _read_package(arquivo)
     try:
         return wireframes.substituir(id_, read)
@@ -304,7 +306,7 @@ def delete_wireframe(id_: str, wireframes: WireframesDep) -> Response:
     return Response(status_code=204)
 
 
-# ---------- Imagens (Google Imagens) ----------
+# ---------- Images (Google Images) ----------
 
 
 def get_images(request: Request) -> Images:
@@ -323,7 +325,7 @@ class RequestImage(BaseModel):
 async def fetch_images(
     imagens: ImagesDep, q: str, tipo: str = "foto", pagina: int = 0
 ) -> list[dict[str, Any]]:
-    """Google Imagens (ou Bing/Openverse sem chave); `tipo`: foto, icone, figura ou todos."""
+    """Google Images (or Bing/Openverse without a key); `tipo`: foto, icone, figura or todos."""
     if not q.strip():
         return []
     try:
@@ -334,7 +336,7 @@ async def fetch_images(
 
 @router.post("/imagens", status_code=201)
 async def store_image(p: RequestImage, imagens: ImagesDep) -> dict[str, Any]:
-    """Copia a imagem escolhida para o servidor; o elemento `imagem` do quadro guarda o `id`."""
+    """Copies the chosen image to the server; the board `imagem` element keeps the `id`."""
     try:
         return await imagens.download(p.url)
     except Invalid as e:
@@ -351,11 +353,11 @@ def get_image(id_: str, imagens: ImagesDep) -> FileResponse:
         raise HTTPException(404, "Imagem não encontrada") from e
 
 
-# ---------- Fluxogramas com IA ----------
+# ---------- AI flowcharts ----------
 
 
 def get_llms(request: Request) -> dict[str, Any]:
-    """Provedores de LLM (`local` = worker no PC, `claude` se houver chave), da plataforma."""
+    """The platform's LLM providers (`local` = worker on the PC, `claude` when available)."""
     return getattr(request.app.state, "design_llms", {})
 
 
@@ -376,16 +378,16 @@ def providers_flow(llms: LLMsDep) -> list[str]:
     return sorted(llms)
 
 
-# Gerações em andamento (em memória): a IA pode levar minutos com código grande, e a Cloudflare
-# corta resposta que demora mais de 100 s para começar; o app cria a tarefa e consulta até terminar.
+# Generations in progress (in memory): the AI can take minutes with large code, and Cloudflare
+# cuts responses that take more than 100 s to start; the app creates the task and polls until done.
 _TASKS: dict[str, dict[str, Any]] = {}
 _MAX_TASKS = 50
 
 
 @router.post("/fluxos/gerar", status_code=202)
 async def generate_flow(p: RequestFlow, llms: LLMsDep) -> dict[str, Any]:
-    """Começa a gerar o fluxograma (estrutura pela IA, posições em camadas, ver `fluxos`); devolve o
-    id da tarefa para `GET /fluxos/tarefas/{id}`."""
+    """Starts generating the flowchart (structure from the AI, layered positions, see `flows`);
+    returns the task id for `GET /fluxos/tarefas/{id}`."""
     import asyncio
     import uuid
 
@@ -407,7 +409,7 @@ async def generate_flow(p: RequestFlow, llms: LLMsDep) -> dict[str, Any]:
             )
         except flows.FlowInvalid as e:
             task.update(estado="erro", erro=str(e))
-        except Exception as e:  # worker desligado, tempo esgotado, API fora
+        except Exception as e:  # worker off, timeout, API down
             task.update(estado="erro", erro=f"A IA não respondeu: {e}")
 
     while len(_TASKS) >= _MAX_TASKS:

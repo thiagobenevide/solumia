@@ -1,5 +1,5 @@
-/// Módulo Painel: cobrador com chat (LLM local ou Claude), agenda do dia, metas e alertas de disciplina.
+/// Painel module: coach with chat (local LLM or Claude), day schedule, goals and discipline alerts.
 library;
 
-export 'src/api_painel.dart' show ApiPainel;
-export 'src/modulo_painel.dart';
+export 'src/panel_api.dart' show PanelApi;
+export 'src/panel_module.dart';

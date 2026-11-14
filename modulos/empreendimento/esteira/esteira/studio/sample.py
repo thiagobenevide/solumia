@@ -35,16 +35,16 @@ def reference(est):
     return next((p for p in projects if p.canal == est.canal), projects[0])
 
 
-def generate(alvo):
+def generate(target):
     """`alvo` = id do estilo ou `id@N`."""
-    est = style.load(alvo)
+    est = style.load(target)
     ref = reference(est)
-    print(f"  exemplo de {style.label(est)} ({est.id}) com o mapa de {ref.pasta.parent.name}-{ref.pasta.name}", flush=True)
+    print(f"  exemplo de {style.label(est)} ({est.id}) com o mapa de {ref.folder_path.parent.name}-{ref.folder_path.name}", flush=True)
     for fmt in est.formatos:
         p = folder(est) / fmt.replace(":", "x")
         if p.exists():
             shutil.rmtree(p)
-        compiler.build(ref, est, fmt, destino=p, ate=SECONDS)
+        compiler.build(ref, est, fmt, destination=p, until=SECONDS)
         compiler.render(ref, fmt, p=p)
         compiler.audio(ref, est, fmt, p=p)
         (p / "final.mp4").unlink(missing_ok=True)

@@ -1,14 +1,15 @@
-"""Wireframes: formato de troca com outras IAs e a conversão de/para o formato interno.
+"""Wireframes: the exchange format with other AIs and the conversion from/to the internal format.
 
-Interno (guardado por [Quadros] em `wireframes/`, igual aos quadros): `paginas` = telas
-(`{id, nome, codigo, subtitulo, caminho, largura, altura, notas}`) e `elementos` = componentes
-(`{id, tipo, pagina, x, y, w, h, estado, props}`), em px relativos à área útil da janela.
+Internal (stored by [Frames] in `wireframes/`, like the boards): `paginas` = screens
+(`{id, nome, codigo, subtitulo, caminho, largura, altura, notas}`) and `elementos` = components
+(`{id, tipo, pagina, x, y, w, h, estado, props}`), in px relative to the window's usable area.
 
-Troca (`wireframe.json`, formato `agent-wireframe` v1): telas aninhadas com os componentes de cada
-uma, props achatadas no próprio componente e `largura`/`altura` por extenso. Vai num ZIP com o JSON
-Schema (`wireframe.schema.json`, draft 2020-12) e as instruções (`AGENTS.md`), o padrão que os
-agentes de código (Codex, Claude Code, Cursor…) leem. A IA devolve o `wireframe.json` (sozinho, em
-ZIP ou até dentro de bloco ```json) e [de_ia] valida e converte de volta."""
+Exchange (`wireframe.json`, format `agent-wireframe` v1): nested screens with the components of each
+one, props flattened into the component itself and `largura`/`altura` spelled out. It goes in a ZIP
+with the JSON Schema (`wireframe.schema.json`, draft 2020-12) and the instructions (`AGENTS.md`),
+the
+convention coding agents (Codex, Claude Code, Cursor…) read. The AI returns the `wireframe.json`
+(alone, in a ZIP or even inside a ```json block) and [of_ai] validates and converts it back."""
 
 import io
 import json
@@ -36,10 +37,11 @@ _ITEM_STATE = {
     "properties": {"texto": _STR, "estado": {"enum": [*STATES, "desabilitado"]}},
 }
 
-# Catálogo: tipo → (descrição, props). É a fonte do schema, do AGENTS.md e da validação.
+# Catalog: type → (description, props). It is the source of the schema, of AGENTS.md and of
+# validation.
 COMPONENTS: dict[str, tuple[str, dict[str, Any]]] = {
     "texto": (
-        "Texto solto (títulos, legendas).",
+        "Loose text (titles, captions).",
         {
             "texto": _STR,
             "tamanho": {**_NUM, "default": 13},
@@ -49,7 +51,7 @@ COMPONENTS: dict[str, tuple[str, dict[str, Any]]] = {
         },
     ),
     "botao": (
-        "Botão com texto.",
+        "Button with text.",
         {
             "texto": _STR,
             "variante": {
@@ -59,9 +61,9 @@ COMPONENTS: dict[str, tuple[str, dict[str, Any]]] = {
             "icone": {**_STR, "description": "Caractere antes do texto, ex.: +"},
         },
     ),
-    "botao_icone": ("Botão quadrado só com ícone.", {"icone": _STR}),
+    "botao_icone": ("Square button with an icon only.", {"icone": _STR}),
     "campo": (
-        "Campo de formulário com rótulo em cima (altura > 46 vira área de texto).",
+        "Form field with the label on top (height > 46 becomes a text area).",
         {
             "rotulo": _STR,
             "valor": _STR,
@@ -71,14 +73,14 @@ COMPONENTS: dict[str, tuple[str, dict[str, Any]]] = {
             "obrigatorio": _BOOL,
         },
     ),
-    "caixa": ("Caixa de marcação.", {"marcado": _BOOL, "texto": _STR}),
-    "selo": ("Etiqueta colorida (status).", {"texto": _STR, "cor": {"enum": list(COLORS)}}),
+    "caixa": ("Checkbox.", {"marcado": _BOOL, "texto": _STR}),
+    "selo": ("Colored tag (status).", {"texto": _STR, "cor": {"enum": list(COLORS)}}),
     "abas": (
-        "Barra de abas.",
+        "Tab bar.",
         {"itens": {"type": "array", "items": _ITEM_STATE}, "ativa": {"type": "integer"}},
     ),
     "cartoes": (
-        "Linha de cartões de resumo (rótulo + valor).",
+        "Row of summary cards (label + value).",
         {
             "itens": {
                 "type": "array",
@@ -91,7 +93,7 @@ COMPONENTS: dict[str, tuple[str, dict[str, Any]]] = {
         },
     ),
     "tabela": (
-        "Tabela; célula é texto ou {texto, selo} para status colorido.",
+        "Table; a cell is text or {texto, selo} for a colored status.",
         {
             "colunas": {
                 "type": "array",
@@ -125,18 +127,18 @@ COMPONENTS: dict[str, tuple[str, dict[str, Any]]] = {
             "altura_linha": {**_NUM, "default": 30},
         },
     ),
-    "paginador": ("Rodapé de paginação.", {"info": _STR}),
-    "menu": ("Menu suspenso.", {"itens": {"type": "array", "items": _ITEM_STATE}}),
+    "paginador": ("Pagination footer.", {"info": _STR}),
+    "menu": ("Dropdown menu.", {"itens": {"type": "array", "items": _ITEM_STATE}}),
     "modal": (
-        "Janela modal: escurece a tela; os componentes seguintes ficam por cima.",
+        "Modal window: darkens the screen; the following components go on top.",
         {"titulo": _STR},
     ),
     "painel": (
-        "Retângulo de agrupamento, com título opcional.",
+        "Grouping rectangle, with an optional title.",
         {"titulo": _STR, "fundo": {"enum": ["branco", "cinza", *COLORS]}},
     ),
     "seta": (
-        "Seta por pontos relativos a (x, y); a ponta fica no último.",
+        "Arrow through points relative to (x, y); the tip is on the last one.",
         {
             "pontos": {
                 "type": "array",
@@ -260,32 +262,33 @@ def agents_md(titulo: str) -> str:
     states = "\n".join(f"- `{k}`: {v}" for k, v in CAPTION.items())
     return f"""# Wireframe: {titulo}
 
-Pacote `agent-wireframe` v1. Você vai editar **`wireframe.json`**; ele segue `wireframe.schema.json`
-(JSON Schema 2020-12). Devolva o `wireframe.json` completo e válido, só ele, sem comentários.
+Package `agent-wireframe` v1. You are going to edit **`wireframe.json`**; it follows
+`wireframe.schema.json` (JSON Schema 2020-12). Return the complete, valid `wireframe.json`, only it,
+with no comments. The texts shown on screen are in Brazilian Portuguese; keep them that way.
 
-## Regras
+## Rules
 
-1. Não mude `formato` nem `versao`. Mantenha o `id` de tudo o que já existe; para itens novos, crie
-   ids curtos e únicos (ex.: `btn-gerar-nd`).
-2. Coordenadas em px, relativas ao canto superior esquerdo da área útil da janela de cada tela
-   (`largura` × `altura`, padrão 1280 × 1080). `x`, `y`, `largura`, `altura` em todo componente.
-3. A ordem de `componentes` é a ordem de desenho: o que vem depois fica por cima. Um `modal`
-   escurece tudo o que veio antes; ponha o conteúdo do modal logo depois dele.
-4. `estado` de cada componente, aba, item de menu e coluna:
+1. Do not change `formato` or `versao`. Keep the `id` of everything that already exists; for new
+   items, create short, unique ids (e.g.: `btn-gerar-nd`).
+2. Coordinates in px, relative to the top-left corner of the usable area of each screen's window
+   (`largura` × `altura`, default 1280 × 1080). `x`, `y`, `largura`, `altura` on every component.
+3. The order of `componentes` is the drawing order: what comes later goes on top. A `modal` darkens
+   everything that came before it; put the modal's content right after it.
+4. `estado` of each component, tab, menu item and column:
 {states}
-5. `notas` formam o painel lateral (componente, clique, endpoint). Ligue componente e nota com
-   `"nota": <n>`; o número aparece num marcador sobre o componente.
-6. Use só os tipos e propriedades do catálogo abaixo; nada de HTML ou CSS.
-7. `telas/<id>.png` (campo `imagem` da tela) mostra como a tela está desenhada hoje: use para
-   entender o layout, mas edite só o JSON; as imagens são refeitas a cada exportação.
+5. `notas` form the side panel (component, click, endpoint). Link a component and a note with
+   `"nota": <n>`; the number appears in a marker over the component.
+6. Use only the types and properties of the catalog below; no HTML or CSS.
+7. `telas/<id>.png` (the screen's `imagem` field) shows how the screen is drawn today: use it to
+   understand the layout, but edit only the JSON; the images are redone on every export.
 
-## Catálogo de componentes
+## Component catalog
 
-| tipo | o que é | propriedades |
+| tipo | what it is | properties |
 |---|---|---|
 {catalog}
 
-## Exemplo de componente
+## Component example
 
 ```json
 {{"id": "btn-gerar", "tipo": "botao", "x": 1020, "y": 48, "largura": 118, "altura": 32,
@@ -295,7 +298,7 @@ Pacote `agent-wireframe` v1. Você vai editar **`wireframe.json`**; ele segue `w
 
 
 def for_ai(doc: dict[str, Any]) -> dict[str, Any]:
-    """Documento interno → `wireframe.json`."""
+    """Internal document → `wireframe.json`."""
     pages = doc.get("paginas") or [screen_default()]
     primeira = pages[0]["id"]
     telas = []
@@ -345,7 +348,8 @@ def _num(v: Any, where: str) -> float:
 
 
 def of_ai(dados: dict[str, Any]) -> dict[str, Any]:
-    """`wireframe.json` → `{titulo, paginas, elementos}` internos; o erro diz onde falhou."""
+    """`wireframe.json` → internal `{titulo, paginas, elementos}`; the error says where it
+    failed."""
     if not isinstance(dados, dict) or dados.get("formato") != FORMAT:
         raise FormatInvalid(f'"formato" deve ser "{FORMAT}"')
     if dados.get("versao") != VERSION:
@@ -357,7 +361,7 @@ def of_ai(dados: dict[str, Any]) -> dict[str, Any]:
     for i, t in enumerate(telas, 1):
         if not isinstance(t, dict):
             raise FormatInvalid(f"telas[{i - 1}]: objeto esperado")
-        # O id vira nome do PNG da tela no pacote: só letras, números, _ e -.
+        # The id becomes the name of the screen PNG in the package: only letters, digits, _ and -.
         tid = re.sub(r"[^\w-]", "-", str(t.get("id") or _new_id()))[:64]
         notes = t.get("notas") or []
         for note in notes:
@@ -405,8 +409,8 @@ def of_ai(dados: dict[str, Any]) -> dict[str, Any]:
 
 
 def package(doc: dict[str, Any], images: dict[str, bytes] | None = None) -> bytes:
-    """ZIP para mandar a outra IA: `AGENTS.md`, `wireframe.schema.json`, `wireframe.json` e, com
-    [imagens] ({id da tela: PNG}), `telas/<id>.png`, apontado no campo `imagem` de cada tela."""
+    """ZIP to send to another AI: `AGENTS.md`, `wireframe.schema.json`, `wireframe.json` and, with
+    images ({screen id: PNG}), `telas/<id>.png`, referenced in the `imagem` field of each screen."""
     images = images or {}
     swap = for_ai(doc)
     for t in swap["telas"]:
@@ -424,7 +428,8 @@ def package(doc: dict[str, Any], images: dict[str, bytes] | None = None) -> byte
 
 
 def read(raw: bytes) -> dict[str, Any]:
-    """ZIP (acha o `wireframe.json`), JSON puro ou texto com bloco ```json → formato interno."""
+    """ZIP (finds the `wireframe.json`), plain JSON or text with a ```json block → internal
+    format."""
     if raw.startswith(b"PK"):
         try:
             with zipfile.ZipFile(io.BytesIO(raw)) as z:

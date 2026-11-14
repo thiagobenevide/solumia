@@ -31,8 +31,8 @@ RE_MARK = re.compile(rf"\b(cort\w*|cancel\w*) (?:(?:a|o|da|de|na) )?(?:parte|par
 HOTWORDS = "Corte parte. Cancela parte."  # vício do Whisper para os marcadores (só na gravação bruta)
 
 
-def number(texto):
-    p = texto.split()
+def number(text):
+    p = text.split()
     if p[0].isdigit():
         return int(p[0])
     if p[0] == "cem":
@@ -43,12 +43,12 @@ def number(texto):
     return TEN[p[0]] + (UNI[p[-1]] if len(p) == 3 else 0)
 
 
-def parts_of_script(texto, chapters=None):
+def parts_of_script(text, chapters=None):
     """Partes com as frases de cada uma; `f0` = índice global da primeira frase (o mesmo de
     `cortes.frases_do_roteiro` no roteiro inteiro). Com `capitulos` (as "## Parte N" do roteiro no vault,
     `roteiro.json`), cada parte junta as falas do seu capítulo; sem eles, parte = parágrafo."""
     speeches, f0 = [], 0
-    for line in texto.splitlines():
+    for line in text.splitlines():
         sentences = C.sentences_of_script(line)
         if sentences:
             speeches.append({"texto": line.strip(), "frases": sentences, "f0": f0})
@@ -68,9 +68,9 @@ def parts_of_script(texto, chapters=None):
 
 def of_project(project):
     import json
-    rot = project.caminho("roteiro.json")
+    rot = project.path_of("roteiro.json")
     caps = json.loads(rot.read_text()).get("capitulos") if rot.exists() else None
-    return parts_of_script(project.roteiro().read_text(), caps)
+    return parts_of_script(project.script_path().read_text(), caps)
 
 
 def text_to_read(parts):
@@ -80,10 +80,10 @@ def text_to_read(parts):
         "— Se errou: \"Cancela parte N\" (ou só recomece; sem marcador a leitura não é usada).\n")
 
 
-def markers(palavras):
+def markers(words):
     """[{tipo: corte|cancela, parte, i0, i1}] — i0..i1 = palavras do marcador na transcrição."""
     idx, toks = [], []
-    for k, p in enumerate(palavras):
+    for k, p in enumerate(words):
         for w in re.split(r"[-\s]+", p["p"]):  # "corte-parte" vira duas palavras
             n = C.norm(w)
             if n:
@@ -102,24 +102,24 @@ def markers(palavras):
     return output
 
 
-def _trim(trechos, motivo):
+def _trim(segments, reason):
     """Só fica o que está entre a primeira e a última frase da parte: conversa antes de começar e sobra
     antes do marcador saem. Improviso no meio da tomada confirmada fica (o narrador aprovou a leitura)."""
-    core = [k for k, t in enumerate(trechos) if t["manter"] and t["tipo"] in ("tomada", "reformulada")]
-    if core and core[-1] + 1 < len(trechos):  # "Isso assusta muito." — colado no fim da última frase
-        a, b = trechos[core[-1]], trechos[core[-1] + 1]
+    core = [k for k, t in enumerate(segments) if t["manter"] and t["tipo"] in ("tomada", "reformulada")]
+    if core and core[-1] + 1 < len(segments):  # "Isso assusta muito." — colado no fim da última frase
+        a, b = segments[core[-1]], segments[core[-1] + 1]
         if b["ini"] - a["fim"] <= 0.3 and b["j"] - b["i"] <= 3 and b["tipo"] in ("fora", "improviso"):
             b.update(manter=True, tipo="continuacao", confianca=0.8, motivo="colada no fim da leitura confirmada")
-    for k, t in enumerate(trechos):
+    for k, t in enumerate(segments):
         if not core or k < core[0] or (k > core[-1] and t["tipo"] != "continuacao"):
-            t.update(manter=False, tipo="fora", por="claquete", confianca=1.0, motivo=f"{motivo}: fora da leitura")
+            t.update(manter=False, tipo="fora", por="claquete", confianca=1.0, motivo=f"{reason}: fora da leitura")
         elif t["tipo"] == "improviso" and not t["manter"] and t["j"] - t["i"] >= 3:
             t.update(manter=True, confianca=max(t["confianca"], 0.75), motivo=t["motivo"] + " · dentro da tomada confirmada")
 
 
-def _in_part(part, palavras, a, b, motivo):
+def _in_part(part, words, a, b, reason):
     """cortes.decidir só com as frases da parte, nas palavras a..b; índices de volta para a gravação toda."""
-    spans, missing = C.decide(part["frases"], palavras[a:b])
+    spans, missing = C.decide(part["frases"], words[a:b])
     for t in spans:
         t["i"] += a
         t["j"] += a
@@ -131,47 +131,47 @@ def _in_part(part, palavras, a, b, motivo):
             t["entre"] = [x + part["f0"] for x in t["entre"]]
         t["parte"] = part["n"]
         t["motivo"] = f"parte {part['n']} · {t['motivo']}"
-    _trim(spans, motivo)
+    _trim(spans, reason)
     return spans, missing
 
 
-def _coverage(part, palavras, a, b):
-    choices, _, _ = C.choose(part["frases"], palavras[a:b])
+def _coverage(part, words, a, b):
+    choices, _, _ = C.choose(part["frases"], words[a:b])
     return sum(1 for e in choices if e) / len(part["frases"])
 
 
-def _cross_check_number(s, valid, palavras):
+def _cross_check_number(s, valid, words):
     """Número dito ou ouvido errado ("corte parte 7" depois de ler a 6): se o texto lido cobre mal a parte
     dita e bem uma vizinha, vale a vizinha."""
     n = s["parte"]
     if s["b"] - s["a"] < 2:
         return n
-    spoken = _coverage(valid[n], palavras, s["a"], s["b"])
+    spoken = _coverage(valid[n], words, s["a"], s["b"])
     if spoken >= 0.6:
         return n
-    viz = [(_coverage(valid[m], palavras, s["a"], s["b"]), m) for m in (n - 1, n + 1) if m in valid]
+    viz = [(_coverage(valid[m], words, s["a"], s["b"]), m) for m in (n - 1, n + 1) if m in valid]
     best = max(viz, default=(0, n))
     return best[1] if best[0] >= spoken + 0.3 else n
 
 
-def _discarded(palavras, a, b, motivo, tipo="descartado"):
-    return {"ini": palavras[a]["ini"], "fim": palavras[b - 1]["fim"], "i": a, "j": b, "manter": False, "tipo": tipo,
-            "motivo": motivo, "confianca": 1.0, "por": "claquete", "texto": " ".join(p["p"] for p in palavras[a:b])}
+def _discarded(words, a, b, reason, kind="descartado"):
+    return {"ini": words[a]["ini"], "fim": words[b - 1]["fim"], "i": a, "j": b, "manter": False, "tipo": kind,
+            "motivo": reason, "confianca": 1.0, "por": "claquete", "texto": " ".join(p["p"] for p in words[a:b])}
 
 
-def decide(parts, palavras):
+def decide(parts, words):
     """None se a gravação não tem marcadores (fluxo antigo). Senão (trechos, faltando, avisos)."""
-    marks = markers(palavras)
+    marks = markers(words)
     if not marks:
         return None
     warnings, segs, start = [], [], 0
     for m in marks:
         segs.append(dict(m, a=start, b=m["i0"]))
         start = m["i1"]
-    tail = {"tipo": "sem marcador", "parte": None, "a": start, "b": len(palavras), "i0": len(palavras),
-             "i1": len(palavras)}
+    tail = {"tipo": "sem marcador", "parte": None, "a": start, "b": len(words), "i0": len(words),
+             "i1": len(words)}
     for k, s in enumerate(segs):
-        read = sum(1 for p in palavras[s["a"]:s["b"]] if len(C.norm(p["p"])) >= 3)
+        read = sum(1 for p in words[s["a"]:s["b"]] if len(C.norm(p["p"])) >= 3)
         if s["tipo"] == "cancela" and k and read < 3 and segs[k - 1]["tipo"] == "corte" \
                 and segs[k - 1]["parte"] == s["parte"]:
             segs[k - 1]["tipo"] = "cancela"  # "Corte parte 3… Cancela parte 3": desfaz o corte
@@ -180,12 +180,12 @@ def decide(parts, palavras):
     chosen = {}
     for s in segs:
         if s["parte"] not in valid:
-            warnings.append(f"marcador \"{s['tipo']} parte {s['parte']}\" em {palavras[s['i0']]['ini']:.1f}s, mas o "
+            warnings.append(f"marcador \"{s['tipo']} parte {s['parte']}\" em {words[s['i0']]['ini']:.1f}s, mas o "
                           f"roteiro tem {len(parts)} partes: ignorado")
         elif s["tipo"] == "corte":
-            n = _cross_check_number(s, valid, palavras)
+            n = _cross_check_number(s, valid, words)
             if n != s["parte"]:
-                warnings.append(f"\"corte parte {s['parte']}\" em {palavras[s['i0']]['ini']:.0f}s, mas o texto lido é "
+                warnings.append(f"\"corte parte {s['parte']}\" em {words[s['i0']]['ini']:.0f}s, mas o texto lido é "
                               f"da parte {n}: usado como parte {n}")
                 s["parte"] = n
             chosen[s["parte"]] = s  # o último "corte" da parte vale
@@ -198,7 +198,7 @@ def decide(parts, palavras):
             used.add(id(s))
             warnings.append(f"parte {p['n']}: \"corte\" sem nada lido antes")
         elif s:
-            tr, falt = _in_part(p, palavras, s["a"], s["b"], f"corte parte {p['n']}")
+            tr, falt = _in_part(p, words, s["a"], s["b"], f"corte parte {p['n']}")
             used.add(id(s))
         else:
             # sem "corte": procura a leitura no que não foi cancelado, da mais recente para a mais antiga
@@ -206,13 +206,13 @@ def decide(parts, palavras):
             for s2 in reversed(segs + [tail]):
                 if s2["tipo"] == "cancela" or s2["b"] - s2["a"] < 2:
                     continue
-                tr2, falt2 = _in_part(p, palavras, s2["a"], s2["b"], f"parte {p['n']} sem marcador")
+                tr2, falt2 = _in_part(p, words, s2["a"], s2["b"], f"parte {p['n']} sem marcador")
                 if best is None or len(falt2) < len(best[1]):
                     best = (tr2, falt2, s2)
             if best and len(best[1]) <= len(p["frases"]) / 2:
                 tr, falt, s2 = best
                 used.add(id(s2))
-                warnings.append(f"parte {p['n']} sem \"corte\": usada a leitura em {palavras[s2['a']]['ini']:.0f}s "
+                warnings.append(f"parte {p['n']} sem \"corte\": usada a leitura em {words[s2['a']]['ini']:.0f}s "
                               f"(confira)")
             else:
                 tr, falt = [], [f["texto"] for f in p["frases"]]
@@ -224,9 +224,9 @@ def decide(parts, palavras):
         if id(s) not in used and s["b"] > s["a"]:
             reason = {"cancela": f"cancelada (parte {s['parte']})", "sem marcador": "sem marcador no fim"}.get(
                 s["tipo"], f"parte {s['parte']} lida de novo depois" if s["parte"] in valid else "parte inexistente")
-            spans.append(_discarded(palavras, s["a"], s["b"], reason))
+            spans.append(_discarded(words, s["a"], s["b"], reason))
         if s is not tail:
-            spans.append(_discarded(palavras, s["i0"], s["i1"], f"marcador: {s['tipo']} parte {s['parte']}",
+            spans.append(_discarded(words, s["i0"], s["i1"], f"marcador: {s['tipo']} parte {s['parte']}",
                                        "marcador"))
     # uma palavra só pode estar num trecho mantido; trecho que sai e cobre palavra mantida não é listado
     spans.sort(key=lambda t: (t["i"], not t["manter"]))

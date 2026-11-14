@@ -61,9 +61,9 @@ def clips_n1(doc: dict, medias: dict) -> list[dict]:
     return output
 
 
-def lift_fc(doc: dict, medias: dict, editado: Path) -> tuple[list[dict], list[dict]]:
+def lift_fc(doc: dict, medias: dict, edited: Path) -> tuple[list[dict], list[dict]]:
     """Diferença N1 gerado × `.fcproj` editado → (operações N1 de correção, brutos)."""
-    before, after = clips_n1(doc, medias), clips_fcproj(editado)
+    before, after = clips_n1(doc, medias), clips_fcproj(edited)
     ops, raw, used = [], [], set()
     for a in before:
         cands = [(abs(b["em"] - a["em"]), k) for k, b in enumerate(after) if k not in used
@@ -77,13 +77,13 @@ def lift_fc(doc: dict, medias: dict, editado: Path) -> tuple[list[dict], list[di
         d_origin = b["origem"] - a["origem"]
         if abs(d_origin) > TOL:
             ops.append({"op": "aparar", "alvo": a["id"], "borda": "entrada", "delta": round(-d_origin, 3)})
-        em_expected = a["em"] + (d_origin if abs(d_origin) > TOL else 0)
-        if abs(b["em"] - em_expected) > TOL:
+        in_expected = a["em"] + (d_origin if abs(d_origin) > TOL else 0)
+        if abs(b["em"] - in_expected) > TOL:
             ops.append({"op": "mover", "alvo": a["id"], "para": round(b["em"], 3)})
         if a["dur"] is not None:
-            duration_esperada = a["dur"] - (d_origin if abs(d_origin) > TOL else 0)
-            if abs(b["dur"] - duration_esperada) > TOL:
-                ops.append({"op": "aparar", "alvo": a["id"], "borda": "saida", "delta": round(b["dur"] - duration_esperada, 3)})
+            duration_expected = a["dur"] - (d_origin if abs(d_origin) > TOL else 0)
+            if abs(b["dur"] - duration_expected) > TOL:
+                ops.append({"op": "aparar", "alvo": a["id"], "borda": "saida", "delta": round(b["dur"] - duration_expected, 3)})
         if abs(b["velocidade"] - 1.0) > 1e-3:
             ops.append({"op": "velocidade", "alvo": a["id"], "fator": round(b["velocidade"], 3)})
     for k, b in enumerate(after):
@@ -97,28 +97,28 @@ def lift_fc(doc: dict, medias: dict, editado: Path) -> tuple[list[dict], list[di
     return ops, raw
 
 
-def fcproj_edited(project: Project, editado: Path) -> str | None:
+def fcproj_edited(project: Project, edited: Path) -> str | None:
     """Registra `corrigir_montagem` para um `.fcproj` salvo à mão. → id do registro (None se já estava)."""
-    sha = _sha(editado)
+    sha = _sha(edited)
     if _already_registered(sha):
         return None
     # a base tem de ser a montagem que a app executou ANTES da edição (com o rastro N0); uma tradução feita
     # depois, pelo plano atual, misturaria replanejamento com edição humana
     base = R.last(f"ep:{project.ep}", "montar")
-    when = __import__("datetime").datetime.fromtimestamp(editado.stat().st_mtime).strftime("%Y-%m-%dT%H:%M:%S")
+    when = __import__("datetime").datetime.fromtimestamp(edited.stat().st_mtime).strftime("%Y-%m-%dT%H:%M:%S")
     if not base or base.get("n0") is None or base["t"] > when or not (base.get("extra") or {}).get("midias"):
         raise ValueError("sem a montagem executada antes da edição (edição anterior ao registro)")
     doc = R.read_artifact(base["saida"]["n1"])
-    ops, raw = lift_fc(doc, base["extra"]["midias"], editado)
+    ops, raw = lift_fc(doc, base["extra"]["midias"], edited)
     if not ops and not raw:
         return None
-    return R.write("corrigir_montagem", grupo=f"ep:{project.ep}", pai=base["id"], origem="humano",
-                    contexto={"montagem": base["saida"]["n1"], "episodio": project.ep,
+    return R.write("corrigir_montagem", group=f"ep:{project.ep}", parent=base["id"], origin="humano",
+                    context={"montagem": base["saida"]["n1"], "episodio": project.ep,
                               "formato": base["contexto"].get("formato"), "modo": base["contexto"].get("modo")},
-                    saida={"versao": 1, "ops": ops}, humano={"veredito": "editada", "nota": None, "motivo": None,
+                    output={"versao": 1, "ops": ops}, humano={"veredito": "editada", "nota": None, "motivo": None,
                                                               "comentario": None, "em": R._now()},
-                    versoes={"n1": 1, "app": "filmcraft"},
-                    extra={"episodio": project.ep, "arquivo": editado.name, "sha": sha, "brutos": raw[:50]})
+                    versions={"n1": 1, "app": "filmcraft"},
+                    extra={"episodio": project.ep, "arquivo": edited.name, "sha": sha, "brutos": raw[:50]})
 
 
 # ---------- PhotoCraft ----------
@@ -172,10 +172,10 @@ def pcraft_edited(project: Project, pcraft: Path) -> str | None:
     new, raw = lift_pc(doc, _info(pcraft))
     if new == doc and not raw:
         return None
-    return R.write("thumb_compor", grupo=f"thumb:{project.ep}", pai=base["id"], origem="humano",
-                    contexto=base["contexto"], saida=new,
+    return R.write("thumb_compor", group=f"thumb:{project.ep}", parent=base["id"], origin="humano",
+                    context=base["contexto"], output=new,
                     humano={"veredito": "editada", "nota": None, "motivo": None, "comentario": None, "em": R._now()},
-                    versoes={"n1": 1, "app": "photocraft"},
+                    versions={"n1": 1, "app": "photocraft"},
                     extra={"episodio": project.ep, "arquivo": pcraft.with_suffix(".png").name, "sha": sha,
                            "brutos": raw[:50]})
 
@@ -189,13 +189,13 @@ def sweep() -> list[str]:
             p = Project(folder)
         except SystemExit:
             continue
-        for file in sorted(p.pasta.glob("projeto.manual-*.fcproj")):
+        for file in sorted(p.folder_path.glob("projeto.manual-*.fcproj")):
             try:
                 if rg := fcproj_edited(p, file):
                     output.append(f"{p.ep}: {file.name} → {rg}")
             except (KeyError, ValueError, StopIteration) as e:
                 output.append(f"{p.ep}: {file.name} não levantado ({e})")
-        for pc in sorted(p.caminho("thumbs").glob("*.pcraft")) if p.caminho("thumbs").exists() else []:
+        for pc in sorted(p.path_of("thumbs").glob("*.pcraft")) if p.path_of("thumbs").exists() else []:
             if photocraft.edited(pc):
                 try:
                     if rg := pcraft_edited(p, pc):

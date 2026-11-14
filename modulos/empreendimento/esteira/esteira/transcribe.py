@@ -32,23 +32,23 @@ STRETCHED = 1.2   # s: palavra mais longa que isto costuma esconder fala que o W
 SLOW = 1.0      # palavras/s numa janela de 6 palavras: abaixo disto, idem
 
 
-def _suspects(palavras):
+def _suspects(words):
     """Regiões [(ini, fim)] onde o Whisper "esticou" palavras por cima de fala repetida: ele escreve o texto
     uma vez só e espalha as palavras pelo tempo dos retakes (ex.: "análise" com 11 s)."""
     marks = set()
-    for k, w in enumerate(palavras):
+    for k, w in enumerate(words):
         if w["fim"] - w["ini"] > STRETCHED:
             marks.add(k)
         j = k + 5
-        if j < len(palavras) and palavras[j]["fim"] - w["ini"] > 6 / SLOW:
+        if j < len(words) and words[j]["fim"] - w["ini"] > 6 / SLOW:
             # janela lenta: só conta se não for pausa simples entre duas palavras
-            durs = [palavras[i]["fim"] - palavras[i]["ini"] for i in range(k, j + 1)]
+            durs = [words[i]["fim"] - words[i]["ini"] for i in range(k, j + 1)]
             if sum(durs) > 4:
                 marks.update(range(k, j + 1))
     regions = []
     for k in sorted(marks):
-        a = palavras[max(k - 1, 0)]["ini"]
-        b = palavras[min(k + 1, len(palavras) - 1)]["fim"]
+        a = words[max(k - 1, 0)]["ini"]
+        b = words[min(k + 1, len(words) - 1)]["fim"]
         if regions and a <= regions[-1][1] + 1.0:
             regions[-1][1] = max(regions[-1][1], b)
         else:
@@ -56,14 +56,14 @@ def _suspects(palavras):
     return regions
 
 
-def _refine(model, signal, palavras, language, sr=16000):
+def _refine(model, signal, words, language, sr=16000):
     """Retranscreve as regiões suspeitas em pedaços curtos, separados pelos silêncios (VAD), cada um sem
     contexto: assim cada tentativa da mesma frase vira texto próprio e a etapa de cortes enxerga o retake."""
     from faster_whisper.vad import VadOptions, get_speech_timestamps
 
-    regions = _suspects(palavras)
+    regions = _suspects(words)
     if not regions:
-        return palavras
+        return words
     recuperadas = 0
     for a, b in regions:
         a, b = max(a - 0.3, 0), min(b + 0.3, len(signal) / sr)
@@ -71,27 +71,27 @@ def _refine(model, signal, palavras, language, sr=16000):
         speeches = get_speech_timestamps(span, VadOptions(min_silence_duration_ms=250, speech_pad_ms=120))
         new = []
         for f in speeches:
-            pedaco = span[f["start"]:f["end"]]
-            if len(pedaco) < sr * 0.3:
+            chunk = span[f["start"]:f["end"]]
+            if len(chunk) < sr * 0.3:
                 continue
-            segs, _ = model.transcribe(pedaco, language=language, word_timestamps=True, beam_size=5,
+            segs, _ = model.transcribe(chunk, language=language, word_timestamps=True, beam_size=5,
                                         vad_filter=False, condition_on_previous_text=False)
             base = a + f["start"] / sr
             for s in segs:
                 new += [{"p": w.word.strip(), "ini": round(base + w.start, 3), "fim": round(base + w.end, 3)}
                           for w in s.words if w.word.strip()]
-        velhas = [w for w in palavras if a <= w["ini"] < b]
+        velhas = [w for w in words if a <= w["ini"] < b]
         # só troca se recuperou fala (mais palavras); senão o Whisper só falou devagar ali
         if len(new) > len(velhas):
             recuperadas += len(new) - len(velhas)
-            palavras = [w for w in palavras if w["ini"] < a] + new + [w for w in palavras if w["ini"] >= b]
+            words = [w for w in words if w["ini"] < a] + new + [w for w in words if w["ini"] >= b]
     if recuperadas:
         print(f"  {len(regions)} regiões com palavras esticadas retranscritas: +{recuperadas} palavras (retakes)")
         events.debug("retranscrição de regiões esticadas", regioes=len(regions), palavras=recuperadas)
-    return palavras
+    return words
 
 
-def transcribe(project, cfg, audio=None, saida_json="transcricao.json"):
+def transcribe(project, cfg, audio=None, output_json="transcricao.json"):
     from esteira.ai.local import free_gpu
     free_gpu()  # o Whisper large-v3 precisa da VRAM que o LLM local ocupa
     _load_libs_cuda()
@@ -114,7 +114,7 @@ def transcribe(project, cfg, audio=None, saida_json="transcricao.json"):
                                         # sem isto o Whisper "pula" retakes (texto repetido) da gravação bruta
                                         condition_on_previous_text=False,
                                         # "Corte parte N" / "Cancela parte N" na gravação bruta (esteira.clapper)
-                                        hotwords=HOTWORDS if saida_json == "transcricao_bruta.json" else None)
+                                        hotwords=HOTWORDS if output_json == "transcricao_bruta.json" else None)
     words, texts = [], []
     for seg in segments:
         events.progress(min(int(seg.end), int(info.duration)), int(info.duration), seg.text.strip())
@@ -125,6 +125,6 @@ def transcribe(project, cfg, audio=None, saida_json="transcricao.json"):
 
     output = {"audio": audio.name, "duracao": round(info.duration, 3), "texto": " ".join(texts),
              "palavras": words, "refinada": True}
-    project.save_json(saida_json, output)
-    print(f"  {len(words)} palavras, {info.duration:.1f}s → {saida_json}")
+    project.save_json(output_json, output)
+    print(f"  {len(words)} palavras, {info.duration:.1f}s → {output_json}")
     return output

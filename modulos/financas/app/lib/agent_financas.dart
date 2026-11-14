@@ -1,5 +1,5 @@
-/// Módulo Finanças: painel pessoal, extrato, orçamento, metas, contas/cartões, análise de empresas e carteira.
+/// Finanças module: personal dashboard, statement, budget, goals, accounts/cards, company analysis and portfolio.
 library;
 
-export 'src/api_financas.dart' show ApiFinancas;
-export 'src/modulo_financas.dart';
+export 'src/finance_api.dart' show FinanceApi;
+export 'src/finance_module.dart';

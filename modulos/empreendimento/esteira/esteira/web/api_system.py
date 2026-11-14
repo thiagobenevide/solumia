@@ -158,7 +158,7 @@ def costs():
 @router.get("/acervo")
 def library(q: str = "", tipo: str = "", limite: int = 180):
     from esteira import library as A
-    items = [dict(it, mini=f"/acervo/mini/{it['id']}") for it in A.list_all(q, tipo, limite=min(limite, 500))]
+    items = [dict(it, mini=f"/acervo/mini/{it['id']}") for it in A.list_all(q, tipo, limit=min(limite, 500))]
     return {"itens": items, "estatisticas": A.call_statistics()}
 
 
@@ -175,13 +175,13 @@ def backup():
     mods = d.get("modulos") or {}
     now = datetime.now()
 
-    def horas(t):
+    def hours(t):
         return round((now - datetime.fromisoformat(t)).total_seconds() / 3600, 1) if t else None
     lines = [{"modulo": m, "estado": r.get("estado"), "erro": r.get("erro"), "ultimo_ok": r.get("ultimo_ok"),
-               "horas": horas(r.get("ultimo_ok"))} for m, r in sorted(mods.items()) if not m.startswith("teste:")]
-    teste = next(({"modulo": m[6:], **r} for m, r in sorted(mods.items(), key=lambda x: x[1].get("fim") or "",
+               "horas": hours(r.get("ultimo_ok"))} for m, r in sorted(mods.items()) if not m.startswith("teste:")]
+    test = next(({"modulo": m[6:], **r} for m, r in sorted(mods.items(), key=lambda x: x[1].get("fim") or "",
                                                            reverse=True) if m.startswith("teste:")), None)
-    return {"configurado": True, "ultimo": d.get("ultimo"), "modulos": lines, "teste": teste,
+    return {"configurado": True, "ultimo": d.get("ultimo"), "modulos": lines, "teste": test,
             "atrasado": any((x["horas"] or 999) > 36 for x in lines), "erros": sum(x["estado"] == "erro" for x in lines)}
 
 

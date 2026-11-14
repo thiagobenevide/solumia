@@ -30,7 +30,7 @@ from esteira.studio import rhythm as R
 from esteira.ai import local
 
 TREATMENTS = ("voz_motion", "midia_motion", "camera_cheia", "camera_peca", "camera_2_5d", "3d")
-SO_PRESENTER = {"camera_cheia", "camera_peca", "camera_2_5d"}
+ONLY_PRESENTER = {"camera_cheia", "camera_peca", "camera_2_5d"}
 RULES_TREATMENT = {
     "dark": "voz_motion = a peça ocupa a tela (dado forte, virada, pergunta); midia_motion = a imagem/vídeo do "
             "assunto com a peça por cima (a maioria); 3d só se a fala pedir um objeto no espaço.",
@@ -39,7 +39,7 @@ RULES_TREATMENT = {
                     "peça na tela (virada forte); midia_motion = B-roll com peça por cima.",
 }
 N_CANDIDATES = 5
-WEIGHT_NAO, BONUS_INTENT, PENALTY_RECENT, PENALTY_NEAR = 0.3, 0.12, 0.25, 0.1
+WEIGHT_NO, BONUS_INTENT, PENALTY_RECENT, PENALTY_NEAR = 0.3, 0.12, 0.25, 0.1
 EMPTY = re.compile(r"\b(unknown|desconhecid[oa]s?|n/a|n\.a\.|não informad[oa]|não disponível|null)\b", re.I)
 STUDY = re.compile(r"\b(estudos?|pesquisa\w*|publicaram|artigo|levantamento|relatorio|autores)\b")
 CALL = re.compile(r"\b(comenta|comentarios|inscrev|link na descricao|me segue|compartilh|curt[ae])")
@@ -85,28 +85,28 @@ HUNDREDS = {"cem": 100, "cento": 100, "duzentos": 200, "duzentas": 200, "trezent
             "novecentos": 900}
 
 
-def spoken(texto):
+def spoken(text):
     """Números do que foi falado como dígitos (`bancada.numeros`), inclusive os por extenso ("oito em cada dez" →
     8 e 10; "vinte e cinco" → 25; "três mil" → 3000), para a conferência de número inventado."""
-    output = set(numbers(texto))
-    ws = normalize(texto).split() + ["."]
-    value, ativo = 0, False
+    output = set(numbers(text))
+    ws = normalize(text).split() + ["."]
+    value, active = 0, False
     for k, w in enumerate(ws):
         n = UNITS.get(w, TENS.get(w, HUNDREDS.get(w)))
-        if w in ("um", "uma") and not ativo and ws[k + 1] not in ("mil", "milhao", "milhoes", "bilhao"):
+        if w in ("um", "uma") and not active and ws[k + 1] not in ("mil", "milhao", "milhoes", "bilhao"):
             n = None  # artigo ("um dia"), não número
         if w == "cento" and k and ws[k - 1] == "por":
             n = None  # "por cento"
         if n is not None:
-            value, ativo = value + n, True
+            value, active = value + n, True
         elif w == "mil":
-            value, ativo = (value or 1) * 1000, True
-        elif w == "e" and ativo:
+            value, active = (value or 1) * 1000, True
+        elif w == "e" and active:
             continue
         else:
-            if ativo:
+            if active:
                 output.add(str(value))
-            value, ativo = 0, False
+            value, active = 0, False
     return output
 
 
@@ -116,14 +116,14 @@ def _words_norm(t):
     return [w for w in normalize(t).split() if w]
 
 
-def blocks(trechos, falas, profile):
+def blocks(segments, speeches, profile):
     """Trechos (com tempo) agrupados por fala do roteiro (parágrafo); sem roteiro, por pausa > 1,2 s ou pelo tamanho
     máximo de bloco do perfil. → [{i, ini, fim, texto, trechos: [índices]}]."""
     groups = []
-    if falas:
-        target = [len(_words_norm(f)) for f in falas if _words_norm(f)]
+    if speeches:
+        target = [len(_words_norm(f)) for f in speeches if _words_norm(f)]
         k, acc, current = 0, 0, []
-        for n, t in enumerate(trechos):
+        for n, t in enumerate(segments):
             current.append(n)
             acc += len(_words_norm(t["texto"]))
             if k < len(target) and acc >= 0.85 * target[k]:
@@ -133,35 +133,35 @@ def blocks(trechos, falas, profile):
             groups.append(current)
     else:
         current = []
-        for n, t in enumerate(trechos):
-            if current and (t["ini"] - trechos[current[-1]]["fim"] > 1.2
-                          or t["fim"] - trechos[current[0]]["ini"] > profile.bloco_s[1]):
+        for n, t in enumerate(segments):
+            if current and (t["ini"] - segments[current[-1]]["fim"] > 1.2
+                          or t["fim"] - segments[current[0]]["ini"] > profile.bloco_s[1]):
                 groups.append(current)
                 current = []
             current.append(n)
         if current:
             groups.append(current)
-    return [{"i": i, "ini": trechos[g[0]]["ini"], "fim": trechos[g[-1]]["fim"],
-             "texto": " ".join(trechos[n]["texto"] for n in g), "trechos": g} for i, g in enumerate(groups)]
+    return [{"i": i, "ini": segments[g[0]]["ini"], "fim": segments[g[-1]]["fim"],
+             "texto": " ".join(segments[n]["texto"] for n in g), "trechos": g} for i, g in enumerate(groups)]
 
 
-def moments(block, trechos, profile):
+def moments(block, segments, profile):
     """Momentos do bloco no tamanho da virada do perfil; um trecho com número abre momento novo se o atual já tem um."""
     output, current = [], []
     for n in block["trechos"]:
-        t = trechos[n]
-        duration = (t["fim"] - trechos[current[0]]["ini"]) if current else 0
-        has_num = any(spoken(trechos[x]["texto"]) for x in current)
+        t = segments[n]
+        duration = (t["fim"] - segments[current[0]]["ini"]) if current else 0
+        has_num = any(spoken(segments[x]["texto"]) for x in current)
         if current and (duration > profile.virada_s[1]
                       or (spoken(t["texto"]) and has_num)
-                      or trechos[current[-1]]["fim"] - trechos[current[0]]["ini"] >= profile.virada_s[0]):
+                      or segments[current[-1]]["fim"] - segments[current[0]]["ini"] >= profile.virada_s[0]):
             output.append(current)
             current = []
         current.append(n)
     if current:
         output.append(current)
-    return [{"bloco": block["i"], "j": j, "ini": trechos[m[0]]["ini"], "fim": trechos[m[-1]]["fim"],
-             "texto": " ".join(trechos[n]["texto"] for n in m), "trechos": m} for j, m in enumerate(output)]
+    return [{"bloco": block["i"], "j": j, "ini": segments[m[0]]["ini"], "fim": segments[m[-1]]["fim"],
+             "texto": " ".join(segments[n]["texto"] for n in m), "trechos": m} for j, m in enumerate(output)]
 
 
 # ---------------------------------------------------------------- 2. leitura e tratamento
@@ -174,11 +174,11 @@ def _rule(m):
                           entidades=Entities(numeros=sorted(spoken(t))))
 
 
-def read(block, ms, modo, profile, antes=""):
-    trat = [t for t in TREATMENTS if modo == "apresentador" or t not in SO_PRESENTER]
-    text = local.prompt("direcao_leitura", intencoes=", ".join(P.INTENTS), tratamentos=", ".join(trat),
-                         regras_tratamento=RULES_TREATMENT.get(modo, RULES_TREATMENT["dark"]), modo=modo,
-                         ritmo=profile.id, antes=antes[-300:], n=len(ms),
+def read(block, ms, mode, profile, before=""):
+    trat = [t for t in TREATMENTS if mode == "apresentador" or t not in ONLY_PRESENTER]
+    text = local.prompt("direction_reading", intencoes=", ".join(P.INTENTS), tratamentos=", ".join(trat),
+                         regras_tratamento=RULES_TREATMENT.get(mode, RULES_TREATMENT["dark"]), modo=mode,
+                         ritmo=profile.id, antes=before[-300:], n=len(ms),
                          momentos="\n".join(f"{k + 1}. {m['texto']}" for k, m in enumerate(ms)))
     r = local.ask(text, ReadingBlock, max_tokens=300 + 160 * len(ms), operation="direction")
     if not r or len(r.momentos) != len(ms):
@@ -198,12 +198,12 @@ def _fix(x: ReadingMoment, m):
     return x
 
 
-def treat(readings, modo):
+def treat(readings, mode):
     """Tratamento possível no modo; o mesmo três vezes seguidas troca o terceiro (variedade)."""
     output = []
     for x in readings:
         t = x.tratamento
-        if modo != "apresentador" and t in SO_PRESENTER:
+        if mode != "apresentador" and t in ONLY_PRESENTER:
             t = "voz_motion" if t == "camera_peca" else "midia_motion"
         if len(output) >= 2 and output[-1] == output[-2] == t:
             t = {"midia_motion": "voz_motion", "voz_motion": "midia_motion", "camera_cheia": "camera_peca",
@@ -226,33 +226,33 @@ def _vectors_cards(cards):
             for f in cards}
 
 
-def _similarity_words(texto, f):
+def _similarity_words(text, f):
     """Plano B sem embeddings: proporção de radicais do momento que aparecem nos exemplos da ficha."""
     def rad(t):
         return {w[:5] for w in _words_norm(t) if len(w) > 3}
-    m = rad(texto)
+    m = rad(text)
     if not m:
         return 0.0
-    sim = rad(" ".join(f.exemplos_sim + [f.comunica]))
-    nao = rad(" ".join(f.exemplos_nao))
-    return len(m & sim) / len(m) - WEIGHT_NAO * len(m & nao) / len(m)
+    yes_words = rad(" ".join(f.exemplos_sim + [f.comunica]))
+    no_words = rad(" ".join(f.exemplos_nao))
+    return len(m & yes_words) / len(m) - WEIGHT_NO * len(m & no_words) / len(m)
 
 
-def _fits(f, tratamento, dur, formatos):
-    if not set(formatos) <= set(f.formatos) or dur < f.duracao_min * 0.8:
+def _fits(f, treatment, duration, formats):
+    if not set(formats) <= set(f.formatos) or duration < f.duracao_min * 0.8:
         return False
-    if tratamento == "3d":
+    if treatment == "3d":
         return f.peso == "3d"
-    if tratamento == "camera_2_5d":
+    if treatment == "camera_2_5d":
         return f.peso == "2_5d" or f.rosto == "sobre_camera"
-    if tratamento in ("voz_motion", "camera_peca"):
+    if treatment in ("voz_motion", "camera_peca"):
         return f.tela_cheia
-    if tratamento == "midia_motion":
+    if treatment == "midia_motion":
         return not f.tela_cheia
     return True
 
 
-def candidates(m, reading, tratamento, cards, vet_m, vet_f, used, formatos, profile, chosen):
+def candidates(m, reading, treatment, cards, vet_m, vet_f, used, formats, profile, chosen):
     """As N_CANDIDATAS melhores [(pontos, ficha)] para o momento. `usadas`: {peça: último t}; `escolhidas`: [(ficha,
     t)] já escolhidas no vídeo (cotas). Se o tratamento deixar menos de 5, completa com as outras que cabem no formato."""
     from esteira.ai import embeddings as E
@@ -260,10 +260,10 @@ def candidates(m, reading, tratamento, cards, vet_m, vet_f, used, formatos, prof
     text_n = sum(1 for f, _ in chosen if f.peso == "texto")
     last_3d = max((t for f, t in chosen if f.peso == "3d"), default=-1e9)
 
-    def pontos(f):
+    def points(f):
         if vet_m is not None and vet_f is not None:
-            sim, nao = vet_f[f.id]
-            s = E.cosine(vet_m, sim) - (WEIGHT_NAO * E.cosine(vet_m, nao) if nao else 0.0)
+            yes_words, no_words = vet_f[f.id]
+            s = E.cosine(vet_m, yes_words) - (WEIGHT_NO * E.cosine(vet_m, no_words) if no_words else 0.0)
         else:
             s = _similarity_words(m["texto"], f)
         if reading.intencao in f.intencoes:
@@ -278,12 +278,12 @@ def candidates(m, reading, tratamento, cards, vet_m, vet_f, used, formatos, prof
             s -= 0.1
         return round(s, 4)
 
-    certas = [f for f in cards if _fits(f, tratamento, duration, formatos)]
-    order = sorted(certas, key=pontos, reverse=True)[:N_CANDIDATES]
+    certas = [f for f in cards if _fits(f, treatment, duration, formats)]
+    order = sorted(certas, key=points, reverse=True)[:N_CANDIDATES]
     if len(order) < N_CANDIDATES:
-        rest = [f for f in cards if f not in order and set(formatos) <= set(f.formatos) and duration >= f.duracao_min * 0.8]
-        order += sorted(rest, key=pontos, reverse=True)[:N_CANDIDATES - len(order)]
-    return [(pontos(f), f) for f in order]
+        rest = [f for f in cards if f not in order and set(formats) <= set(f.formatos) and duration >= f.duracao_min * 0.8]
+        order += sorted(rest, key=points, reverse=True)[:N_CANDIDATES - len(order)]
+    return [(points(f), f) for f in order]
 
 
 # ---------------------------------------------------------------- 4–5. escolha e preenchimento
@@ -293,12 +293,12 @@ def lines_candidates(cards):
                      for f in cards)
 
 
-def choose(m, reading, tratamento, cands):
+def choose(m, reading, treatment, cands):
     if len(cands) == 1:
         return cands[0][1], "única candidata", "regra"
     lines = lines_candidates([f for _, f in cands])
-    text = local.prompt("direcao_escolha", texto=m["texto"], intencao=reading.intencao, tom=reading.tom,
-                         tratamento=tratamento, numeros=", ".join(reading.entidades.numeros) or "nenhum",
+    text = local.prompt("direction_choice", texto=m["texto"], intencao=reading.intencao, tom=reading.tom,
+                         treatment=treatment, numeros=", ".join(reading.entidades.numeros) or "nenhum",
                          candidatas=lines)
     r = local.ask(text, Escolha, max_tokens=200, operation="direction")
     by_id = {f.id: f for _, f in cands}
@@ -319,42 +319,42 @@ def _describe_fits(f):
     return "\n".join(lines)
 
 
-def problems(f, enc, bot, texto):
+def problems(f, enc, bot, text):
     """Erros do preenchimento: limites da ficha + número que não foi dito no momento."""
     errors = P.validate_data(f, enc, bot)
     values = json.dumps(enc, ensure_ascii=False)
     of_number = bool(f.intencoes) and f.intencoes[0] == "numero"
-    if of_number and spoken(texto) and not numbers(values):
+    if of_number and spoken(text) and not numbers(values):
         errors.append("peça de número sem o número dito: ponha o valor como foi falado")
-    if of_number and not spoken(texto):
+    if of_number and not spoken(text):
         errors.append("peça de número, mas nenhum número foi dito neste momento")
-    invented = numbers(values) - spoken(texto)
+    invented = numbers(values) - spoken(text)
     if invented:
         errors.append(f"números que não foram ditos: {', '.join(sorted(invented))}")
     if EMPTY.search(values):
         errors.append("campo com marcador vazio (Unknown, N/A...): deixe de fora o que não foi dito")
     for e in f.encaixes:
         if e.tipo == "pares" and isinstance(enc.get(e.nome), list):
-            rotulos = [str(x.get("rotulo", "")).strip() for x in enc[e.nome] if isinstance(x, dict)]
-            if any(len(r.replace("*", "")) < 3 for r in rotulos):
+            labels = [str(x.get("rotulo", "")).strip() for x in enc[e.nome] if isinstance(x, dict)]
+            if any(len(r.replace("*", "")) < 3 for r in labels):
                 errors.append(f"{e.nome}: cada rótulo é um item completo, não um pedaço da frase")
     if "valor_a" in enc and str(enc["valor_a"]) == str(enc.get("valor_b")):
         errors.append("comparação de dois valores iguais não compara nada: use outra peça")
     pairs = [str(x.get("valor", "")) for x in enc.get("valores") or [] if isinstance(x, dict)]
     if f.id.startswith("barras") and (not all(re.search(r"\d", v) for v in pairs) or len(set(pairs)) < 2):
         errors.append("barras precisam de números diferentes ditos na fala: use outra peça")
-    if f.id == "citacao_estudo" and not STUDY.search(normalize(texto)):
+    if f.id == "citacao_estudo" and not STUDY.search(normalize(text)):
         errors.append("a fala não cita estudo nenhum: use outra peça")
-    if f.id == "cta" and not CALL.search(normalize(texto)):
+    if f.id == "cta" and not CALL.search(normalize(text)):
         errors.append("a fala não chama o público para nada: use outra peça")
     if f.id == "passo_a_passo" and re.match(r"\W*passo\s*:", str(enc.get("titulo", "")), re.I):
         errors.append("titulo: sem 'Passo:' quando não há número de passo")
     return errors
 
 
-def cross_check(f, enc, m, contexto):
+def cross_check(f, enc, m, context):
     """Segunda passada da LLM local: o texto de tela diz o que a fala diz? Sem resposta, passa."""
-    r = local.ask(local.prompt("direcao_conferir", texto=m["texto"], contexto=contexto[-300:], peca=f.id,
+    r = local.ask(local.prompt("direction_check", texto=m["texto"], contexto=context[-300:], peca=f.id,
                                      comunica=f.comunica, tela=json.dumps(enc, ensure_ascii=False)),
                         Verification, max_tokens=300, operation="direction")
     return [f"o texto de tela não bate com a fala: {r.problema}"] if getattr(r, "fiel", True) is False else []
@@ -362,7 +362,7 @@ def cross_check(f, enc, m, contexto):
 
 def quotes(project):
     """Blocos [!cite] do roteiro, com a fala em que aparecem: a única fonte de trecho, autor e ano."""
-    file = project.pasta / "roteiro.json"
+    file = project.folder_path / "roteiro.json"
     if not file.exists():
         return []
     speeches = _speeches(project)
@@ -378,13 +378,13 @@ def _quote_of(m, cits):
     return cits[n] if note >= 0.6 else None
 
 
-def _fit(texto, limite):
-    if len(texto) <= limite:
-        return texto
-    sentence = re.match(r".+?[.!?](?=\s|$)", texto)
-    if sentence and len(sentence[0]) <= limite:
+def _fit(text, limit):
+    if len(text) <= limit:
+        return text
+    sentence = re.match(r".+?[.!?](?=\s|$)", text)
+    if sentence and len(sentence[0]) <= limit:
         return sentence[0]
-    return texto[:limite - 1].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
+    return text[:limit - 1].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
 
 
 def _fill_quote(f, m, cits):
@@ -399,14 +399,14 @@ def _fill_quote(f, m, cits):
     return None if P.validate_data(f, enc, {}) else (enc, {})
 
 
-def fill(f, m, reading, cits=(), contexto=""):
+def fill(f, m, reading, cits=(), context=""):
     """(encaixes, botões) válidos ou None depois de duas tentativas."""
     if any(e.nome == "trecho_en" for e in f.encaixes):
         return _fill_quote(f, m, cits)
     errors = []
     for _ in range(2):
         text = local.prompt(
-            "direcao_preencher", peca=f.id, comunica=f.comunica, texto=m["texto"],
+            "direction_fill", peca=f.id, comunica=f.comunica, texto=m["texto"],
             numeros=", ".join(reading.entidades.numeros) or "nenhum", datas=", ".join(reading.entidades.datas) or "nenhuma",
             nomes=", ".join(reading.entidades.nomes) or "nenhum", encaixes=_describe_fits(f),
             botoes="\n".join(f"- {b.nome}: {b.valores} (padrão {b.padrao})" for b in f.botoes) or "(nenhum)",
@@ -417,16 +417,16 @@ def fill(f, m, reading, cits=(), contexto=""):
             continue
         enc = {k: v for k, v in r.encaixes.items() if v not in (None, "", [])}
         bot = {k: v for k, v in r.botoes.items() if any(b.nome == k for b in f.botoes)}
-        errors = problems(f, enc, bot, m["texto"]) or cross_check(f, enc, m, contexto)
+        errors = problems(f, enc, bot, m["texto"]) or cross_check(f, enc, m, context)
         if not errors:
             return enc, bot
     return None
 
 
-def beats(f, enc, m, palavras):
+def beats(f, enc, m, words):
     """Instante (s) em que a palavra de cada encaixe de `batidas` é dita dentro do momento."""
     output = {}
-    spoken = [w for w in palavras if m["ini"] - 0.05 <= w["ini"] <= m["fim"] + 0.05]
+    spoken = [w for w in words if m["ini"] - 0.05 <= w["ini"] <= m["fim"] + 0.05]
     for name in f.batidas:
         v = enc.get(name)
         target = None
@@ -444,30 +444,30 @@ def beats(f, enc, m, palavras):
 
 # ---------------------------------------------------------------- mapa
 
-def redo_scene(cena, ficha):
+def redo_scene(scene, card):
     """Troca a peça de uma cena do mapa (linha do tempo do app): preenche a nova pela IA local com a mesma validação
     da direção; se não der, aproveita título/valores que a cena já tinha. → a cena atualizada (ou ValueError)."""
-    m = {"ini": cena["t"], "fim": cena["ate"], "texto": cena.get("frase", "")}
-    reading = ReadingMoment(intencao=cena.get("intencao") or "destaque", tratamento=cena.get("tratamento", "midia_motion"),
+    m = {"ini": scene["t"], "fim": scene["ate"], "texto": scene.get("frase", "")}
+    reading = ReadingMoment(intencao=scene.get("intencao") or "destaque", tratamento=scene.get("tratamento", "midia_motion"),
                              entidades=Entities(numeros=sorted(spoken(m["texto"]))))
-    filled = fill(ficha, m, reading)
+    filled = fill(card, m, reading)
     if not filled:
-        enc = P.legacy({"titulo": cena.get("titulo", ""), "valores": cena.get("valores", [])}, ficha)
-        if problems(ficha, enc, {}, m["texto"]):
-            raise ValueError(f"{ficha.id} não serve para este momento (a IA não preencheu e o que havia não cabe)")
+        enc = P.legacy({"titulo": scene.get("titulo", ""), "valores": scene.get("valores", [])}, card)
+        if problems(card, enc, {}, m["texto"]):
+            raise ValueError(f"{card.id} não serve para este momento (a IA não preencheu e o que havia não cabe)")
         filled = (enc, {})
     enc, bot = filled
-    duration = min(max(cena["ate"] - cena["t"], ficha.duracao_min), ficha.duracao_max)
-    cena.update(cena=ficha.id, encaixes=enc, botoes={**P.defaults(ficha), **bot}, takeover=ficha.tela_cheia,
-                titulo=str(enc.get("titulo", ""))[:80], valores=enc.get("valores", []), sfx=ficha.sfx.get("entrada"),
-                ate=round(cena["t"] + duration, 3), manual=True, por="voce", motivo="trocada na linha do tempo")
-    return cena
+    duration = min(max(scene["ate"] - scene["t"], card.duracao_min), card.duracao_max)
+    scene.update(cena=card.id, encaixes=enc, botoes={**P.defaults(card), **bot}, takeover=card.tela_cheia,
+                titulo=str(enc.get("titulo", ""))[:80], valores=enc.get("valores", []), sfx=card.sfx.get("entrada"),
+                ate=round(scene["t"] + duration, 3), manual=True, por="voce", motivo="trocada na linha do tempo")
+    return scene
 
 
-def answer_key(ep, cena, aceita, origem):
+def answer_key(ep, scene, aceita, origin):
     """Caso da tarefa `bloco_peca` da bancada (momento + as 5 candidatas → a peça que a pessoa aprovou/trocou)."""
     from esteira.bench import ANSWER_KEY
-    ids = cena.get("candidatas") or []
+    ids = scene.get("candidatas") or []
     if not ids:
         return False
     cards = []
@@ -477,24 +477,24 @@ def answer_key(ep, cena, aceita, origem):
         except (KeyError, ValueError):
             continue
     ANSWER_KEY.mkdir(parents=True, exist_ok=True)
-    instance = {"id": f"{origem}:{ep}:{cena.get('bloco')}:{cena.get('momento')}", "texto": cena.get("frase", ""),
-            "intencao": cena.get("intencao", ""), "tratamento": cena.get("tratamento", ""),
-            "numeros": ", ".join(sorted(spoken(cena.get("frase", "")))), "candidatas": lines_candidates(cards),
-            "aceitas": [aceita], "ia": cena.get("cena") if origem == "troca" else None}
+    instance = {"id": f"{origin}:{ep}:{scene.get('bloco')}:{scene.get('momento')}", "texto": scene.get("frase", ""),
+            "intencao": scene.get("intencao", ""), "tratamento": scene.get("tratamento", ""),
+            "numeros": ", ".join(sorted(spoken(scene.get("frase", "")))), "candidatas": lines_candidates(cards),
+            "aceitas": [aceita], "ia": scene.get("cena") if origin == "troca" else None}
     with open(ANSWER_KEY / "bloco_peca.jsonl", "a") as f:
         f.write(json.dumps(instance, ensure_ascii=False) + "\n")
     return True
 
 
-def answer_key_fill(ep, cena, origem):
+def answer_key_fill(ep, scene, origin):
     """Caso de preenchimento (momento + peça → encaixes e botões que ficaram): treino da tarefa `preencher`."""
     from esteira.bench import ANSWER_KEY
-    if not cena.get("encaixes"):
+    if not scene.get("encaixes"):
         return False
     ANSWER_KEY.mkdir(parents=True, exist_ok=True)
-    instance = {"id": f"{origem}:{ep}:{cena.get('bloco')}:{cena.get('momento')}:{cena['cena']}", "texto": cena.get("frase", ""),
-            "peca": cena["cena"], "intencao": cena.get("intencao", ""), "encaixes": cena["encaixes"],
-            "botoes": cena.get("botoes") or {}}
+    instance = {"id": f"{origin}:{ep}:{scene.get('bloco')}:{scene.get('momento')}:{scene['cena']}", "texto": scene.get("frase", ""),
+            "peca": scene["cena"], "intencao": scene.get("intencao", ""), "encaixes": scene["encaixes"],
+            "botoes": scene.get("botoes") or {}}
     with open(ANSWER_KEY / "preencher.jsonl", "a") as f:
         f.write(json.dumps(instance, ensure_ascii=False) + "\n")
     return True
@@ -511,7 +511,7 @@ def approve_map(ep, mapping):
 
 
 def _speeches(project):
-    file = project.pasta / "roteiro.txt"
+    file = project.folder_path / "roteiro.txt"
     if not file.exists():
         return []
     return [x.strip() for x in file.read_text().splitlines() if x.strip() and not x.startswith("#")]
@@ -529,21 +529,21 @@ def _fixed(m, marks, gat, cards_id):
     return None
 
 
-def direct(project, estilo, profile=None, formatos=None):
+def direct(project, style, profile=None, formats=None):
     """Escreve `<ep>/estudio/mapa.json` pela direção por bloco; devolve o mapa."""
     from esteira.studio import marking, cut, director, triggers
     from esteira.ai import embeddings as E
     profile = profile or R.profile_of(project)
-    formatos = formatos or estilo.formatos
-    folder = project.pasta / "estudio"
+    formats = formats or style.formatos
+    folder = project.folder_path / "estudio"
     folder.mkdir(exist_ok=True)
     sentences, words = cut.sentences(project), cut.words(project)
     duration = sentences[-1]["fim"] + 1.0 if sentences else 0
     words_d = [{"p": w["p"], "ini": w["ini"]} for w in words]
-    spans = director.spans(sentences, words, estilo.regras.trecho_max_s)
+    spans = director.spans(sentences, words, style.regras.trecho_max_s)
     marks = marking.marks(project, spans)
-    gat = triggers.aplicar(spans, estilo.gatilhos)
-    cards = [f for f in P.in_channel(P.list_all(), estilo) if f.motor in ("html", "effectcraft")]
+    gat = triggers.apply(spans, style.gatilhos)
+    cards = [f for f in P.in_channel(P.list_all(), style) if f.motor in ("html", "effectcraft")]
     if not cards:
         raise SystemExit("acervo vazio para o canal: aprove peças na Fábrica ou tire do filtro do canal")
     by_id = {f.id: f for f in cards}
@@ -560,34 +560,34 @@ def direct(project, estilo, profile=None, formatos=None):
     before = ""
     for b, ms in zip(bls, ms_by_block, strict=True):
         events.progress(b["i"] + 1, len(bls), f"bloco {b['i'] + 1}: {b['texto'][:50]}")
-        readings, origin = read(b, ms, estilo.modo, profile, before)
+        readings, origin = read(b, ms, style.modo, profile, before)
         before = b["texto"]
-        trats = treat(readings, estilo.modo)
+        trats = treat(readings, style.modo)
         for m, lt, tr in zip(ms, readings, trats, strict=True):
             if tr == "camera_cheia":
                 decisoes["midia"] += 1
                 continue
             fixed = _fixed(m, marks, gat, by_id)
-            reserva = []
+            reserve = []
             if fixed:
                 cands = [(1.0, by_id[fixed[0]])]
                 if fixed[1] == "gatilho":  # o gatilho sugere; se a peça não preencher, a direção escolhe outra
-                    reserva = candidates(m, lt, tr, cards, vet_by[id(m)], vet_f, used, formatos, profile, chosen)
+                    reserve = candidates(m, lt, tr, cards, vet_by[id(m)], vet_f, used, formats, profile, chosen)
             else:
-                cands = candidates(m, lt, tr, cards, vet_by[id(m)], vet_f, used, formatos, profile, chosen)
+                cands = candidates(m, lt, tr, cards, vet_by[id(m)], vet_f, used, formats, profile, chosen)
             if not cands:
                 decisoes["midia"] += 1
                 continue
-            f, reason, por = choose(m, lt, tr, cands)
-            por = fixed[1] if fixed else por
-            order = [f] + [x for _, x in cands + reserva if x.id != f.id]
+            f, reason, by_choice = choose(m, lt, tr, cands)
+            by_choice = fixed[1] if fixed else by_choice
+            order = [f] + [x for _, x in cands + reserve if x.id != f.id]
             filled = None
             for target in order[:3]:
                 filled = fill(target, m, lt, cits, b["texto"])
                 if filled:
                     if target.id != f.id:
                         reason = f"{f.id} não preencheu; ficou {target.id}"
-                        por = "local" if por == "gatilho" else por
+                        by_choice = "local" if by_choice == "gatilho" else by_choice
                     f = target
                     break
             if not filled:
@@ -602,13 +602,13 @@ def direct(project, estilo, profile=None, formatos=None):
                 continue
             bat = beats(f, enc, m, words_d)
             t = max(t, bat.get("valor", 0) - 0.5)  # peça de número abre quando ele é dito, não vazia antes
-            decisoes[por] = decisoes.get(por, 0) + 1
+            decisoes[by_choice] = decisoes.get(by_choice, 0) + 1
             used[f.id] = m["ini"]
             chosen.append((f, m["ini"]))
             scenes.append({"t": round(t, 3), "ate": round(t + dur, 3), "cena": f.id, "encaixes": enc,
                           "botoes": {**P.defaults(f), **bot}, "batidas": bat,
                           "takeover": f.tela_cheia, "frase": m["texto"], "titulo": str(enc.get("titulo", ""))[:80],
-                          "valores": enc.get("valores", []), "ancora": "", "por": por, "motivo": reason,
+                          "valores": enc.get("valores", []), "ancora": "", "por": by_choice, "motivo": reason,
                           "tratamento": tr, "intencao": lt.intencao, "leitura": origin, "bloco": b["i"], "momento": m["j"],
                           "candidatas": [x.id for _, x in cands], "pontos": [p for p, _ in cands],
                           "sfx": f.sfx.get("entrada"), "frase_i": m["trechos"][0],
@@ -622,7 +622,7 @@ def direct(project, estilo, profile=None, formatos=None):
         c["id"] = n
         c.setdefault("takeover", by_id[c["cena"]].tela_cheia if c["cena"] in by_id else False)
     warnings = R.cross_check(scenes, director._media_times(project), duration, profile)
-    mapping = {"estilo": estilo.id, "versao": estilo.versao, "duracao": duration, "direcao": "blocos",
+    mapping = {"estilo": style.id, "versao": style.versao, "duracao": duration, "direcao": "blocos",
             "decisoes": decisoes, "cenas": scenes, "ritmo": {"perfil": profile.id, "avisos": warnings},
             "blocos": [{"i": b["i"], "ini": b["ini"], "fim": b["fim"], "texto": b["texto"][:120]} for b in bls],
             "embeddings": vet_f is not None}

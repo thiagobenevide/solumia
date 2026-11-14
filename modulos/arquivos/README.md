@@ -1,48 +1,48 @@
-# Arquivos
+# Files
 
-Biblioteca de estudo: PDF (artigos científicos), DOCX e PPTX (slides). DOCX/PPTX viram PDF no servidor
-(LibreOffice headless) e são lidos no mesmo leitor; o original fica guardado para baixar.
-Edição dentro do app: DOCX no editor de documentos (formatação, controle de alterações por autor,
-comentários, ortografia/reescrita pelo Claude como revisões), XLSX na planilha e PPTX no editor de slides;
-"Exportar…" gera ODT/PDF/ODS/ODP/CSV/Markdown ou nota de referência. CSV em grade e XML em texto; no desktop, "Abrir com…" LibreOffice/Craft Apps sobe
-sozinho o que for salvo lá (PUT `/original`). CSV abre em tabela e XML em árvore (o app lê o `/original`, ou a cópia baixada no aparelho; XML não vira PDF e já entra `pronto`).
+Study library: PDF (scientific articles), DOCX and PPTX (slides). DOCX/PPTX become PDF on the server
+(headless LibreOffice) and are read in the same reader; the original is kept for download.
+Editing inside the app: DOCX in the document editor (formatting, track changes per author,
+comments, spelling/rewriting by Claude as revisions), XLSX in the spreadsheet and PPTX in the slide editor;
+"Exportar…" generates ODT/PDF/ODS/ODP/CSV/Markdown or a reference note. CSV in a grid and XML as text; on desktop, "Abrir com…" LibreOffice/Craft Apps uploads
+on its own whatever is saved there (PUT `/original`). CSV opens as a table and XML as a tree (the app reads `/original`, or the copy downloaded on the device; XML does not become PDF and already enters as `pronto`).
 
-- Backend: `plataforma/backend/src/backend/files/` em `/api/arquivos` (núcleo comum, como as notas,
-  porque outros módulos anexam arquivos). Dados em `$AGENT_DATA/arquivos/<id>/`.
-- App: `app/` (`agent_arquivos`), montado em `plataforma/app/lib/main.dart` com `API_URL`/`API_TOKEN`.
+- Backend: `plataforma/backend/src/backend/files/` at `/api/arquivos` (shared core, like the notes,
+  because other modules attach files). Data in `$AGENT_DATA/arquivos/<id>/`.
+- App: `app/` (`agent_arquivos`), mounted in `plataforma/app/lib/main.dart` with `API_URL`/`API_TOKEN`.
 
-## Rotas (`Authorization: Bearer <GATEWAY_CLIENT_API_KEYS>`)
+## Routes (`Authorization: Bearer <GATEWAY_CLIENT_API_KEYS>`)
 
-| Rota | O quê |
+| Route | What |
 |---|---|
-| `GET /api/arquivos?q=&tipo=&pasta=` | lista (mais recente primeiro) |
-| `POST /api/arquivos` (multipart `arquivo`, `pasta`) | envia; PDF fica `pronto`, DOCX/PPTX `convertendo` |
-| `GET /api/arquivos/pastas` | pastas em uso |
-| `GET /api/arquivos/destaques?q=&arquivo_id=` | trechos marcados de todos os arquivos, com `referencia` Markdown |
-| `GET /api/arquivos/mudancas?desde=<seq>` | log `criado/editado/excluido/convertido/anotado` para sincronizar aparelhos |
-| `GET/PATCH/DELETE /api/arquivos/{id}` | meta; edita `titulo`, `pasta`, `tags`; exclui tudo |
-| `GET /api/arquivos/{id}/pdf` · `/original` · `/miniatura` | arquivos |
-| `PUT /api/arquivos/{id}/original` (multipart `arquivo`) | troca o original por uma versão editada; reconverte |
-| `POST /api/arquivos/{id}/converter` | refaz a conversão |
-| `POST /api/arquivos/novo` (`{tipo: documento\|planilha\|apresentacao, titulo, pasta}`) | DOCX/XLSX/PPTX em branco (LibreOffice) |
-| `GET /api/arquivos/{id}/exportar?formato=` | original convertido pelo LibreOffice (`EXPORTACOES` em `biblioteca.py`: odt/pdf/rtf/txt/html, ods/csv, odp…) |
-| `GET /api/arquivos/reescrita` · `POST /api/arquivos/reescrever` | reescrita de trecho (TCC) pelo Claude Code no worker do PC — nunca a API da Anthropic; `arquivo_id` manda o documento como contexto |
-| `GET/POST /api/arquivos/{id}/traducao` | tradução do documento para o português, frase a frase por página (LLM local do worker, sem raciocínio), guardada em `traducao.json`; POST só traduz as páginas cujas frases mudaram (ou `refazer`). O leitor mostra no painel, com a diagramação do PDF, ou sobre a própria página |
-| `GET/PUT /api/arquivos/{id}/anotacoes` | traços, destaques e textos; PUT com `versao_base` (409 = outro aparelho salvou antes; o app mescla) |
+| `GET /api/arquivos?q=&tipo=&pasta=` | list (most recent first) |
+| `POST /api/arquivos` (multipart `arquivo`, `pasta`) | upload; PDF becomes `pronto`, DOCX/PPTX `convertendo` |
+| `GET /api/arquivos/pastas` | folders in use |
+| `GET /api/arquivos/destaques?q=&arquivo_id=` | marked passages from every file, with a Markdown `referencia` |
+| `GET /api/arquivos/mudancas?desde=<seq>` | `criado/editado/excluido/convertido/anotado` log to sync devices |
+| `GET/PATCH/DELETE /api/arquivos/{id}` | meta; edits `titulo`, `pasta`, `tags`; deletes everything |
+| `GET /api/arquivos/{id}/pdf` · `/original` · `/miniatura` | files |
+| `PUT /api/arquivos/{id}/original` (multipart `arquivo`) | replaces the original with an edited version; converts again |
+| `POST /api/arquivos/{id}/converter` | redoes the conversion |
+| `POST /api/arquivos/novo` (`{tipo: documento\|planilha\|apresentacao, titulo, pasta}`) | blank DOCX/XLSX/PPTX (LibreOffice) |
+| `GET /api/arquivos/{id}/exportar?formato=` | original converted by LibreOffice (`EXPORTACOES` in `biblioteca.py`: odt/pdf/rtf/txt/html, ods/csv, odp…) |
+| `GET /api/arquivos/reescrita` · `POST /api/arquivos/reescrever` | passage rewriting (thesis) by Claude Code on the PC worker — never the Anthropic API; `arquivo_id` sends the document as context |
+| `GET/POST /api/arquivos/{id}/traducao` | translation of the document into Portuguese, sentence by sentence per page (worker local LLM, no reasoning), stored in `traducao.json`; POST only translates the pages whose sentences changed (or `refazer`). The reader shows it in the panel, with the PDF layout, or over the page itself |
+| `GET/PUT /api/arquivos/{id}/anotacoes` | strokes, highlights and texts; PUT with `versao_base` (409 = another device saved first; the app merges) |
 
-O mesmo backend roda no PC (`http://localhost:48080`, uso interno) e na VPS atrás do nginx
-(`https://…`, uso externo pelo tablet, celular e web). Na VPS a imagem Docker já traz LibreOffice e poppler.
+The same backend runs on the PC (`http://localhost:48080`, internal use) and on the VPS behind nginx
+(`https://…`, external use from the tablet, phone and web). On the VPS the Docker image already ships LibreOffice and poppler.
 
-## Edição pelo Collabora (WOPI)
+## Editing with Collabora (WOPI)
 
-`POST /api/arquivos/{id}/collabora` devolve `{url, access_token, access_token_ttl}`; o Collabora fala com
-`/wopi/files/{id}` (CheckFileInfo, contents GET/POST, travas) autenticado pelo token, nunca pela chave do app.
-`GET /wopi/abrir/{id}?t=` abre no navegador (Linux/Windows, sem webview). Cada salvamento reconverte o PDF.
+`POST /api/arquivos/{id}/collabora` returns `{url, access_token, access_token_ttl}`; Collabora talks to
+`/wopi/files/{id}` (CheckFileInfo, contents GET/POST, locks) authenticated by the token, never by the app key.
+`GET /wopi/abrir/{id}?t=` opens it in the browser (Linux/Windows, no webview). Each save converts the PDF again.
 
-Env (`GATEWAY_`): `COLLABORA_URL` (pública; vazio = desligado), `COLLABORA_INTERNO_URL` (discovery),
-`WOPI_BASE_URL` (como o Collabora alcança o backend; casa com `aliasgroup1`), `WOPI_SECRET`, `WOPI_TOKEN_MINUTOS`.
-VPS: serviço `collabora` no `infra/docker/docker-compose.yml` + blocos do nginx (`/browser`, `/hosting/*`, `/cool/`).
-No PC:
+Env (`GATEWAY_`): `COLLABORA_URL` (public; empty = off), `COLLABORA_INTERNO_URL` (discovery),
+`WOPI_BASE_URL` (how Collabora reaches the backend; matches `aliasgroup1`), `WOPI_SECRET`, `WOPI_TOKEN_MINUTOS`.
+VPS: `collabora` service in `infra/docker/docker-compose.yml` + nginx blocks (`/browser`, `/hosting/*`, `/cool/`).
+On the PC:
 
 ```
 docker run -d --name collabora -p 127.0.0.1:9980:9980 --cap-add MKNOD --add-host=host.docker.internal:host-gateway \
@@ -50,5 +50,5 @@ docker run -d --name collabora -p 127.0.0.1:9980:9980 --cap-add MKNOD --add-host
   -e "dictionaries=pt_BR en_US" collabora/code
 ```
 
-com `GATEWAY_COLLABORA_URL=http://localhost:9980`, `GATEWAY_WOPI_BASE_URL=http://host.docker.internal:48080` e o
-backend escutando em `0.0.0.0`. Web: acrescentar `--o:net.frame_ancestors=<origem do app>` ao `extra_params`.
+with `GATEWAY_COLLABORA_URL=http://localhost:9980`, `GATEWAY_WOPI_BASE_URL=http://host.docker.internal:48080` and the
+backend listening on `0.0.0.0`. Web: add `--o:net.frame_ancestors=<app origin>` to `extra_params`.

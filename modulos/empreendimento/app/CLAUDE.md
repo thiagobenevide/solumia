@@ -1,33 +1,38 @@
-# App Flutter do empreendimento
+# Empreendimento Flutter app
 
-Telas da produção de vídeos, montadas pela plataforma (`modulo_empreendimento.dart` → `plataforma/app/lib/modulos.dart`).
-Fala com a API JSON da esteira (`modulos/empreendimento/esteira/esteira/web/api.py`, `/api/v1`, porta 8765).
+Video production screens, mounted by the platform (`business_module.dart` → `plataforma/app/lib/modulos.dart`).
+Talks to the esteira JSON API (`modulos/empreendimento/esteira/esteira/web/api.py`, `/api/v1`, port 8765).
 
-## Mapa (achar aqui antes de abrir arquivo)
+## Map (look here before opening a file)
 
-- `lib/src/api_esteira.dart`: um método por rota da API (`grep -n 'Future' ` lista todos). Rota nova: método
-  aqui + rota em `web/api.py` (`grep -n '@router' web/api.py`).
-- `lib/src/modelos.dart`: `fromJson` dos tipos (Canal, Roteiro, EpisodioResumo, Episodio…). Teste em `test/modelos_test.dart`.
-- `lib/src/telas/empreendimento_tela.dart`: abas de topo → `producao_aba`, `roteiros_aba`, `fila_aba`,
-  `monitor_aba` (+ `grafo.dart`, `serie_temporal.dart`), `processos_aba` (+ `ProcessoTela`), `acervo_aba`, `custos_aba`,
-  `fabrica_aba` (painel ao vivo da fábrica: ideias do Claude → N1 da LLM local → portão → revisão → acervo, thumbs),
-  `dataset_aba` (dataset das Craft Apps, adaptadores e backup), `opcoes_aba`.
-- `lib/src/telas/episodio/episodio_tela.dart`: abas do episódio → `geral_aba`, `roteiro_aba`, `cortes_aba`,
-  `cenas_aba`, `graficos_aba`, `thumbs_aba`, `video_final`.
-- `lib/src/telas/editor/`: editor de gráficos/thumbs (`editor_tela.dart` é o maior arquivo, ~730 linhas: ler
-  por trecho; `campos.dart` são os campos do formulário).
-- `lib/src/youtube/`: aba **Canais** (gerência dos 5 canais) → `youtube_aba` → `canal_tela` (Gerência + uma aba
-  por coleção) → `item_tela`; `formulario.dart` monta o formulário pelo esquema. Fala com `/api/youtube` do backend
-  da plataforma (`api_youtube.dart`; backend em `modulos/empreendimento/youtube/`, notas do cofre).
-- `lib/src/recording/`: página **Gravação** (grupo Captura) → `recording_tab` (Câmera | Estúdio). Android:
-  `phone_camera_screen` + `camera_pro.dart` (canal do Kotlin `plataforma/app/android/.../recording/`: Camera2 +
-  MediaCodec → TCP e MP4 local). PC: `receiver_screen` + `receiver.dart` (ffmpeg grava o take e remuxa para MOV,
-  prévia UDP, cópia para o Estúdio, v4l2loopback); protocolo e args do ffmpeg em `protocol.dart` (teste
-  `test/recording_protocol_test.dart`). Estúdio: `capture_studio_screen` (+ `studio_item_panel` formato/máscara/
-  enquadramento, `studio_sources_panel` fontes/mixer) + `capture_api.dart` → motor GStreamer
-  `modulos/empreendimento/capture` (`python -m capture`, API 127.0.0.1:5620; `model.py` puro e testado,
-  `engine.py` pipeline, `overlay.py` desenho, `face.py` rosto, `api.py` rotas; venv: `infra/scripts/install_capture`).
-- `lib/src/telas/util.dart`: widgets e formatações comuns — conferir aqui antes de criar helper novo.
-- Núcleo comum (`plataforma/app_core/lib/src/`): `api.dart` (HTTP), `sondagem.dart` (polling), `tema.dart`.
+- `lib/src/api_esteira.dart`: one method per API route (`grep -n 'Future' ` lists them all). New route: method
+  here + route in `web/api.py` (`grep -n '@router' web/api.py`).
+- `lib/src/models.dart`: `fromJson` of the types (Channel, Script, EpisodeSummary, Episode…). Test in `test/models_test.dart`.
+- `lib/src/screens/business_screen.dart`: top tabs → `production_tab`, `scripts_tab`, `queue_tab`,
+  `monitor_tab` (+ `graph.dart`, `time_series.dart`), `processes_tab` (+ `ProcessScreen`), `library_tab`, `costs_tab`,
+  `factory_tab` (live factory panel: Claude ideas → local LLM N1 → gate → review → library, thumbnails),
+  `dataset_tab` (Craft Apps dataset, adapters and backup), `options_tab`.
+- `lib/src/screens/episode/episode_screen.dart`: episode tabs → `general_tab`, `script_tab`, `cuts_tab`,
+  `scenes_tab`, `graphics_tab`, `thumbs_tab`, `final_video`.
+- `lib/src/screens/editor/`: graphics/thumbnail editor (`editor_screen.dart` is the largest file, ~950 lines: read
+  it in parts; `fields.dart` are the form fields).
+- `lib/src/studio/`: Studio (motion graphics pieces, styles, factory, production): `studio_tab`, `style_screen` +
+  `style_tabs` (part file), `factory_screen`, `production_screen`, `piece_preview`, `library_screen`, `cut_screen`,
+  `marking_screen`, `timeline`, `system`.
+- `lib/src/youtube/`: **Channels** tab (management of the 5 channels) → `youtube_tab` → `channel_screen` (Management +
+  one tab per collection) → `item_screen`; `form.dart` builds the form from the schema. Talks to the platform
+  backend `/api/youtube` (`youtube_api.dart`; backend in `modulos/empreendimento/youtube/`, vault notes).
+- `lib/src/jobs/`: **Jobs** section → `jobs_screen` (+ `jobs_map`), `resumes_screen`; `jobs_api.dart` talks to
+  `/api/vagas`.
+- `lib/src/recording/`: **Recording** page (Capture group) → `recording_tab` (Camera | Studio). Android:
+  `phone_camera_screen` + `camera_pro.dart` (Kotlin channel `plataforma/app/android/.../recording/`: Camera2 +
+  MediaCodec → TCP and local MP4). PC: `receiver_screen` + `receiver.dart` (ffmpeg records the take and remuxes to MOV,
+  UDP preview, copy to the Studio, v4l2loopback); protocol and ffmpeg args in `protocol.dart` (test
+  `test/recording_protocol_test.dart`). Studio: `capture_studio_screen` (+ `studio_item_panel` format/mask/
+  framing, `studio_sources_panel` sources/mixer) + `capture_api.dart` → GStreamer engine
+  `modulos/empreendimento/capture` (`python -m capture`, API 127.0.0.1:5620; `model.py` pure and tested,
+  `engine.py` pipeline, `overlay.py` drawing, `face.py` face, `api.py` routes; venv: `infra/scripts/install_capture`).
+- `lib/src/screens/util.dart`: shared widgets and formatting — check here before writing a new helper.
+- Shared core (`plataforma/app_core/lib/src/`): `api.dart` (HTTP), `sondagem.dart` (polling), `tema.dart`.
 
-Validar: `infra/scripts/verificar modulos/empreendimento/app` (na raiz do repositório).
+Validate: `infra/scripts/verificar modulos/empreendimento/app` (at the repository root).

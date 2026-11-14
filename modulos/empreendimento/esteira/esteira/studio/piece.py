@@ -126,7 +126,7 @@ def load(id_):
     return Card.model_validate_json(file.read_text())
 
 
-def list_all(estado=None):
+def list_all(state=None):
     """Fichas válidas do acervo (as inválidas ficam de fora; o portão diz o porquê)."""
     output = []
     for file in sorted(FOLDER.glob("*/ficha.json")):
@@ -134,35 +134,35 @@ def list_all(estado=None):
             f = Card.model_validate_json(file.read_text())
         except ValidationError:
             continue
-        if estado is None or f.estado == estado:
+        if state is None or f.estado == state:
             output.append(f)
     return output
 
 
-def save(ficha: Card):
-    folder(ficha.id).mkdir(parents=True, exist_ok=True)
-    (folder(ficha.id) / "ficha.json").write_text(ficha.model_dump_json(indent=1, exclude_defaults=False))
+def save(card: Card):
+    folder(card.id).mkdir(parents=True, exist_ok=True)
+    (folder(card.id) / "ficha.json").write_text(card.model_dump_json(indent=1, exclude_defaults=False))
 
 
-def in_channel(cards, estilo):
+def in_channel(cards, style):
     """Peças que o canal pode usar: aprovadas, no formato e fora do filtro (id, intenção ou tema filtrado)."""
-    criteria = set(estilo.regras.filtro)
+    criteria = set(style.regras.filtro)
     return [f for f in cards if f.estado == "aprovada" and f.id not in criteria
             and not criteria & set(f.intencoes) and not criteria & set(f.temas)]
 
 
 # ---------------------------------------------------------------- preenchimento
 
-def defaults(ficha: Card):
-    return {b.nome: b.padrao for b in ficha.botoes}
+def defaults(card: Card):
+    return {b.nome: b.padrao for b in card.botoes}
 
 
-def validate_data(ficha: Card, encaixes: dict, botoes: dict | None = None):
+def validate_data(card: Card, slots: dict, buttons: dict | None = None):
     """Confere o preenchimento da IA local contra os limites da ficha → lista de erros (vazia = ok). O erro volta
     ao modelo como está, então tem de dizer o que corrigir."""
     errors = []
-    for e in ficha.encaixes:
-        v = encaixes.get(e.nome)
+    for e in card.encaixes:
+        v = slots.get(e.nome)
         if v in (None, "", []):
             if e.obrigatorio:
                 errors.append(f"{e.nome}: obrigatório")
@@ -202,10 +202,10 @@ def validate_data(ficha: Card, encaixes: dict, botoes: dict | None = None):
                 errors.append(f"{e.nome}: número com unidade (%, R$, anos…)")
         if e.opcoes and e.tipo in ("icone", "tematico") and v not in e.opcoes:
             errors.append(f"{e.nome}: um de {e.opcoes}")
-    if extras := set(encaixes) - {e.nome for e in ficha.encaixes}:
+    if extras := set(slots) - {e.nome for e in card.encaixes}:
         errors.append(f"encaixes que a peça não tem: {sorted(extras)}")
-    for name, v in (botoes or {}).items():
-        b = next((b for b in ficha.botoes if b.nome == name), None)
+    for name, v in (buttons or {}).items():
+        b = next((b for b in card.botoes if b.nome == name), None)
         if not b:
             errors.append(f"botão que a peça não tem: {name}")
         elif v not in b.valores:
@@ -285,10 +285,10 @@ def sample_page():
     return {**d, "arquivo": str(file)}
 
 
-def maximums(ficha: Card):
+def maximums(card: Card):
     """Preenchimento no pior caso (texto no limite, itens no máximo): o portão prova que cabe."""
     output = {}
-    for e in ficha.encaixes:
+    for e in card.encaixes:
         base = e.exemplo if isinstance(e.exemplo, str) and e.exemplo else "Palavra"
         if e.tipo == "pares":
             ex = e.exemplo if isinstance(e.exemplo, list) and e.exemplo and isinstance(e.exemplo[0], dict) \
@@ -349,13 +349,13 @@ AREA_SAFE = 0.03  # fração do lado menor que o texto deixa livre em cada borda
 INSTANTS = (0.35, 0.6, 0.9)  # frações da duração em que o portão mede e fotografa
 
 
-def _code(texto):
+def _code(text):
     """Sem comentários (a regra vale para o que roda, não para o que explica)."""
-    texto = re.sub(r"/\*.*?\*/", "", texto, flags=re.S)
-    return re.sub(r"(?m)(^|[^:\"'])//.*$", r"\1", texto)
+    text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+    return re.sub(r"(?m)(^|[^:\"'])//.*$", r"\1", text)
 
 
-def check_code(id_, ficha: Card):
+def check_code(id_, card: Card):
     """Checagens estáticas: arquivos, sintaxe, registro do id, pele só por variáveis, encaixes/botões declarados."""
     errors, warnings = [], []
     p = folder(id_)
@@ -392,7 +392,7 @@ def check_code(id_, ficha: Card):
         errors.append(f"peca.js usa classes do kit ({sorted(colide)[:5]}): o estilo global do kit vaza para a peça; "
                      f"use o prefixo da peça (ex.: {id_[:2]}-titulo)")
     used_and, used_b = _used(js, "encaixes"), _used(js, "botoes")
-    names_and, names_b = {e.nome for e in ficha.encaixes}, {b.nome for b in ficha.botoes}
+    names_and, names_b = {e.nome for e in card.encaixes}, {b.nome for b in card.botoes}
     if outside := used_and - names_and - {"*"}:
         errors.append(f"peca.js usa encaixes que a ficha não declara: {sorted(outside)}")
     if outside := used_b - names_b:
@@ -453,50 +453,50 @@ def _node():
     return str(n) if n.exists() else shutil.which("node")
 
 
-def _scene(ficha: Card, dur, botoes=None, encaixes=None):
-    enc = encaixes or maximums(ficha)
+def _scene(card: Card, duration, buttons=None, slots=None):
+    enc = slots or maximums(card)
     t = 0.3
-    beats = {b: round(t + 0.4 + 0.5 * k, 2) for k, b in enumerate(ficha.batidas)}
-    return {"cena": ficha.id, "t": t, "ate": round(t + dur, 2), "takeover": ficha.tela_cheia, "titulo": "",
-            "valores": [], "frase": "", "encaixes": enc, "botoes": {**defaults(ficha), **(botoes or {})},
+    beats = {b: round(t + 0.4 + 0.5 * k, 2) for k, b in enumerate(card.batidas)}
+    return {"cena": card.id, "t": t, "ate": round(t + duration, 2), "takeover": card.tela_cheia, "titulo": "",
+            "valores": [], "frase": "", "encaixes": enc, "botoes": {**defaults(card), **(buttons or {})},
             "batidas": beats}
 
 
-def assemble(destino, cenas, pele: Skin, fmt, ids=None, dur=None, medir=False):
+def assemble(destination, scenes, skin: Skin, fmt, ids=None, duration=None, measure=False):
     """Composição mínima (kit + peças + pele + uma ou mais cenas, sem mídia) em `destino`: usada na prova do portão
     e na prévia das peças. `medir`: ao abrir com ?t=S, posiciona a timeline em S e grava o que estoura a tela."""
     from esteira.studio import compiler, style, fonts
-    a = destino / "assets"
+    a = destination / "assets"
     a.mkdir(parents=True, exist_ok=True)
     for name in ("estudio.js", "estudio.css", "gsap.min.js"):
         shutil.copy(compiler.KIT / name, a / name)
     three = join(a, ids)
-    if "assets/amostra_pagina.png" in json.dumps(cenas):
+    if "assets/amostra_pagina.png" in json.dumps(scenes):
         shutil.copy(sample_page()["arquivo"], a / "amostra_pagina.png")
-    if "assets/amostra_foto.png" in json.dumps(cenas):
+    if "assets/amostra_foto.png" in json.dumps(scenes):
         shutil.copy(sample_photo(), a / "amostra_foto.png")
     roles = ("fonte_destaque", "fonte_texto", "fonte_tecnica", "fonte_legenda", "fonte_editorial")
-    (a / "fontes.css").write_text(fonts.css([getattr(pele, k) for k in roles], a))
-    pele = pele.model_copy(update={k: fonts.resolve(getattr(pele, k)) for k in roles})
-    base = style.Style(id="prova", nome="prova", canal="prova", pele=pele)
+    (a / "fontes.css").write_text(fonts.css([getattr(skin, k) for k in roles], a))
+    skin = skin.model_copy(update={k: fonts.resolve(getattr(skin, k)) for k in roles})
+    base = style.Style(id="prova", nome="prova", canal="prova", pele=skin)
     rg = base.regras
     W, H = DIM[fmt]
-    dur = dur or max(c["ate"] for c in cenas) + 0.5
-    cfg = {"W": W, "H": H, "pele": pele.model_dump(), "efeitos": rg.efeitos, "visual": rg.visual.model_dump(),
+    duration = duration or max(c["ate"] for c in scenes) + 0.5
+    cfg = {"W": W, "H": H, "pele": skin.model_dump(), "efeitos": rg.efeitos, "visual": rg.visual.model_dump(),
            "legenda": {"ativa": False, **rg.legenda_visual.model_dump(), "chaves": []},
            "movimento": base.movimento.model_dump(), "layouts": base.layouts.model_dump(),
            "regras_cor": base.regras_cor.model_dump(), "pecas": {}}
     html = (compiler.KIT / "index.template.html").read_text()
-    for k, v in {"__W__": W, "__H__": H, "__DUR__": round(dur, 3), "__CFG__": json.dumps(cfg, ensure_ascii=False),
-                 "__MIDIA__": "[]", "__CENAS__": json.dumps(cenas, ensure_ascii=False), "__WORDS__": "[]",
+    for k, v in {"__W__": W, "__H__": H, "__DUR__": round(duration, 3), "__CFG__": json.dumps(cfg, ensure_ascii=False),
+                 "__MIDIA__": "[]", "__CENAS__": json.dumps(scenes, ensure_ascii=False), "__WORDS__": "[]",
                  "__SFX__": "[]"}.items():
         html = html.replace(k, str(v))
-    html = html.replace("__EC__", videos_ec(cenas)).replace("__DE__", "0").replace("__THREE__", TAG_THREE if three else "")
+    html = html.replace("__EC__", videos_ec(scenes)).replace("__DE__", "0").replace("__THREE__", TAG_THREE if three else "")
     html = re.sub(r'\s*<audio id="voz"[^>]*></audio>', "", html)  # sem narração na prova/prévia
-    if medir:
+    if measure:
         html = html.replace("</body>", MEASURE.replace("__AREA__", str(AREA_SAFE)) + "</body>")
-    (destino / "index.html").write_text(html)
-    return destino / "index.html"
+    (destination / "index.html").write_text(html)
+    return destination / "index.html"
 
 
 # posiciona a timeline no instante pedido e anota no DOM os elementos visíveis que saem da tela
@@ -531,20 +531,20 @@ MEASURE = """<script>
 """
 
 
-def legacy(cena, ficha: Card):
+def legacy(scene, card: Card):
     """Cena do mapa do diretor atual (titulo/valores no topo) → encaixes da peça migrada."""
-    if cena.get("encaixes"):
-        return cena["encaixes"]
-    names = {e.nome for e in ficha.encaixes}
-    return {k: cena[k] for k in ("titulo", "valores") if k in names and k in cena}
+    if scene.get("encaixes"):
+        return scene["encaixes"]
+    names = {e.nome for e in card.encaixes}
+    return {k: scene[k] for k in ("titulo", "valores") if k in names and k in scene}
 
 
-def videos_ec(cenas):
+def videos_ec(scenes):
     """<video> das cenas com peça EffectCraft já renderizada (`ec_src`), para a camada #ec do template."""
     return "".join(
         f'<video id="ec{n}" class="clip peca-ec" src="{c["ec_src"]}" muted playsinline data-start="{c["t"]:.3f}" '
         f'data-duration="{max(0.1, c["ate"] - c["t"]):.3f}" data-track-index="{30 + n % 2}"></video>'
-        for n, c in enumerate(cenas) if c.get("ec_src"))
+        for n, c in enumerate(scenes) if c.get("ec_src"))
 
 
 TAG_THREE = '<script src="assets/three.min.js"></script>\n'
@@ -592,34 +592,34 @@ def join(destination_assets, ids=None):
     return three
 
 
-def _chromium(url, W, H, saida=None, budget=2500):
+def _chromium(url, W, H, output=None, budget=2500):
     from esteira.studio import engine
     exe = engine._chromium()
     if not exe:
         raise RuntimeError("Chromium não instalado (aba Estúdio → Dependências)")
     args = [exe, "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars", "--allow-file-access-from-files",
             f"--window-size={W},{H}", f"--virtual-time-budget={budget}"]
-    args += [f"--screenshot={saida}", url] if saida else ["--dump-dom", url]
+    args += [f"--screenshot={output}", url] if output else ["--dump-dom", url]
     r = subprocess.run(args, capture_output=True, text=True, timeout=90)
-    if r.returncode and not saida:
+    if r.returncode and not output:
         raise RuntimeError(r.stderr.strip()[-200:])
     return r.stdout
 
 
-def prove(id_, ficha: Card):
+def prove(id_, card: Card):
     """Monta a peça com o preenchimento máximo nas duas peles × formatos da ficha; mede estouro de tela em
     INSTANTES e fotografa o meio. → (erros, quadros)."""
     errors, frames = [], []
     proof = folder(id_) / "prova"
     shutil.rmtree(proof, ignore_errors=True)
     proof.mkdir(parents=True)
-    duration = min(ficha.duracao_max, max(ficha.duracao_min, 4.0))
-    scene = _scene(ficha, duration)
+    duration = min(card.duracao_max, max(card.duracao_min, 4.0))
+    scene = _scene(card, duration)
     with tempfile.TemporaryDirectory() as tmp:
         for name_skin, skin in SKINS_PROOF.items():
-            for fmt in ficha.formatos:
+            for fmt in card.formatos:
                 d = Path(tmp) / f"{name_skin}_{fmt.replace(':', 'x')}"
-                idx = assemble(d, [scene], skin, fmt, ids=[id_], dur=scene["ate"] + 0.5, medir=True)
+                idx = assemble(d, [scene], skin, fmt, ids=[id_], duration=scene["ate"] + 0.5, measure=True)
                 W, H = DIM[fmt]
                 for frac in INSTANTS:
                     t = round(scene["t"] + frac * duration, 2)
@@ -635,7 +635,7 @@ def prove(id_, ficha: Card):
                     if outside:
                         errors.append(f"{name_skin} {fmt} em {t:.1f} s: sai da tela com o texto máximo: {outside[:4]}")
                 png = Path(tmp) / f"{name_skin}_{fmt.replace(':', 'x')}.png"
-                _chromium(f"file://{idx}?t={round(scene['t'] + 0.6 * duration, 2)}", W, H, saida=png)
+                _chromium(f"file://{idx}?t={round(scene['t'] + 0.6 * duration, 2)}", W, H, output=png)
                 file = proof / png.with_suffix(".jpg").name  # metade do tamanho, JPG: a prova é para olhar
                 if png.exists():
                     subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(png), "-vf", "scale=iw/2:-2",
@@ -689,13 +689,13 @@ def previews_dir(id_):
     return DATA / "estudio" / "fabrica" / "previas" / id_
 
 
-def preview(id_, style_ref, formato=None):
+def preview(id_, style_ref, video_format=None):
     """MP4 curto da peça (preenchimento de exemplo) na pele do estilo de um canal, pelo HyperFrames (GPU) ou, no
     motor EffectCraft, pela engine dele."""
     from esteira.studio import compiler, ec, style
     card = load(id_)
     est = style.load(style_ref)
-    fmt = formato or card.formatos[0]
+    fmt = video_format or card.formatos[0]
     if card.motor == "effectcraft":
         return ec.preview(id_, est, fmt)
     duration = min(card.duracao_max, max(card.duracao_min, 5.0))
@@ -703,7 +703,7 @@ def preview(id_, style_ref, formato=None):
     enc = {**maximums(card), **enc}
     destination = previews_dir(id_) / f"_{est.id}"
     shutil.rmtree(destination, ignore_errors=True)
-    assemble(destination, [_scene(card, duration, encaixes=enc)], est.pele, fmt, ids=[id_], dur=duration + 1.0)
+    assemble(destination, [_scene(card, duration, slots=enc)], est.pele, fmt, ids=[id_], duration=duration + 1.0)
     raw = compiler.render(None, fmt, qualidade="draft", p=destination)
     output = previews_dir(id_) / f"{est.id}_{fmt.replace(':', 'x')}.mp4"
     shutil.move(str(raw), output)
@@ -713,13 +713,13 @@ def preview(id_, style_ref, formato=None):
 
 # ---------------------------------------------------------------- prova de troca de pele entre canais
 
-def examples(ficha: Card):
+def examples(card: Card):
     """Preenchimento típico (os `exemplo` da ficha; o máximo só onde não há exemplo)."""
-    m = maximums(ficha)
-    return {e.nome: (e.exemplo if e.exemplo and e.tipo not in ("pagina", "imagem") else m[e.nome]) for e in ficha.encaixes}
+    m = maximums(card)
+    return {e.nome: (e.exemplo if e.exemplo and e.tipo not in ("pagina", "imagem") else m[e.nome]) for e in card.encaixes}
 
 
-def proof_channels(styles, formatos=("16:9", "9:16"), ids=None):
+def proof_channels(styles, formats=("16:9", "9:16"), ids=None):
     """Cada peça aprovada (ou `ids`) com o conteúdo de exemplo na pele de cada estilo: mede erro de JavaScript e
     estouro da área segura e monta uma folha por estilo × formato. A mesma peça tem de funcionar em todos os canais
     só pela pele. → {"folhas": [...], "problemas": [{peca, estilo, formato, erro}]}."""
@@ -731,21 +731,21 @@ def proof_channels(styles, formatos=("16:9", "9:16"), ids=None):
     with tempfile.TemporaryDirectory() as tmp:
         for ref in styles:
             est = E.load(ref)
-            for fmt in formatos:
+            for fmt in formats:
                 W, H = DIM[fmt]
                 frames = []
                 for f in cards:
                     if fmt not in f.formatos:
                         continue
                     duration = min(f.duracao_max, max(f.duracao_min, 4.0))
-                    scene = _scene(f, duration, encaixes=examples(f))
+                    scene = _scene(f, duration, slots=examples(f))
                     d = Path(tmp) / f"{est.id}_{fmt.replace(':', 'x')}_{f.id}"
                     if f.motor == "effectcraft":
                         q = _proof_channel_ec(f, scene, duration, est, fmt, d, problems)
                         if q:
                             frames.append(q)
                         continue
-                    idx = assemble(d, [scene], est.pele, fmt, ids=[f.id] + _drops(f), dur=scene["ate"] + 0.5, medir=True)
+                    idx = assemble(d, [scene], est.pele, fmt, ids=[f.id] + _drops(f), duration=scene["ate"] + 0.5, measure=True)
                     t = round(scene["t"] + 0.6 * duration, 2)
                     dom = _chromium(f"file://{idx}?t={t}", W, H)
                     er = re.search(r'data-erros="([^"]*)"', dom)
@@ -757,7 +757,7 @@ def proof_channels(styles, formatos=("16:9", "9:16"), ids=None):
                     if lst_s:
                         problems.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"sai da área segura: {lst_s[:3]}"})
                     png = d / "quadro.png"
-                    _chromium(f"file://{idx}?t={t}", W, H, saida=png)
+                    _chromium(f"file://{idx}?t={t}", W, H, output=png)
                     if png.exists():
                         frames.append(png)
                 if frames:
@@ -769,29 +769,29 @@ def proof_channels(styles, formatos=("16:9", "9:16"), ids=None):
     return r
 
 
-def _proof_channel_ec(f, cena, dur, est, fmt, folder_tmp, problemas):
+def _proof_channel_ec(f, scene, duration, est, fmt, folder_tmp, problems):
     """Peça EffectCraft na pele do estilo: estouro da área segura e o quadro do meio (ou o erro do script)."""
     from esteira.studio import ec
     folder_tmp.mkdir(parents=True, exist_ok=True)
-    t = round(cena["t"] + 0.6 * dur, 2)
-    d = ec.data(f, cena["encaixes"], cena["botoes"], cena["batidas"], est.pele, fmt, dur, cena["t"], [t], AREA_SAFE)
+    t = round(scene["t"] + 0.6 * duration, 2)
+    d = ec.data(f, scene["encaixes"], scene["botoes"], scene["batidas"], est.pele, fmt, duration, scene["t"], [t], AREA_SAFE)
     try:
         overflows, _ = ec.assemble(f.id, d, folder_tmp / "p.ecproj", est.pele)
     except (RuntimeError, subprocess.TimeoutExpired) as e:
-        problemas.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"EffectCraft: {str(e)[:200]}"})
+        problems.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"EffectCraft: {str(e)[:200]}"})
         return None
     if overflows:
-        problemas.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"sai da área segura: {overflows[:3]}"})
-    return ec.frame(folder_tmp / "p.ecproj", t, folder_tmp / "quadro.jpg", est.pele.fundo, escala=1.0)
+        problems.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"sai da área segura: {overflows[:3]}"})
+    return ec.frame(folder_tmp / "p.ecproj", t, folder_tmp / "quadro.jpg", est.pele.fundo, scale=1.0)
 
 
-def _drops(ficha: Card):
+def _drops(card: Card):
     """Peças em que esta cai quando o conteúdo não serve (`k.outra`), para a composição ter as duas."""
-    js = (folder(ficha.id) / "peca.js").read_text() if (folder(ficha.id) / "peca.js").exists() else ""
+    js = (folder(card.id) / "peca.js").read_text() if (folder(card.id) / "peca.js").exists() else ""
     return sorted(set(re.findall(r'k\.outra\("(\w+)"', js)))
 
 
-def _sheet(frames, destino, colunas):
+def _sheet(frames, destination, columns):
     """Folha de contato (ffmpeg xstack) com os quadros em miniatura, na ordem."""
     n = len(frames)
     width = 320
@@ -801,8 +801,8 @@ def _sheet(frames, destino, colunas):
         criteria = f"[0]scale={width}:-2"
     else:
         # posições: colunas de `larg` px; linhas pela altura da primeira miniatura (h0)
-        pos = "|".join(("0" if i % colunas == 0 else "+".join(f"w{j}" for j in range(i - i % colunas, i)))
-                       + "_" + ("0" if i < colunas else "+".join("h0" for _ in range(i // colunas))) for i in range(n))
+        pos = "|".join(("0" if i % columns == 0 else "+".join(f"w{j}" for j in range(i - i % columns, i)))
+                       + "_" + ("0" if i < columns else "+".join("h0" for _ in range(i // columns))) for i in range(n))
         criteria = scale + "".join(f"[a{i}]" for i in range(n)) + f"xstack=inputs={n}:layout={pos}:fill=black"
     subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", *inputs, "-filter_complex", criteria, "-frames:v", "1",
-                    "-q:v", "4", str(destino)], check=True)
+                    "-q:v", "4", str(destination)], check=True)

@@ -1,5 +1,5 @@
-/// Módulo Concursos: listagem, edital → plano de estudos pelo Claude, tarefas diárias, prazos e alertas.
+/// Concursos module: listing, notice → study plan by Claude, daily tasks, deadlines and alerts.
 library;
 
-export 'src/api_concursos.dart' show ApiConcursos;
-export 'src/modulo_concursos.dart';
+export 'src/exams_api.dart' show ExamsApi;
+export 'src/exams_module.dart';

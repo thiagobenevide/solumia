@@ -8,14 +8,14 @@ from esteira.dataset import registry as R
 from esteira.project import Project, episodes
 
 
-def _tem(grupo, tarefa, **extra):
-    return R.last(grupo, tarefa, **extra) is not None
+def _has(group, task, **extra):
+    return R.last(group, task, **extra) is not None
 
 
 def assembly(project: Project) -> str | None:
     """N1 da montagem do episódio pelo plano atual (`origem: traducao`). → id do registro."""
     from esteira import assemble, production
-    if not project.caminho("plano.json").exists():
+    if not project.path_of("plano.json").exists():
         return None
     plan = project.load_json("plano.json")
     cam = production.camera(project) if production.mode(project) == "apresentador" else None
@@ -33,25 +33,25 @@ def thumbs(project: Project) -> int:
     """Candidatas de `thumbs/ranking.json` → `thumb_compor` em N1; as que estão nas vagas A/B ficam `escolhida`."""
     from esteira import thumbs as T
     from esteira.n1 import photocraft as N1
-    rk = project.caminho("thumbs/ranking.json")
+    rk = project.path_of("thumbs/ranking.json")
     if not rk.exists():
         return 0
     cfg = project.cfg.get("thumb", {})
     w, h = cfg.get("largura", 1280), cfg.get("altura", 720)
-    slots = {project.caminho(f"thumb_{k}.png").read_bytes() for k in (1, 2, 3) if project.caminho(f"thumb_{k}.png").exists()}
+    slots = {project.path_of(f"thumb_{k}.png").read_bytes() for k in (1, 2, 3) if project.path_of(f"thumb_{k}.png").exists()}
     ctx = T._context(project)
     n = 0
     for x in json.loads(rk.read_text()):
-        if _tem(f"thumb:{project.ep}", "thumb_compor", arquivo=x["arquivo"]):
+        if _has(f"thumb:{project.ep}", "thumb_compor", arquivo=x["arquivo"]):
             continue
-        data = T.data_thumb(x["conceito"], project.caminho(f"thumbs/{x['fundo']}").as_uri(), project.cfg)
+        data = T.data_thumb(x["conceito"], project.path_of(f"thumbs/{x['fundo']}").as_uri(), project.cfg)
         doc = N1.of_data_thumb(data, w, h)
-        png = project.caminho(f"thumbs/{x['arquivo']}")
+        png = project.path_of(f"thumbs/{x['arquivo']}")
         chosen = png.exists() and png.read_bytes() in slots
-        R.write("thumb_compor", grupo=f"thumb:{project.ep}", origem="traducao",
-                 contexto={**ctx, "canal": getattr(project, "canal", "") or "", "fundo": x["fundo"],
+        R.write("thumb_compor", group=f"thumb:{project.ep}", origin="traducao",
+                 context={**ctx, "canal": getattr(project, "canal", "") or "", "fundo": x["fundo"],
                            "cena_en": x["conceito"].get("cena_en")},
-                 saida=doc.model_dump(mode="json"), versoes={"n1": N1.VERSION, "app": "photocraft"},
+                 output=doc.model_dump(mode="json"), versions={"n1": N1.VERSION, "app": "photocraft"},
                  humano={"veredito": "escolhida", "nota": None, "motivo": None, "comentario": "vaga A/B",
                          "em": R._now()} if chosen else None,
                  metricas={"nota_visao": x.get("nota"), "problema": x.get("problema")},
@@ -77,13 +77,13 @@ def pieces() -> int:
                      "peca_css": (d / "peca.css").read_text() if (d / "peca.css").exists() else "", "ficha": card}
         else:
             continue
-        if _tem(f"peca:{d.name}", task, peca=d.name, versao=card.get("versao")):
+        if _has(f"peca:{d.name}", task, peca=d.name, versao=card.get("versao")):
             continue
         v = vered.get(card.get("estado"))
-        R.write(task, grupo=f"peca:{d.name}", origem="traducao",
-                 contexto={"pedido": {"tipo": "acervo", "texto": card.get("comunica", "")}, "modo": "nova",
+        R.write(task, group=f"peca:{d.name}", origin="traducao",
+                 context={"pedido": {"tipo": "acervo", "texto": card.get("comunica", "")}, "modo": "nova",
                            "motor": card.get("motor"), "intencoes": card.get("intencoes")},
-                 saida=output, portao={"ok": True, "erros": [], "render_s": None},
+                 output=output, gate={"ok": True, "erros": [], "render_s": None},
                  humano={"veredito": v, "nota": None, "motivo": None, "comentario": None, "em": R._now()} if v else None,
                  extra={"peca": d.name, "versao": card.get("versao"), "origem_peca": card.get("origem")})
         n += 1
@@ -98,7 +98,7 @@ def translate_all() -> list[str]:
         except SystemExit:
             continue
         parts = []
-        if not _tem(f"ep:{p.ep}", "montar"):
+        if not _has(f"ep:{p.ep}", "montar"):
             try:
                 if assembly(p):
                     parts.append("montagem")

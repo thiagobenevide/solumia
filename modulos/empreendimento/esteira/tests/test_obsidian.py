@@ -1,7 +1,7 @@
 """Leitura dos roteiros do vault: falas, notas de cena e blocos [!cite] (citação com PDF, página e trecho)."""
 from esteira.sources import obsidian
 
-ROTEIRO = '''---
+SCRIPT = '''---
 tipo: roteiro
 video: 5
 ---
@@ -31,8 +31,8 @@ video: 5
 '''
 
 
-def test_citacao_do_roteiro():
-    title, lines, notes, sources, quotes = obsidian.convert(ROTEIRO)
+def test_quote_from_script():
+    title, lines, notes, sources, quotes = obsidian.convert(SCRIPT)
     assert [l["fala"][:8] for l in lines if "fala" in l] == ["Em 2021,", "E o resu"]
     assert len(notes) == 2 and notes[1]["texto"] == "cérebro acendendo"
     assert len(sources) == 1
@@ -44,7 +44,7 @@ def test_citacao_do_roteiro():
     assert c["titulo"] == "Neural mechanisms of credit card spending"
 
 
-def test_short_pela_pasta_e_nome():
+def test_short_by_folder_and_name():
     assert obsidian.short("Short 005a — Cartão.md", {}) == "a"
     assert obsidian.short("Roteiro — 005 Cartão.md", {}) == ""
     assert obsidian.title_clean("# Short 005b — O cartão anestesia") == "O cartão anestesia"

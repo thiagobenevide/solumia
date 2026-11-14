@@ -20,4 +20,4 @@ dependencies = [
 agent-shared = { workspace = true }
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/estudos"]
+packages = ["src/studies"]

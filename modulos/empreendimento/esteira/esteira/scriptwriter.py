@@ -69,8 +69,8 @@ def _slug(t):
 
 # ---------------------------------------------------------------- 1. plano
 
-def line_of_plan(canal, n):
-    folder = _vault() / "Notas/Empreendimento/YouTube" / canal / "Temas"
+def line_of_plan(channel, n):
+    folder = _vault() / "Notas/Empreendimento/YouTube" / channel / "Temas"
     for arc in sorted(folder.rglob("*Arco*.md")):
         for line in arc.read_text().splitlines():
             if re.match(rf"^\|\s*{n}\s*\|", line):
@@ -80,7 +80,7 @@ def line_of_plan(canal, n):
                 return {"n": n, "fio": c[1], "titulo": title, "gancho": c[3], "base": c[4],
                         "busca": search.group(1) if search else title, "evidencia": c[6], "fmt": (c[8] or "M")[:1],
                         "arco": arc.stem}
-    raise SystemExit(f"vídeo {n} não está no plano de {canal}")
+    raise SystemExit(f"vídeo {n} não está no plano de {channel}")
 
 
 # ---------------------------------------------------------------- 2. fontes abertas
@@ -117,8 +117,8 @@ def _candidates_base(base):
     return output
 
 
-def _candidates_search(busca, n=12):
-    return [w for w in _openalex({"search": busca, "filter": "is_oa:true,type:article|preprint|report",
+def _candidates_search(search, n=12):
+    return [w for w in _openalex({"search": search, "filter": "is_oa:true,type:article|preprint|report",
                                    "per_page": n, "sort": "relevance_score:desc"})
             if w.get("doi") and (w.get("cited_by_count") or 0) >= 5]
 
@@ -180,18 +180,18 @@ def _sentences(pdf, terms, max_pages=25, n=14):
     return output[:n]
 
 
-def facts(line, fontes):
+def facts(line, sources):
     """[{id, fonte, pagina, en, pt, achado}] verificados no PDF pelo `artigo citar`."""
     terms = [t for t in re.findall(r"[a-z]{4,}", line["busca"].lower())]
     output = []
-    for f in fontes:
+    for f in sources:
         trace.step("trechos", f"{f['arquivo'].split('/')[-1]} · termos: {', '.join(terms[:8])}")
         sentences = _sentences(f["arquivo"], terms)
         if not sentences:
             continue
         items = "\n".join(f"{i}. (p.{p}) {txt}" for i, (_, p, txt) in enumerate(sentences))
         trace.step("fatos", f"{len(sentences)} frases com números de {label(f)}")
-        r = local.ask(local.prompt("roteiro_trechos", tema=line["titulo"], gancho=line["gancho"],
+        r = local.ask(local.prompt("script_excerpts", tema=line["titulo"], gancho=line["gancho"],
                                          estudo=f"{label(f)}, {f['titulo']}", frases=items),
                             Findings, max_tokens=900)
         for a in (r.achados if r else []):
@@ -225,18 +225,18 @@ def _numbers(t):
     return {re.sub(r"[^\d]", "", x) for x in NUM.findall(t) if re.sub(r"[^\d]", "", x)}
 
 
-def _speech_ok(fala, facts_):
+def _speech_ok(speech, facts_):
     """Todo número da fala (exceto 1–10 e anos) precisa estar no fato citado (achado ou trecho em inglês)."""
-    nums = {n for n in _numbers(fala.texto) if not (len(n) <= 1 or re.fullmatch(r"(19|20)\d\d", n))}
+    nums = {n for n in _numbers(speech.texto) if not (len(n) <= 1 or re.fullmatch(r"(19|20)\d\d", n))}
     if not nums:
         return True
-    if not 0 <= fala.fato < len(facts_):
+    if not 0 <= speech.fato < len(facts_):
         return False
-    base = _numbers(facts_[fala.fato]["achado"]) | _numbers(facts_[fala.fato]["en"])
+    base = _numbers(facts_[speech.fato]["achado"]) | _numbers(facts_[speech.fato]["en"])
     return nums <= base
 
 
-def write(line, facts_, canal):
+def write(line, facts_, channel):
     fmt = line["fmt"] if line["fmt"] in PARTS else "M"
     structure, total = PARTS[fmt], WORDS.get(fmt, 1650)
     items = "\n".join(f"{x['id']}. {x['achado']} — {label(x['fonte'])}" for x in facts_) or "(nenhum)"
@@ -249,7 +249,7 @@ def write(line, facts_, canal):
             trace.step("partes", f"parte {i}/{len(structure)}: {name} · ~{words} palavras · tentativa {attempt}")
             trace.progress(i, len(structure), name)
             r = local.ask(local.prompt(
-                "roteiro_parte", canal=canal, titulo=line["titulo"], gancho=line["gancho"], parte_n=i,
+                "script_part", canal=channel, titulo=line["titulo"], gancho=line["gancho"], parte_n=i,
                 total=len(structure), parte_nome=name, funcao=funcao, palavras=words, n_falas=n_speeches,
                 anterior=f"Última fala da parte anterior: \"{previous}\"" if previous else "", fatos=items)
                 + ("\n(Atenção: na tentativa anterior havia número fora dos FATOS ou o texto ficou curto; "
@@ -270,12 +270,12 @@ def write(line, facts_, canal):
 
 # ---------------------------------------------------------------- 5. markdown
 
-def _file(canal, line):
+def _file(channel, line):
     name = re.sub(r"[?:/\\]", "", re.sub(r"\s*[—–-]\s*", ", ", line["titulo"])).strip(" ,.")
-    return _vault() / "Notas/Empreendimento/YouTube" / canal / "Roteiros" / f"Roteiro — {line['n']:03d} {name[:90]}.md"
+    return _vault() / "Notas/Empreendimento/YouTube" / channel / "Roteiros" / f"Roteiro — {line['n']:03d} {name[:90]}.md"
 
 
-def assemble(canal, line, fontes, facts_, parts, channel_note):
+def assemble(channel, line, sources, facts_, parts, channel_note):
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
     fmt = line["fmt"]
@@ -293,7 +293,7 @@ def assemble(canal, line, fontes, facts_, parts, channel_note):
             lines_md.append("")
             t0 += len(f.texto.split()) / 2.6
     sources_md = [f"- [ ] **{label(f)}**: \"{f['titulo']}\", *{f['revista'] or 'acesso aberto'}*. DOI {f['doi']}."
-                 for f in fontes]
+                 for f in sources]
     words = sum(len(f.texto.split()) for p in parts for f in p["falas"])
     md = f"""---
 id: "{datetime.now().strftime('%Y%m%d%H%M')}"
@@ -330,22 +330,22 @@ modo: dark
 {chr(10).join(lines_md)}
 ## Notas de produção
 
-- Fontes: {', '.join(label(f) for f in fontes)}.
+- Fontes: {', '.join(label(f) for f in sources)}.
 - Gerado por `./dark script` (esteira-dark) em {today}.
 """
     return md, words
 
 
-def generate(alvo, ate=None):
+def generate(target, until=None):
     """`canal:N` (ou `canal:N` + ate=M) → roteiros no vault. Pula os que já existem."""
-    channel, _, n = alvo.partition(":")
+    channel, _, n = target.partition(":")
     folder = _vault() / "Notas/Empreendimento/YouTube" / channel
     channel_note = next((p.stem for p in folder.glob("Canal *.md")), channel)
-    for k in range(int(n), int(ate or n) + 1):
+    for k in range(int(n), int(until or n) + 1):
         if any((folder / "Roteiros").glob(f"Roteiro — {k:03d} *.md")):
             print(f"{k:03d}: já existe, pulado")
             continue
-        trace.node(f"roteiro:{channel}:{k}", "plano", f"vídeo {k} (lote {n}–{ate or n})")
+        trace.node(f"roteiro:{channel}:{k}", "plano", f"vídeo {k} (lote {n}–{until or n})")
         line = line_of_plan(channel, k)
         print(f"{k:03d} · {line['titulo']} (Fmt {line['fmt']})")
         sources = sources_open(line)

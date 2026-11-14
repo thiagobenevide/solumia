@@ -5,7 +5,7 @@ from esteira.dataset import registry as R
 
 
 @pytest.fixture(autouse=True)
-def dataset_temporario(tmp_path, monkeypatch):
+def temporary_dataset(tmp_path, monkeypatch):
     """Nenhum teste grava no dataset real: registro, artefatos, eventos e índice vão para o tmp."""
     base = tmp_path / "dataset"
     for name, value in {"FOLDER": base, "RECORD": base / "registro", "ARTIFACTS": base / "artefatos",

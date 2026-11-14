@@ -30,48 +30,48 @@ class Choice(BaseModel):
     itens: list[Item]
 
 
-def _heuristica(texto):
+def _heuristica(text):
     """Sem LLM: a palavra de conteúdo mais longa (≥ 7 letras)."""
-    cands = [w.strip(".,;:!?\"'()*") for w in texto.split()]
+    cands = [w.strip(".,;:!?\"'()*") for w in text.split()]
     cands = [w for w in cands if len(w) >= 7 and w.lower() not in STOP and not re.search(r"\d", w)
              and not w.lower().endswith("mente")]  # advérbio ("realmente") não é palavra-chave
     return [max(cands, key=len)] if cands else []
 
 
-def choose(frases):
+def choose(sentences):
     """{índice da frase: [palavras-chave]}."""
     from esteira.ai import local
     output = {}
-    for a in range(0, len(frases), BATCH):
-        block = frases[a:a + BATCH]
+    for a in range(0, len(sentences), BATCH):
+        block = sentences[a:a + BATCH]
         items = "\n".join(f"{a + k}: {f['texto']}" for k, f in enumerate(block))
-        r = local.ask(local.prompt("chaves", frases=items), Choice, max_tokens=1500, operation="graphics")
+        r = local.ask(local.prompt("keywords", frases=items), Choice, max_tokens=1500, operation="graphics")
         given = {i.frase: i.palavras for i in r.itens} if r else {}
         for k, f in enumerate(block):
             output[a + k] = [p for p in given.get(a + k, []) if p.strip()] or _heuristica(f["texto"])
-        events.progress(min(a + BATCH, len(frases)), len(frases), "palavras-chave")
+        events.progress(min(a + BATCH, len(sentences)), len(sentences), "palavras-chave")
     return output
 
 
-def _find(chave, palavras, t0, t1):
+def _find(key, words, t0, t1):
     """(início, fim) da sequência de palavras `chave` dita entre t0 e t1 (comparação sem acento/pontuação)."""
-    target = [norm(w) for w in chave.split() if norm(w)]
+    target = [norm(w) for w in key.split() if norm(w)]
     if not target:
         return None
-    window = [(k, w) for k, w in enumerate(palavras) if t0 - 0.5 <= w["ini"] <= t1 + 0.5]
+    window = [(k, w) for k, w in enumerate(words) if t0 - 0.5 <= w["ini"] <= t1 + 0.5]
     for n, (k, w) in enumerate(window):
-        seq = [norm(x["p"]) for x in palavras[k:k + len(target)]]
+        seq = [norm(x["p"]) for x in words[k:k + len(target)]]
         if len(seq) == len(target) and all(s[:5] == a[:5] for s, a in zip(seq, target)):
-            return w["ini"], palavras[k + len(target) - 1]["fim"]
+            return w["ini"], words[k + len(target) - 1]["fim"]
     return None
 
 
-def plan(project, graphics, refazer=False):
-    file = project.caminho("chaves.json")
-    if file.exists() and not refazer:
+def plan(project, graphics, redo=False):
+    file = project.path_of("chaves.json")
+    if file.exists() and not redo:
         return project.load_json("chaves.json")
     sentences = project.load_json("frases.json")
-    words = (project.load_json("alinhamento.json") if project.caminho("alinhamento.json").exists()
+    words = (project.load_json("alinhamento.json") if project.path_of("alinhamento.json").exists()
                 else project.load_json("transcricao.json")["palavras"])
     choices = choose(sentences)
     busy = [(g["inicio"] - SLACK_GRAPHIC, g["inicio"] + g["dur"] + SLACK_GRAPHIC) for g in graphics]

@@ -29,14 +29,14 @@ INSTRUCTIONS = {
 }
 
 
-def schema(tarefa: str):
+def schema(task: str):
     from esteira.n1 import effectcraft, filmcraft, photocraft
     return {"peca_animar": effectcraft.Piece, "montar": filmcraft.Assembly, "corrigir_montagem": filmcraft.Assembly,
-            "thumb_compor": photocraft.Composition, "foto_tratar": photocraft.PhotoDecision}[tarefa]
+            "thumb_compor": photocraft.Composition, "foto_tratar": photocraft.PhotoDecision}[task]
 
 
-def _fraction(chave: str) -> float:
-    return int(hashlib.sha1(chave.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
+def _fraction(key: str) -> float:
+    return int(hashlib.sha1(key.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
 
 
 def _context(r: dict) -> dict:
@@ -65,20 +65,20 @@ def context_model(r: dict) -> dict:
     return c
 
 
-def prompt(tarefa: str, contexto: dict, exemplos=()) -> str:
-    parts = [INSTRUCTIONS[tarefa], "Responda só com JSON válido no esquema. Nada de texto fora do JSON."]
-    for k, (cx, rx) in enumerate(exemplos, 1):
+def prompt(task: str, context: dict, examples=()) -> str:
+    parts = [INSTRUCTIONS[task], "Responda só com JSON válido no esquema. Nada de texto fora do JSON."]
+    for k, (cx, rx) in enumerate(examples, 1):
         parts.append(f"<exemplo {k}>\n<contexto>{json.dumps(cx, ensure_ascii=False)}</contexto>\n"
                       f"<resposta>{json.dumps(rx, ensure_ascii=False)}</resposta>\n</exemplo {k}>")
-    parts.append(f"<contexto>{json.dumps(contexto, ensure_ascii=False)}</contexto>")
+    parts.append(f"<contexto>{json.dumps(context, ensure_ascii=False)}</contexto>")
     return "\n\n".join(parts)
 
 
-def _system(tarefa: str) -> str:
+def _system(task: str) -> str:
     # curto de propósito: o formato é garantido pela gramática do esquema na inferência; o JSON Schema inteiro
     # incharia cada exemplo e estouraria o contexto do treino (16 GB de VRAM)
-    app = R.TASKS[tarefa]
-    return f"Você opera o {app} pela linguagem N1 v1 e responde só com o JSON do esquema da tarefa {tarefa}."
+    app = R.TASKS[task]
+    return f"Você opera o {app} pela linguagem N1 v1 e responde só com o JSON do esquema da tarefa {task}."
 
 
 # ---------- montagem por trecho ----------
@@ -111,12 +111,12 @@ def spans_assembly(ctx: dict, doc: dict) -> list[tuple[dict, dict]]:
 
 # ---------- ouro ----------
 
-def gold(tarefa: str) -> set[str]:
+def gold(task: str) -> set[str]:
     """Ids do ouro da tarefa. Sem arquivo, escolhe os grupos pelo sha1 (≈8%, ao menos 1 com 5+ grupos) e grava."""
-    file = _folders()[1] / R.TASKS[tarefa] / f"{tarefa}.jsonl"
+    file = _folders()[1] / R.TASKS[task] / f"{task}.jsonl"
     if file.exists():
         return {json.loads(x)["id"] for x in file.read_text().splitlines() if x.strip()}
-    good = [r for r in R.records(tarefa) if r["uso"] == "sft"]
+    good = [r for r in R.records(task) if r["uso"] == "sft"]
     groups = sorted({r["grupo"] for r in good}, key=lambda g: _fraction("ouro:" + g))
     if len(groups) < 5:
         return set()
@@ -127,9 +127,9 @@ def gold(tarefa: str) -> set[str]:
     return set(ids)
 
 
-def mark_gold(tarefa: str, ids: list[str]) -> None:
-    file = _folders()[1] / R.TASKS[tarefa] / f"{tarefa}.jsonl"
-    current = gold(tarefa) if file.exists() else set()
+def mark_gold(task: str, ids: list[str]) -> None:
+    file = _folders()[1] / R.TASKS[task] / f"{task}.jsonl"
+    current = gold(task) if file.exists() else set()
     file.parent.mkdir(parents=True, exist_ok=True)
     with open(file, "a") as f:
         for i in ids:
@@ -139,58 +139,58 @@ def mark_gold(tarefa: str, ids: list[str]) -> None:
 
 # ---------- exportação ----------
 
-def _pairs(tarefa: str) -> list[tuple[dict, dict]]:
+def _pairs(task: str) -> list[tuple[dict, dict]]:
     """(contexto, resposta) de cada registro bom; a montagem vira trechos."""
     out = []
-    for r in R.records(tarefa):
+    for r in R.records(task):
         if r["uso"] != "sft":
             continue
         resp = answer(r)
         if resp is None:
             continue
         cx = context_model(r)
-        if tarefa == "montar":
+        if task == "montar":
             out += [(r, c, d) for c, d in spans_assembly(cx, resp)]
         else:
             out.append((r, cx, resp))
     return out
 
 
-def cases_eval(tarefa: str) -> list[dict]:
-    ids = gold(tarefa)
+def cases_eval(task: str) -> list[dict]:
+    ids = gold(task)
     cases = []
-    for r, cx, resp in _pairs(tarefa):
+    for r, cx, resp in _pairs(task):
         if r["id"] in ids:
-            cases.append({"id": r["id"], "tarefa": tarefa, "contexto": cx, "referencia": resp})
+            cases.append({"id": r["id"], "tarefa": task, "contexto": cx, "referencia": resp})
     return cases
 
 
-def _dpo(tarefa: str) -> list[dict]:
+def _dpo(task: str) -> list[dict]:
     """Pares do mesmo grupo: bom × ruim. Nas thumbs, a escolhida × as outras candidatas do mesmo episódio."""
-    por: dict[str, dict[str, list]] = {}
-    for r in R.records(tarefa):
+    by_choice: dict[str, dict[str, list]] = {}
+    for r in R.records(task):
         side = ("bom" if r["uso"] == "sft" else "ruim" if r["uso"] == "dpo_ruim"
-                else "ruim" if tarefa == "thumb_compor" and r["uso"] == "pendente" else None)
+                else "ruim" if task == "thumb_compor" and r["uso"] == "pendente" else None)
         if side:
-            por.setdefault(r["grupo"], {"bom": [], "ruim": []})[side].append(r)
+            by_choice.setdefault(r["grupo"], {"bom": [], "ruim": []})[side].append(r)
     output = []
-    for g in por.values():
+    for g in by_choice.values():
         for b in g["bom"]:
             for m in g["ruim"]:
                 rb, rm = answer(b), answer(m)
                 if rb is None or rm is None or rb == rm:
                     continue
-                output.append({"grupo": b["grupo"], "prompt": prompt(tarefa, context_model(b)),
+                output.append({"grupo": b["grupo"], "prompt": prompt(task, context_model(b)),
                               "chosen": json.dumps(rb, ensure_ascii=False), "rejected": json.dumps(rm, ensure_ascii=False)})
     return output
 
 
-def export(tarefas=None) -> dict:
+def export(tasks=None) -> dict:
     from esteira.n1 import save_schemas
     destination = _folders()[0] / datetime.now().strftime("%Y%m%d-%H%M%S")
     summary = {"em": datetime.now().isoformat(timespec="seconds"), "pasta": str(destination), "tarefas": {}}
     files = save_schemas(destination / "esquemas")
-    for t in tarefas or TASKS:
+    for t in tasks or TASKS:
         ids_gold = gold(t)
         sft = {"train": [], "val": []}
         evaluation = []
@@ -223,5 +223,5 @@ def last() -> Path | None:
     return folders[-1].parent if folders else None
 
 
-def hash_export(pasta: Path) -> str:
-    return hashlib.sha256((Path(pasta) / "manifesto.json").read_bytes()).hexdigest()[:16]
+def hash_export(folder: Path) -> str:
+    return hashlib.sha256((Path(folder) / "manifesto.json").read_bytes()).hexdigest()[:16]

@@ -150,7 +150,7 @@ class ErrorN1(ValueError):
     pass
 
 
-def _highlights(s, cor):
+def _highlights(s, color):
     """*destaque* → (texto sem marcas, runs com a cor)."""
     out, runs, start = "", [], None
     for ch in s:
@@ -158,7 +158,7 @@ def _highlights(s, cor):
             if start is None:
                 start = len(out)
             else:
-                runs.append({"start": start, "end": len(out), "color": cor})
+                runs.append({"start": start, "end": len(out), "color": color})
                 start = None
             continue
         out += ch
@@ -176,13 +176,13 @@ class Executor:
     `cores`: papel → hex; `tamanho_imagem(caminho)` → (w, h). `rastro` guarda as duas passagens."""
 
     def __init__(self, run, medias: dict, colors: dict, size_image):
-        self.rodar, self.medias, self.cores, self.size_image = run, medias, colors, size_image
+        self.run_command, self.medias, self.colors, self.size_image = run, medias, colors, size_image
         self.trace: list[list] = []
 
-    def cor(self, c):
-        return c if c.startswith("#") else self.cores[c]
+    def color_of(self, c):
+        return c if c.startswith("#") else self.colors[c]
 
-    def executar(self, doc: Composition | dict, destino: Path) -> Path:
+    def apply_doc(self, doc: Composition | dict, destination: Path) -> Path:
         doc = doc if isinstance(doc, Composition) else Composition.model_validate(doc)
         w, h = doc.documento.largura, doc.documento.altura
         els = doc.elementos
@@ -227,7 +227,7 @@ class Executor:
                 def pt(x, y, x0=x0, sx=sx, esq=esq):
                     return [round(x0 + (220 if esq else 0) + x * sx, 1), round(150 + y * 1.1, 1)]
                 steps += [("shape.create", {"kind": "path", "name": "Seta", "fill": None,
-                                             "stroke": {"width": 16, "color": self.cor(e.cor), "cap": "round",
+                                             "stroke": {"width": 16, "color": self.color_of(e.cor), "cap": "round",
                                                         "join": "round"},
                                              "path": {"subpaths": [
                                                  {"closed": False, "knots": [
@@ -238,12 +238,12 @@ class Executor:
                 size = round(e.tamanho * h)
                 width = round(e.largura * w)
                 x_tit = w - 56 - width if e.lado == "direita" else 56
-                text, runs = _highlights(e.conteudo, self.cor(e.destaque))
+                text, runs = _highlights(e.conteudo, self.color_of(e.destaque))
                 if not text:
                     continue
                 steps += [("type.create", {"box": [x_tit, 0, width, h], "text": text, "name": "Título",
                                             "font": "InterVar", "fontStyle": "Black", "size": size,
-                                            "color": self.cor(e.cor), "leading": round(size * 0.92), "tracking": -35,
+                                            "color": self.color_of(e.cor), "leading": round(size * 0.92), "tracking": -35,
                                             "align": "right" if e.lado == "direita" else "left"})]
                 if runs:
                     steps += [("type.edit", {"runs": runs})]
@@ -264,7 +264,7 @@ class Executor:
                 layers["selo"] = len(steps) - 1
             elif isinstance(e, Box):
                 k = sum(1 for c in layers if c.startswith("caixa"))
-                t, rs = _highlights(e.conteudo, self.cor(e.destaque or "destaque"))
+                t, rs = _highlights(e.conteudo, self.color_of(e.destaque or "destaque"))
                 if e.maiusculas:
                     t = t.upper()
                 size = round(e.tamanho * h)
@@ -272,7 +272,7 @@ class Executor:
                 steps += [("type.create", {"box": [round(cx), round(cy), round(cw), h], "text": t or " ",
                                             "name": f"Caixa {k + 1}", "font": SOURCES[e.fonte],
                                             "fontStyle": WEIGHTS.get(e.peso, "ExtraBold"), "size": size,
-                                            "color": self.cor(e.cor), "leading": round(size * 1.12),
+                                            "color": self.color_of(e.cor), "leading": round(size * 1.12),
                                             "align": {"centro": "center", "direita": "right"}.get(e.alinhar, "left")})]
                 if rs:
                     steps += [("type.edit", {"runs": rs})]
@@ -289,7 +289,7 @@ class Executor:
         if doc.variantes:
             steps += [("layerComp.new", {"name": "A"})]
         self.trace.append(steps)
-        res = self.rodar({"width": w, "height": h, "name": Path(destino).stem}, steps, destino)
+        res = self.run_command({"width": w, "height": h, "name": Path(destination).stem}, steps, destination)
 
         # segunda passagem: centraliza o título, põe o selo acima dele e os fundos atrás das caixas
         adjustment = []
@@ -305,7 +305,7 @@ class Executor:
                 top = by + dy - 18 - (sh + 22)
                 adjustment += [("type.edit", {"layer": si["layer"], "move": [0, round(top + 10 - sy)]}),
                            ("shape.create", {"kind": "rect", "rect": [x_tit, round(top), round(sw + 36), round(sh + 22)],
-                                             "fill": self.cor(badge.fundo), "stroke": None, "name": "Selo (fundo)"}),
+                                             "fill": self.color_of(badge.fundo), "stroke": None, "name": "Selo (fundo)"}),
                            ("layer.moveTo", {"target": si["layer"], "position": "below"}),
                            ("layer.select", {"layer": si["layer"], "mode": "add"}),
                            ("edit.transform", {"rotate": -3})]
@@ -316,19 +316,19 @@ class Executor:
             bx, by, bw, bh = _bounds(info)
             size = round(c.tamanho * h)
             m = round(size * 0.3)
-            color = "#080c189e" if c.fundo == "vidro" else self.cor(c.cor_fundo)  # vidro: 62% de opacidade
+            color = "#080c189e" if c.fundo == "vidro" else self.color_of(c.cor_fundo)  # vidro: 62% de opacidade
             adjustment += [("shape.create", {"kind": "roundedRect" if c.fundo == "vidro" else "rect", "radii": 8,
                                          "rect": [bx - m, by - m // 2, bw + 2 * m, bh + m], "fill": color, "stroke": None,
                                          "name": f"Fundo da {info.get('name', 'caixa')}"}),
                        ("layer.moveTo", {"target": info["layer"], "position": "below"})]
             if c.fundo == "tarja":
                 adjustment += [("shape.create", {"kind": "rect", "rect": [bx - m, by - m // 2, round(size * 0.14), bh + m],
-                                             "fill": self.cor("destaque"), "stroke": None, "name": "Tarja"})]
+                                             "fill": self.color_of("destaque"), "stroke": None, "name": "Tarja"})]
         adjustment += self._variantes(doc, res, layers)
         if adjustment:
             self.trace.append(adjustment)
-            self.rodar(destino, adjustment, destino)
-        return Path(destino)
+            self.run_command(destination, adjustment, destination)
+        return Path(destination)
 
     def _variantes(self, doc, res, layers):
         """Cada variante troca textos e vira um layer comp (o A/B fica no mesmo `.pcraft`); volta ao A no fim."""
@@ -337,7 +337,7 @@ class Executor:
         steps = []
         for v in doc.variantes:
             if v.titulo is not None and "titulo" in layers:
-                t, runs = _highlights(v.titulo, self.cor("destaque"))
+                t, runs = _highlights(v.titulo, self.color_of("destaque"))
                 steps += [("type.edit", {"layer": res[layers["titulo"]]["layer"], "text": t, "runs": runs})]
             if v.selo is not None and "selo" in layers:
                 steps += [("type.edit", {"layer": res[layers["selo"]]["layer"], "text": v.selo})]

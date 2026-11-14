@@ -5,12 +5,12 @@ from fastapi.testclient import TestClient
 c = TestClient(app, base_url="http://localhost")
 
 
-def test_episodio_inexistente_da_404():
+def test_missing_episode_returns_404():
     assert c.get("/api/v1/episodios/canal-que-nao-existe-999").status_code == 404
     assert c.post("/api/v1/episodios/canal-que-nao-existe-999/rodar/all").status_code == 404
 
 
-def test_produzir_recusa_roteiro_fora_do_vault():
+def test_produce_rejects_script_outside_vault():
     r = c.post("/api/v1/produzir", json={"roteiros": ["/etc/passwd"]})
     assert r.status_code == 400
 
@@ -24,7 +24,7 @@ def test_cors_libera_o_app_local():
     assert "access-control-allow-origin" not in r.headers
 
 
-def test_validacoes_das_acoes():
+def test_action_validations():
     assert c.post("/api/v1/roteiros/gerar", json={"alvo": "sem-numero"}).status_code == 400
     assert c.post("/api/v1/opcoes", json={"engine": "gpt"}).status_code == 400
     assert c.post("/api/v1/opcoes/baixar", json={"nome": "rm -rf /"}).status_code == 400
@@ -33,12 +33,12 @@ def test_validacoes_das_acoes():
         assert c.get(f"/api/v1/episodios/canal-que-nao-existe-999/{route}").status_code == 404, route
 
 
-def test_leituras_do_sistema_respondem():
+def test_system_readings_respond():
     for route in ("meta", "monitor", "grafo", "processos?limite=1", "custos", "acervo?limite=1", "opcoes/baixando"):
         assert c.get(f"/api/v1/{route}").status_code == 200, route
 
 
-def test_episodio_do_estudio_usa_o_final_do_estudio(tmp_path, monkeypatch):
+def test_studio_episode_uses_studio_final(tmp_path, monkeypatch):
     import os
 
     from esteira.web import api
@@ -60,7 +60,7 @@ def test_episodio_do_estudio_usa_o_final_do_estudio(tmp_path, monkeypatch):
     assert painel._summary_ep("canal-001")["desatualizado"]
 
 
-def test_recusa_host_de_fora_e_post_de_outro_site():
+def test_rejects_foreign_host_and_post_from_other_site():
     # DNS rebinding: o navegador manda o Host do domínio do atacante.
     assert c.get("/api/sistema", headers={"host": "atacante.com"}).status_code == 403
     # CSRF: formulário de outro site para a esteira local.
@@ -69,7 +69,7 @@ def test_recusa_host_de_fora_e_post_de_outro_site():
     assert c.post("/fila/limpar", headers={"origin": "null"}).status_code == 403
 
 
-def test_aceita_origem_local_e_dominio():
+def test_accepts_local_origin_and_domain():
     for origin in ("http://127.0.0.1:8765", "https://agent.thiagobenevide.com"):
         # Rota inexistente: 404 mostra que a trava deixou passar sem mexer na fila real.
         assert c.post("/nao-existe", headers={"origin": origin}).status_code == 404

@@ -1,55 +1,55 @@
-# Concursos
+# Public exams (Concursos)
 
-Cada concurso é cadastrado com o edital (PDF ou link). O Claude Code lê o edital e monta o fluxo de
-conhecimento do cargo: disciplinas, tópicos na ordem em que devem ser estudados, horas, prazos do
-edital e estratégia. Disso sai, por regra, o calendário de tarefas até 1 semana antes da prova.
-Os alertas de prazo aparecem no app e vão por push (ntfy do Painel).
+Each exam is registered with its notice (PDF or link). Claude Code reads the notice and builds the knowledge flow
+for the position: subjects, topics in the order they should be studied, hours, notice deadlines
+and strategy. From that, a rule produces the task calendar up to 1 week before the exam.
+Deadline alerts show up in the app and go out by push (Panel ntfy).
 
-## Estrutura
+## Layout
 
 ```
 concursos/
-├── backend/   `agent-concursos` (pacote `concursos`) em `/api/concursos`; dados em `$AGENT_DATA/concursos/<id>/`
-└── app/       `agent_concursos`: Listagem, Novo concurso, e por concurso as abas Hoje, Cronograma, Fluxo e Prazos
+├── backend/   `agent-concursos` (package `concursos`) at `/api/concursos`; data in `$AGENT_DATA/concursos/<id>/`
+└── app/       `agent_concursos`: List, New exam, and per exam the Today, Schedule, Flow and Deadlines tabs
 ```
 
-- `plano_ia.py`: prompt, sistema e esquema JSON do pedido ao Claude (tarefa `claude_json` do worker,
-  `shared/claude_code.py`; sem worker, o `claude` do próprio PC; nunca a API da Anthropic).
-- `cronograma.py`: distribui os tópicos pelos dias (min/dia útil e de fim de semana), intercalando as
-  disciplinas; sábado treina a discursiva, domingo revisa a semana ou faz simulado (a cada 2 semanas);
-  o que sobra antes da semana final vira revisão + questões; a semana final é só revisão leve e véspera.
-  Se faltar tempo, comprime os tópicos na mesma proporção (`resumo_plano.fator`).
-- `concursos.py`: armazenamento, edital (pdftotext), replanejar (feitas ficam, o resto vai de hoje
-  em diante, sem chamar o Claude de novo) e alertas (prazos dos próximos 15 dias, contagem até a
-  prova, tarefas de hoje e atrasadas).
+- `plano_ia.py`: prompt, system and JSON schema of the request to Claude (`claude_json` worker task,
+  `shared/claude_code.py`; without a worker, the PC's own `claude`; never the Anthropic API).
+- `cronograma.py`: spreads the topics over the days (min/weekday and weekend), interleaving the
+  subjects; Saturday trains the essay, Sunday reviews the week or runs a mock exam (every 2 weeks);
+  what is left before the final week becomes review + questions; the final week is only light review and the day before.
+  If time is short, it compresses the topics in the same proportion (`resumo_plano.fator`).
+- `concursos.py`: storage, notice (pdftotext), replanning (done tasks stay, the rest goes from today
+  on, without calling Claude again) and alerts (deadlines in the next 15 days, countdown to the
+  exam, today's and late tasks).
 
-Rotas: `GET/POST /`, `GET /alertas`, `GET/PATCH/DELETE /{id}`, `POST /{id}/edital` (multipart),
-`POST /{id}/edital/link`, `POST /{id}/plano` (202, em segundo plano), `POST /{id}/replanejar`,
+Routes: `GET/POST /`, `GET /alertas`, `GET/PATCH/DELETE /{id}`, `POST /{id}/edital` (multipart),
+`POST /{id}/edital/link`, `POST /{id}/plano` (202, in the background), `POST /{id}/replanejar`,
 `PATCH /{id}/tarefas/{tid}`, `POST /{id}/prazos`, `DELETE /{id}/prazos/{pid}`.
 
-## Radar de TI (aba "Radar TI · mapa")
+## IT radar ("Radar TI · mapa" tab)
 
-- `radar.py`: a cada `concursos_radar_horas` (6 h; a 1ª coleta 60 s depois do boot) lê as listagens
-  do PCI Concursos (nacional + 5 regiões), separa as de TI por palavra-chave e, para cada notícia
-  nova com TI no texto, segue o site oficial citado (os PDFs do PCI ficam atrás de captcha) atrás
-  do edital, tira dele os trechos de local/data/remuneração e pede à **LLM local** (worker, sem
-  raciocínio) vagas/salários de TI, inscrições, data/horário da prova, cidades de aplicação e
-  links. Até 12 chamadas à LLM por coleta; o resto fica na fila.
-- `geo.py`: coordenadas pela lista de municípios do IBGE (baixada uma vez para
-  `$AGENT_DATA/concursos/radar/`) e rota de carro pelo OSRM público (cache em `rotas/`; sem ele,
-  linha reta × 1,3 marcada como estimada). Origem: `concursos_origem_cidade/uf` (Custódia/PE).
-- App: mapa (flutter_map, tiles CARTO) com você, o local de prova mais próximo de cada concurso
-  (cor pela distância, número de vagas de TI no pino), a sede e a rota desenhada com km e tempo;
-  painel com vagas, salários, inscrições, prova, links e **Acompanhar** (escolhe a vaga → baixa o
-  edital → o Claude monta o fluxo; a ficha do radar aparece no concurso).
-- Rotas: `GET /radar`, `POST /radar/atualizar`, `GET /radar/{id}/rota`, `POST /radar/{id}/acompanhar`.
+- `radar.py`: every `concursos_radar_horas` (6 h; the first collection 60 s after boot) reads the
+  PCI Concursos listings (national + 5 regions), separates the IT ones by keyword and, for each new
+  item with IT in the text, follows the official site it cites (the PCI PDFs sit behind a captcha) to find
+  the notice, extracts the location/date/pay passages and asks the **local LLM** (worker, no
+  reasoning) for IT positions/salaries, registration, exam date/time, exam cities and
+  links. Up to 12 LLM calls per collection; the rest stays in the queue.
+- `geo.py`: coordinates from the IBGE municipality list (downloaded once to
+  `$AGENT_DATA/concursos/radar/`) and the driving route from the public OSRM (cache in `rotas/`; without it,
+  straight line × 1.3 marked as an estimate). Origin: `concursos_origem_cidade/uf` (Custódia/PE).
+- App: map (flutter_map, CARTO tiles) with you, the closest exam location of each exam
+  (color by distance, number of IT positions on the pin), the headquarters and the drawn route with km and time;
+  panel with positions, salaries, registration, exam, links and **Acompanhar** (pick the position → downloads the
+  notice → Claude builds the flow; the radar sheet shows up in the exam).
+- Routes: `GET /radar`, `POST /radar/atualizar`, `GET /radar/{id}/rota`, `POST /radar/{id}/acompanhar`.
 
-## Simulados e materiais (abas do concurso)
+## Mock exams and materials (exam tabs)
 
-- `estudo.py` + `plano_ia.SISTEMA_SIMULADO`: o Claude cria questões inéditas no estilo da banca, na
-  proporção do edital (ou de uma disciplina), preferindo tópicos já estudados; gabarito e
-  comentário só voltam depois de entregar; desempenho por disciplina contra os 60% do edital.
-- Materiais: busca na web (`Internet.buscar_web`, DuckDuckGo) por provas anteriores, questões,
-  apostilas e vídeos; a LLM local classifica e descarta o inútil (só links que a busca trouxe).
-- Rotas: `GET/POST /{id}/simulados`, `POST /{id}/simulados/{sid}/respostas`,
+- `estudo.py` + `plano_ia.SISTEMA_SIMULADO`: Claude creates new questions in the exam board's style, in the
+  notice's proportion (or for one subject), preferring topics already studied; answer key and
+  commentary only come back after submitting; performance per subject against the notice's 60%.
+- Materials: web search (`Internet.buscar_web`, DuckDuckGo) for past exams, questions,
+  handouts and videos; the local LLM classifies and discards the useless ones (only links the search returned).
+- Routes: `GET/POST /{id}/simulados`, `POST /{id}/simulados/{sid}/respostas`,
   `DELETE /{id}/simulados/{sid}`, `GET /{id}/materiais`, `POST /{id}/materiais/buscar`.

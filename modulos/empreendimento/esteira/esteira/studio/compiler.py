@@ -19,14 +19,14 @@ DIM = {"16:9": (1920, 1080), "9:16": (1080, 1920)}
 
 
 def folder(project, fmt):
-    return project.pasta / "estudio" / fmt.replace(":", "x")
+    return project.folder_path / "estudio" / fmt.replace(":", "x")
 
 
-def _link(origem, destino):
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    if destino.is_symlink() or destino.exists():
-        destino.unlink()
-    destino.symlink_to(Path(origem).resolve())
+def _link(origin, destination):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink() or destination.exists():
+        destination.unlink()
+    destination.symlink_to(Path(origin).resolve())
 
 
 def _words(project):
@@ -43,17 +43,17 @@ def _words(project):
     return ws
 
 
-def _media(project, destino):
+def _media(project, destination):
     """Mídia curada do plano (imagem/vídeo por trecho), sem buracos entre um trecho e o seguinte."""
     from esteira.studio import cut
-    plan = json.loads((project.pasta / "plano.json").read_text())
+    plan = json.loads((project.folder_path / "plano.json").read_text())
     new = cut.new(project)
     items = []
     for c in plan["cenas"]:
-        file = project.pasta / (c.get("midia") or "")
+        file = project.folder_path / (c.get("midia") or "")
         if not c.get("midia") or not file.is_file():
             continue
-        _link(file, destino / "midia" / file.name)
+        _link(file, destination / "midia" / file.name)
         items.append({"ini": new(c["inicio"]), "fim": new(c["fim"]), "src": f"assets/midia/{file.name}",
                       "tipo": "video" if c.get("midia_tipo") == "video" or file.suffix == ".mp4" else "imagem",
                       "mov": c.get("movimento") or "zoom_in"})
@@ -66,13 +66,13 @@ def _media(project, destino):
     return items
 
 
-def _sfx(cenas, estilo):
+def _sfx(scenes, style):
     """Um som por entrada de cena, respeitando o teto por segundo (intervalo mínimo entre efeitos)."""
-    rg = estilo.regras
+    rg = style.regras
     gap, last, sounds = 1.0 / max(rg.sfx_por_s, 0.05), -99.0, []
     from esteira.studio.style import SFX_KEY, SFX_DEFAULT
     level = rg.niveis.get("sfx", "media")
-    for c in sorted(cenas, key=lambda c: c["t"]):
+    for c in sorted(scenes, key=lambda c: c["t"]):
         # baixa: só as entradas principais; alta: toda cena ganha som (o padrão onde o estilo não escolheu)
         # a peça do acervo traz o som da entrada na ficha (`sfx.entrada`); o estilo pode trocar por cena
         name = rg.sfx.get(c["cena"]) or (SFX_DEFAULT.get(c["cena"]) or c.get("sfx") if level == "alta" else None)
@@ -87,34 +87,34 @@ def _sfx(cenas, estilo):
     return sounds
 
 
-def _window(itens, de, ate, ini="t", fim="ate"):
+def _window(items, de, until, start="t", end="ate"):
     """Itens que tocam [de, ate], com os tempos deslocados para começar em 0 (trecho de um bloco)."""
     output = []
-    for x in itens:
-        if x[fim] <= de or x[ini] >= ate:
+    for x in items:
+        if x[end] <= de or x[start] >= until:
             continue
-        y = {**x, ini: round(max(x[ini], de) - de, 3), fim: round(min(x[fim], ate) - de, 3)}
-        if x[ini] < de:
-            y["corte"] = round(de - x[ini] + x.get("corte", 0.0), 3)  # a mídia que já tinha começado entra no meio
+        y = {**x, start: round(max(x[start], de) - de, 3), end: round(min(x[end], until) - de, 3)}
+        if x[start] < de:
+            y["corte"] = round(de - x[start] + x.get("corte", 0.0), 3)  # a mídia que já tinha começado entra no meio
         if "batidas" in x:
-            y["batidas"] = {k: round(v - de, 3) for k, v in (x.get("batidas") or {}).items() if de <= v < ate}
+            y["batidas"] = {k: round(v - de, 3) for k, v in (x.get("batidas") or {}).items() if de <= v < until}
         output.append(y)
     return output
 
 
-def build(project, estilo, fmt, destino=None, ate=None, de=None):
+def build(project, style, fmt, destination=None, until=None, de=None):
     """Monta a pasta da produção e o index.html; devolve a pasta. `destino`/`ate`: amostra do estilo (outra pasta,
     só os primeiros `ate` segundos do mapa). `de` + `ate`: trecho [de, ate] (render de um bloco, para emendar)."""
-    mapping = json.loads((project.pasta / "estudio" / "mapa.json").read_text())
+    mapping = json.loads((project.folder_path / "estudio" / "mapa.json").read_text())
     duration_total = mapping["duracao"]
     if de is not None:
-        ate = ate if ate is not None else mapping["duracao"]
-        mapping["cenas"] = _window(mapping["cenas"], de, ate)
-        mapping["duracao"] = round(ate - de, 3)
-    elif ate:
-        mapping["duracao"] = min(mapping["duracao"], ate)
-        mapping["cenas"] = [{**c, "ate": min(c["ate"], ate)} for c in mapping["cenas"] if c["t"] < ate - 1]
-    p = destino or folder(project, fmt)
+        until = until if until is not None else mapping["duracao"]
+        mapping["cenas"] = _window(mapping["cenas"], de, until)
+        mapping["duracao"] = round(until - de, 3)
+    elif until:
+        mapping["duracao"] = min(mapping["duracao"], until)
+        mapping["cenas"] = [{**c, "ate": min(c["ate"], until)} for c in mapping["cenas"] if c["t"] < until - 1]
+    p = destination or folder(project, fmt)
     a = p / "assets"
     a.mkdir(parents=True, exist_ok=True)
     for name in ("estudio.js", "estudio.css", "gsap.min.js"):
@@ -130,10 +130,10 @@ def build(project, estilo, fmt, destino=None, ate=None, de=None):
     for n, c in enumerate(mapping["cenas"]):
         f = cards.get(c["cena"])
         if f and f.motor == "effectcraft":
-            ec.to_production(f.id, c, estilo, fmt, a / f"ec_{n:03d}.webm")
+            ec.to_production(f.id, c, style, fmt, a / f"ec_{n:03d}.webm")
             c["ec_src"] = f"assets/ec_{n:03d}.webm"
     from esteira.studio import fonts
-    skin = estilo.pele
+    skin = style.pele
     roles = ("fonte_destaque", "fonte_texto", "fonte_tecnica", "fonte_legenda", "fonte_editorial")
     (a / "fontes.css").write_text(fonts.css([getattr(skin, k) for k in roles], a))
     skin = skin.model_copy(update={k: fonts.resolve(getattr(skin, k)) for k in roles})
@@ -141,29 +141,29 @@ def build(project, estilo, fmt, destino=None, ate=None, de=None):
     from esteira.studio import cut
     _link(cut.audio(project), a / "narracao.wav")
     W, H = DIM[fmt]
-    rg = estilo.regras
+    rg = style.regras
     keys = sorted({w for c in mapping["cenas"] for w in re.findall(r"\w{4,}", (c.get("ancora") or "").lower())})
     cfg = {"W": W, "H": H, "pele": skin.model_dump(), "efeitos": rg.efeitos, "visual": rg.visual.model_dump(),
            "legenda": {"ativa": rg.legenda.get(fmt, False), **rg.legenda_visual.model_dump(), "chaves": keys},
            # linguagem de movimento, layouts, regras de cor e ajuste de cada peça (abas do estilo no app)
-           "movimento": estilo.movimento.model_dump(), "layouts": estilo.layouts.model_dump(),
-           "regras_cor": estilo.regras_cor.model_dump(), "pecas": {k: v.model_dump() for k, v in estilo.pecas.items()}}
-    sounds = _sfx(mapping["cenas"], estilo)
+           "movimento": style.movimento.model_dump(), "layouts": style.layouts.model_dump(),
+           "regras_cor": style.regras_cor.model_dump(), "pecas": {k: v.model_dump() for k, v in style.pecas.items()}}
+    sounds = _sfx(mapping["cenas"], style)
     duration = round(mapping["duracao"], 3)
     media = _media(project, a)
     if de is not None:
-        media = _window(media, de, ate, "ini", "fim")
+        media = _window(media, de, until, "ini", "fim")
     lay = None
-    if estilo.modo != "apresentador":
-        _layouts_dark(mapping["cenas"], estilo.layouts.variacoes_dark)
-    if estilo.modo == "apresentador":
+    if style.modo != "apresentador":
+        _layouts_dark(mapping["cenas"], style.layouts.variacoes_dark)
+    if style.modo == "apresentador":
         from esteira.studio import camera
         if not camera.exists(project):
             raise SystemExit("estilo de apresentador sem câmera: envie o vídeo da câmera do episódio (camera.mp4)")
         v = camera.cut_camera(project, duration_total if de is not None else duration)
         _link(v, a / "camera.mp4")
-        segs = camera.layouts(mapping["cenas"], media, estilo.regras, duration, estilo.layouts.variacoes)
-        ap = estilo.regras.apresentador
+        segs = camera.layouts(mapping["cenas"], media, style.regras, duration, style.layouts.variacoes)
+        ap = style.regras.apresentador
         from esteira.library import _probe
         cw, ch, _ = _probe(v)
         cfg["camera"] = {"src": "assets/camera.mp4", "foco": camera.face(v), "dim": [cw, ch], "punch": ap["punch"],
@@ -176,24 +176,24 @@ def build(project, estilo, fmt, destino=None, ate=None, de=None):
                  "__MIDIA__": json.dumps(media, ensure_ascii=False),
                  "__CENAS__": json.dumps(mapping["cenas"], ensure_ascii=False),
                  "__WORDS__": json.dumps(_words(project) if de is None else
-                                         _window(_words(project), de, ate, "start", "end"), ensure_ascii=False),
+                                         _window(_words(project), de, until, "start", "end"), ensure_ascii=False),
                  "__DE__": de or 0,
                  "__SFX__": json.dumps(sounds), "__EC__": piece.videos_ec(mapping["cenas"]),
                  "__THREE__": piece.TAG_THREE if three else ""}.items():
         html = html.replace(k, str(v))
     (p / "index.html").write_text(html)
-    (p / "producao.json").write_text(json.dumps({"estilo": estilo.id, "versao": estilo.versao, "formato": fmt,
+    (p / "producao.json").write_text(json.dumps({"estilo": style.id, "versao": style.versao, "formato": fmt,
                                                  "cenas": len(mapping["cenas"]), "sfx": len(sounds), "duracao": duration,
                                                  "layouts": lay}, indent=1))
     print(f"  {fmt}: {len(mapping['cenas'])} cenas · {len(sounds)} efeitos · {duration:.0f} s" + (f" · layouts {lay}" if lay else ""))
     return p
 
 
-def _layouts_dark(cenas, variations):
+def _layouts_dark(scenes, variations):
     """Dark: peças cheias em rodízio (tela = motion sobre a mídia desfocada; lateral/flutuante = dados sobre a mídia;
     sólido = card sobre fundo na cor do estilo). O layout pedido pelo gatilho vence; capítulo fica na tela."""
     spin = 0
-    for c in cenas:
+    for c in scenes:
         request = c.get("layout_pedido")
         if request in ("lateral", "flutuante", "solido", "galeria"):
             c["layout"] = request
@@ -219,29 +219,29 @@ def _has_audio(file):
     return bool(r.stdout.strip())
 
 
-def render_span(project, estilo, fmt, de, ate, nome):
+def render_span(project, style, fmt, de, until, name):
     """Compila e renderiza só [de, ate] (o bloco alterado) em `<formato>/trechos/<nome>/render/bruto.mp4`."""
-    destination = folder(project, fmt) / "trechos" / nome
+    destination = folder(project, fmt) / "trechos" / name
     shutil.rmtree(destination, ignore_errors=True)
-    build(project, estilo, fmt, destino=destination, ate=ate, de=de)
+    build(project, style, fmt, destination=destination, until=until, de=de)
     return render(project, fmt, p=destination)
 
 
-def splice(project, fmt, de, ate, trecho):
+def splice(project, fmt, de, until, segment):
     """Troca [de, ate] do `render/bruto.mp4` pelo trecho renderizado (vídeo e som da composição); o resto do vídeo
     não é renderizado de novo, só reencodado na emenda. Guarda o bruto anterior como `bruto.anterior.mp4`."""
     p = folder(project, fmt)
     raw = p / "render" / "bruto.mp4"
     if not raw.exists():
         raise SystemExit("sem render completo para emendar: renderize o vídeo inteiro antes")
-    sound = _has_audio(raw) and _has_audio(trecho)
+    sound = _has_audio(raw) and _has_audio(segment)
     v = (f"[0:v]trim=0:{de:.3f},setpts=PTS-STARTPTS[v0];[1:v]setpts=PTS-STARTPTS[v1];"
-         f"[0:v]trim=start={ate:.3f},setpts=PTS-STARTPTS[v2];")
+         f"[0:v]trim=start={until:.3f},setpts=PTS-STARTPTS[v2];")
     a = (f"[0:a]atrim=0:{de:.3f},asetpts=PTS-STARTPTS[a0];[1:a]asetpts=PTS-STARTPTS[a1];"
-         f"[0:a]atrim=start={ate:.3f},asetpts=PTS-STARTPTS[a2];") if sound else ""
+         f"[0:a]atrim=start={until:.3f},asetpts=PTS-STARTPTS[a2];") if sound else ""
     junta = "[v0][a0][v1][a1][v2][a2]concat=n=3:v=1:a=1[v][a]" if sound else "[v0][v1][v2]concat=n=3:v=1:a=0[v]"
     new = p / "render" / "bruto.novo.mp4"
-    cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(raw), "-i", str(trecho), "-filter_complex", v + a + junta,
+    cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(raw), "-i", str(segment), "-filter_complex", v + a + junta,
            "-map", "[v]", "-c:v", "libx264", "-preset", "fast", "-crf", "16", "-pix_fmt", "yuv420p"]
     cmd += ["-map", "[a]", "-c:a", "aac", "-b:a", "256k"] if sound else []
     subprocess.run(cmd + [str(new)], check=True)
@@ -257,10 +257,10 @@ def _measure(file, lufs, peak, extra=""):
     return json.loads(out[out.rindex("{"):out.rindex("}") + 1])
 
 
-def audio(project, estilo, fmt, p=None):
+def audio(project, style, fmt, p=None):
     """Loudnorm em duas passadas (medição + correção linear); vídeo copiado sem reencodar. Gera também a prévia leve."""
     p = p or folder(project, fmt)
-    rg = estilo.regras
+    rg = style.regras
     raw, final = p / "render" / "bruto.mp4", p / "final.mp4"
     cap = rg.pico - 0.8  # o AAC estoura o pico depois do loudnorm: a margem mantém o final dentro do limite
     m = _measure(raw, rg.lufs, cap)
@@ -284,19 +284,19 @@ def preview(final):
     return destination
 
 
-def _frame(video, t, destino):
+def _frame(video, t, destination):
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", str(video), "-frames:v", "1", "-q:v", "3",
-                    str(destino)], check=True)
+                    str(destination)], check=True)
 
 
-def verify(project, estilo, fmt, n_vision=8):
+def verify(project, style, fmt, n_vision=8):
     """Portão final: loudness, folha de quadros e conferência visual (IA local) nos quadros das cenas."""
     from esteira.bench import Vision
     from esteira.ai import local
     p = folder(project, fmt)
     final = p / "final.mp4"
-    mapping = json.loads((project.pasta / "estudio" / "mapa.json").read_text())
-    medido = _measure(final, estilo.regras.lufs, estilo.regras.pico)
+    mapping = json.loads((project.folder_path / "estudio" / "mapa.json").read_text())
+    medido = _measure(final, style.regras.lufs, style.regras.pico)
     lufs, peak = float(medido["input_i"]), float(medido["input_tp"])
     q = p / "quadros"
     shutil.rmtree(q, ignore_errors=True)
@@ -315,19 +315,19 @@ def verify(project, estilo, fmt, n_vision=8):
     problems = []
     for n, (c, file) in enumerate(frames[:n_vision], 1):
         events.progress(n, min(n_vision, len(frames)), f"conferindo {c['cena']}")
-        r = local.ask(local.prompt("estudio_visao"), Vision, model=local.VISION, images=[str(file)], max_tokens=200,
+        r = local.ask(local.prompt("studio_vision"), Vision, model=local.VISION, images=[str(file)], max_tokens=200,
                             operation="studio_vision")
         if r:
             bad = [k for k, v in r.model_dump().items() if v]
             if bad:
                 problems.append({"cena": c["id"], "tipo": c["cena"], "t": c["t"], "defeitos": bad, "quadro": file.name})
     prod = json.loads((p / "producao.json").read_text())
-    rel = {"formato": fmt, "estilo": estilo.id, "versao": estilo.versao, "duracao": prod["duracao"],
+    rel = {"formato": fmt, "estilo": style.id, "versao": style.versao, "duracao": prod["duracao"],
            "cenas": prod["cenas"], "sfx": prod["sfx"], "sfx_por_s": round(prod["sfx"] / max(prod["duracao"], 1), 2),
            "takeover": round(sum(c["ate"] - c["t"] for c in scenes if c["takeover"]) / max(prod["duracao"], 1), 2),
            "lufs": lufs, "pico": peak, "visao": problems, "decisoes": mapping.get("decisoes", {}),
            "ritmo": mapping.get("ritmo"),
-           "audio_ok": abs(lufs - estilo.regras.lufs) <= 0.5 and peak <= estilo.regras.pico + 0.3}
+           "audio_ok": abs(lufs - style.regras.lufs) <= 0.5 and peak <= style.regras.pico + 0.3}
     rel["aprovado_auto"] = rel["audio_ok"] and not problems
     (p / "relatorio.json").write_text(json.dumps(rel, ensure_ascii=False, indent=1))
     print(f"  {fmt}: {lufs} LUFS · pico {peak} dBTP · {len(problems)} quadro(s) com defeito · "

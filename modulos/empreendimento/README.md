@@ -1,18 +1,18 @@
-# Empreendimento e Escala de Conteúdo
+# Business and Content Scaling
 
-Gestão dos cinco canais do YouTube (meta: um vídeo por canal por dia): ideação, roteiros com artigos científicos, curadoria e validação por LLM local, busca de mídia em bancos abertos, edição, efeitos e thumbnails pelas Craft Apps, publicação.
+Management of the five YouTube channels (goal: one video per channel per day): ideation, scripts backed by scientific articles, local-LLM curation and validation, media search in open banks, editing, effects and thumbnails through the Craft Apps, publishing.
 
-- `esteira/`: pipeline de vídeos dark (ex-`llm/esteira-dark`), com CLI `./dark` e painel próprios; dados em `$AGENT_DATA/empreendimento/`.
-- Canais: `finlumia`, `benehistory`, `cosmoatomico`, `embarcados`, `thiagobenevide` (`esteira/perfis/`).
+- `esteira/`: dark video pipeline (ex-`llm/esteira-dark`), with its own `./dark` CLI and panel; data in `$AGENT_DATA/empreendimento/`.
+- Channels: `finlumia`, `benehistory`, `cosmoatomico`, `embarcados`, `thiagobenevide` (`esteira/perfis/`).
 
-## Estrutura
+## Layout
 
 ```
 empreendimento/
-├── backend/   pacote Python: API FastAPI, modelos e regras (roda na VPS)
-├── worker/    jobs pesados de LLM/GPU (roda no PC com a GPU)
-└── app/       pacote Flutter com as telas do módulo
+├── backend/   Python package: FastAPI API, models and rules (runs on the VPS)
+├── worker/    heavy LLM/GPU jobs (runs on the GPU PC)
+└── app/       Flutter package with the module screens
 ```
 
-Cada parte só existe quando houver código para ela. A plataforma (`plataforma/`) registra o
-router do backend, despacha os jobs do worker e monta as telas do app.
+Each part only exists once there is code for it. The platform (`plataforma/`) registers the
+backend router, dispatches the worker jobs and mounts the app screens.

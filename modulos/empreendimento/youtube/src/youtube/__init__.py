@@ -1,1 +1,1 @@
-"""Canais do YouTube do módulo Empreendimento, guardados como notas do cofre (`/api/notas`)."""
+"""YouTube channels of the Empreendimento module, stored as vault notes (`/api/notas`)."""

@@ -40,15 +40,15 @@ def list_all():
         return _read()
 
 
-def add(ep, comando, args=(), motor="local"):
+def add(ep, command, args=(), engine="local"):
     """`ep`: episódio (canal-NNN) ou, para `roteiro`, o alvo canal:N. motor="claude" só vale em locks.CLAUDE_OK."""
-    v = locks.slot(comando, motor)
+    v = locks.slot(command, engine)
     args = list(args) + (["--engine", "claude"] if v == "claude" else [])
     with _lock:
         queue = _read()
-        if any(t["ep"] == ep and t["comando"] == comando and t["estado"] in ("na fila", "rodando") for t in queue):
+        if any(t["ep"] == ep and t["comando"] == command and t["estado"] in ("na fila", "rodando") for t in queue):
             return None  # já está na fila
-        t = {"id": int(time.time() * 1000), "ep": ep, "comando": comando, "args": args, "vaga": v,
+        t = {"id": int(time.time() * 1000), "ep": ep, "comando": command, "args": args, "vaga": v,
              "estado": "na fila", "criado": datetime.now().isoformat(timespec="seconds")}
         queue.append(t)
         _save(queue)
@@ -121,12 +121,12 @@ def _next(slot):
         return t
 
 
-def _finish(tid, codigo):
+def _finish(tid, code):
     with _lock:
         queue = _read()
         for t in queue:
             if t["id"] == tid and t["estado"] != "cancelado":
-                t.update(estado="ok" if codigo == 0 else "erro", codigo=codigo,
+                t.update(estado="ok" if code == 0 else "erro", codigo=code,
                          fim=datetime.now().isoformat(timespec="seconds"))
         _save(queue)
 

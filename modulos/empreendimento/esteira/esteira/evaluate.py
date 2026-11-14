@@ -19,31 +19,31 @@ class Note(BaseModel):
     sugestao_en: str = Field("", max_length=60)
 
 
-def _frame(project, cena):
+def _frame(project, scene):
     """Imagem que representa a mídia: a própria foto ou o quadro do meio do vídeo (512 px)."""
-    file = project.pasta / cena["midia"]
-    destination = project.pasta / "midia" / f".aval_{cena['id']:03d}.jpg"
+    file = project.folder_path / scene["midia"]
+    destination = project.folder_path / "midia" / f".aval_{scene['id']:03d}.jpg"
     if destination.exists() and destination.stat().st_mtime >= file.stat().st_mtime:
         return destination
     # -ss só em vídeo: numa foto ele pula o único quadro e o ffmpeg sai sem gravar nada
-    search = ["-ss", f"{(cena['fim'] - cena['inicio']) / 2:.2f}"] if cena.get("midia_tipo") == "video" else []
+    search = ["-ss", f"{(scene['fim'] - scene['inicio']) / 2:.2f}"] if scene.get("midia_tipo") == "video" else []
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", *search, "-i", file, "-frames:v", "1",
                     "-vf", "scale=512:-2", "-q:v", "4", "-update", "1", destination], check=True)
     return destination
 
 
-def _evaluate(project, cenas):
+def _evaluate(project, scenes):
     """Nota de cada mídia para a sua cena. A nota já dada no acervo para a mesma mídia e o mesmo termo é
     reaproveitada (sem chamar o modelo de visão); as novas vão para o acervo."""
     notes, reused = {}, 0
-    for n, c in enumerate(cenas, 1):
-        events.progress(n, len(cenas), f"cena {c['id']}")
+    for n, c in enumerate(scenes, 1):
+        events.progress(n, len(scenes), f"cena {c['id']}")
         term = c.get("busca_en") or c["busca"]
         before = library.evaluation(c["midia_id"], term) if c.get("midia_id") else None
         if before:
             r, reused = Note(nota=before["nota"], problema=before["problema"] or ""), reused + 1
         else:
-            r = local.ask(local.prompt("avaliar", texto=c["texto"], busca=term),
+            r = local.ask(local.prompt("evaluate", texto=c["texto"], busca=term),
                                 Note, model=local.VISION, images=[_frame(project, c)], max_tokens=120)
             if r and c.get("midia_id"):
                 library.save_evaluation(c["midia_id"], term, r.nota, r.problema)
@@ -60,28 +60,29 @@ def _claude(project, plan, weak):
     from esteira.ai import claude
     from esteira.media import sheet
 
-    class Troca(BaseModel):
+    class Swap(BaseModel):
         id: int
-        busca_en: str
-        tipo: str = Field(pattern="^(video|imagem)$")
+        search_en: str
+        kind: str = Field(pattern="^(video|imagem)$")
 
-    class Resposta(BaseModel):
-        trocas: list[Troca]
+    class Answer(BaseModel):
+        swaps: list[Swap]
 
     weak = weak[:16]
-    frames = [(project.pasta / c["midia"], (c["fim"] - c["inicio"]) / 2 if c.get("midia_tipo") == "video" else None,
+    frames = [(project.folder_path / c["midia"], (c["fim"] - c["inicio"]) / 2 if c.get("midia_tipo") == "video" else None,
                 f"{c['id']}") for c in weak]
-    destination = project.caminho("avaliar_claude.jpg")
+    destination = project.path_of("avaliar_claude.jpg")
     sheet(project, frames, destination)
-    lines = "\n".join(f"{c['id']}: fala \"{c['texto'][:140]}\" | busca atual \"{c.get('busca_en')}\" | "
-                       f"problema: {c.get('problema_midia', '')}" for c in weak)
+    lines = "\n".join(f"{c['id']}: line \"{c['texto'][:140]}\" | current search \"{c.get('busca_en')}\" | "
+                       f"problem: {c.get('problema_midia', '')}" for c in weak)
     channel = getattr(project, "canal", "") or "documentário"
     r = claude.query(
-        f"Canal {channel}. A folha mostra o fundo atual de cenas cujas imagens não combinaram com a fala "
-        f"(número da cena no canto). Para cada cena, proponha uma busca melhor para Pexels/Pixabay: 2-4 palavras "
-        f"em inglês, concretas e filmáveis, que ilustrem a ideia da fala sem ser literal demais, e o tipo "
-        f"(video para ambiente/ação, imagem para objeto/pessoa/documento).\n\n{lines}",
-        Resposta, project.cfg, project.ep, f"mídia: {len(weak)} cenas fracas", image=destination)
+        f"Channel {channel}. The sheet shows the current background of scenes whose images did not match the "
+        f"narration (in Brazilian Portuguese; scene number in the corner). For each scene, propose a better "
+        f"Pexels/Pixabay search: 2-4 English words, concrete and filmable, that illustrate the idea of the line "
+        f"without being too literal, and the type (\"video\" for environment/action, \"imagem\" for "
+        f"object/person/document).\n\n{lines}",
+        Answer, project.cfg, project.ep, f"mídia: {len(weak)} cenas fracas", image=destination)
     if not r:
         return False
     by_id = {c["id"]: c for c in plan["cenas"]}
@@ -93,17 +94,17 @@ def _claude(project, plan, weak):
     return True
 
 
-def evaluate(project, rodadas=2, minimum=3):
+def evaluate(project, rounds=2, minimum=3):
     from esteira.media import fetch
     plan = project.load_json("plano.json")
     target = [c for c in plan["cenas"] if c.get("midia") and "nota_midia" not in c]
-    for rounded in range(1, rodadas + 2):
+    for rounded in range(1, rounds + 2):
         notes = _evaluate(project, target)
         project.save_json("plano.json", plan)
         weak = [c for c in target if c["id"] in notes and notes[c["id"]].nota < minimum]
         print(f"  rodada {rounded}: {len(notes)} avaliadas, {len(weak)} fracas"
               + (f" ({', '.join(str(c['id']) for c in weak[:20])})" if weak else ""))
-        if not weak or rounded > rodadas:
+        if not weak or rounded > rounds:
             break
         for c in weak:  # termo sugerido pelo modelo de visão; a mídia atual não volta
             s = notes[c["id"]].sugestao_en.strip()
@@ -112,13 +113,13 @@ def evaluate(project, rodadas=2, minimum=3):
             c.pop("nota_midia", None)
         project.save_json("plano.json", plan)
         local.free_gpu()
-        fetch(project, refazer=True, cenas=[c["id"] for c in weak])
+        fetch(project, redo=True, scenes=[c["id"] for c in weak])
         plan = project.load_json("plano.json")
         ids = {c["id"] for c in weak}
         target = [c for c in plan["cenas"] if c["id"] in ids and c.get("midia")]
     weak = [c for c in plan["cenas"] if c.get("nota_midia", 5) < minimum]
     if weak and _claude(project, plan, weak):
-        fetch(project, refazer=True, cenas=[c["id"] for c in weak])
+        fetch(project, redo=True, scenes=[c["id"] for c in weak])
         plan = project.load_json("plano.json")
         ids = {c["id"] for c in weak}
         _evaluate(project, [c for c in plan["cenas"] if c["id"] in ids and c.get("midia")])

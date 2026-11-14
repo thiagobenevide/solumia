@@ -6,17 +6,17 @@ from esteira.dataset import export as X
 from esteira.dataset import registry as R
 
 
-def _montagem(dur=120):
+def _assembly(duration=120):
     ops = [{"op": "sequencia", "nome": "e"}, {"op": "colocar", "id": "narracao", "midia": "narracao",
                                                "trilha": "narracao", "em": 0}]
-    for k in range(0, int(dur), 10):
+    for k in range(0, int(duration), 10):
         ops += [{"op": "colocar", "id": f"c{k}", "midia": f"cena:{k}", "trilha": "base", "em": k, "dur": 10},
                 {"op": "ken_burns", "alvo": f"c{k}", "movimento": "zoom_in", "zoom": 8}]
     return {"versao": 1, "ops": ops}
 
 
-def test_trechos_da_montagem_cobrem_tudo_sem_repetir():
-    doc = _montagem()
+def test_assembly_segments_cover_everything_without_repeating():
+    doc = _assembly()
     ctx = {"duracao": 120, "cenas": [{"id": k, "inicio": k} for k in range(0, 120, 10)], "graficos": [], "chaves": []}
     parts = X.spans_assembly(ctx, doc)
     assert len(parts) == 3 and parts[0][0]["trecho"] == [0.0, 45.0]
@@ -25,11 +25,11 @@ def test_trechos_da_montagem_cobrem_tudo_sem_repetir():
     assert parts[0][1]["ops"][0]["op"] == "sequencia" and all(c["inicio"] >= 45 for c in parts[1][0]["cenas"])
 
 
-def test_exportar_divide_por_grupo_tira_o_ouro_e_monta_dpo():
+def test_export_splits_by_group_removes_gold_and_builds_dpo():
     for g in range(12):
         for v in ("escolhida", None):
-            rg = R.write("foto_tratar", grupo=f"foto:{g}", contexto={"g": g}, origem="t",
-                          saida={"foco": [0.5, 0.5], "recortar": v is None, "separar_planos": False})
+            rg = R.write("foto_tratar", group=f"foto:{g}", context={"g": g}, origin="t",
+                          output={"foco": [0.5, 0.5], "recortar": v is None, "separar_planos": False})
             if v:
                 R.evaluate(rg, v)
             else:

@@ -1,5 +1,5 @@
-/// Módulo Design: quadro branco infinito para desenho livre, esquemas e projeção.
+/// Design module: infinite whiteboard for free drawing, diagrams and projection.
 library;
 
-export 'src/api_design.dart' show ApiDesign;
-export 'src/modulo_design.dart';
+export 'src/design_api.dart' show ApiDesign;
+export 'src/design_module.dart';

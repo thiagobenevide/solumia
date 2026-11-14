@@ -15,9 +15,9 @@ from esteira.project import CACHE, PROJECTS, ROOT
 
 PROMPTS = ROOT / "esteira" / "ai" / "prompts"
 PROMPTS_DO_NODE = {
-    "r_fatos": ["roteiro_trechos"], "r_partes": ["roteiro_parte"], "clean": ["corte", "corte_par"],
-    "curate": ["curadoria"], "evaluate": ["avaliar"], "graphics": ["grafico_numero", "grafico_nota", "grafico_citacao", "termos_en"],
-    "thumb": ["thumb_conceitos"],
+    "r_fatos": ["script_excerpts"], "r_partes": ["script_part"], "clean": ["cut", "cut_pair"],
+    "curate": ["curation"], "evaluate": ["evaluate"], "graphics": ["graphic_number", "graphic_note", "graphic_quote", "terms_en"],
+    "thumb": ["thumb_concepts"],
 }
 MODELS = {"qwen3": "qwen3-14b", "qwen_vl": "qwen2.5vl-7b"}  # ids no llama.cpp
 OLD = {"qwen3-14b": "qwen3:14b", "qwen2.5vl-7b": "qwen2.5vl:7b"}  # mesmo modelo no tempo do Ollama
@@ -25,12 +25,12 @@ STAGES = {"transcribe", "clean", "scenes", "curate", "fetch", "evaluate", "graph
 _memo = {}
 
 
-def _stored(chave, seg, f):
-    v = _memo.get(chave)
+def _stored(key, seg, f):
+    v = _memo.get(key)
     if v and time.time() - v[0] < seg:
         return v[1]
     r = f()
-    _memo[chave] = (time.time(), r)
+    _memo[key] = (time.time(), r)
     return r
 
 
@@ -56,18 +56,18 @@ def _pct(vals, p):
 
 # ---------- chamadas de LLM ----------
 
-def call_statistics(chamadas, hist_monitor=()):
+def call_statistics(calls, hist_monitor=()):
     """Resumo das chamadas do rastro + energia estimada pela potência da GPU durante cada chamada."""
-    if not chamadas:
+    if not calls:
         return None
-    ok = [c for c in chamadas if c.get("ok")]
+    ok = [c for c in calls if c.get("ok")]
     tin = [c["input_tokens"] for c in ok if c.get("input_tokens")]
     tout = [c["output_tokens"] for c in ok if c.get("output_tokens")]
     tok_s = [c["tok_s"] for c in ok if c.get("tok_s")]
     pre = [c["prefill_tok_s"] for c in ok if c.get("prefill_tok_s")]
     lat = [c.get("total_s") or c.get("seconds") for c in ok if c.get("total_s") or c.get("seconds")]
     by_prompt = {}
-    for c in chamadas:
+    for c in calls:
         d = by_prompt.setdefault(c.get("name") or "?", {"n": 0, "seg": 0.0, "tokens": 0})
         d["n"] += 1
         d["seg"] += c.get("total_s") or c.get("seconds") or 0
@@ -81,43 +81,43 @@ def call_statistics(chamadas, hist_monitor=()):
             wh += statistics.mean(samples) * (end - start) / 3600
             tok_and += (c.get("input_tokens") or 0) + (c.get("output_tokens") or 0)
     return {
-        "n": len(chamadas), "ok_pct": round(100 * len(ok) / len(chamadas)), "tentativas_extra": sum(1 for c in chamadas if (c.get("params") or {}).get("attempt", 1) > 1),
+        "n": len(calls), "ok_pct": round(100 * len(ok) / len(calls)), "tentativas_extra": sum(1 for c in calls if (c.get("params") or {}).get("attempt", 1) > 1),
         "tokens_entrada": sum(tin), "tokens_saida": sum(tout),
         "media_entrada": round(statistics.mean(tin)) if tin else None, "media_saida": round(statistics.mean(tout)) if tout else None,
         "tok_s": round(statistics.median(tok_s), 1) if tok_s else None, "prefill_tok_s": round(statistics.median(pre)) if pre else None,
-        "lat_p50": _pct(lat, .5), "lat_p95": _pct(lat, .95), "custo_usd": round(sum(c.get("cost_usd") or 0 for c in chamadas), 4),
+        "lat_p50": _pct(lat, .5), "lat_p95": _pct(lat, .95), "custo_usd": round(sum(c.get("cost_usd") or 0 for c in calls), 4),
         "wh": round(wh, 3) if wh else None, "wh_por_mil_tokens": round(wh / tok_and * 1000, 4) if tok_and else None,
         "por_prompt": sorted(({"nome": k, **v, "seg": round(v["seg"], 1)} for k, v in by_prompt.items()), key=lambda x: -x["n"])[:8],
         "serie": [{"t": c["t"], "tok_s": c.get("tok_s"), "seg": c.get("total_s") or c.get("seconds"),
-                   "tokens": c.get("output_tokens"), "ok": c.get("ok")} for c in chamadas[-40:]],
+                   "tokens": c.get("output_tokens"), "ok": c.get("ok")} for c in calls[-40:]],
     }
 
 
-def card_model(nome):
+def card_model(name):
     """Metadados do GGUF pelo llama-server (`/props`; só com o modelo carregado) e o tamanho em disco."""
-    def ler():
+    def read_part():
         from esteira.ai import llama
-        m = next((m for m in llama.models() or [] if m["id"] == nome), None)
+        m = next((m for m in llama.models() or [] if m["id"] == name), None)
         if m is None:
             return None
-        card = {"formato": "gguf", "gb": llama.gb(nome), "visao": llama.vision(m), "estado": m["status"]["value"]}
+        card = {"formato": "gguf", "gb": llama.gb(name), "visao": llama.vision(m), "estado": m["status"]["value"]}
         if card["estado"] == "loaded":
             try:
-                req = urllib.request.Request(f"{llama.HOST}/props?model={urllib.parse.quote(nome)}")
+                req = urllib.request.Request(f"{llama.HOST}/props?model={urllib.parse.quote(name)}")
                 with urllib.request.urlopen(req, timeout=3) as r:
                     p = json.load(r)
                 ger = p.get("default_generation_settings") or {}
-                card |= {"contexto_max": ger.get("n_ctx"), "familia": (p.get("model_alias") or nome),
+                card |= {"contexto_max": ger.get("n_ctx"), "familia": (p.get("model_alias") or name),
                           "arquivo": Path(p.get("model_path") or "").name or None}
             except (OSError, ValueError):
                 pass
         return card
-    return _stored(f"ficha:{nome}", 600, ler)
+    return _stored(f"ficha:{name}", 600, read_part)
 
 
 def history_events_llm(model):
     """Chamadas antigas (antes do rastro) gravadas como eventos `llm` nos episódios: ms e tokens gerados."""
-    def ler():
+    def read_part():
         regs = []
         for file in PROJECTS.glob("*/*/log/events.jsonl"):
             for e in _tail(file, 800_000):
@@ -127,24 +127,24 @@ def history_events_llm(model):
             return None
         ms = [r["ms"] for r in regs if r["ms"]]
         tk = [r["tokens"] for r in regs if r["tokens"]]
-        por = {}
+        by_choice = {}
         for r in regs:
-            por[r["etapa"]] = por.get(r["etapa"], 0) + 1
+            by_choice[r["etapa"]] = by_choice.get(r["etapa"], 0) + 1
         return {"n": len(regs), "lat_p50": _pct([m / 1000 for m in ms], .5), "lat_p95": _pct([m / 1000 for m in ms], .95),
                 "tokens_saida": sum(tk), "tok_s_aprox": round(sum(tk) / (sum(ms) / 1000), 1) if ms and tk else None,
-                "por_etapa": sorted(por.items(), key=lambda x: -x[1])}
-    return _stored(f"evllm:{model}", 15, ler)
+                "por_etapa": sorted(by_choice.items(), key=lambda x: -x[1])}
+    return _stored(f"evllm:{model}", 15, read_part)
 
 
 def cache_llm():
-    def ler():
+    def read_part():
         file = CACHE / "llm.jsonl"
         if not file.exists():
             return None
         with open(file, "rb") as f:
             n = sum(1 for _ in f)
         return {"respostas": n, "mb": round(file.stat().st_size / 2**20, 1)}
-    return _stored("cache_llm", 30, ler)
+    return _stored("cache_llm", 30, read_part)
 
 
 def prompts(id_node):
@@ -159,37 +159,37 @@ def prompts(id_node):
 # ---------- Claude ----------
 
 def claude():
-    def ler():
+    def read_part():
         file = CACHE / "claude.jsonl"
         regs = list(_tail(file, 2_000_000)) if file.exists() else []
-        today, mes = date.today().isoformat(), date.today().isoformat()[:7]
+        today, month = date.today().isoformat(), date.today().isoformat()[:7]
         c = _cfg().get("claude", {})
-        por = {}
+        by_choice = {}
         for r in regs:
             m = (r.get("motivo") or "?").split(":")[0]
-            d = por.setdefault(m, {"n": 0, "custo": 0.0})
+            d = by_choice.setdefault(m, {"n": 0, "custo": 0.0})
             d["n"] += 1
             d["custo"] += r.get("custo") or 0
         return {"hoje": round(sum(r["custo"] for r in regs if r["t"].startswith(today)), 4),
-                "mes": round(sum(r["custo"] for r in regs if r["t"].startswith(mes)), 4),
+                "mes": round(sum(r["custo"] for r in regs if r["t"].startswith(month)), 4),
                 "chamadas": len(regs), "chamadas_hoje": sum(1 for r in regs if r["t"].startswith(today)),
                 "teto_dia": c.get("teto_dia_usd"), "teto_episodio": c.get("teto_episodio_usd"), "teto_chamada": c.get("teto_chamada_usd"),
                 "modelo": c.get("modelo"), "ativo": c.get("ativo", True),
-                "por_motivo": sorted(({"motivo": k, "n": v["n"], "custo": round(v["custo"], 4)} for k, v in por.items()), key=lambda x: -x["custo"])[:8],
+                "por_motivo": sorted(({"motivo": k, "n": v["n"], "custo": round(v["custo"], 4)} for k, v in by_choice.items()), key=lambda x: -x["custo"])[:8],
                 "ultimas": [{"t": r["t"], "ep": r.get("ep"), "motivo": r.get("motivo"), "custo": r.get("custo"), "ok": r.get("resposta") is not None} for r in regs[-8:][::-1]]}
-    return _stored("claude", 15, ler)
+    return _stored("claude", 15, read_part)
 
 
 # ---------- etapas dos episódios ----------
 
-def executions(etapa):
+def executions(stage):
     """Últimas execuções da etapa em todos os episódios + mensagens, avisos e chamadas registradas nelas."""
-    def ler():
+    def read_part():
         runs, msgs, n_llm, n_claude = [], [], 0, 0
         for file in PROJECTS.glob("*/*/log/events.jsonl"):
             current = None
             for e in _tail(file, 800_000):
-                if e.get("stage") != etapa:
+                if e.get("stage") != stage:
                     continue
                 kind = e.get("kind")
                 if kind == "start":
@@ -216,7 +216,7 @@ def executions(etapa):
                 "erros": sum(r["status"] == "erro" for r in runs), "dur_media": round(statistics.mean(durs)) if durs else None,
                 "chamadas_llm": n_llm, "chamadas_claude": n_claude,
                 "mensagens": sorted(msgs, key=lambda m: m["t"])[-12:][::-1]}
-    return _stored(f"exec:{etapa}", 15, ler)
+    return _stored(f"exec:{stage}", 15, read_part)
 
 
 # ---------- arquivos produzidos ----------
@@ -246,7 +246,7 @@ def files(id_node):
                  "extra": f"{r.get('paginas', '?')} p. · {r.get('revista', '')[:40]}"} for m, r in items[:10]]}
         return _stored("arq:pdfs", 15, pdfs)
     if id_node in ("r_montar", "r_checar", "r_partes", "r_validar", "r_plano"):
-        def roteiros():
+        def scripts_node():
             fs = sorted(v.glob("Notas/Empreendimento/YouTube/*/Roteiros/Roteiro — *.md"), key=lambda p: -p.stat().st_mtime)[:10]
             items = []
             for f in fs:
@@ -255,7 +255,7 @@ def files(id_node):
                 items.append({"quando": _when(f.stat().st_mtime), "nome": f.stem.replace("Roteiro — ", ""),
                               "extra": f"{status} · {txt.count('[!cite]')} citações · {len(txt.split())} palavras · {f.parent.parent.name}"})
             return {"titulo": "Roteiros mais recentes no vault", "itens": items}
-        return _stored("arq:roteiros", 15, roteiros)
+        return _stored("arq:roteiros", 15, scripts_node)
     if id_node in ("graficos", "chromium"):
         fs = sorted(PROJECTS.glob("*/*/graficos/*.mov"), key=lambda p: -p.stat().st_mtime)[:10]
         return {"titulo": "Gráficos renderizados", "itens": [{"quando": _when(f.stat().st_mtime), "nome": f.name,
@@ -285,13 +285,13 @@ def files(id_node):
 
 def openalex():
     env = ROOT / ".env"
-    tem = env.exists() and any(l.startswith("OPENALEX_API_KEY=") and l.strip() != "OPENALEX_API_KEY=" for l in env.read_text().splitlines())
-    return {"chave": tem}
+    has = env.exists() and any(l.startswith("OPENALEX_API_KEY=") and l.strip() != "OPENALEX_API_KEY=" for l in env.read_text().splitlines())
+    return {"chave": has}
 
 
-def extras(id_node, chamadas, hist_monitor):
+def extras(id_node, calls, hist_monitor):
     """Tudo o que a gaveta mostra além do básico, conforme o tipo do nó."""
-    e = {"estat": call_statistics(chamadas, hist_monitor), "prompts": prompts(id_node), "arquivos": files(id_node)}
+    e = {"estat": call_statistics(calls, hist_monitor), "prompts": prompts(id_node), "arquivos": files(id_node)}
     if id_node in MODELS:
         e["ficha"] = card_model(MODELS[id_node])
         e["antigo"] = history_events_llm(MODELS[id_node])

@@ -37,7 +37,7 @@ PURE = {"aa", "aaa", "ee", "eee", "eh", "ah", "hum", "hm", "uh", "umm", "mm"}
 
 
 def folder(project):
-    return project.pasta / "estudio" / "corte"
+    return project.folder_path / "estudio" / "corte"
 
 
 def _nz(s):
@@ -62,10 +62,10 @@ def speech(x):
     return a["fala"], a["db"]
 
 
-def kept(palavras, cuts):
+def kept(words, cuts):
     """(ini, fim) das palavras que ficam: com texto e sem metade ou mais coberta por um corte de vício."""
     out = []
-    for s0, e0, t in palavras:
+    for s0, e0, t in words:
         cob = sum(max(0.0, min(e0, c1) - max(s0, c0)) for c0, c1, _ in cuts)
         if _nz(t) and cob < 0.5 * max(e0 - s0, 1e-3):
             out.append((s0, e0))
@@ -92,14 +92,14 @@ def _transcribe(model, x, prompt=None, language="pt"):
     return [[round(w.start, 3), round(w.end, 3), w.word.strip()] for s in segs for w in s.words if w.word.strip()]
 
 
-def fillers(palavras, tempos=None):
+def fillers(words, times=None):
     """Hesitação pura sai inteira; conjunção esticada ("e", "é", "a", "um", "o" com 0,45–1,6 s) fica só com o começo.
     A detecção usa a duração do Whisper (`palavras`); o corte, os tempos alinhados (`tempos`, mesma ordem), e a
     palavra seguinte é protegida pela regra de ouro (`bordas.validar`)."""
     cuts = []
-    for k, (s0, e0, t) in enumerate(palavras):
+    for k, (s0, e0, t) in enumerate(words):
         tt, d = _nz(t), e0 - s0
-        a0, a1 = (tempos[k][0], tempos[k][1]) if tempos else (s0, e0)
+        a0, a1 = (times[k][0], times[k][1]) if times else (s0, e0)
         if tt in PURE or (len(tt) > 1 and len(set(tt)) == 1):
             cuts.append([a0, a1, t])
         elif tt in ("e", "a", "um", "o") and 0.45 < d < 1.6:
@@ -112,7 +112,7 @@ def _runs(mask):
     return list(zip(limit[::2], limit[1::2], strict=True))
 
 
-def segments(sp, palavras, cuts, reverted=(), dur=None, db=None, sound=None):
+def segments(sp, words, cuts, reverted=(), dur=None, db=None, sound=None):
     """Máscara + vícios + palavras → segmentos mantidos [ini, fim, respiro] e emendas (buracos tirados).
     `som` (`bordas.analise`) dá o núcleo de cada palavra mantida; sem ele vale o tempo do Whisper."""
     sp = sp.copy()
@@ -125,7 +125,7 @@ def segments(sp, palavras, cuts, reverted=(), dur=None, db=None, sound=None):
     ref = np.percentile(db[db > -60], 90) if db is not None and (db > -60).any() else None
     # palavra que o detector comeu (quase nada dela na máscara, mas com som) volta: os quadros audíveis dela
     # (o Whisper estica o começo da 1ª palavra da frase por cima do silêncio, então não basta "metade fora")
-    for s0, e0, t in palavras:
+    for s0, e0, t in words:
         if (s0, e0) in cut_filler or any(abs(s0 - c0) < 0.05 for c0, _, _ in cuts) or not _nz(t):
             continue
         i0, i1 = max(0, int(s0 * 100)), min(n, int(e0 * 100))
@@ -154,9 +154,9 @@ def segments(sp, palavras, cuts, reverted=(), dur=None, db=None, sound=None):
             segs[-1][1] = max(segs[-1][1], b)
         else:
             segs.append([a, b])
-    everything = [(s0, e0) for s0, e0, _ in palavras]
-    segs = edges.validate(segs, edges.cores(kept(palavras, cuts), sound, everything), dur)
-    end_sentence = [e0 for s0, e0, t in palavras if re.search(r"[.?!:…]$", t)]
+    everything = [(s0, e0) for s0, e0, _ in words]
+    segs = edges.validate(segs, edges.cores(kept(words, cuts), sound, everything), dur)
+    end_sentence = [e0 for s0, e0, t in words if re.search(r"[.?!:…]$", t)]
     emendas, output = [], []
     for k, (a, b) in enumerate(segs):
         prox = segs[k + 1][0] if k + 1 < len(segs) else None
@@ -206,7 +206,7 @@ def new(project):
 
 def words(project):
     """Palavras da narração (transcricao.json) nos tempos do corte; as que caíram num buraco (vícios) saem."""
-    ws = json.loads((project.pasta / "transcricao.json").read_text())["palavras"]
+    ws = json.loads((project.folder_path / "transcricao.json").read_text())["palavras"]
     c = load(project)
     if not c or not c.get("mapa"):
         return ws
@@ -218,7 +218,7 @@ def words(project):
 
 
 def sentences(project):
-    fs = json.loads((project.pasta / "frases.json").read_text())
+    fs = json.loads((project.folder_path / "frases.json").read_text())
     f = new(project)
     return [{**x, "ini": f(x["ini"]), "fim": f(x["fim"])} for x in fs]
 
@@ -226,13 +226,13 @@ def sentences(project):
 def audio(project):
     """A narração que o Estúdio usa: a cortada pelo som, se houver; senão a editada da esteira."""
     a = folder(project) / "narracao.wav"
-    return a if a.exists() and load(project) else project.pasta / "narracao.wav"
+    return a if a.exists() and load(project) else project.folder_path / "narracao.wav"
 
 
-def _render(origem, segs, destino):
+def _render(origin, segs, destination):
     """48 kHz estéreo; fade de 8 ms na entrada e 12 ms na saída (40 ms se a voz ainda soa); respiro = silêncio digital."""
     sr = 48000
-    x = _signal(origem, sr, 2)
+    x = _signal(origin, sr, 2)
     fi, fo, fo_voice = int(0.008 * sr), int(0.012 * sr), int(0.04 * sr)
     parts = []
     for a, b, r in segs:
@@ -243,7 +243,7 @@ def _render(origem, segs, destino):
             p[-f:] *= np.linspace(1, 0, f)[:, None]
         parts += [p, np.zeros((int(r * sr), 2), np.float32)]
     data = np.concatenate(parts).astype(np.float32) if parts else np.zeros((0, 2), np.float32)
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(sr), "-ac", "2", "-i", "-", str(destino)],
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(sr), "-ac", "2", "-i", "-", str(destination)],
                    input=data.tobytes(), check=True)
 
 
@@ -253,12 +253,12 @@ def _pauses(file, minimum=0.45):
     return [float(m) for m in re.findall(r"silence_end: ([\d.]+)", r)]
 
 
-def cross_check(origem, cut, emendas, protected, pauses, cut_geo=()):
+def cross_check(origin, cut, emendas, protected, pauses, cut_geo=()):
     """Conferência do corte: palavras que sumiram (texto da narração × texto do corte), palavras encurtadas (a
     mesma palavra durou bem menos no áudio final: o Whisper "completa" "ca…" como "casa", então o texto não basta),
     palavras cortadas pela geometria (`bordas.perdas`, travam o portão), repetições coladas, pausas longas que
     sobraram e o texto em volta de cada emenda."""
-    a = [(_nz(t), s0, t, e0) for s0, e0, t in origem if _nz(t) and _nz(t) not in PURE]
+    a = [(_nz(t), s0, t, e0) for s0, e0, t in origin if _nz(t) and _nz(t) not in PURE]
     b = [(_nz(t), s0, t, e0) for s0, e0, t in cut if _nz(t)]
     sm = difflib.SequenceMatcher(None, [x[0] for x in a], [x[0] for x in b], autojunk=False)
 
@@ -292,7 +292,7 @@ def analyze(project):
     """Corte pelo som da narração editada, com as reversões já marcadas; grava corte.json e narracao.wav."""
     p = folder(project)
     p.mkdir(parents=True, exist_ok=True)
-    origin = project.pasta / "narracao.wav"
+    origin = project.folder_path / "narracao.wav"
     if not origin.exists():
         raise SystemExit("corte pelo som precisa da narracao.wav (rode o limpar da esteira)")
     previous = load(project) or {}
@@ -347,14 +347,14 @@ def analyze(project):
     return r
 
 
-def revert(project, de, ate, revert=True):
+def revert(project, de, until, revert=True):
     """Marca (ou desmarca) a faixa [de, ate] da narração editada como revertida; vale no próximo `analisar`."""
     c = load(project)
     if not c:
         raise ValueError("corte pelo som ainda não foi feito")
-    rev = [r for r in c["revertidas"] if not (r[0] < ate and r[1] > de)]
+    rev = [r for r in c["revertidas"] if not (r[0] < until and r[1] > de)]
     if revert:
-        rev.append([de, ate])
+        rev.append([de, until])
     c["revertidas"] = sorted(rev)
     (folder(project) / "corte.json").write_text(json.dumps(c, ensure_ascii=False, indent=1))
     return c
@@ -365,7 +365,7 @@ def state(project):
     c = load(project)
     if not c:
         return {"feito": False}
-    origin = project.pasta / "narracao.wav"
+    origin = project.folder_path / "narracao.wav"
     current = origin.exists() and c["assinatura"] == _signature(origin) and c["revertidas"] == c["aplicadas"]
     conf = c["conferencia"]
     return {"feito": True, "atualizado": current, "duracao_antes": c["duracao_antes"], "duracao": c["duracao"],

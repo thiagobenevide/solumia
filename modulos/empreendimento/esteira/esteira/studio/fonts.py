@@ -49,50 +49,50 @@ def list_all():
             for n, (arqs, t) in everything.items()]
 
 
-def path(arquivo):
+def path(file):
     """Arquivo de fonte do kit ou enviado (para a prévia no app); None se não existir."""
     for base in (KIT, UPLOADED):
-        p = base / Path(arquivo).name
+        p = base / Path(file).name
         if p.is_file():
             return p
     return None
 
 
-def send(name_file, dados):
+def send(name_file, data):
     name = Path(name_file).name
     if Path(name).suffix.lower() not in EXT or not re.fullmatch(r"[\w .()+-]{1,80}", name):
         raise ValueError("envie um arquivo .ttf ou .otf com nome simples")
-    if dados[:4] not in (b"\x00\x01\x00\x00", b"OTTO", b"true"):
+    if data[:4] not in (b"\x00\x01\x00\x00", b"OTTO", b"true"):
         raise ValueError("o arquivo não parece uma fonte TrueType/OpenType")
     UPLOADED.mkdir(parents=True, exist_ok=True)
-    (UPLOADED / name).write_bytes(dados)
+    (UPLOADED / name).write_bytes(data)
     return Path(name).stem
 
 
-def missing(nomes):
+def missing(names):
     everything = {**CATALOG, **_uploaded()}
-    return sorted({n for n in nomes if n not in everything})
+    return sorted({n for n in names if n not in everything})
 
 
-def css(nomes, destino):
+def css(names, destination):
     """Copia as fontes usadas para `destino/fonts` e devolve o CSS com os @font-face; fonte fora do catálogo
     cai na padrão (com aviso no log)."""
     from esteira.core import events
     everything = {**CATALOG, **_uploaded()}
-    for n in missing(nomes):
+    for n in missing(names):
         events.warning(f"fonte '{n}' não está no catálogo do Estúdio: usando {DEFAULT} (envie o .ttf pela aba Estúdio)")
         print(f"  ! fonte '{n}' fora do catálogo → {DEFAULT}")
-    (destino / "fonts").mkdir(parents=True, exist_ok=True)
+    (destination / "fonts").mkdir(parents=True, exist_ok=True)
     rules = []
-    for n in sorted({n if n in everything else DEFAULT for n in nomes}):
+    for n in sorted({n if n in everything else DEFAULT for n in names}):
         for file, weights, *it in everything[n][0]:
-            shutil.copy(path(file), destino / "fonts" / file)
+            shutil.copy(path(file), destination / "fonts" / file)
             esticar = " font-stretch: 50% 150%;" if n == "Anybody" else ""
             italico = " font-style: italic;" if it else ""
             rules.append(f'@font-face {{ font-family: "{n}"; src: url("fonts/{file}"); font-weight: {weights};{esticar}{italico} }}')
     return "\n".join(rules) + "\n"
 
 
-def resolve(nome):
+def resolve(name):
     """Nome que vai para o CSS: o pedido, se existir; senão a padrão."""
-    return nome if nome in {**CATALOG, **_uploaded()} else DEFAULT
+    return name if name in {**CATALOG, **_uploaded()} else DEFAULT

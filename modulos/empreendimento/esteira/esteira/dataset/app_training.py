@@ -101,13 +101,13 @@ def train(app: str, base: str = BASE, epochs: float = 2.0, forcar: bool = False)
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(info["adapter"], destination)
     from esteira.n1 import effectcraft, filmcraft, photocraft
-    manifesto = {"nome": name, "app": app, "base": base, "base_gguf": BASE_GGUF, "em": datetime.now().isoformat(),
+    manifest = {"nome": name, "app": app, "base": base, "base_gguf": BASE_GGUF, "em": datetime.now().isoformat(),
                  "exportacao": exp.name, "hash_exportacao": X.hash_export(exp), "casos_treino": n,
                  "n1": {"filmcraft": filmcraft.VERSION, "photocraft": photocraft.VERSION,
                         "effectcraft": effectcraft.VERSION}[app],
                  "perda": info.get("loss"), "perda_val": info.get("val_loss"), "forcado": forcar, "promovido": False}
-    destination.with_suffix(".json").write_text(json.dumps(manifesto, ensure_ascii=False, indent=1))
-    return manifesto
+    destination.with_suffix(".json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1))
+    return manifest
 
 
 def _base_gguf() -> Path:
@@ -145,15 +145,15 @@ def promoted(app: str) -> str | None:
     return name if name in _read_presets() else None
 
 
-def promote(app: str, nome: str, n: int | None = None) -> dict:
+def promote(app: str, name: str, n: int | None = None) -> dict:
     """Portão de promoção: base × candidato no ouro das tarefas da app (bancada). Promove só se ganhar."""
     from esteira import bench
     from esteira.ai import llama
-    adapter = _folder() / f"{nome}.gguf"
+    adapter = _folder() / f"{name}.gguf"
     if not adapter.exists():
         raise SystemExit(f"adaptador inexistente: {adapter}")
     presets = _read_presets()
-    candidate = f"{nome}-candidato"
+    candidate = f"{name}-candidato"
     _write_presets({**presets, candidate: adapter})
     if not llama.restart():
         raise SystemExit("o roteador não voltou com o preset novo")
@@ -175,4 +175,4 @@ def promote(app: str, nome: str, n: int | None = None) -> dict:
         d.update(promovido=won, bancada={"base": note.get(BASE_GGUF), "adaptador": note.get(candidate),
                                             "tarefas": tasks, "em": datetime.now().isoformat()})
         man.write_text(json.dumps(d, ensure_ascii=False, indent=1))
-    return {"nome": nome, "promovido": won, "notas": note}
+    return {"nome": name, "promovido": won, "notas": note}

@@ -10,7 +10,7 @@ from esteira.studio import ec
 from esteira.studio import piece as P
 from esteira.n1 import effectcraft as N1
 
-N1_EXEMPLO = P.FOLDER / "_ec" / "exemplo_caixas.n1.json"
+N1_EXAMPLE = P.FOLDER / "_ec" / "exemplo_caixas.n1.json"
 
 DOC = json.loads((P.folder("numero_impacto_ec") / "peca.n1.json").read_text())
 
@@ -22,7 +22,7 @@ def _d(**kw):
     return {**d, **kw}
 
 
-def test_peca_real_compila_com_condicoes_tempos_e_vertical():
+def test_real_piece_compiles_with_conditions_times_and_vertical():
     js = N1.build(DOC, _d())
     assert "veuBaixo(0.85);" in js and "fundoTela" not in js
     assert 'retangulo("Traço"' in js and 'elipse("Anel"' not in js  # ênfase = traço
@@ -30,18 +30,18 @@ def test_peca_real_compila_com_condicoes_tempos_e_vertical():
     assert "if (n_e2 && n_e2.depois)" in js  # unidade só se o número tiver
     vert = N1.build(DOC, _d(w=1080, h=1920, botoes={"alinhamento": "esquerda", "enfase": "anel"}))
     assert 'elipse("Anel"' in vert and "108.0" in vert  # x0 = 10% do lado menor no 9:16
-    sem = N1.build(DOC, _d(encaixes={"numero": "7", "rotulo": "", "contexto": ""}, tela_cheia=True))
-    assert "fundoTela();" in sem and '"Contexto"' not in sem and '"Rótulo"' not in sem
+    without_region = N1.build(DOC, _d(encaixes={"numero": "7", "rotulo": "", "contexto": ""}, tela_cheia=True))
+    assert "fundoTela();" in without_region and '"Contexto"' not in without_region and '"Rótulo"' not in without_region
 
 
-def test_batida_dita_tem_prioridade_e_tempo_composto():
+def test_spoken_beat_has_priority_and_compound_time():
     c = N1.Compiler(DOC, _d(batidas={"numero": 2.0}))
-    assert c.tempo("@numero+0.2+0.6v") == pytest.approx(2.0 + 0.2 + 0.6 * 1.6)
-    assert c.tempo(0.5) == pytest.approx(0.8) and c.dur("0.8v") == pytest.approx(1.28)
-    assert N1.Compiler({"elementos": []}, _d()).tempo("@sem_padrao") == pytest.approx(0.45)  # T0 + 0,15
+    assert c.time_of("@numero+0.2+0.6v") == pytest.approx(2.0 + 0.2 + 0.6 * 1.6)
+    assert c.time_of(0.5) == pytest.approx(0.8) and c.duration_of("0.8v") == pytest.approx(1.28)
+    assert N1.Compiler({"elementos": []}, _d()).time_of("@sem_padrao") == pytest.approx(0.45)  # T0 + 0,15
 
 
-def test_repetir_desdobra_itens_com_passo_e_intervalo():
+def test_repeat_unfolds_items_with_step_and_interval():
     doc = {"elementos": [{"tipo": "repetir", "nome": "Marcos", "encaixe": "marcos", "passo": [0.2, 0], "intervalo": 0.3,
                           "elementos": [{"tipo": "texto", "nome": "Ano", "conteudo": "{{item.rotulo}}", "x": 0.1, "y": 0.5,
                                          "tam": 0.05}],
@@ -51,7 +51,7 @@ def test_repetir_desdobra_itens_com_passo_e_intervalo():
     assert "entrar(e0, \"baixo\", 0.5, 0.6)" in js and "entrar(e1, \"baixo\", 0.8, 0.6)" in js
 
 
-def test_esquema_fechado_e_erros():
+def test_closed_schema_and_errors():
     with pytest.raises(ValidationError):  # cor fixa não passa
         N1.Piece.model_validate({"elementos": [{"tipo": "texto", "nome": "a", "conteudo": "x", "x": 0, "y": 0,
                                                "tam": 0.1, "cor": "#ff0000"}]})
@@ -62,12 +62,12 @@ def test_esquema_fechado_e_erros():
     assert "var n_e0 = numero(" in js
 
 
-def test_portao_estatico_da_peca_em_n1():
+def test_static_gate_of_n1_piece():
     errors, _ = ec.check_code("numero_impacto_ec", P.load("numero_impacto_ec"))
     assert errors == []
 
 
-def test_script_gerado_tem_sintaxe_valida():
+def test_generated_script_has_valid_syntax():
     node = P._node()
     if not node:
         pytest.skip("sem node")
@@ -77,7 +77,7 @@ def test_script_gerado_tem_sintaxe_valida():
     assert r.returncode == 0, r.stderr
 
 
-def test_apos_de_elemento_desligado_ou_inexistente_fica_no_proprio_x():
+def test_after_disabled_or_missing_element_keeps_own_x():
     doc = {"elementos": [
         {"tipo": "texto", "nome": "Número", "conteudo": "{{n}}", "x": 0.5, "y": 0.5, "tam": 0.2,
          "se": {"encaixe": "n"}},
@@ -89,7 +89,7 @@ def test_apos_de_elemento_desligado_ou_inexistente_fica_no_proprio_x():
     assert 'linha("Unidade", "%", 1152.0' in js
 
 
-def test_grade_ativos_fatias_vertical_e_marcadores():
+def test_grid_active_slices_vertical_and_markers():
     grade = {"tipo": "repetir", "nome": "Grade", "quantidade": 100, "colunas": 10, "passo": [0.05, 0.05],
              "ativos": "v", "elementos": [{"tipo": "retangulo", "nome": "C", "x": 0.3, "y": 0.2, "w": 0.04, "h": 0.04,
                                            "cor": "apoio"}]}
@@ -111,8 +111,8 @@ def test_grade_ativos_fatias_vertical_e_marcadores():
                                     "tam": 0.05}]}, _d())
 
 
-def test_caixas_calculam_a_geometria_nos_dois_formatos():
-    doc = json.loads((N1_EXEMPLO).read_text())
+def test_boxes_compute_geometry_in_both_formats():
+    doc = json.loads((N1_EXAMPLE).read_text())
     enc = {"titulo": "Para onde vai o salário", "total": "R$ 4.000",
            "fatias": [{"rotulo": "Necessidades", "valor": "50%"}, {"rotulo": "Desejos", "valor": "30%"},
                       {"rotulo": "Investir", "valor": "20%"}]}
@@ -133,7 +133,7 @@ def test_caixas_calculam_a_geometria_nos_dois_formatos():
     assert js.count('retangulo("C ') == 100 and js.count('"destaque"') == 34
 
 
-def test_barras_proporcionais_e_textos_empilhados_em_camadas():
+def test_proportional_bars_and_texts_stacked_in_layers():
     doc = {"elementos": [
         {"tipo": "caixa", "nome": "B", "regiao": "centro", "disposicao": "linha", "filhos": [
             {"tipo": "repetir", "nome": "R", "encaixe": "p", "elementos": [

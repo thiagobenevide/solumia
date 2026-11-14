@@ -1,14 +1,15 @@
-"""Cadernos de anotação à caneta: a mesma guarda dos quadros (pasta `cadernos/`), com o papel de
-cada folha (`papel` em cada item de `paginas`: pauta, espaço, tamanho, cor), como veio do app.
-A plataforma monta este router em `/api/design` e a guarda em `app.state.cadernos_design`."""
+"""Pen notebooks: the same storage as the boards (`cadernos/` folder), with the paper of each
+sheet (`papel` in each `paginas` item: ruling, spacing, size, color), as it came from the app.
+The platform mounts this router at `/api/design` and the storage in `app.state`."""
+
 
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
-from design.api import Recording, FrameEdit, FrameInput
-from design.boards import Conflict, NotFound, Frames
+from design.api import FrameEdit, FrameInput, Recording
+from design.boards import Conflict, Frames, NotFound
 
 router = APIRouter(tags=["design"])
 

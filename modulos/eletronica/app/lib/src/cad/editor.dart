@@ -5,203 +5,203 @@ import 'dart:ui' show Offset, Rect;
 import 'package:agent_core/agent_core.dart';
 import 'package:flutter/foundation.dart';
 
-import '../api_eletronica.dart';
-import '../modelos.dart';
+import '../electronics_api.dart';
+import '../models.dart';
 
-enum Ferramenta { selecionar, componente, fio, rotulo, texto, sonda }
+enum Tool { select, component, wire, label, text, probe }
 
-enum Camada {
-  componentes('Componentes'),
-  campos('Referências e valores'),
-  fios('Fios'),
-  rotulos('Rótulos de rede'),
-  textos('Textos'),
-  sondas('Pontas de prova'),
+enum Layer {
+  components('Componentes'),
+  fields('Referências e valores'),
+  wires('Fios'),
+  labels('Rótulos de rede'),
+  texts('Textos'),
+  probes('Pontas de prova'),
   grade('Grade');
 
-  const Camada(this.nome);
-  final String nome;
+  const Layer(this.name);
+  final String name;
 }
 
-Camada camadaDe(Item i) => switch (i) {
-  Componente() => Camada.componentes,
-  Fio() => Camada.fios,
-  Rotulo() => Camada.rotulos,
-  TextoCad() => Camada.textos,
-  Sonda() => Camada.sondas,
+Layer layerOf(Item i) => switch (i) {
+  Component() => Layer.components,
+  Wire() => Layer.wires,
+  NetLabel() => Layer.labels,
+  CadText() => Layer.texts,
+  Probe() => Layer.probes,
 };
 
-/// Estado do esquemático aberto: ferramenta, seleção, desfazer/refazer e gravação automática (1,5 s depois
-/// da última mudança). 409 vira [conflito]: a tela pergunta se recarrega ou grava por cima.
+/// State of the open schematic: tool, selection, undo/redo and autosave (1.5 s after
+/// the last change). 409 becomes [conflict]: the screen asks whether to reload or overwrite.
 class Editor extends ChangeNotifier {
-  Editor({required this.api, required this.projeto, required this.biblioteca}) : folha = projeto.folhas.first.id;
+  Editor({required this.api, required this.project, required this.library}) : sheet = project.sheets.first.id;
 
-  final ApiEletronica api;
-  final Projeto projeto;
-  final Biblioteca biblioteca;
+  final ElectronicsApi api;
+  final Project project;
+  final Library library;
 
-  String folha;
-  Ferramenta ferramenta = Ferramenta.selecionar;
-  Simbolo? simbolo;
-  int rotPrevia = 0;
-  bool espelhoPrevia = false;
-  final Set<String> selecao = {};
-  List<P>? fio;
-  bool horizontalPrimeiro = true;
+  String sheet;
+  Tool tool = Tool.select;
+  Symbol? symbol;
+  int previewRotation = 0;
+  bool previewMirror = false;
+  final Set<String> selection = {};
+  List<P>? wire;
+  bool horizontalFirst = true;
   P? cursor;
-  int passo = grade;
-  final Set<Camada> ocultas = {};
-  final Set<Camada> travadas = {};
+  int step = grade;
+  final Set<Layer> hidden = {};
+  final Set<Layer> locked = {};
 
-  /// Leitura de cada sonda (id → texto, ex. "2,5 V") do último ponto de operação simulado.
-  Map<String, String> leituras = {};
+  /// Reading of each probe (id → text, e.g. "2,5 V") from the last simulated operating point.
+  Map<String, String> readings = {};
 
-  final List<String> _desfazer = [], _refazer = [];
-  String? _lote;
+  final List<String> _undo = [], _redo = [];
+  String? _batch;
   Timer? _timer;
-  bool salvando = false, pendente = false, conflito = false;
-  String? erro;
+  bool saving = false, pending = false, conflict = false;
+  String? error;
 
   // ---------- Consulta ----------
 
-  Iterable<Componente> get componentes => projeto.componentes.where((c) => c.folha == folha);
-  Iterable<Fio> get fios => projeto.fios.where((f) => f.folha == folha);
-  Iterable<Rotulo> get rotulos => projeto.rotulos.where((r) => r.folha == folha);
-  Iterable<TextoCad> get textos => projeto.textos.where((t) => t.folha == folha);
-  Iterable<Sonda> get sondas => projeto.sondas.where((s) => s.folha == folha);
+  Iterable<Component> get components => project.components.where((c) => c.sheet == sheet);
+  Iterable<Wire> get wires => project.wires.where((f) => f.sheet == sheet);
+  Iterable<NetLabel> get labels => project.labels.where((r) => r.sheet == sheet);
+  Iterable<CadText> get texts => project.texts.where((t) => t.sheet == sheet);
+  Iterable<Probe> get probes => project.probes.where((s) => s.sheet == sheet);
 
-  /// Posição da sonda na lista do projeto = posição da cor na paleta dos sinais.
-  int indiceSonda(Sonda s) => projeto.sondas.indexOf(s);
+  /// Probe position in the project list = color position in the signal palette.
+  int probeIndex(Probe s) => project.probes.indexOf(s);
 
-  Simbolo simboloDe(Componente c) => biblioteca.de(c.simbolo);
+  Symbol symbolOf(Component c) => library.de(c.symbol);
 
-  Iterable<P> pinosDaFolha() sync* {
-    for (final c in componentes) {
-      for (final p in simboloDe(c).pinos) {
-        yield c.posicaoPino(p);
+  Iterable<P> sheetPins() sync* {
+    for (final c in components) {
+      for (final p in symbolOf(c).pins) {
+        yield c.pinPosition(p);
       }
     }
   }
 
-  List<Item> get selecionados => [for (final i in projeto.itens(folha)) if (selecao.contains(i.id)) i];
+  List<Item> get selected => [for (final i in project.itens(sheet)) if (selection.contains(i.id)) i];
 
-  bool podeDesfazer() => _desfazer.isNotEmpty;
-  bool podeRefazer() => _refazer.isNotEmpty;
+  bool canUndo() => _undo.isNotEmpty;
+  bool canRedo() => _redo.isNotEmpty;
 
-  bool _visivel(Item i) => !ocultas.contains(camadaDe(i)) && !travadas.contains(camadaDe(i));
+  bool _visible(Item i) => !hidden.contains(layerOf(i)) && !locked.contains(layerOf(i));
 
-  /// Item sob [mundo] com folga de [tol] µm; o de cima (último desenhado) ganha.
-  Item? acertar(Offset mundo, double tol) {
-    Item? achado;
-    for (final i in projeto.itens(folha)) {
-      if (!_visivel(i)) continue;
-      final toca = switch (i) {
-        Componente c => c.limites(simboloDe(c)).inflate(tol).contains(mundo),
-        Fio f => [
-          for (var k = 0; k < f.pontos.length - 1; k++) distanciaSegmento(mundo, f.pontos[k].offset, f.pontos[k + 1].offset),
+  /// Item under [world] with a [tol] µm slack; the topmost (last drawn) wins.
+  Item? fix(Offset world, double tol) {
+    Item? found;
+    for (final i in project.itens(sheet)) {
+      if (!_visible(i)) continue;
+      final touches = switch (i) {
+        Component c => c.bounds(symbolOf(c)).inflate(tol).contains(world),
+        Wire f => [
+          for (var k = 0; k < f.points.length - 1; k++) segmentDistance(world, f.points[k].offset, f.points[k + 1].offset),
         ].any((d) => d <= tol),
-        Rotulo r => _caixaRotulo(r).inflate(tol).contains(mundo),
-        TextoCad t => _caixaTexto(t).inflate(tol).contains(mundo),
-        Sonda s => (s.pos.offset - mundo).distance <= tol + 900,
+        NetLabel r => _labelBox(r).inflate(tol).contains(world),
+        CadText t => _textBox(t).inflate(tol).contains(world),
+        Probe s => (s.pos.offset - world).distance <= tol + 900,
       };
-      if (toca) achado = i;
+      if (touches) found = i;
     }
-    return achado;
+    return found;
   }
 
-  Rect _caixaRotulo(Rotulo r) => Rect.fromLTWH(r.pos.x.toDouble(), r.pos.y - 1400.0, r.nome.length * 800.0 + 600, 1400);
-  Rect _caixaTexto(TextoCad t) =>
-      Rect.fromLTWH(t.pos.x.toDouble(), t.pos.y - t.tamanho.toDouble(), t.texto.length * t.tamanho * 0.62, t.tamanho * 1.3);
+  Rect _labelBox(NetLabel r) => Rect.fromLTWH(r.pos.x.toDouble(), r.pos.y - 1400.0, r.name.length * 800.0 + 600, 1400);
+  Rect _textBox(CadText t) =>
+      Rect.fromLTWH(t.pos.x.toDouble(), t.pos.y - t.size.toDouble(), t.text.length * t.size * 0.62, t.size * 1.3);
 
-  /// Itens inteiros dentro de [area] (janela, como no AutoCAD).
-  void selecionarArea(Rect area, {bool somar = false}) {
-    if (!somar) selecao.clear();
-    for (final i in projeto.itens(folha)) {
-      if (!_visivel(i)) continue;
-      final dentro = switch (i) {
-        Componente c => _contem(area, c.limites(simboloDe(c))),
-        Fio f => f.pontos.every((p) => area.contains(p.offset)),
-        Rotulo r => area.contains(r.pos.offset),
-        TextoCad t => area.contains(t.pos.offset),
-        Sonda s => area.contains(s.pos.offset),
+  /// Whole items inside [area] (window, as in AutoCAD).
+  void selectArea(Rect area, {bool sum = false}) {
+    if (!sum) selection.clear();
+    for (final i in project.itens(sheet)) {
+      if (!_visible(i)) continue;
+      final inside = switch (i) {
+        Component c => _contains(area, c.bounds(symbolOf(c))),
+        Wire f => f.points.every((p) => area.contains(p.offset)),
+        NetLabel r => area.contains(r.pos.offset),
+        CadText t => area.contains(t.pos.offset),
+        Probe s => area.contains(s.pos.offset),
       };
-      if (dentro) selecao.add(i.id);
+      if (inside) selection.add(i.id);
     }
     notifyListeners();
   }
 
-  static bool _contem(Rect fora, Rect dentro) => fora.contains(dentro.topLeft) && fora.contains(dentro.bottomRight);
+  static bool _contains(Rect fora, Rect inside) => fora.contains(inside.topLeft) && fora.contains(inside.bottomRight);
 
-  // ---------- Mudanças ----------
+  // ---------- Changes ----------
 
-  String _foto() => jsonEncode(projeto.esquematicoJson());
+  String _photo() => jsonEncode(project.schematicJson());
 
-  /// Aplica [mudar] guardando o estado de antes para desfazer.
-  void alterar(void Function() mudar) {
-    final antes = _foto();
-    mudar();
-    if (_foto() == antes) return;
-    _desfazer.add(antes);
-    if (_desfazer.length > 200) _desfazer.removeAt(0);
-    _refazer.clear();
-    _mudou();
+  /// Applies [edit] keeping the previous state for undo.
+  void change(void Function() edit) {
+    final antes = _photo();
+    edit();
+    if (_photo() == antes) return;
+    _undo.add(antes);
+    if (_undo.length > 200) _undo.removeAt(0);
+    _redo.clear();
+    _changed();
   }
 
-  /// Arrastes: [iniciarLote] guarda o estado uma vez, [mexer] muda sem pilha, [terminarLote] empilha.
-  void iniciarLote() => _lote ??= _foto();
+  /// Drags: [startBatch] stores the state once, [changeLive] changes without the stack, [endBatch] pushes it.
+  void startBatch() => _batch ??= _photo();
 
-  void mexer(void Function() mudar) {
-    mudar();
+  void changeLive(void Function() edit) {
+    edit();
     notifyListeners();
   }
 
-  void terminarLote() {
-    final antes = _lote;
-    _lote = null;
-    if (antes == null || antes == _foto()) return;
-    _desfazer.add(antes);
-    _refazer.clear();
-    _mudou();
+  void endBatch() {
+    final antes = _batch;
+    _batch = null;
+    if (antes == null || antes == _photo()) return;
+    _undo.add(antes);
+    _redo.clear();
+    _changed();
   }
 
-  void desfazer() {
-    if (_desfazer.isEmpty) return;
-    _refazer.add(_foto());
-    projeto.restaurar(jsonDecode(_desfazer.removeLast()) as Map<String, dynamic>);
-    _depoisDeRestaurar();
+  void undo() {
+    if (_undo.isEmpty) return;
+    _redo.add(_photo());
+    project.restore(jsonDecode(_undo.removeLast()) as Map<String, dynamic>);
+    _afterRestore();
   }
 
-  void refazer() {
-    if (_refazer.isEmpty) return;
-    _desfazer.add(_foto());
-    projeto.restaurar(jsonDecode(_refazer.removeLast()) as Map<String, dynamic>);
-    _depoisDeRestaurar();
+  void redo() {
+    if (_redo.isEmpty) return;
+    _undo.add(_photo());
+    project.restore(jsonDecode(_redo.removeLast()) as Map<String, dynamic>);
+    _afterRestore();
   }
 
-  void _depoisDeRestaurar() {
-    if (!projeto.folhas.any((f) => f.id == folha)) folha = projeto.folhas.first.id;
-    selecao.removeWhere((id) => !projeto.itens(folha).any((i) => i.id == id));
-    _mudou();
+  void _afterRestore() {
+    if (!project.sheets.any((f) => f.id == sheet)) sheet = project.sheets.first.id;
+    selection.removeWhere((id) => !project.itens(sheet).any((i) => i.id == id));
+    _changed();
   }
 
-  void _mudou() {
-    pendente = true;
+  void _changed() {
+    pending = true;
     notifyListeners();
     _timer?.cancel();
-    _timer = Timer(const Duration(milliseconds: 1500), gravar);
+    _timer = Timer(const Duration(milliseconds: 1500), save);
   }
 
   // ---------- Ferramentas ----------
 
-  void escolher(Ferramenta f, {Simbolo? s}) {
-    ferramenta = f;
+  void pick(Tool f, {Symbol? s}) {
+    tool = f;
     if (s != null) {
-      simbolo = s;
-      rotPrevia = 0;
-      espelhoPrevia = false;
+      symbol = s;
+      previewRotation = 0;
+      previewMirror = false;
     }
-    fio = null;
-    if (f != Ferramenta.selecionar) selecao.clear();
+    wire = null;
+    if (f != Tool.select) selection.clear();
     notifyListeners();
   }
 
@@ -211,274 +211,274 @@ class Editor extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// `/`: o fio em andamento dobra primeiro na outra direção.
-  void inverterCanto() {
-    horizontalPrimeiro = !horizontalPrimeiro;
+  /// `/`: the wire in progress bends first in the other direction.
+  void flipCorner() {
+    horizontalFirst = !horizontalFirst;
     notifyListeners();
   }
 
-  void mudarPasso(int novo) {
-    passo = novo;
+  void changeStep(int isNew) {
+    step = isNew;
     notifyListeners();
   }
 
-  Componente? colocarComponente(P pos) {
-    final s = simbolo;
+  Component? placeComponent(P pos) {
+    final s = symbol;
     if (s == null) return null;
-    final c = Componente(
-      folha: folha,
-      simbolo: s.id,
-      ref: proximaRef(s.prefixo, projeto.componentes),
-      valor: s.valor,
-      encapsulamento: s.encapsulamento,
+    final c = Component(
+      sheet: sheet,
+      symbol: s.id,
+      ref: nextRef(s.prefix, project.components),
+      value: s.value,
+      footprint: s.footprint,
       pos: pos,
-      rot: rotPrevia,
-      espelho: espelhoPrevia,
+      rot: previewRotation,
+      mirrored: previewMirror,
     );
-    alterar(() => projeto.componentes.add(c));
+    change(() => project.components.add(c));
     return c;
   }
 
-  /// Ponto onde algo já liga (pino, ponta ou meio de fio): clicar nele termina o fio.
-  bool ehLigacao(P p) => pinosDaFolha().contains(p) || fios.any((f) => f.passaPor(p)) || rotulos.any((r) => r.pos == p);
+  /// Point where something already connects (pin, tip or wire middle): clicking it ends the wire.
+  bool isConnection(P p) => sheetPins().contains(p) || wires.any((f) => f.passesThrough(p)) || labels.any((r) => r.pos == p);
 
-  void pontoDoFio(P p) {
-    final atual = fio;
-    if (atual == null) {
-      fio = [p];
+  void wirePoint(P p) {
+    final current = wire;
+    if (current == null) {
+      wire = [p];
       notifyListeners();
       return;
     }
-    final rota = rotaOrtogonal(atual.last, p, horizontalPrimeiro: horizontalPrimeiro);
-    fio = [...atual, ...rota.skip(1)];
-    if (ehLigacao(p) && fio!.length > 1) {
-      concluirFio();
+    final route = orthogonalRoute(current.last, p, horizontalFirst: horizontalFirst);
+    wire = [...current, ...route.skip(1)];
+    if (isConnection(p) && wire!.length > 1) {
+      finishWire();
     } else {
       notifyListeners();
     }
   }
 
-  void concluirFio() {
-    final pontos = simplificar(fio ?? const []);
-    fio = null;
-    if (pontos.length >= 2) {
-      alterar(() => projeto.fios.add(Fio(folha: folha, pontos: pontos)));
+  void finishWire() {
+    final points = simplify(wire ?? const []);
+    wire = null;
+    if (points.length >= 2) {
+      change(() => project.wires.add(Wire(sheet: sheet, points: points)));
     } else {
       notifyListeners();
     }
   }
 
-  void colocarRotulo(P pos, String nome) =>
-      alterar(() => projeto.rotulos.add(Rotulo(folha: folha, nome: nome.trim(), pos: pos)));
+  void placeLabel(P pos, String name) =>
+      change(() => project.labels.add(NetLabel(sheet: sheet, name: name.trim(), pos: pos)));
 
-  /// Ponta de corrente em cima de um componente; senão, de tensão no ponto. Devolve o aviso quando não cabe.
-  String? colocarSonda(P pos, Offset mundo, double tol) {
-    if (projeto.sondas.length >= Sonda.maximo) return 'No máximo ${Sonda.maximo} pontas de prova.';
-    final alvo = acertar(mundo, tol);
-    final s = alvo is Componente
-        ? Sonda(folha: folha, tipo: 'i', pos: pos, ref: alvo.ref)
-        : Sonda(folha: folha, tipo: 'v', pos: pos);
-    alterar(() => projeto.sondas.add(s));
-    leituras = {};
+  /// Current probe on top of a component; otherwise, voltage probe at the point. Returns the warning when it does not fit.
+  String? placeProbe(P pos, Offset world, double tol) {
+    if (project.probes.length >= Probe.maximum) return 'No máximo ${Probe.maximum} pontas de prova.';
+    final target = fix(world, tol);
+    final s = target is Component
+        ? Probe(sheet: sheet, type: 'i', pos: pos, ref: target.ref)
+        : Probe(sheet: sheet, type: 'v', pos: pos);
+    change(() => project.probes.add(s));
+    readings = {};
     return null;
   }
 
-  void lerSondas(Map<String, String> novas) {
-    leituras = novas;
+  void readProbes(Map<String, String> novas) {
+    readings = novas;
     notifyListeners();
   }
 
-  void colocarTexto(P pos, String texto) => alterar(() => projeto.textos.add(TextoCad(folha: folha, texto: texto, pos: pos)));
+  void placeText(P pos, String text) => change(() => project.texts.add(CadText(sheet: sheet, text: text, pos: pos)));
 
-  /// R: gira a prévia (com a ferramenta de componente) ou a seleção em 90° em volta do próprio ponto.
-  void girar() {
-    if (ferramenta == Ferramenta.componente) {
-      rotPrevia = (rotPrevia + 90) % 360;
+  /// R: rotates the preview (with the component tool) or the selection by 90° around its own point.
+  void rotate() {
+    if (tool == Tool.component) {
+      previewRotation = (previewRotation + 90) % 360;
       notifyListeners();
       return;
     }
-    alterar(() {
-      for (final c in selecionados.whereType<Componente>()) {
+    change(() {
+      for (final c in selected.whereType<Component>()) {
         c.rot = (c.rot + 90) % 360;
       }
     });
   }
 
-  void espelhar() {
-    if (ferramenta == Ferramenta.componente) {
-      espelhoPrevia = !espelhoPrevia;
+  void mirror() {
+    if (tool == Tool.component) {
+      previewMirror = !previewMirror;
       notifyListeners();
       return;
     }
-    alterar(() {
-      for (final c in selecionados.whereType<Componente>()) {
-        c.espelho = !c.espelho;
+    change(() {
+      for (final c in selected.whereType<Component>()) {
+        c.mirrored = !c.mirrored;
       }
     });
   }
 
-  void excluirSelecao() {
-    if (selecao.isEmpty) return;
-    alterar(() {
-      projeto.componentes.removeWhere((i) => selecao.contains(i.id));
-      projeto.fios.removeWhere((i) => selecao.contains(i.id));
-      projeto.rotulos.removeWhere((i) => selecao.contains(i.id));
-      projeto.textos.removeWhere((i) => selecao.contains(i.id));
-      projeto.sondas.removeWhere((i) => selecao.contains(i.id));
-      selecao.clear();
+  void deleteSelection() {
+    if (selection.isEmpty) return;
+    change(() {
+      project.components.removeWhere((i) => selection.contains(i.id));
+      project.wires.removeWhere((i) => selection.contains(i.id));
+      project.labels.removeWhere((i) => selection.contains(i.id));
+      project.texts.removeWhere((i) => selection.contains(i.id));
+      project.probes.removeWhere((i) => selection.contains(i.id));
+      selection.clear();
     });
   }
 
-  /// Ctrl+D: cópia da seleção deslocada duas grades, com referências novas.
-  void duplicarSelecao() {
-    final itens = selecionados;
+  /// Ctrl+D: copy of the selection offset by two grids, with new references.
+  void duplicateSelection() {
+    final itens = selected;
     if (itens.isEmpty) return;
     const d = P(2 * grade, 2 * grade);
-    alterar(() {
-      selecao.clear();
+    change(() {
+      selection.clear();
       for (final i in itens) {
-        final Item novo = switch (i) {
-          Componente c => Componente(
-            folha: folha,
-            simbolo: c.simbolo,
-            ref: proximaRef(simboloDe(c).prefixo, projeto.componentes),
-            valor: c.valor,
-            encapsulamento: c.encapsulamento,
+        final Item isNew = switch (i) {
+          Component c => Component(
+            sheet: sheet,
+            symbol: c.symbol,
+            ref: nextRef(symbolOf(c).prefix, project.components),
+            value: c.value,
+            footprint: c.footprint,
             pos: c.pos + d,
             rot: c.rot,
-            espelho: c.espelho,
-          )..let(projeto.componentes.add),
-          Fio f => Fio(folha: folha, pontos: [for (final p in f.pontos) p + d])..let(projeto.fios.add),
-          Rotulo r => Rotulo(folha: folha, nome: r.nome, pos: r.pos + d)..let(projeto.rotulos.add),
-          TextoCad t => TextoCad(folha: folha, texto: t.texto, pos: t.pos + d, tamanho: t.tamanho)..let(projeto.textos.add),
-          // Sonda não se duplica (cada uma tem a sua cor); fica a original selecionada.
-          Sonda s => s,
+            mirrored: c.mirrored,
+          )..let(project.components.add),
+          Wire f => Wire(sheet: sheet, points: [for (final p in f.points) p + d])..let(project.wires.add),
+          NetLabel r => NetLabel(sheet: sheet, name: r.name, pos: r.pos + d)..let(project.labels.add),
+          CadText t => CadText(sheet: sheet, text: t.text, pos: t.pos + d, size: t.size)..let(project.texts.add),
+          // A probe is not duplicated (each one has its own color); the original stays selected.
+          Probe s => s,
         };
-        selecao.add(novo.id);
+        selection.add(isNew.id);
       }
     });
   }
 
-  /// Desloca a seleção em [d]; pontas de fio presas a pinos de componentes movidos vão junto (elástico).
-  void deslocarSelecao(P d) {
-    final itens = selecionados;
-    final pinos = <P>{
-      for (final c in itens.whereType<Componente>())
-        for (final p in simboloDe(c).pinos) c.posicaoPino(p),
+  /// Moves the selection by [d]; wire tips attached to pins of moved components go along (rubber band).
+  void moveSelection(P d) {
+    final itens = selected;
+    final pins = <P>{
+      for (final c in itens.whereType<Component>())
+        for (final p in symbolOf(c).pins) c.pinPosition(p),
     };
-    for (final f in fios) {
-      if (selecao.contains(f.id)) continue;
-      for (final k in [0, f.pontos.length - 1]) {
-        if (pinos.contains(f.pontos[k])) f.pontos[k] = f.pontos[k] + d;
+    for (final f in wires) {
+      if (selection.contains(f.id)) continue;
+      for (final k in [0, f.points.length - 1]) {
+        if (pins.contains(f.points[k])) f.points[k] = f.points[k] + d;
       }
     }
     for (final i in itens) {
       switch (i) {
-        case Componente c:
+        case Component c:
           c.pos = c.pos + d;
-        case Fio f:
-          f.pontos = [for (final p in f.pontos) p + d];
-        case Rotulo r:
+        case Wire f:
+          f.points = [for (final p in f.points) p + d];
+        case NetLabel r:
           r.pos = r.pos + d;
-        case TextoCad t:
+        case CadText t:
           t.pos = t.pos + d;
-        case Sonda s:
+        case Probe s:
           s.pos = s.pos + d;
       }
     }
   }
 
-  void alternarCamada(Camada c, {bool travar = false}) {
-    final conjunto = travar ? travadas : ocultas;
-    conjunto.contains(c) ? conjunto.remove(c) : conjunto.add(c);
-    selecao.removeWhere((id) => projeto.itens(folha).any((i) => i.id == id && !_visivel(i)));
+  void toggleLayer(Layer c, {bool lock = false}) {
+    final group = lock ? locked : hidden;
+    group.contains(c) ? group.remove(c) : group.add(c);
+    selection.removeWhere((id) => project.itens(sheet).any((i) => i.id == id && !_visible(i)));
     notifyListeners();
   }
 
   // ---------- Folhas ----------
 
-  void irPara(String id) {
-    folha = id;
-    selecao.clear();
-    fio = null;
+  void goTo(String id) {
+    sheet = id;
+    selection.clear();
+    wire = null;
     notifyListeners();
   }
 
-  void novaFolha() {
-    var n = projeto.folhas.length + 1;
-    while (projeto.folhas.any((f) => f.id == 'f$n')) {
+  void newSheet() {
+    var n = project.sheets.length + 1;
+    while (project.sheets.any((f) => f.id == 'f$n')) {
       n++;
     }
-    final f = Folha(id: 'f$n', nome: 'Folha $n');
-    alterar(() => projeto.folhas.add(f));
-    irPara(f.id);
+    final f = Sheet(id: 'f$n', name: 'Folha $n');
+    change(() => project.sheets.add(f));
+    goTo(f.id);
   }
 
-  void renomearFolha(String id, String nome) => alterar(() => projeto.folhas.firstWhere((f) => f.id == id).nome = nome);
+  void renameSheet(String id, String name) => change(() => project.sheets.firstWhere((f) => f.id == id).name = name);
 
-  void excluirFolha(String id) {
-    if (projeto.folhas.length <= 1) return;
-    alterar(() {
-      projeto.folhas.removeWhere((f) => f.id == id);
-      projeto.componentes.removeWhere((i) => i.folha == id);
-      projeto.fios.removeWhere((i) => i.folha == id);
-      projeto.rotulos.removeWhere((i) => i.folha == id);
-      projeto.textos.removeWhere((i) => i.folha == id);
-      projeto.sondas.removeWhere((i) => i.folha == id);
+  void deleteSheet(String id) {
+    if (project.sheets.length <= 1) return;
+    change(() {
+      project.sheets.removeWhere((f) => f.id == id);
+      project.components.removeWhere((i) => i.sheet == id);
+      project.wires.removeWhere((i) => i.sheet == id);
+      project.labels.removeWhere((i) => i.sheet == id);
+      project.texts.removeWhere((i) => i.sheet == id);
+      project.probes.removeWhere((i) => i.sheet == id);
     });
-    if (folha == id) irPara(projeto.folhas.first.id);
+    if (sheet == id) goTo(project.sheets.first.id);
   }
 
-  // ---------- Gravação ----------
+  // ---------- Saving ----------
 
-  Future<void> gravar({bool porCima = false}) async {
+  Future<void> save({bool onTop = false}) async {
     _timer?.cancel();
-    if (salvando || (!pendente && !porCima)) return;
-    salvando = true;
+    if (saving || (!pending && !onTop)) return;
+    saving = true;
     notifyListeners();
     try {
-      if (porCima) projeto.versao = (await api.obter(projeto.id)).versao;
-      final r = await api.salvar(projeto, projeto.versao);
-      projeto.versao = r.versao;
-      pendente = false;
-      conflito = false;
-      erro = null;
+      if (onTop) project.version = (await api.fetch(project.id)).version;
+      final r = await api.save(project, project.version);
+      project.version = r.version;
+      pending = false;
+      conflict = false;
+      error = null;
     } on ApiErro catch (e) {
       if (e.status == 409) {
-        conflito = true;
+        conflict = true;
       } else {
-        erro = e.mensagem;
-        _timer = Timer(const Duration(seconds: 15), gravar);
+        error = e.mensagem;
+        _timer = Timer(const Duration(seconds: 15), save);
       }
     } catch (e) {
-      erro = '$e';
-      _timer = Timer(const Duration(seconds: 15), gravar);
+      error = '$e';
+      _timer = Timer(const Duration(seconds: 15), save);
     } finally {
-      salvando = false;
+      saving = false;
       notifyListeners();
     }
   }
 
-  /// Descarta o que não foi gravado e lê a versão do servidor.
-  Future<void> recarregar() async {
-    final p = await api.obter(projeto.id);
-    projeto
-      ..versao = p.versao
-      ..restaurar(p.esquematicoJson());
+  /// Discards what was not saved and reads the server version.
+  Future<void> reload() async {
+    final p = await api.fetch(project.id);
+    project
+      ..version = p.version
+      ..restore(p.schematicJson());
     _timer?.cancel();
-    pendente = conflito = false;
-    _desfazer.clear();
-    _refazer.clear();
-    if (!projeto.folhas.any((f) => f.id == folha)) folha = projeto.folhas.first.id;
-    selecao.clear();
+    pending = conflict = false;
+    _undo.clear();
+    _redo.clear();
+    if (!project.sheets.any((f) => f.id == sheet)) sheet = project.sheets.first.id;
+    selection.clear();
     notifyListeners();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    // Sem notificar: o editor já saiu da tela.
-    if (pendente && !conflito && !salvando) unawaited(api.salvar(projeto, projeto.versao).then((_) {}, onError: (_) {}));
+    // Without notifying: the editor already left the screen.
+    if (pending && !conflict && !saving) unawaited(api.save(project, project.version).then((_) {}, onError: (_) {}));
     super.dispose();
   }
 }

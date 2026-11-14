@@ -2,7 +2,7 @@
 from esteira import bench as B
 
 
-def test_numeros_e_normalizar():
+def test_numbers_and_normalize():
     assert B.numbers("Eram 81,7% em 2026, R$ 1.200") == {"817", "2026", "1200"}
     assert B.normalize("Avalanche: é o MÉTODO!") == "avalanche e o metodo"
 
@@ -12,14 +12,14 @@ def test_wer():
     assert B.wer("um consignato", "um consignado") == 0.5
 
 
-def test_so_trocas():
+def test_only_swaps():
     assert B.only_swaps("Um consignato ou crédito", "Um consignado ou crédito")
     assert B.only_swaps("eram 81 , 7 %", "eram 81,7%")
     assert not B.only_swaps("Imagina aqui que você tem", "Imagina que você tem")  # o narrador acrescentou
     assert not B.only_swaps("igual", "igual")
 
 
-def test_nota_cena():
+def test_scene_score():
     instance = {"frase": "Em setembro de 2026, eram 81,7%.", "aceitas": ["contador"]}
     certa = B.Scene(cena="contador", ancora="eram 81,7%", titulo="Endividadas",
                    valores=[B.Value(rotulo="famílias", valor="81,7%")])
@@ -30,7 +30,7 @@ def test_nota_cena():
     assert B.score_scene(instance, errada) == 0.25  # só "não inventou número"
 
 
-def test_nota_legenda_e_visao():
+def test_caption_score_and_vision():
     instance = {"whisper": "um consignato", "certo": "um consignado"}
     assert B.score_caption(instance, B.Caption(texto="um consignado")) == 1
     assert B.score_caption(instance, B.Caption(texto="um consignato")) == 0.5

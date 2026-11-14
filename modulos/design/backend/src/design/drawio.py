@@ -1,11 +1,12 @@
-"""Compatibilidade com o draw.io (diagrams.net): lê `.drawio`/`.xml` (mxfile com várias páginas,
-comprimidas ou não) para os elementos do quadro e escreve o quadro de volta como `.drawio`.
+"""draw.io (diagrams.net) compatibility: reads `.drawio`/`.xml` (mxfile with several pages,
+compressed or not) into board elements and writes the board back as `.drawio`.
 
-Mapeamento: vértices viram blocos (`no`) pelo estilo do draw.io (losango → decisão, elipse →
-círculo, cilindro → banco, documento, nota, hexágono, paralelogramo → entrada/saída, processo
-predefinido → subprocesso, raia/contêiner → contêiner, cantos arredondados → processo, o resto →
-quadrado); `text` vira texto solto; arestas viram setas (`ligacao`) presas aos blocos, com rótulo.
-Cores de preenchimento, borda e texto vêm junto. O visual é o do app, não o do draw.io.
+Mapping: vertices become blocks (`no`) by their draw.io style (rhombus → decision, ellipse →
+circle, cylinder → database, document, note, hexagon, parallelogram → input/output, predefined
+process → subprocess, swimlane/container → container, rounded corners → process, everything else →
+square); `text` becomes free text; edges become arrows (`ligacao`) attached to the blocks, with a
+label.
+Fill, border and text colors come along. The look is the app's, not draw.io's.
 """
 
 import base64
@@ -25,11 +26,11 @@ class FileInvalid(ValueError):
     pass
 
 
-# ---------- leitura ----------
+# ---------- reading ----------
 
 
 def _models(xml: str) -> list[tuple[str, ET.Element]]:
-    """(nome da página, mxGraphModel) de cada diagrama; descomprime o formato antigo."""
+    """(page name, mxGraphModel) of each diagram; decompresses the old format."""
     try:
         root = ET.fromstring(xml)
     except ET.ParseError as e:
@@ -78,10 +79,10 @@ def _color(v: str | None, default: int | None = None) -> int | None:
     return 0xFF000000 | int(m.group(1), 16) if m else default
 
 
-def text_of_html(valor: str) -> str:
-    """Rótulo HTML do draw.io → texto com a marcação do app (**negrito**, *itálico*,
-    __sublinhado__)."""
-    t = valor or ""
+def text_of_html(value: str) -> str:
+    """draw.io HTML label → text with the app markup (**bold**, *italic*,
+    __underline__)."""
+    t = value or ""
     t = re.sub(r"(?i)<br\s*/?>|</div>\s*<div[^>]*>|</p>\s*<p[^>]*>", "\n", t)
     t = re.sub(r"(?is)<(b|strong)\b[^>]*>(.*?)</\1>", r"**\2**", t)
     t = re.sub(r"(?is)<(i|em)\b[^>]*>(.*?)</\1>", r"*\2*", t)
@@ -91,8 +92,8 @@ def text_of_html(valor: str) -> str:
 
 
 def _with_source(text: str, pairs: dict[str, str]) -> str:
-    """`fontStyle` do draw.io é uma máscara (1 negrito, 2 itálico, 4 sublinhado) sobre o texto
-    todo."""
+    """draw.io `fontStyle` is a bit mask (1 bold, 2 italic, 4 underline) over the whole
+    text."""
     try:
         f = int(pairs.get("fontStyle", "0") or 0)
     except ValueError:
@@ -146,7 +147,7 @@ def _kind_node(loose: set[str], pairs: dict[str, str]) -> str:
 
 
 def read(xml: str) -> dict[str, Any]:
-    """`{"paginas": [{id, nome}], "elementos": [...]}` no formato do app (coordenadas absolutas)."""
+    """`{"paginas": [{id, nome}], "elementos": [...]}` in the app format (absolute coordinates)."""
     pages, elements = [], []
     ignorados = 0
     for n, (name, model) in enumerate(_models(xml)):
@@ -177,16 +178,17 @@ def read(xml: str) -> dict[str, Any]:
             cells[data["id"]] = data
 
         def origem(cid: str, cells: dict[str, dict[str, Any]] = cells) -> tuple[float, float]:
-            """Canto do pai (contêiner/grupo) somado até a raiz: no draw.io filhos são relativos."""
+            """Parent corner (container/group) summed up to the root: in draw.io children are
+            relative."""
             x = y = 0.0
-            pai = cells.get(cid, {}).get("parent")
+            parent = cells.get(cid, {}).get("parent")
             seen = set()
-            while pai and pai in cells and pai not in seen:
-                seen.add(pai)
-                g = cells[pai]["_geo"]
+            while parent and parent in cells and parent not in seen:
+                seen.add(parent)
+                g = cells[parent]["_geo"]
                 x += float(g.get("x", 0) or 0)
                 y += float(g.get("y", 0) or 0)
-                pai = cells[pai].get("parent")
+                parent = cells[parent].get("parent")
             return x, y
 
         def eid(cid: str, pid: str = pid) -> str:
@@ -252,7 +254,7 @@ def read(xml: str) -> dict[str, Any]:
         def bloco_em(
             pt: dict[str, str] | None, ox: float, oy: float, boxes: list[Any] = boxes
         ) -> str:
-            """Bloco cuja borda está a até 8 px do ponto (seta solta encostada no bloco)."""
+            """Block whose border is within 8 px of the point (loose arrow touching the block)."""
             if not pt:
                 return ""
             x, y = ox + float(pt.get("x", 0)), oy + float(pt.get("y", 0))
@@ -272,7 +274,7 @@ def read(xml: str) -> dict[str, Any]:
                 if de and para and de != para:
                     pairs = {**pairs, "edgeStyle": pairs.get("edgeStyle", "none")}
             label = text_of_html(c.get("value", ""))
-            # rótulo como filho da aresta (edgeLabel) no draw.io
+            # label as a child of the edge (edgeLabel) in draw.io
             for child in cells.values():
                 if child.get("parent") == cid and child.get("vertex") == "1" and not label:
                     label = text_of_html(child.get("value", ""))
@@ -295,7 +297,7 @@ def read(xml: str) -> dict[str, Any]:
                 vertices.append((2, elements_arrow))
             else:
                 s, t = c["_pontos"]
-                if s and t:  # seta solta: vira forma
+                if s and t:  # loose arrow: becomes a shape
                     ox, oy = origem(cid)
                     vertices.append(
                         (
@@ -314,13 +316,13 @@ def read(xml: str) -> dict[str, Any]:
                     )
                 else:
                     ignorados += 1
-        # contêineres atrás, blocos no meio, setas na frente
+        # containers behind, blocks in the middle, arrows in front
         elements += [e for _, e in sorted(vertices, key=lambda v: v[0])]
         del n
     return {"paginas": pages, "elementos": elements, "ignorados": ignorados}
 
 
-# ---------- escrita ----------
+# ---------- writing ----------
 
 STYLES = {
     "inicio": "rounded=1;arcSize=50;",
@@ -353,8 +355,8 @@ def html_of_text(t: str) -> str:
 
 
 def write(frame: dict[str, Any]) -> str:
-    """O quadro como `.drawio` (uma página por aba, sem compressão: abre no draw.io/diagrams.net).
-    Traços à mão livre não têm equivalente e ficam de fora."""
+    """The board as `.drawio` (one page per tab, uncompressed: opens in draw.io/diagrams.net).
+    Freehand strokes have no equivalent and are left out."""
     pages = frame.get("paginas") or [{"id": "", "nome": "Página 1"}]
     primeira = pages[0]["id"]
     file = ET.Element("mxfile", host="agent", type="device")
@@ -424,7 +426,7 @@ def write(frame: dict[str, Any]) -> str:
                     target=e["para"],
                 )
                 geo = ET.SubElement(c, "mxGeometry", {"relative": "1", "as": "geometry"})
-                if e.get("pontos"):  # a rota que o app calculou vira pontos de passagem no draw.io
+                if e.get("pontos"):  # the route the app computed becomes waypoints in draw.io
                     points = ET.SubElement(geo, "Array", {"as": "points"})
                     for x, y in e["pontos"]:
                         ET.SubElement(points, "mxPoint", {"x": f"{x:g}", "y": f"{y:g}"})

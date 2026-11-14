@@ -10,11 +10,11 @@ def test_ulid_ordenavel_e_unico():
     assert len(set(ids)) == 200 and all(len(i) == 26 for i in ids)
 
 
-def test_gravar_avaliar_e_uso():
-    a = R.write("thumb_compor", grupo="thumb:x-001", contexto={"titulo": "T"}, saida={"conceito": {"texto": "A"}},
-                 origem="local:teste", extra={"arquivo": "thumb_0.png"})
-    b = R.write("thumb_compor", grupo="thumb:x-001", contexto={"titulo": "T"}, saida={"conceito": {"texto": "B"}},
-                 origem="local:teste", extra={"arquivo": "thumb_1.png"})
+def test_record_evaluate_and_usage():
+    a = R.write("thumb_compor", group="thumb:x-001", context={"titulo": "T"}, output={"conceito": {"texto": "A"}},
+                 origin="local:teste", extra={"arquivo": "thumb_0.png"})
+    b = R.write("thumb_compor", group="thumb:x-001", context={"titulo": "T"}, output={"conceito": {"texto": "B"}},
+                 origin="local:teste", extra={"arquivo": "thumb_1.png"})
     R.evaluate(b, "escolhida")
     regs = {r["id"]: r for r in R.records("thumb_compor")}
     assert regs[a]["uso"] == "pendente" and regs[b]["uso"] == "sft"
@@ -22,20 +22,20 @@ def test_gravar_avaliar_e_uso():
     assert R.last("thumb:x-001", arquivo="thumb_0.png")["id"] == a
 
 
-def test_portao_reprovado_e_veredito_invalido():
-    r = R.write("peca_html", grupo="peca:p", contexto={}, saida={"id": "p"}, origem="claude",
-                 portao={"ok": False, "erros": ["lint"]})
+def test_gate_rejected_and_invalid_verdict():
+    r = R.write("peca_html", group="peca:p", context={}, output={"id": "p"}, origin="claude",
+                 gate={"ok": False, "erros": ["lint"]})
     assert next(R.records("peca_html"))["uso"] == "descartar"
     R.evaluate(r, "descartada", motivo="lint")
     assert next(R.records("peca_html"))["uso"] == "dpo_ruim"
     with pytest.raises(ValueError):
         R.evaluate(r, "talvez")
     with pytest.raises(ValueError):
-        R.write("inexistente", grupo="g", contexto={}, saida={}, origem="x")
+        R.write("inexistente", group="g", context={}, output={}, origin="x")
 
 
-def test_contexto_grande_vai_para_artefato_e_linha_truncada_e_ignorada():
-    R.write("montar", grupo="ep:a", contexto={"texto": "x" * 20_000}, saida=[], origem="traducao")
+def test_large_context_goes_to_artifact_and_truncated_line_ignored():
+    R.write("montar", group="ep:a", context={"texto": "x" * 20_000}, output=[], origin="traducao")
     file = next(R.RECORD.glob("**/montar/*.jsonl"))
     with open(file, "a") as f:
         f.write('{"id": "rg_quebrado", "t"')  # escrita interrompida
@@ -44,9 +44,9 @@ def test_contexto_grande_vai_para_artefato_e_linha_truncada_e_ignorada():
     assert R.read_artifact(regs[0]["contexto"]["ref"])["texto"] == "x" * 20_000
 
 
-def test_indice_reconstroi_e_conta():
+def test_index_rebuilds_and_counts():
     for k in range(3):
-        rg = R.write("foto_tratar", grupo=f"foto:{k}", contexto={}, saida={"foco": "sujeito"}, origem="local:t")
+        rg = R.write("foto_tratar", group=f"foto:{k}", context={}, output={"foco": "sujeito"}, origin="local:t")
         if k:
             R.evaluate(rg, "aprovada")
     assert index.reindex() == 3

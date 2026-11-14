@@ -1,9 +1,9 @@
-"""Coleções de cada canal: tipo da nota, subpasta no cofre, campos do formulário e modelo do corpo.
+"""Collections of each channel: note type, vault subfolder, form fields and body template.
 
-Segue a estrutura do vault:
-`Notas/Empreendimento/YouTube/<canal>/{Temas,História,Roteiros,Método}/`, com os planos de vídeos
-em `Temas/Plano de 500 vídeos/`. Campos `link` são gravados como `[[Título]]` e viram relações
-no grafo das notas.
+Follows the vault structure:
+`Notas/Empreendimento/YouTube/<canal>/{Temas,História,Roteiros,Método}/`, with the video plans
+in `Temas/Plano de 500 vídeos/`. `link` fields are written as `[[Title]]` and become relations
+in the notes graph.
 """
 
 from typing import Any
@@ -23,8 +23,8 @@ STATUS = [
 STATUS_CHANNEL = ["ideia", "em-andamento", "ativo", "pausado", "arquivada"]
 
 
-def _field(nome: str, label: str, tipo: str = "texto", options: list[str] | None = None) -> dict:
-    return {"nome": nome, "rotulo": label, "tipo": tipo, "opcoes": options or []}
+def _field(name: str, label: str, kind: str = "texto", options: list[str] | None = None) -> dict:
+    return {"nome": name, "rotulo": label, "tipo": kind, "opcoes": options or []}
 
 
 _STATUS = _field("status", "Status", "opcoes", STATUS)
@@ -107,7 +107,7 @@ MODEL_CHANNEL = (
     "## Formatos\n\n## Metas\n"
 )
 
-# Para o app de notas (`/api/notas/tipos`) mostrar os mesmos formulários.
+# So the notes app (`/api/notas/tipos`) shows the same forms.
 KINDS_NOTE: list[dict[str, Any]] = [
     {
         "id": "canal",

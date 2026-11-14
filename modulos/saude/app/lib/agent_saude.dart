@@ -1,5 +1,5 @@
-/// Módulo Saúde: físico (calendário de treinos e biblioteca de exercícios), espiritual e mental.
+/// Saúde module: physical (workout calendar and exercise library), spiritual and mental.
 library;
 
-export 'src/api_saude.dart' show ApiSaude;
-export 'src/modulo_saude.dart';
+export 'src/health_api.dart' show HealthApi;
+export 'src/health_module.dart';

@@ -7,20 +7,20 @@ from esteira.studio import rhythm as R
 from esteira.studio import training as T
 
 
-def test_peca_3d_usa_three_e_passa_no_portao_estatico():
+def test_3d_piece_uses_three_and_passes_static_gate():
     f = P.load("barras_3d")
     assert f.peso == "3d" and P.check_code("barras_3d", f) == ([], [])
     assert "k.cena3d(" in (P.folder("barras_3d") / "peca.js").read_text()   # cena do kit, desenhada pela timeline
 
 
-def test_three_so_vai_para_os_assets_com_peca_3d(tmp_path):
+def test_three_goes_to_assets_only_with_3d_piece(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir(), b.mkdir()
     assert P.join(a, ["numero_impacto"]) is False and not (a / "three.min.js").exists()
     assert P.join(b, ["numero_impacto", "barras_3d"]) is True and (b / "three.min.js").exists()
 
 
-def test_cota_3d_derruba_a_segunda_peca_3d_na_janela():
+def test_3d_quota_drops_second_3d_piece_in_window():
     f3 = P.load("barras_3d").model_copy(update={"estado": "aprovada"})
     cards = [f3] + P.list_all("aprovada")
     profile = R.load("longo")
@@ -33,7 +33,7 @@ def test_cota_3d_derruba_a_segunda_peca_3d_na_janela():
     assert points(preso) <= points(free) - 1.0
 
 
-def test_exportar_base_de_treino(tmp_path, monkeypatch):
+def test_export_training_base(tmp_path, monkeypatch):
     cases = {"corte": [{"id": f"c{i}", "manter": i % 2 == 0} for i in range(40)],
              "legenda": [{"id": "l1", "certo": "texto certo"}, {"id": "l1", "certo": "corrigido de novo"}]}
     monkeypatch.setattr(T, "FOLDER", tmp_path)
