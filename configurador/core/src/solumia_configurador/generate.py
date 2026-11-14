@@ -1,22 +1,24 @@
-"""Arquivos gerados a partir de manifesto + cofre. Nunca editados à mão.
+"""Files generated from manifest + vault. Never edited by hand.
 
-Os modelos do nginx e os Dockerfiles do repositório são reaproveitados; só trocamos domínio, portas
-publicadas e nomes (zona de limite, formato de log), para conviver com a instalação atual.
+The repository's nginx templates and Dockerfiles are reused; only the domain, published ports and
+names (rate-limit zone, log format) are replaced, to coexist with the current installation.
 """
 
 from __future__ import annotations
 
 import io
+import os
 import re
+import shutil
 import tarfile
 from pathlib import Path
 
 from . import names, secret_store
-from .manifest import Manifesto
-from .vault import Cofre
+from .manifest import Manifest
+from .vault import Vault
 
-# Arquivos do repositório que vão para a VPS para construir as imagens.
-_FONTES_GATEWAY = [
+# Repository files sent to the VPS to build the images.
+_GATEWAY_SOURCES = [
     "plataforma/shared",
     "plataforma/backend",
     "modulos/saude/backend", "modulos/estudos/backend", "modulos/rotinas/backend",
@@ -26,40 +28,44 @@ _FONTES_GATEWAY = [
     "infra/docker/backend",
     "infra/docker/tunel/Dockerfile", "infra/docker/tunel/entrypoint.sh", "infra/docker/tunel/sshd_config",
 ]
-_EXCLUIR = re.compile(
+_EXCLUDE = re.compile(
     r"(^|/)(\.env(\..*)?|.*\.bak|__pycache__|\.venv[^/]*|tests?|\.pytest_cache|\.ruff_cache|.*\.pyc|"
     r"authorized_keys|chave_pc(\.pub)?|local\.properties|node_modules|build)(/|$)"
 )
 _PERMITIR = re.compile(r"(^|/)\.env\.example$")
 
 
-def raiz_repositorio() -> Path:
-    """configurador/core/src/solumia_configurador/generate.py -> raiz do monorepo."""
+def repository_root() -> Path:
+    """Monorepo root. Installed from the .deb the core lives in /opt, so the launcher passes the
+    repository in SOLUMIA_REPO; in development it is found from this file's path."""
+    configured = os.environ.get("SOLUMIA_REPO", "")
+    if configured:
+        return Path(configured)
     return Path(__file__).resolve().parents[4]
 
 
-def _substituir_nomes(texto: str) -> str:
-    return (texto.replace("agent_login", names.ZONA_LOGIN_NGINX)
-                 .replace("agent_sem_token", f"{names.PREFIXO}_sem_token")
-                 .replace("agent-seguranca.conf", names.CONF_SEGURANCA_NGINX))
+def _replace_names(text: str) -> str:
+    return (text.replace("agent_login", names.ZONA_LOGIN_NGINX)
+                 .replace("agent_sem_token", f"{names.PREFIX}_sem_token")
+                 .replace("agent-seguranca.conf", names.NGINX_SECURITY_CONF))
 
 
-# --- pacote de código-fonte -----------------------------------------------------------------------
-def pacote_fonte(raiz: Path | None = None) -> bytes:
-    """tar.gz só com o necessário para as imagens; segredos e caches ficam fora (conferido)."""
-    raiz = raiz or raiz_repositorio()
+# --- source package -------------------------------------------------------------------------------
+def source_package(root: Path | None = None) -> bytes:
+    """tar.gz with only what the images need; secrets and caches stay out (checked)."""
+    root = root or repository_root()
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz", compresslevel=6) as tar:
-        for rel in _FONTES_GATEWAY:
-            origem = raiz / rel
-            if not origem.exists():
+        for rel in _GATEWAY_SOURCES:
+            origin = root / rel
+            if not origin.exists():
                 raise FileNotFoundError(f"faltando no repositório: {rel}")
-            arquivos = [origem] if origem.is_file() else sorted(p for p in origem.rglob("*") if p.is_file())
-            for p in arquivos:
-                relativo = p.relative_to(raiz).as_posix()
-                if _EXCLUIR.search(relativo) and not _PERMITIR.search(relativo):
+            files = [origin] if origin.is_file() else sorted(p for p in origin.rglob("*") if p.is_file())
+            for p in files:
+                relative = p.relative_to(root).as_posix()
+                if _EXCLUDE.search(relative) and not _PERMITIR.search(relative):
                     continue
-                info = tar.gettarinfo(str(p), arcname=relativo)
+                info = tar.gettarinfo(str(p), arcname=relative)
                 info.uid = info.gid = 0
                 info.uname = info.gname = "root"
                 info.mode = 0o755 if info.mode & 0o111 else 0o644
@@ -70,7 +76,7 @@ def pacote_fonte(raiz: Path | None = None) -> bytes:
 
 # --- docker compose --------------------------------------------------------------------------------
 def compose(nginx_no_docker: bool) -> str:
-    """docker-compose do Solumia. Projeto `solumia`: nomes de contêiner, rede e volume próprios."""
+    """Solumia docker-compose. Project `solumia`: its own container, network and volume names."""
     nginx = """
   nginx:
     image: nginx:1.27-alpine
@@ -94,20 +100,20 @@ def compose(nginx_no_docker: bool) -> str:
     restart: unless-stopped
 """ if nginx_no_docker else ""
     return f"""# Gerado pelo configurador do Solumia. Não edite: altere no configurador e aplique.
-name: {names.PROJETO_COMPOSE}
+name: {names.COMPOSE_PROJECT}
 
 services:
   gateway:
     build:
       context: ./fonte
       dockerfile: infra/docker/backend/Dockerfile
-    image: {names.IMAGEM_GATEWAY}:local
+    image: {names.GATEWAY_IMAGE}:local
     env_file: [./gateway.env]
     environment:
       GATEWAY_HOST: 0.0.0.0
-      GATEWAY_PORT: {names.PORTA_GATEWAY_CONTEINER}
-    ports: ["127.0.0.1:{names.PORTA_GATEWAY_HOST}:{names.PORTA_GATEWAY_CONTEINER}"]
-    volumes: ["{names.VOLUME_DADOS}:/home/gateway/agent-data"]
+      GATEWAY_PORT: {names.GATEWAY_CONTAINER_PORT}
+    ports: ["127.0.0.1:{names.GATEWAY_HOST_PORT}:{names.GATEWAY_CONTAINER_PORT}"]
+    volumes: ["{names.DATA_VOLUME}:/home/gateway/agent-data"]
     read_only: false
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
@@ -115,10 +121,10 @@ services:
 
   tunel:
     build: ./fonte/infra/docker/tunel
-    image: {names.IMAGEM_TUNEL}:local
+    image: {names.TUNNEL_IMAGE}:local
     ports:
-      - "{names.PORTA_TUNEL_SSH}:2222"
-      - "127.0.0.1:{names.PORTA_TUNEL_ESTEIRA_HOST}:8765"
+      - "{names.SSH_TUNNEL_PORT}:2222"
+      - "127.0.0.1:{names.PIPELINE_TUNNEL_HOST_PORT}:8765"
     volumes:
       - ./tunel/authorized_keys:/config/authorized_keys:ro
       - tunel-chaves:/etc/ssh/chaves
@@ -129,111 +135,122 @@ services:
     image: ${{COLLABORA_IMAGEM:-collabora/code:latest}}
     cap_add: [MKNOD]
     environment:
-      aliasgroup1: http://gateway:{names.PORTA_GATEWAY_CONTEINER}
+      aliasgroup1: http://gateway:{names.GATEWAY_CONTAINER_PORT}
       extra_params: --o:ssl.enable=false --o:ssl.termination=true
       server_name: ${{COLLABORA_DOMINIO:-}}
       dictionaries: pt_BR en_US
       username: admin
       password: ${{COLLABORA_ADMIN_SENHA:-}}
-    ports: ["127.0.0.1:{names.PORTA_COLLABORA_HOST}:9980"]
+    ports: ["127.0.0.1:{names.COLLABORA_HOST_PORT}:9980"]
     restart: unless-stopped
 {nginx}
 volumes:
-  {names.VOLUME_DADOS}:
+  {names.DATA_VOLUME}:
   tunel-chaves:
   certbot-www:
   certbot-etc:
 """
 
 
-def env_compose(m: Manifesto, cofre: Cofre, imagens: dict[str, str]) -> str:
-    """`.env` do compose (variáveis de interpolação): imagens fixadas e senha do Collabora."""
-    linhas = [f"{k}={v}" for k, v in sorted(imagens.items())]
-    # Domínio já validado pelo manifesto; senha urlsafe (sem $ nem aspas) para não haver interpolação.
-    linhas.append(f"COLLABORA_DOMINIO={m.topologia.dominio}")
-    senha = cofre.obter_ou_gerar(secret_store.COLLABORA_SENHA, lambda: secret_store.token())
-    linhas.append(f"COLLABORA_ADMIN_SENHA={senha}")
-    return "\n".join(linhas) + "\n"
+def env_compose(m: Manifest, vault: Vault, imagens: dict[str, str]) -> str:
+    """Compose `.env` (interpolation variables): pinned images and the Collabora password."""
+    lines = [f"{k}={v}" for k, v in sorted(imagens.items())]
+    # Domain already validated by the manifest; urlsafe password (no $ or quotes) so nothing is interpolated.
+    lines.append(f"COLLABORA_DOMINIO={m.topologia.dominio}")
+    password = vault.get_or_generate(secret_store.COLLABORA_PASSWORD, lambda: secret_store.token())
+    lines.append(f"COLLABORA_ADMIN_SENHA={password}")
+    return "\n".join(lines) + "\n"
 
 
-def env_gateway(m: Manifesto, cofre: Cofre) -> str:
-    dominio = m.topologia.dominio
+def env_gateway(m: Manifest, vault: Vault) -> str:
+    domain = m.topologia.dominio
     v = {
-        "GATEWAY_APP_NAME": names.NOME_EXIBICAO,
+        "GATEWAY_APP_NAME": names.DISPLAY_NAME,
         "GATEWAY_ENVIRONMENT": "production",
         "GATEWAY_DEBUG": "false",
         "GATEWAY_LOG_FORMAT": "json",
         "GATEWAY_LOG_LEVEL": "info",
-        "GATEWAY_CORS_ORIGINS": f"https://{dominio}",
-        "GATEWAY_CLIENT_API_KEYS": cofre.obter_ou_gerar(
-            secret_store.CHAVE_CLIENTE, lambda: secret_store.token("sk_live_")
+        "GATEWAY_CORS_ORIGINS": f"https://{domain}",
+        "GATEWAY_CLIENT_API_KEYS": vault.get_or_generate(
+            secret_store.CLIENT_KEY, lambda: secret_store.token("sk_live_")
         ),
-        "GATEWAY_WORKER_API_KEYS": cofre.obter_ou_gerar(
-            secret_store.CHAVE_WORKER, lambda: secret_store.token("worker_")
+        "GATEWAY_WORKER_API_KEYS": vault.get_or_generate(
+            secret_store.WORKER_KEY, lambda: secret_store.token("worker_")
         ),
         "GATEWAY_ADMIN_USUARIO": m.conta.usuario,
-        "GATEWAY_ADMIN_SENHA_HASH": cofre.exigir(secret_store.SENHA_HASH),
-        "GATEWAY_ADMIN_TOTP_SEGREDO": cofre.exigir(secret_store.TOTP),
-        "GATEWAY_JWT_SECRET_KEY": cofre.obter_ou_gerar(secret_store.JWT, lambda: secret_store.token(tamanho=48)),
-        "GATEWAY_COLLABORA_URL": f"https://{dominio}",
+        "GATEWAY_ADMIN_SENHA_HASH": vault.require(secret_store.PASSWORD_HASH),
+        "GATEWAY_ADMIN_TOTP_SEGREDO": vault.require(secret_store.TOTP),
+        "GATEWAY_JWT_SECRET_KEY": vault.get_or_generate(secret_store.JWT, lambda: secret_store.token(tamanho=48)),
+        "GATEWAY_COLLABORA_URL": f"https://{domain}",
         "GATEWAY_COLLABORA_INTERNO_URL": "http://collabora:9980",
-        "GATEWAY_WOPI_BASE_URL": f"http://gateway:{names.PORTA_GATEWAY_CONTEINER}",
-        "GATEWAY_WOPI_SECRET": cofre.obter_ou_gerar(secret_store.WOPI, lambda: secret_store.token(tamanho=48)),
+        "GATEWAY_WOPI_BASE_URL": f"http://gateway:{names.GATEWAY_CONTAINER_PORT}",
+        "GATEWAY_WOPI_SECRET": vault.get_or_generate(secret_store.WOPI, lambda: secret_store.token(tamanho=48)),
     }
-    linhas = ["# Gerado pelo configurador do Solumia. Contém segredos: modo 0600, não copiar."]
-    for chave, valor in v.items():
-        if "\n" in valor or "'" in valor:
-            raise ValueError(f"valor inválido para {chave}")
-        linhas.append(f"{chave}='{valor}'")
-    return "\n".join(linhas) + "\n"
+    lines = ["# Gerado pelo configurador do Solumia. Contém segredos: modo 0600, não copiar."]
+    for key, value in v.items():
+        if "\n" in value or "'" in value:
+            raise ValueError(f"valor inválido para {key}")
+        lines.append(f"{key}='{value}'")
+    return "\n".join(lines) + "\n"
 
 
 def nginx_desafio(dominio: str) -> str:
-    """Antes do certificado: só a porta 80 com o desafio do Let's Encrypt."""
+    """Before the certificate: only port 80 with the Let's Encrypt challenge."""
     return (f"server {{\n    listen 80;\n    server_name {dominio};\n"
             "    location /.well-known/acme-challenge/ { root /var/www/certbot; }\n"
             "    location / { return 503; }\n}\n")
 
 
-def nginx_site_docker(dominio: str, raiz: Path | None = None) -> str:
-    raiz = raiz or raiz_repositorio()
-    texto = (raiz / "infra/docker/nginx/nginx.conf.example").read_text()
-    return _substituir_nomes(texto.replace("seu-dominio.exemplo.com", dominio))
+def nginx_site_docker(dominio: str, root: Path | None = None) -> str:
+    root = root or repository_root()
+    text = (root / "infra/docker/nginx/nginx.conf.example").read_text()
+    return _replace_names(text.replace("seu-dominio.exemplo.com", dominio))
 
 
-def nginx_site_host(dominio: str, raiz: Path | None = None) -> str:
-    raiz = raiz or raiz_repositorio()
-    texto = (raiz / "infra/docker/nginx/host-nginx-site.conf.example").read_text()
-    texto = (texto.replace("seu-dominio.exemplo.com", dominio)
-                  .replace("127.0.0.1:48080", f"127.0.0.1:{names.PORTA_GATEWAY_HOST}")
-                  .replace("127.0.0.1:18765", f"127.0.0.1:{names.PORTA_TUNEL_ESTEIRA_HOST}")
-                  .replace("127.0.0.1:9980", f"127.0.0.1:{names.PORTA_COLLABORA_HOST}"))
-    return _substituir_nomes(texto)
+def nginx_site_host(dominio: str, root: Path | None = None) -> str:
+    root = root or repository_root()
+    text = (root / "infra/docker/nginx/host-nginx-site.conf.example").read_text()
+    text = (text.replace("seu-dominio.exemplo.com", dominio)
+                  .replace("127.0.0.1:48080", f"127.0.0.1:{names.GATEWAY_HOST_PORT}")
+                  .replace("127.0.0.1:18765", f"127.0.0.1:{names.PIPELINE_TUNNEL_HOST_PORT}")
+                  .replace("127.0.0.1:9980", f"127.0.0.1:{names.COLLABORA_HOST_PORT}"))
+    return _replace_names(text)
 
 
-def nginx_seguranca(raiz: Path | None = None) -> str:
-    raiz = raiz or raiz_repositorio()
-    return _substituir_nomes((raiz / "infra/docker/nginx/seguranca-http.conf").read_text())
+# Directives of the security conf that nginx accepts only once per http context.
+NGINX_SINGLE_DIRECTIVES = ("real_ip_header", "real_ip_recursive", "limit_req_status")
 
 
-def authorized_keys_tunel(publica: str) -> str:
-    # restrict: a chave só abre o encaminhamento reverso da esteira, nada mais.
-    if not re.fullmatch(r"ssh-ed25519 [A-Za-z0-9+/=]+( [\w.@-]+)?", publica.strip()):
+def nginx_security(root: Path | None = None, skip: tuple[str, ...] | list[str] = ()) -> str:
+    """`skip`: directives the host nginx already sets; a second one would fail `nginx -t`."""
+    root = root or repository_root()
+    text = _replace_names((root / "infra/docker/nginx/seguranca-http.conf").read_text())
+    kept = []
+    for line in text.splitlines(keepends=True):
+        words = line.split()
+        if not words or words[0] not in skip:
+            kept.append(line)
+    return "".join(kept)
+
+
+def authorized_keys_tunnel(public: str) -> str:
+    # restrict: the key only opens the pipeline's reverse forwarding, nothing else.
+    if not re.fullmatch(r"ssh-ed25519 [A-Za-z0-9+/=]+( [\w.@-]+)?", public.strip()):
         raise ValueError("chave pública do túnel inválida")
-    return f'restrict,port-forwarding,permitlisten="0.0.0.0:8765" {publica.strip()}\n'
+    return f'restrict,port-forwarding,permitlisten="0.0.0.0:8765" {public.strip()}\n'
 
 
-# --- serviços no host (Linux, systemd --user) ------------------------------------------------------
-def unidade_worker(dir_worker: Path, python: Path) -> str:
+# --- host services (Linux, systemd --user) ---------------------------------------------------------
+def worker_unit(dir_worker: Path, python: Path) -> str:
     return f"""# Gerado pelo configurador do Solumia.
 [Unit]
-Description={names.NOME_EXIBICAO}: worker (conecta ao gateway)
+Description={names.DISPLAY_NAME}: worker (conecta ao gateway)
 After=network-online.target
 
 [Service]
 WorkingDirectory={dir_worker}
-EnvironmentFile=%h/.config/{names.PREFIXO}/worker.env
-ExecStart={python} -m worker
+EnvironmentFile=%h/.config/{names.PREFIX}/worker.env
+ExecStart={python} -m worker.main
 Restart=always
 RestartSec=5
 NoNewPrivileges=yes
@@ -243,16 +260,16 @@ WantedBy=default.target
 """
 
 
-def unidade_tunel(host: str, porta_ssh: int, chave: Path, known_hosts: Path) -> str:
+def tunnel_unit(host: str, port_ssh: int, key: Path, known_hosts: Path) -> str:
     return f"""# Gerado pelo configurador do Solumia.
 [Unit]
-Description={names.NOME_EXIBICAO}: túnel reverso da esteira até a VPS
+Description={names.DISPLAY_NAME}: túnel reverso da esteira até a VPS
 After=network-online.target
 
 [Service]
 ExecStart=/usr/bin/ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \\
-  -o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts} -i {chave} -p {porta_ssh} \\
-  -R 0.0.0.0:8765:127.0.0.1:{names.PORTA_ESTEIRA_LOCAL} tunel@{host}
+  -o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts} -i {key} -p {port_ssh} \\
+  -R 0.0.0.0:8765:127.0.0.1:{names.PIPELINE_LOCAL_PORT} tunel@{host}
 Restart=always
 RestartSec=10
 
@@ -261,11 +278,32 @@ WantedBy=default.target
 """
 
 
-def env_worker(m: Manifesto, cofre: Cofre) -> str:
+# Where llama.cpp is usually built; systemd --user services do not see the shell's PATH.
+LLAMA_SERVER_CANDIDATES = (
+    Path.home() / "development/llama.cpp/build/bin/llama-server",
+    Path.home() / "llama.cpp/build/bin/llama-server",
+    Path.home() / ".local/bin/llama-server",
+    Path("/usr/local/bin/llama-server"),
+)
+
+
+def llama_server_path() -> str:
+    """Full path of llama-server, or the bare name when it cannot be found."""
+    found = shutil.which("llama-server")
+    if found:
+        return found
+    for candidate in LLAMA_SERVER_CANDIDATES:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return "llama-server"
+
+
+def env_worker(m: Manifest, vault: Vault) -> str:
     return (
         "# Gerado pelo configurador do Solumia. Contém a chave do worker.\n"
-        f"WORKER_NAME={names.PREFIXO}-worker\n"
+        f"WORKER_NAME={names.PREFIX}-worker\n"
         f"WORKER_GATEWAY_URL=wss://{m.topologia.dominio}/ws/worker\n"
-        f"WORKER_API_KEY={cofre.exigir(secret_store.CHAVE_WORKER)}\n"
-        f"WORKER_LLAMA_PORTA={names.PORTA_LLAMA_LOCAL}\n"
+        f"WORKER_API_KEY={vault.require(secret_store.WORKER_KEY)}\n"
+        f"WORKER_LLAMA_PORTA={names.LLAMA_LOCAL_PORT}\n"
+        f"WORKER_LLAMA_SERVER_BIN={llama_server_path()}\n"
     )

@@ -1,11 +1,11 @@
-"""Validação das pastas de mídia (imagens, vídeos, áudio, em produção, produzidos).
+"""Validation of the media folders (images, videos, audio, in production, produced).
 
-Regras, iguais no Linux e no Windows:
-- caminho absoluto (aceita `~`), sem `..`;
-- fora de pastas do sistema;
-- as cinco pastas são distintas e nenhuma fica dentro de outra (evita a esteira apagar ou
-  reprocessar o próprio acervo);
-- a pasta existe ou pode ser criada, e o configurador consegue gravar nela.
+Rules, the same on Linux and Windows:
+- absolute path (`~` accepted), no `..`;
+- outside system folders;
+- the five folders are distinct and none is inside another (keeps the pipeline from deleting or
+  reprocessing its own library);
+- the folder exists or can be created, and the configurator can write to it.
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 
-from .manifest import Pastas
+from .manifest import Folders
 
-ROTULOS = {
+LABELS = {
     "imagens": "Imagens",
     "videos": "Vídeos (acervo)",
     "audio": "Áudio",
@@ -25,130 +25,130 @@ ROTULOS = {
     "produzidos": "Vídeos produzidos",
 }
 
-_SISTEMA_LINUX = ("/", "/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/proc", "/root", "/run",
+_LINUX_SYSTEM_DIRS = ("/", "/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/proc", "/root", "/run",
                   "/sbin", "/sys", "/usr", "/var")
-_SISTEMA_WINDOWS = ("c:\\", "c:\\windows", "c:\\program files", "c:\\program files (x86)",
+_WINDOWS_SYSTEM_DIRS = ("c:\\", "c:\\windows", "c:\\program files", "c:\\program files (x86)",
                     "c:\\programdata")
 
 
 @dataclass
-class Resultado:
+class Result:
     ok: bool = True
     erros: dict[str, list[str]] = field(default_factory=dict)
     avisos: dict[str, list[str]] = field(default_factory=dict)
     resolvidas: dict[str, str] = field(default_factory=dict)
 
-    def erro(self, chave: str, msg: str) -> None:
+    def error(self, key: str, msg: str) -> None:
         self.ok = False
-        self.erros.setdefault(chave, []).append(msg)
+        self.erros.setdefault(key, []).append(msg)
 
 
-def _puro(caminho: str, windows: bool) -> PurePath:
-    return PureWindowsPath(caminho) if windows else PurePosixPath(caminho)
+def _puro(path: str, windows: bool) -> PurePath:
+    return PureWindowsPath(path) if windows else PurePosixPath(path)
 
 
-def _expandir(caminho: str, windows: bool, casa: str | None) -> str:
-    if caminho.startswith("~"):
-        casa = casa or str(Path.home())
-        return casa + caminho[1:]
-    return caminho
+def _expandir(path: str, windows: bool, matches: str | None) -> str:
+    if path.startswith("~"):
+        matches = matches or str(Path.home())
+        return matches + path[1:]
+    return path
 
 
-def _de_sistema(p: PurePath, windows: bool) -> bool:
+def _is_system_path(p: PurePath, windows: bool) -> bool:
     if windows:
-        partes = [x.lower().rstrip("\\") for x in p.parts]
-        if len(partes) == 1:  # raiz de qualquer unidade (C:\, D:\)
+        parts = [x.lower().rstrip("\\") for x in p.parts]
+        if len(parts) == 1:  # root of any drive (C:\, D:\)
             return True
-        alvo = "\\".join(partes[:2]) if partes[0].endswith(":") else ""
-        return any(alvo == x.rstrip("\\") for x in _SISTEMA_WINDOWS[1:]) and partes[0] == "c:"
-    partes = list(p.parts)
-    if len(partes) == 1:  # "/"
+        target = "\\".join(parts[:2]) if parts[0].endswith(":") else ""
+        return any(target == x.rstrip("\\") for x in _WINDOWS_SYSTEM_DIRS[1:]) and parts[0] == "c:"
+    parts = list(p.parts)
+    if len(parts) == 1:  # "/"
         return True
-    topo = "/" + partes[1]
-    if topo == "/var":
-        return not (len(partes) > 2 and partes[2] == "lib")
-    return topo in _SISTEMA_LINUX
+    top = "/" + parts[1]
+    if top == "/var":
+        return not (len(parts) > 2 and parts[2] == "lib")
+    return top in _LINUX_SYSTEM_DIRS
 
 
-def validar(pastas: Pastas, *, windows: bool, local: bool = True, casa: str | None = None) -> Resultado:
-    """`local=False` valida só a forma (nó remoto): existência e escrita são checadas na aplicação."""
-    r = Resultado()
-    puros: dict[str, PurePath] = {}
-    for chave in ROTULOS:
-        bruto = getattr(pastas, chave).strip()
-        if not bruto:
-            r.erro(chave, "pasta não definida")
+def validate(folders: Folders, *, windows: bool, local: bool = True, matches: str | None = None) -> Result:
+    """`local=False` only validates the form (remote node): existence and write access are checked when applying."""
+    r = Result()
+    plain: dict[str, PurePath] = {}
+    for key in LABELS:
+        raw = getattr(folders, key).strip()
+        if not raw:
+            r.error(key, "pasta não definida")
             continue
-        if "\x00" in bruto:
-            r.erro(chave, "caractere inválido")
+        if "\x00" in raw:
+            r.error(key, "caractere inválido")
             continue
-        expandido = _expandir(bruto, windows, casa)
-        p = _puro(expandido, windows)
+        expanded = _expandir(raw, windows, matches)
+        p = _puro(expanded, windows)
         if not p.is_absolute():
-            exemplo = "D:\\Midia\\videos" if windows else "/home/voce/videos"
-            r.erro(chave, f"use um caminho absoluto (ex.: {exemplo})")
+            example = "D:\\Midia\\videos" if windows else "/home/voce/videos"
+            r.error(key, f"use um caminho absoluto (ex.: {example})")
             continue
         if ".." in p.parts:
-            r.erro(chave, "'..' não é permitido")
+            r.error(key, "'..' não é permitido")
             continue
-        if _de_sistema(p, windows):
-            r.erro(chave, "pasta do sistema operacional não é permitida")
+        if _is_system_path(p, windows):
+            r.error(key, "pasta do sistema operacional não é permitida")
             continue
-        puros[chave] = p
-        r.resolvidas[chave] = str(p)
+        plain[key] = p
+        r.resolvidas[key] = str(p)
 
-    chaves = list(puros)
-    for i, a in enumerate(chaves):
-        for b in chaves[i + 1 :]:
-            pa, pb = puros[a], puros[b]
+    keys = list(plain)
+    for i, a in enumerate(keys):
+        for b in keys[i + 1 :]:
+            pa, pb = plain[a], plain[b]
             ia, ib = (str(pa).lower(), str(pb).lower()) if windows else (str(pa), str(pb))
             if ia == ib:
-                r.erro(b, f"igual à pasta de {ROTULOS[a]}")
-            elif _dentro(pb, pa, windows):
-                r.erro(b, f"está dentro da pasta de {ROTULOS[a]}")
-            elif _dentro(pa, pb, windows):
-                r.erro(a, f"está dentro da pasta de {ROTULOS[b]}")
+                r.error(b, f"igual à pasta de {LABELS[a]}")
+            elif _is_inside(pb, pa, windows):
+                r.error(b, f"está dentro da pasta de {LABELS[a]}")
+            elif _is_inside(pa, pb, windows):
+                r.error(a, f"está dentro da pasta de {LABELS[b]}")
 
     if local and r.ok:
-        for chave, p in puros.items():
-            _checar_escrita(Path(str(p)), chave, r)
+        for key, p in plain.items():
+            _check_writable(Path(str(p)), key, r)
     return r
 
 
-def _dentro(filho: PurePath, pai: PurePath, windows: bool) -> bool:
-    f = [x.lower() for x in filho.parts] if windows else list(filho.parts)
-    p = [x.lower() for x in pai.parts] if windows else list(pai.parts)
+def _is_inside(child: PurePath, parent: PurePath, windows: bool) -> bool:
+    f = [x.lower() for x in child.parts] if windows else list(child.parts)
+    p = [x.lower() for x in parent.parts] if windows else list(parent.parts)
     return len(f) > len(p) and f[: len(p)] == p
 
 
-def _checar_escrita(p: Path, chave: str, r: Resultado) -> None:
-    alvo = p
-    while not alvo.exists():
-        if alvo.parent == alvo:
-            r.erro(chave, "nenhuma parte do caminho existe")
+def _check_writable(p: Path, key: str, r: Result) -> None:
+    target = p
+    while not target.exists():
+        if target.parent == target:
+            r.error(key, "nenhuma parte do caminho existe")
             return
-        alvo = alvo.parent
-    if not alvo.is_dir():
-        r.erro(chave, f"{alvo} existe e não é pasta")
+        target = target.parent
+    if not target.is_dir():
+        r.error(key, f"{target} existe e não é pasta")
         return
-    if alvo != p:
-        r.avisos.setdefault(chave, []).append("será criada ao aplicar")
-    if not os.access(alvo, os.W_OK):
-        r.erro(chave, f"sem permissão de escrita em {alvo}")
+    if target != p:
+        r.avisos.setdefault(key, []).append("será criada ao aplicar")
+    if not os.access(target, os.W_OK):
+        r.error(key, f"sem permissão de escrita em {target}")
         return
     try:
-        with tempfile.NamedTemporaryFile(dir=alvo, prefix=".solumia-teste-"):
+        with tempfile.NamedTemporaryFile(dir=target, prefix=".solumia-teste-"):
             pass
     except OSError as e:
-        r.erro(chave, f"não consegui gravar em {alvo}: {e.strerror}")
+        r.error(key, f"não consegui gravar em {target}: {e.strerror}")
 
 
-def criar(pastas: Pastas, casa: str | None = None) -> list[str]:
-    """Cria as pastas locais que faltam; devolve as criadas."""
-    criadas = []
-    for chave in ROTULOS:
-        p = Path(_expandir(getattr(pastas, chave), os.name == "nt", casa))
+def create(folders: Folders, matches: str | None = None) -> list[str]:
+    """Creates the missing local folders; returns the ones created."""
+    created = []
+    for key in LABELS:
+        p = Path(_expandir(getattr(folders, key), os.name == "nt", matches))
         if not p.exists():
             p.mkdir(parents=True, exist_ok=True)
-            criadas.append(str(p))
-    return criadas
+            created.append(str(p))
+    return created

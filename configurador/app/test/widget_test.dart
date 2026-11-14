@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:solumia_configurador/l10n/textos.dart';
-import 'package:solumia_configurador/nucleo.dart';
-import 'package:solumia_configurador/tema.dart';
+import 'package:solumia_configurador/l10n/app_text.dart';
+import 'package:solumia_configurador/core.dart';
+import 'package:solumia_configurador/theme.dart';
 
 void main() {
-  test('ErroNucleo mostra a mensagem', () {
-    expect(ErroNucleo('falhou', 422).toString(), 'falhou');
+  test('CoreError shows the message', () {
+    expect(CoreError('falhou', 422).toString(), 'falhou');
   });
 
-  test('três idiomas com textos próprios', () {
-    final inicio = {for (final (c, _) in idiomas) c: lookupTextos(Locale(c)).navInicio};
-    expect(inicio, {'pt': 'Início', 'en': 'Home', 'es': 'Inicio'});
+  test('three languages with their own texts', () {
+    final home = {for (final (c, _) in languages) c: lookupAppText(Locale(c)).navHome};
+    expect(home, {'pt': 'Início', 'en': 'Home', 'es': 'Inicio'});
   });
 
-  test('paleta clara e escura distintas', () {
-    expect(esquemaSolumia(Brightness.light).surface, isNot(esquemaSolumia(Brightness.dark).surface));
+  test('light and dark palettes differ', () {
+    expect(solumiaScheme(Brightness.light).surface, isNot(solumiaScheme(Brightness.dark).surface));
   });
 }

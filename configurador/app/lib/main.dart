@@ -3,114 +3,116 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'l10n/textos.dart';
-import 'nucleo.dart';
-import 'tema.dart';
-import 'telas/apps_solumia.dart';
-import 'telas/conta.dart';
-import 'telas/craft_apps.dart';
-import 'telas/inicio.dart';
-import 'telas/pastas.dart';
-import 'telas/registro.dart';
-import 'telas/vps.dart';
+import 'l10n/app_text.dart';
+import 'core.dart';
+import 'theme.dart';
+import 'screens/solumia_apps.dart';
+import 'screens/account.dart';
+import 'screens/assistant.dart';
+import 'screens/craft_apps.dart';
+import 'screens/home.dart';
+import 'screens/folders.dart';
+import 'screens/run_log.dart';
+import 'screens/vps.dart';
+import 'screens/worker.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(AppConfigurador(prefs: await Preferencias.carregar()));
+  runApp(ConfiguratorApp(prefs: await Preferences.load()));
 }
 
-class AppConfigurador extends StatelessWidget {
-  const AppConfigurador({super.key, required this.prefs});
-  final Preferencias prefs;
+class ConfiguratorApp extends StatelessWidget {
+  const ConfiguratorApp({super.key, required this.prefs});
+  final Preferences prefs;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: prefs,
       builder: (context, _) => MaterialApp(
-        onGenerateTitle: (c) => Textos.of(c).appTitulo,
+        onGenerateTitle: (c) => AppText.of(c).appTitle,
         debugShowCheckedModeBanner: false,
-        theme: temaSolumia(Brightness.light),
-        darkTheme: temaSolumia(Brightness.dark),
-        themeMode: prefs.tema,
-        locale: prefs.idioma,
-        supportedLocales: Textos.supportedLocales,
+        theme: solumiaTheme(Brightness.light),
+        darkTheme: solumiaTheme(Brightness.dark),
+        themeMode: prefs.theme,
+        locale: prefs.language,
+        supportedLocales: AppText.supportedLocales,
         localizationsDelegates: const [
-          Textos.delegate,
+          AppText.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
-        // Idioma do sistema fora dos três suportados: português.
-        localeResolutionCallback: (l, suportados) =>
-            suportados.firstWhere((s) => s.languageCode == l?.languageCode, orElse: () => const Locale('pt')),
-        home: Inicializacao(prefs: prefs),
+        // System language outside the three supported ones: Portuguese.
+        localeResolutionCallback: (l, supported) =>
+            supported.firstWhere((s) => s.languageCode == l?.languageCode, orElse: () => const Locale('pt')),
+        home: Startup(prefs: prefs),
       ),
     );
   }
 }
 
-/// Sobe o núcleo antes de qualquer tela; encerra o núcleo junto com a janela.
-class Inicializacao extends StatefulWidget {
-  const Inicializacao({super.key, required this.prefs});
-  final Preferencias prefs;
+/// Starts the core before any screen; shuts the core down together with the window.
+class Startup extends StatefulWidget {
+  const Startup({super.key, required this.prefs});
+  final Preferences prefs;
   @override
-  State<Inicializacao> createState() => _InicializacaoEstado();
+  State<Startup> createState() => _StartupState();
 }
 
-class _InicializacaoEstado extends State<Inicializacao> {
-  Nucleo? _nucleo;
-  String? _erro;
-  late final AppLifecycleListener _ciclo;
+class _StartupState extends State<Startup> {
+  Core? _core;
+  String? _error;
+  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
     super.initState();
-    _ciclo = AppLifecycleListener(onExitRequested: () async {
-      _nucleo?.encerrar();
+    _lifecycle = AppLifecycleListener(onExitRequested: () async {
+      _core?.shutdown();
       return AppExitResponse.exit;
     });
-    _iniciar();
+    _start();
   }
 
-  Future<void> _iniciar() async {
-    setState(() => _erro = null);
+  Future<void> _start() async {
+    setState(() => _error = null);
     try {
-      final n = await Nucleo.iniciar();
-      if (mounted) setState(() => _nucleo = n);
-    } on ErroNucleo catch (e) {
-      if (mounted) setState(() => _erro = e.mensagem);
+      final n = await Core.start();
+      if (mounted) setState(() => _core = n);
+    } on CoreError catch (e) {
+      if (mounted) setState(() => _error = e.message);
     }
   }
 
   @override
   void dispose() {
-    _ciclo.dispose();
-    _nucleo?.encerrar();
+    _lifecycle.dispose();
+    _core?.shutdown();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final t = Textos.of(context);
-    final n = _nucleo;
-    if (n != null) return Principal(nucleo: n, prefs: widget.prefs);
+    final t = AppText.of(context);
+    final n = _core;
+    if (n != null) return MainShell(core: n, prefs: widget.prefs);
     return Scaffold(
       body: Center(
-        child: _erro == null
+        child: _error == null
             ? Column(mainAxisSize: MainAxisSize.min, children: [
                 const CircularProgressIndicator(),
                 const SizedBox(height: 16),
-                Text(t.iniciandoNucleo),
+                Text(t.startingCore),
               ])
             : Padding(
                 padding: const EdgeInsets.all(32),
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.error, color: Theme.of(context).colorScheme.error, size: 48),
                   const SizedBox(height: 12),
-                  SelectableText(_erro!),
+                  SelectableText(_error!),
                   const SizedBox(height: 12),
-                  FilledButton(onPressed: _iniciar, child: Text(t.tentarDeNovo)),
+                  FilledButton(onPressed: _start, child: Text(t.tryAgain)),
                 ]),
               ),
       ),
@@ -118,37 +120,47 @@ class _InicializacaoEstado extends State<Inicializacao> {
   }
 }
 
-class Principal extends StatefulWidget {
-  const Principal({super.key, required this.nucleo, required this.prefs});
-  final Nucleo nucleo;
-  final Preferencias prefs;
+class MainShell extends StatefulWidget {
+  const MainShell({super.key, required this.core, required this.prefs});
+  final Core core;
+  final Preferences prefs;
   @override
-  State<Principal> createState() => _PrincipalEstado();
+  State<MainShell> createState() => _MainShellState();
 }
 
-class _PrincipalEstado extends State<Principal> {
-  int _indice = 0;
+// Screen ids the assistant may suggest, in the order of the navigation rail.
+const _screenIds = ['inicio', 'conta', 'vps', 'pastas', 'craft_apps', 'apps', 'worker', 'registro', 'assistente'];
+
+class _MainShellState extends State<MainShell> {
+  int _index = 0;
+
+  void _openScreen(String id) {
+    final i = _screenIds.indexOf(id);
+    if (i >= 0) setState(() => _index = i);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final t = Textos.of(context);
+    final t = AppText.of(context);
     final c = Theme.of(context).colorScheme;
-    final n = widget.nucleo;
-    final telas = <Widget>[
-      TelaInicio(key: ValueKey('inicio$_indice'), nucleo: n, irPara: (i) => setState(() => _indice = i)),
-      TelaConta(nucleo: n),
-      TelaVPS(nucleo: n),
-      TelaPastas(nucleo: n),
-      TelaCraftApps(nucleo: n),
-      TelaAppsSolumia(nucleo: n),
-      TelaRegistro(key: ValueKey('registro$_indice'), nucleo: n),
+    final n = widget.core;
+    final screens = <Widget>[
+      HomeScreen(key: ValueKey('inicio$_index'), core: n, goTo: (i) => setState(() => _index = i)),
+      AccountScreen(core: n),
+      VpsScreen(core: n),
+      FoldersScreen(core: n),
+      CraftAppsScreen(core: n),
+      SolumiaAppsScreen(core: n),
+      WorkerScreen(core: n),
+      RunLogScreen(key: ValueKey('registro$_index'), core: n),
+      AssistantScreen(core: n, openScreen: _openScreen),
     ];
     return Scaffold(
       body: Row(children: [
         NavigationRail(
-          selectedIndex: _indice,
+          selectedIndex: _index,
           labelType: NavigationRailLabelType.all,
-          onDestinationSelected: (i) => setState(() => _indice = i),
+          onDestinationSelected: (i) => setState(() => _index = i),
           leading: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Icon(Icons.wb_sunny_rounded, color: c.primary, size: 32),
@@ -159,63 +171,65 @@ class _PrincipalEstado extends State<Principal> {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: IconButton(
-                  tooltip: '${t.aparencia} · ${t.idioma}',
+                  tooltip: '${t.appearance} · ${t.language}',
                   icon: const Icon(Icons.tune),
-                  onPressed: () => _preferencias(context),
+                  onPressed: () => _preferences(context),
                 ),
               ),
             ),
           ),
           destinations: [
-            NavigationRailDestination(icon: const Icon(Icons.home_outlined), label: Text(t.navInicio)),
-            NavigationRailDestination(icon: const Icon(Icons.person_outline), label: Text(t.navConta)),
+            NavigationRailDestination(icon: const Icon(Icons.home_outlined), label: Text(t.navHome)),
+            NavigationRailDestination(icon: const Icon(Icons.person_outline), label: Text(t.navAccount)),
             NavigationRailDestination(icon: const Icon(Icons.dns_outlined), label: Text(t.navVps)),
-            NavigationRailDestination(icon: const Icon(Icons.folder_outlined), label: Text(t.navPastas)),
+            NavigationRailDestination(icon: const Icon(Icons.folder_outlined), label: Text(t.navFolders)),
             NavigationRailDestination(icon: const Icon(Icons.apps_outlined), label: Text(t.navCraft)),
             NavigationRailDestination(icon: const Icon(Icons.devices_outlined), label: Text(t.navApps)),
-            NavigationRailDestination(icon: const Icon(Icons.history), label: Text(t.navRegistro)),
+            NavigationRailDestination(icon: const Icon(Icons.memory), label: Text(t.navWorker)),
+            NavigationRailDestination(icon: const Icon(Icons.history), label: Text(t.navRunLog)),
+            NavigationRailDestination(icon: const Icon(Icons.auto_awesome_outlined), label: Text(t.navAssistant)),
           ],
         ),
-        Expanded(child: telas[_indice]),
+        Expanded(child: screens[_index]),
       ]),
     );
   }
 
-  void _preferencias(BuildContext context) {
+  void _preferences(BuildContext context) {
     final p = widget.prefs;
     showDialog<void>(
       context: context,
       builder: (_) => ListenableBuilder(
         listenable: p,
         builder: (context, _) {
-          final t = Textos.of(context);
+          final t = AppText.of(context);
           return AlertDialog(
-            title: Text(t.aparencia),
+            title: Text(t.appearance),
             content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(t.tema, style: Theme.of(context).textTheme.titleSmall),
+              Text(t.theme, style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 8),
               SegmentedButton<ThemeMode>(
                 segments: [
-                  ButtonSegment(value: ThemeMode.system, icon: const Icon(Icons.brightness_auto), label: Text(t.temaSistema)),
-                  ButtonSegment(value: ThemeMode.light, icon: const Icon(Icons.light_mode), label: Text(t.temaClaro)),
-                  ButtonSegment(value: ThemeMode.dark, icon: const Icon(Icons.dark_mode), label: Text(t.temaEscuro)),
+                  ButtonSegment(value: ThemeMode.system, icon: const Icon(Icons.brightness_auto), label: Text(t.themeSystem)),
+                  ButtonSegment(value: ThemeMode.light, icon: const Icon(Icons.light_mode), label: Text(t.themeLight)),
+                  ButtonSegment(value: ThemeMode.dark, icon: const Icon(Icons.dark_mode), label: Text(t.themeDark)),
                 ],
-                selected: {p.tema},
-                onSelectionChanged: (s) => p.definirTema(s.first),
+                selected: {p.theme},
+                onSelectionChanged: (s) => p.setTheme(s.first),
               ),
               const SizedBox(height: 20),
-              Text(t.idioma, style: Theme.of(context).textTheme.titleSmall),
+              Text(t.language, style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 8),
               SegmentedButton<String>(
                 segments: [
-                  ButtonSegment(value: '', label: Text(t.temaSistema)),
-                  for (final (codigo, nome) in idiomas) ButtonSegment(value: codigo, label: Text(nome)),
+                  ButtonSegment(value: '', label: Text(t.themeSystem)),
+                  for (final (code, name) in languages) ButtonSegment(value: code, label: Text(name)),
                 ],
-                selected: {p.idioma?.languageCode ?? ''},
-                onSelectionChanged: (s) => p.definirIdioma(s.first.isEmpty ? null : Locale(s.first)),
+                selected: {p.language?.languageCode ?? ''},
+                onSelectionChanged: (s) => p.setLanguage(s.first.isEmpty ? null : Locale(s.first)),
               ),
             ]),
-            actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(t.fechar))],
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(t.close))],
           );
         },
       ),

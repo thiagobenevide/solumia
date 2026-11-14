@@ -1,15 +1,15 @@
-"""API local do núcleo, usada só pela interface do configurador.
+"""Local API of the core, used only by the configurator interface.
 
-Camadas de proteção:
-- escuta só em 127.0.0.1, em porta aleatória por sessão;
-- token de sessão (256 bits) exigido em toda rota, comparado em tempo constante; o token só é
-  entregue à interface pela saída padrão do processo que ela mesma iniciou;
-- `Host` precisa ser 127.0.0.1/localhost na porta da sessão (bloqueia DNS rebinding);
-- requisição com cabeçalho `Origin` é recusada: navegador nenhum fala com o núcleo;
-- valores do cofre nunca saem pela API (só os nomes); senhas de VPS ficam em memória ligadas a um
-  plano e são descartadas quando ele termina ou expira;
-- plano destrutivo exige o código TOTP da conta para ser aplicado;
-- a aplicação exige o `hash` do plano mostrado: o que roda é exatamente o que a pessoa viu.
+Protection layers:
+- listens only on 127.0.0.1, on a random port per session;
+- session token (256 bits) required on every route, compared in constant time; the token is only
+  handed to the interface through the standard output of the process the interface itself started;
+- `Host` must be 127.0.0.1/localhost on the session port (blocks DNS rebinding);
+- requests with an `Origin` header are refused: no browser talks to the core;
+- vault values never leave through the API (only the names); VPS passwords stay in memory tied to a
+  plan and are discarded when it finishes or expires;
+- a destructive plan requires the account TOTP code to be applied;
+- applying requires the `hash` of the plan shown: what runs is exactly what the person saw.
 """
 
 from __future__ import annotations
@@ -27,90 +27,106 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from . import VERSAO, VERSAO_PROTOCOLO, craft_apps, folders, manifest, names, secret_store, solumia_apps
-from .engine import Execucao, Mascara, Passo, Plano, listar_registro
-from .manifest import Manifesto, Pastas
-from .platform_setup import Sistema, detectar, dir_downloads, dir_estado, pastas_midia_padrao
-from .roles import vps
-from .ssh import SSHErro, ler_impressao_servidor
-from .vault import Cofre, CofreErro
+from . import (
+    PROTOCOL_VERSION,
+    VERSION,
+    assistant,
+    craft_apps,
+    folders,
+    manifest,
+    names,
+    secret_store,
+    self_update,
+    solumia_apps,
+)
+from .engine import Execucao, Mask, Plan, Step, list_runs
+from .manifest import Folders, Manifest
+from .platform_setup import System, default_media_folders, detect, dir_downloads, state_dir
+from .roles import vps, worker
+from .ssh import SSHError, read_server_fingerprint
+from .vault import Vault, VaultError
 
-_VALIDADE_PLANO = 15 * 60
-_CORPO_MAX = 1024 * 1024
+_PLAN_VALIDITY = 15 * 60
+_MAX_BODY = 1024 * 1024
 
 
 @dataclass
-class _PlanoGuardado:
-    plano: Plano
+class _StoredPlan:
+    plano: Plan
     criado: float
     recursos: dict[str, Any] = field(default_factory=dict)
 
 
-class Estado:
-    def __init__(self, caminho_manifesto: Path, cofre: Cofre, sistema: Sistema | None = None) -> None:
-        self.caminho_manifesto = caminho_manifesto
-        self.cofre = cofre
-        self.sistema = sistema or detectar()
-        self.dir_registro = dir_estado(self.sistema) / "registro"
-        self.planos: dict[str, _PlanoGuardado] = {}
-        self.execucoes: dict[str, Execucao] = {}
+class State:
+    def __init__(self, path_manifest: Path, vault: Vault, system: System | None = None) -> None:
+        self.manifest_path = path_manifest
+        self.cofre = vault
+        self.sistema = system or detect()
+        self.runs_dir = state_dir(self.sistema) / "registro"
+        self.plans: dict[str, _StoredPlan] = {}
+        self.executions: dict[str, Execucao] = {}
         self.lock = threading.Lock()
-        self.mascara = Mascara(cofre.valores_sensiveis)
+        self.mask = Mask(vault.sensitive_values)
+        self.conversation = assistant.Conversation()
 
-    def manifesto(self) -> Manifesto:
-        if not self.caminho_manifesto.exists():
-            return Manifesto()
-        return manifest.carregar(self.caminho_manifesto)
+    def manifest(self) -> Manifest:
+        if not self.manifest_path.exists():
+            return Manifest()
+        return manifest.load(self.manifest_path)
 
-    def guardar_plano(self, plano: Plano, recursos: dict[str, Any] | None = None) -> dict[str, Any]:
+    def store_plan(self, plan: Plan, recursos: dict[str, Any] | None = None) -> dict[str, Any]:
         with self.lock:
-            agora = time.time()
-            for pid in [p for p, g in self.planos.items() if agora - g.criado > _VALIDADE_PLANO]:
-                del self.planos[pid]
-            self.planos[plano.id] = _PlanoGuardado(plano, agora, recursos or {})
-        return plano.resumo()
+            now = time.time()
+            for pid in [p for p, g in self.plans.items() if now - g.criado > _PLAN_VALIDITY]:
+                del self.plans[pid]
+            self.plans[plan.id] = _StoredPlan(plan, now, recursos or {})
+        return plan.summary()
 
 
-class ContaEntrada(BaseModel):
+class AccountInput(BaseModel):
     usuario: str = Field(min_length=3, max_length=32)
     senha: str = Field(min_length=1, max_length=256)
 
 
-class PastasEntrada(BaseModel):
-    pastas: Pastas
+class FoldersInput(BaseModel):
+    pastas: Folders
     windows: bool | None = None  # None = sistema deste host
     local: bool = True
 
 
-class CraftEntrada(BaseModel):
+class CraftInput(BaseModel):
     versao: str = "ultima"
     formato: str = "auto"
 
 
-class AppSolumiaEntrada(BaseModel):
+class SolumiaAppInput(BaseModel):
     versao: str = "ultima"
     instalar: bool = False
 
 
-class ImpressaoEntrada(BaseModel):
+class FingerprintInput(BaseModel):
     host: str
     porta: int = 22
 
 
-class VPSEntrada(BaseModel):
+class VPSInput(BaseModel):
     senha: str | None = Field(default=None, max_length=256)
     senha_sudo: str | None = Field(default=None, max_length=256)
     desativar_login_por_senha: bool = True
     nginx: str = Field(default="auto", pattern="^(auto|docker|host)$")
 
 
-class AplicarEntrada(BaseModel):
+class QuestionInput(BaseModel):
+    pergunta: str = Field(min_length=1, max_length=assistant.MAX_QUESTION)
+
+
+class ApplyInput(BaseModel):
     hash: str
     totp: str | None = None
 
 
-def criar_app(estado: Estado, token: str, porta: int) -> FastAPI:
-    app = FastAPI(title="Solumia configurador (núcleo)", version=VERSAO, docs_url=None, redoc_url=None,
+def create_app(state: State, token: str, porta: int) -> FastAPI:
+    app = FastAPI(title="Solumia configurador (núcleo)", version=VERSION, docs_url=None, redoc_url=None,
                   openapi_url=None)
     hosts = {f"127.0.0.1:{porta}", f"localhost:{porta}"}
 
@@ -120,240 +136,285 @@ def criar_app(estado: Estado, token: str, porta: int) -> FastAPI:
             return JSONResponse({"detail": "host recusado"}, status_code=421)
         if "origin" in request.headers:
             return JSONResponse({"detail": "origem recusada"}, status_code=403)
-        tamanho = request.headers.get("content-length")
-        if tamanho and int(tamanho) > _CORPO_MAX:
+        size = request.headers.get("content-length")
+        if size and int(size) > _MAX_BODY:
             return JSONResponse({"detail": "corpo grande demais"}, status_code=413)
-        enviado = request.headers.get("authorization", "")
-        if not hmac.compare_digest(enviado.encode(), f"Bearer {token}".encode()):
+        sent = request.headers.get("authorization", "")
+        if not hmac.compare_digest(sent.encode(), f"Bearer {token}".encode()):
             return JSONResponse({"detail": "token inválido"}, status_code=401)
-        resposta = await call_next(request)
-        resposta.headers["Cache-Control"] = "no-store"
-        return resposta
+        answer = await call_next(request)
+        answer.headers["Cache-Control"] = "no-store"
+        return answer
 
-    def e() -> Estado:
-        return estado
+    def e() -> State:
+        return state
 
     # --- geral -----------------------------------------------------------------------------------
     @app.get("/saude")
-    def saude(s: Estado = Depends(e)) -> dict[str, Any]:
-        return {"versao": VERSAO, "protocolo": VERSAO_PROTOCOLO, "so": s.sistema.so,
-                "arquitetura": s.sistema.arquitetura, "manifesto": str(s.caminho_manifesto),
-                "nomes": {"prefixo": names.PREFIXO, "porta_gateway": names.PORTA_GATEWAY_HOST,
-                          "porta_tunel": names.PORTA_TUNEL_SSH}}
+    def saude(s: State = Depends(e)) -> dict[str, Any]:
+        return {"versao": VERSION, "protocolo": PROTOCOL_VERSION, "so": s.sistema.so,
+                "arquitetura": s.sistema.arquitetura, "manifesto": str(s.manifest_path),
+                "nomes": {"prefixo": names.PREFIX, "porta_gateway": names.GATEWAY_HOST_PORT,
+                          "porta_tunel": names.SSH_TUNNEL_PORT}}
 
     @app.get("/manifesto")
-    def ler_manifesto(s: Estado = Depends(e)) -> dict[str, Any]:
-        return s.manifesto().model_dump(mode="json")
+    def ler_manifesto(s: State = Depends(e)) -> dict[str, Any]:
+        return s.manifest().model_dump(mode="json")
 
     @app.put("/manifesto")
-    def gravar_manifesto(dados: dict[str, Any] = Body(...), s: Estado = Depends(e)) -> dict[str, Any]:
+    def gravar_manifesto(dados: dict[str, Any] = Body(...), s: State = Depends(e)) -> dict[str, Any]:
         try:
-            m = Manifesto.model_validate(dados)
-        except ValueError as erro:
-            raise HTTPException(422, str(erro)) from erro
-        manifest.salvar(m, s.caminho_manifesto)
+            m = Manifest.model_validate(dados)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        manifest.save(m, s.manifest_path)
         return m.model_dump(mode="json")
 
     @app.get("/cofre")
-    def cofre_nomes(s: Estado = Depends(e)) -> dict[str, Any]:
-        return {"segredos": s.cofre.nomes()}
+    def cofre_nomes(s: State = Depends(e)) -> dict[str, Any]:
+        return {"segredos": s.cofre.names()}
 
     # --- conta -----------------------------------------------------------------------------------
     @app.post("/conta")
-    def conta(dados: ContaEntrada, s: Estado = Depends(e)) -> dict[str, Any]:
-        problemas = secret_store.validar_senha(dados.senha)
-        if problemas:
-            raise HTTPException(422, "senha fraca: " + "; ".join(problemas))
-        m = s.manifesto()
+    def conta(dados: AccountInput, s: State = Depends(e)) -> dict[str, Any]:
+        problems = secret_store.check_password(dados.senha)
+        if problems:
+            raise HTTPException(422, "senha fraca: " + "; ".join(problems))
+        m = s.manifest()
         m.conta.usuario = dados.usuario
-        manifest.salvar(Manifesto.model_validate(m.model_dump()), s.caminho_manifesto)
-        s.cofre.definir(secret_store.SENHA_HASH, secret_store.hash_senha(dados.senha))
-        novo = not s.cofre.obter(secret_store.TOTP)
-        resposta: dict[str, Any] = {"usuario": dados.usuario, "totp_novo": novo}
-        if novo:
-            segredo = secret_store.segredo_totp()
-            s.cofre.definir(secret_store.TOTP, segredo)
-            # Única vez em que o segredo TOTP sai do núcleo: para o QR do Google Authenticator.
-            resposta["totp_uri"] = secret_store.uri_totp(segredo, dados.usuario)
-        return resposta
+        manifest.save(Manifest.model_validate(m.model_dump()), s.manifest_path)
+        s.cofre.definir(secret_store.PASSWORD_HASH, secret_store.hash_password(dados.senha))
+        new = not s.cofre.obter(secret_store.TOTP)
+        answer: dict[str, Any] = {"usuario": dados.usuario, "totp_novo": new}
+        if new:
+            secret = secret_store.totp_secret()
+            s.cofre.definir(secret_store.TOTP, secret)
+            # The only time the TOTP secret leaves the core: for the Google Authenticator QR code.
+            answer["totp_uri"] = secret_store.uri_totp(secret, dados.usuario)
+        return answer
 
     @app.post("/conta/totp/conferir")
-    def conferir_totp(codigo: str = Body(..., embed=True), s: Estado = Depends(e)) -> dict[str, bool]:
-        return {"ok": secret_store.conferir_totp(s.cofre.obter(secret_store.TOTP) or "", codigo)}
+    def conferir_totp(codigo: str = Body(..., embed=True), s: State = Depends(e)) -> dict[str, bool]:
+        return {"ok": secret_store.check_totp(s.cofre.obter(secret_store.TOTP) or "", codigo)}
 
-    # --- pastas de mídia ---------------------------------------------------------------------------
+    # --- media folders ------------------------------------------------------------------------------
     @app.get("/pastas/padrao")
-    def pastas_padrao(s: Estado = Depends(e)) -> dict[str, Any]:
-        return {"pastas": pastas_midia_padrao(s.sistema), "rotulos": folders.ROTULOS}
+    def pastas_padrao(s: State = Depends(e)) -> dict[str, Any]:
+        return {"pastas": default_media_folders(s.sistema), "rotulos": folders.LABELS}
 
     @app.post("/pastas/validar")
-    def validar_pastas(dados: PastasEntrada, s: Estado = Depends(e)) -> dict[str, Any]:
+    def validar_pastas(dados: FoldersInput, s: State = Depends(e)) -> dict[str, Any]:
         windows = s.sistema.windows if dados.windows is None else dados.windows
-        r = folders.validar(dados.pastas, windows=windows, local=dados.local)
+        r = folders.validate(dados.pastas, windows=windows, local=dados.local)
         return {"ok": r.ok, "erros": r.erros, "avisos": r.avisos, "resolvidas": r.resolvidas}
 
     @app.post("/pastas/{no}/plano")
-    def plano_pastas(no: str, s: Estado = Depends(e)) -> dict[str, Any]:
-        m = s.manifesto()
-        alvo = m.nos.get(no)
-        if alvo is None or alvo.pastas is None:
+    def plano_pastas(no: str, s: State = Depends(e)) -> dict[str, Any]:
+        m = s.manifest()
+        target = m.nos.get(no)
+        if target is None or target.pastas is None:
             raise HTTPException(404, "nó sem pastas definidas")
-        if alvo.endereco != "local":
+        if target.endereco != "local":
             raise HTTPException(422, "pastas de nó remoto são criadas pela instalação do nó")
-        r = folders.validar(alvo.pastas, windows=s.sistema.windows)
+        r = folders.validate(target.pastas, windows=s.sistema.windows)
         if not r.ok:
             raise HTTPException(422, {"erros": r.erros})
-        definidas = alvo.pastas
+        defined = target.pastas
 
         def criar(ctx) -> None:  # noqa: ANN001
-            for c in folders.criar(definidas):
+            for c in folders.create(defined):
                 ctx.log(f"Criada: {c}")
 
-        return s.guardar_plano(Plano(f"Criar pastas de mídia do nó {no}", [
-            Passo("pastas", "Criar pastas de mídia que faltam", ", ".join(r.resolvidas.values()), criar)]))
+        return s.store_plan(Plan(f"Criar pastas de mídia do nó {no}", [
+            Step("pastas", "Criar pastas de mídia que faltam", ", ".join(r.resolvidas.values()), criar)]))
+
+    # --- configurator update ------------------------------------------------------------------------
+    @app.post("/configurador/atualizar/plano")
+    def plano_atualizar(s: State = Depends(e)) -> dict[str, Any]:
+        try:
+            return s.store_plan(self_update.plan(s.sistema))
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
 
     # --- Craft Apps ----------------------------------------------------------------------------------
     @app.get("/craft-apps")
-    def listar_craft(s: Estado = Depends(e)) -> dict[str, Any]:
+    def listar_craft(s: State = Depends(e)) -> dict[str, Any]:
         inst = craft_apps.instalados()
-        m = s.manifesto()
+        m = s.manifest()
         return {"apps": [
             {"id": a.id, "nome": a.nome, "descricao": a.descricao, "github": a.url_github,
              "releases": a.url_releases, "instalado": inst.get(a.id),
              "config": (m.craft_apps.get(a.id) or manifest.CraftApp()).model_dump()}
-            for a in craft_apps.CATALOGO.values()
+            for a in craft_apps.CATALOG.values()
         ]}
 
     @app.get("/craft-apps/{app_id}/release")
-    def release_craft(app_id: str, versao: str = "ultima", s: Estado = Depends(e)) -> dict[str, Any]:
+    def release_craft(app_id: str, versao: str = "ultima", s: State = Depends(e)) -> dict[str, Any]:
         try:
-            r = craft_apps.buscar_release(app_id, versao)
-            arquivo = craft_apps.nome_arquivo(app_id, r.versao, s.sistema)
-        except craft_apps.CraftErro as erro:
-            raise HTTPException(422, str(erro)) from erro
-        return {"versao": r.versao, "publicada_em": r.publicada_em, "arquivo": arquivo,
-                "disponivel": arquivo in r.arquivos}
+            r = craft_apps.fetch_release(app_id, versao)
+            file = craft_apps.file_name(app_id, r.versao, s.sistema)
+        except craft_apps.CraftError as error:
+            raise HTTPException(422, str(error)) from error
+        return {"versao": r.versao, "publicada_em": r.publicada_em, "arquivo": file,
+                "disponivel": file in r.arquivos}
 
     @app.post("/craft-apps/{app_id}/plano")
-    def plano_craft(app_id: str, dados: CraftEntrada, s: Estado = Depends(e)) -> dict[str, Any]:
-        if app_id not in craft_apps.CATALOGO:
+    def plano_craft(app_id: str, dados: CraftInput, s: State = Depends(e)) -> dict[str, Any]:
+        if app_id not in craft_apps.CATALOG:
             raise HTTPException(404, "app fora do catálogo")
-        app_c = craft_apps.CATALOGO[app_id]
+        app_c = craft_apps.CATALOG[app_id]
 
         def instalar(ctx) -> None:  # noqa: ANN001
-            def progresso(lido: int, total: int | None) -> None:
-                if total and lido == total or lido % (50 << 20) < (1 << 20):
-                    ctx.log(f"  {lido >> 20} MiB" + (f" de {total >> 20} MiB" if total else ""))
-            craft_apps.instalar(app_id, s.sistema, dados.versao, dados.formato, log=ctx.log, progresso=progresso)
+            def progresso(read: int, total: int | None) -> None:
+                if total and read == total or read % (50 << 20) < (1 << 20):
+                    ctx.log(f"  {read >> 20} MiB" + (f" de {total >> 20} MiB" if total else ""))
+            craft_apps.install(app_id, s.sistema, dados.versao, dados.formato, log=ctx.log, progresso=progresso)
 
-        return s.guardar_plano(Plano(f"Baixar e instalar {app_c.nome}", [
-            Passo("instalar", f"Baixar {app_c.nome} de {app_c.url_releases}",
+        return s.store_plan(Plan(f"Baixar e instalar {app_c.nome}", [
+            Step("instalar", f"Baixar {app_c.nome} de {app_c.url_releases}",
                   "assinatura (chave fixada) e SHA-256 conferidos antes de instalar", instalar)]))
 
-    # --- Apps do Solumia (celular, relógio, PC/notebook) ------------------------------------------
+    # --- Solumia apps (phone, watch, PC/laptop) --------------------------------------------------
     @app.get("/apps-solumia")
-    def listar_apps_solumia(s: Estado = Depends(e)) -> dict[str, Any]:
+    def listar_apps_solumia(s: State = Depends(e)) -> dict[str, Any]:
         resp: dict[str, Any] = {
             "releases": solumia_apps.url_releases(),
-            "assinatura_fixada": bool(solumia_apps.IMPRESSOES_SOLUMIA),
+            "assinatura_fixada": bool(solumia_apps.SOLUMIA_FINGERPRINTS),
             "pasta": str(dir_downloads(s.sistema)),
             "versao": None, "erro": None,
         }
         release = None
         try:
-            release = solumia_apps.buscar()
+            release = solumia_apps.fetch()
             resp["versao"] = release.versao
-        except (craft_apps.CraftErro, httpx.HTTPError) as erro:
-            resp["erro"] = str(erro)
+        except (craft_apps.CraftError, httpx.HTTPError) as error:
+            resp["erro"] = str(error)
         apps = []
-        for a in solumia_apps.CATALOGO.values():
-            arquivo = a.arquivo(release.versao) if release else None
+        for a in solumia_apps.CATALOG.values():
+            file = a.arquivo(release.versao) if release else None
             apps.append({"id": a.id, "dispositivo": a.dispositivo,
-                         "instala_aqui": solumia_apps.instala_aqui(a, s.sistema), "arquivo": arquivo,
-                         "url": release.arquivos.get(arquivo) if release and arquivo else None})
+                         "instala_aqui": solumia_apps.installs_here(a, s.sistema), "arquivo": file,
+                         "url": release.arquivos.get(file) if release and file else None})
         resp["apps"] = apps
         return resp
 
     @app.post("/apps-solumia/{app_id}/plano")
-    def plano_app_solumia(app_id: str, dados: AppSolumiaEntrada, s: Estado = Depends(e)) -> dict[str, Any]:
-        if app_id not in solumia_apps.CATALOGO:
+    def plano_app_solumia(app_id: str, dados: SolumiaAppInput, s: State = Depends(e)) -> dict[str, Any]:
+        if app_id not in solumia_apps.CATALOG:
             raise HTTPException(404, "app fora do catálogo")
-        a = solumia_apps.CATALOGO[app_id]
-        if dados.instalar and not solumia_apps.instala_aqui(a, s.sistema):
+        a = solumia_apps.CATALOG[app_id]
+        if dados.instalar and not solumia_apps.installs_here(a, s.sistema):
             raise HTTPException(422, "este app não é para este sistema")
 
         def baixar(ctx) -> None:  # noqa: ANN001
-            def progresso(lido: int, total: int | None) -> None:
-                if total and lido == total or lido % (50 << 20) < (1 << 20):
-                    ctx.log(f"  {lido >> 20} MiB" + (f" de {total >> 20} MiB" if total else ""))
-            solumia_apps.baixar(app_id, s.sistema, dados.versao, dados.instalar, log=ctx.log, progresso=progresso)
+            def progresso(read: int, total: int | None) -> None:
+                if total and read == total or read % (50 << 20) < (1 << 20):
+                    ctx.log(f"  {read >> 20} MiB" + (f" de {total >> 20} MiB" if total else ""))
+            solumia_apps.download(app_id, s.sistema, dados.versao, dados.instalar, log=ctx.log, progresso=progresso)
 
-        acao = "Baixar e instalar" if dados.instalar else "Baixar"
-        return s.guardar_plano(Plano(f"{acao} Solumia ({app_id})", [
-            Passo("baixar", f"{acao} {a.modelo.format(v='X.Y.Z')} de {solumia_apps.url_releases()}",
+        action = "Baixar e instalar" if dados.instalar else "Baixar"
+        return s.store_plan(Plan(f"{action} Solumia ({app_id})", [
+            Step("baixar", f"{action} {a.modelo.format(v='X.Y.Z')} de {solumia_apps.url_releases()}",
                   f"assinatura (chave fixada) e SHA-256 conferidos; salvo em {dir_downloads(s.sistema)}", baixar)]))
 
     # --- VPS -----------------------------------------------------------------------------------------
     @app.post("/vps/impressao")
-    def impressao(dados: ImpressaoEntrada) -> dict[str, str]:
+    def impressao(dados: FingerprintInput) -> dict[str, str]:
         try:
-            manifest.AcessoSSH(host=dados.host, porta=dados.porta)
-            return ler_impressao_servidor(dados.host, dados.porta)
-        except (ValueError, OSError, SSHErro) as erro:
-            raise HTTPException(422, f"não consegui ler a chave do servidor: {erro}") from erro
+            manifest.SSHAccess(host=dados.host, porta=dados.porta)
+            return read_server_fingerprint(dados.host, dados.porta)
+        except (ValueError, OSError, SSHError) as error:
+            raise HTTPException(422, f"não consegui ler a chave do servidor: {error}") from error
 
     @app.post("/vps/plano")
-    def plano_vps(dados: VPSEntrada, s: Estado = Depends(e)) -> dict[str, Any]:
-        opcoes = vps.OpcoesVPS(dados.senha or None, dados.senha_sudo or None,
+    def plano_vps(dados: VPSInput, s: State = Depends(e)) -> dict[str, Any]:
+        options = vps.VPSOptions(dados.senha or None, dados.senha_sudo or None,
                                dados.desativar_login_por_senha, dados.nginx)
         try:
-            p = vps.plano(s.manifesto(), s.cofre, opcoes)
-        except (ValueError, CofreErro) as erro:
-            raise HTTPException(422, str(erro)) from erro
-        # As senhas desta requisição vivem só dentro do plano (closures) e somem com ele.
-        return s.guardar_plano(p)
+            p = vps.plan(s.manifest(), s.cofre, options)
+        except (ValueError, VaultError) as error:
+            raise HTTPException(422, str(error)) from error
+        # The passwords of this request live only inside the plan (closures) and go away with it.
+        return s.store_plan(p)
 
-    # --- aplicação ------------------------------------------------------------------------------------
+    # --- worker on this PC -----------------------------------------------------------------------
+    @app.get("/worker")
+    def estado_worker() -> dict[str, Any]:
+        return worker.status()
+
+    @app.post("/worker/plano")
+    def plano_worker(s: State = Depends(e)) -> dict[str, Any]:
+        try:
+            p = worker.plan(s.manifest(), s.cofre, s.sistema)
+        except (ValueError, VaultError) as error:
+            raise HTTPException(422, str(error)) from error
+        return s.store_plan(p)
+
+    # --- Claude assistant --------------------------------------------------------------------------
+    def contexto_assistente(s: State) -> str:
+        return assistant.state_text(s.manifest(), s.cofre.names(), s.sistema, s.runs_dir, s.mask)
+
+    @app.get("/assistente")
+    def assistente(s: State = Depends(e)) -> dict[str, Any]:
+        with s.conversation.lock:
+            turns = list(s.conversation.turns)
+        return {"disponivel": assistant.find_claude() is not None, "contexto": contexto_assistente(s),
+                "historico": turns}
+
+    @app.post("/assistente/perguntar")
+    def perguntar(dados: QuestionInput, s: State = Depends(e)) -> dict[str, Any]:
+        try:
+            return assistant.answer(dados.pergunta, s.conversation, contexto_assistente(s), s.manifest(), s.mask)
+        except assistant.AssistantError as error:
+            raise HTTPException(502, str(error)) from error
+
+    @app.post("/assistente/limpar")
+    def limpar_assistente(s: State = Depends(e)) -> dict[str, bool]:
+        s.conversation.clear()
+        return {"ok": True}
+
+    # --- apply -----------------------------------------------------------------------------------------
+
     @app.post("/planos/{plano_id}/aplicar")
-    def aplicar(plano_id: str, dados: AplicarEntrada, s: Estado = Depends(e)) -> dict[str, Any]:
+    def aplicar(plano_id: str, dados: ApplyInput, s: State = Depends(e)) -> dict[str, Any]:
         with s.lock:
-            guardado = s.planos.pop(plano_id, None)
-        if guardado is None:
+            stored = s.plans.pop(plano_id, None)
+        if stored is None:
             raise HTTPException(404, "plano não encontrado ou expirado; gere de novo")
-        if not hmac.compare_digest(guardado.plano.hash, dados.hash):
+        if not hmac.compare_digest(stored.plano.hash, dados.hash):
             raise HTTPException(409, "o plano mudou desde que foi mostrado")
-        if guardado.plano.destrutivo and not secret_store.conferir_totp(s.cofre.obter(secret_store.TOTP) or "",
+        if stored.plano.destrutivo and not secret_store.check_totp(s.cofre.obter(secret_store.TOTP) or "",
                                                                     dados.totp or ""):
             raise HTTPException(403, "ação destrutiva: confirme com o código do autenticador")
-        if any(x.estado == "rodando" for x in s.execucoes.values()):
+        if any(x.state == "rodando" for x in s.executions.values()):
             raise HTTPException(409, "já há uma aplicação em andamento")
-        recursos = {**guardado.recursos, "_mascara": s.mascara}
-        ex = Execucao(guardado.plano, s.dir_registro, s.mascara, recursos)
-        s.execucoes[ex.id] = ex
+        resources = {**stored.recursos, "_mascara": s.mask}
+        ex = Execucao(stored.plano, s.runs_dir, s.mask, resources)
+        s.executions[ex.id] = ex
         ex.iniciar()
-        return ex.resumo()
+        return ex.summary()
 
     @app.get("/execucoes/{exec_id}")
-    def execucao(exec_id: str, desde: int = 0, s: Estado = Depends(e)) -> dict[str, Any]:
-        ex = s.execucoes.get(exec_id)
+    def execucao(exec_id: str, desde: int = 0, s: State = Depends(e)) -> dict[str, Any]:
+        ex = s.executions.get(exec_id)
         if ex is None:
             raise HTTPException(404, "execução não encontrada")
-        return {**ex.resumo(), "novos": ex.eventos_desde(max(desde, 0))}
+        return {**ex.summary(), "novos": ex.events_since(max(desde, 0))}
 
     @app.post("/execucoes/{exec_id}/cancelar")
-    def cancelar(exec_id: str, s: Estado = Depends(e)) -> dict[str, str]:
-        ex = s.execucoes.get(exec_id)
+    def cancelar(exec_id: str, s: State = Depends(e)) -> dict[str, str]:
+        ex = s.executions.get(exec_id)
         if ex is None:
             raise HTTPException(404, "execução não encontrada")
-        ex.cancelar()
+        ex.cancel()
         return {"estado": "cancelando"}
 
     @app.get("/registro")
-    def registro(s: Estado = Depends(e)) -> dict[str, Any]:
-        return {"execucoes": listar_registro(s.dir_registro)}
+    def registro(s: State = Depends(e)) -> dict[str, Any]:
+        return {"execucoes": list_runs(s.runs_dir)}
 
     return app
 
 
-def novo_token() -> str:
+def new_token() -> str:
     return secrets.token_urlsafe(32)

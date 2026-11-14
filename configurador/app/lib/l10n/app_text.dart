@@ -5,25 +5,25 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
-import 'textos_en.dart';
-import 'textos_es.dart';
-import 'textos_pt.dart';
+import 'app_text_en.dart';
+import 'app_text_es.dart';
+import 'app_text_pt.dart';
 
 // ignore_for_file: type=lint
 
-/// Callers can lookup localized strings with an instance of Textos
-/// returned by `Textos.of(context)`.
+/// Callers can lookup localized strings with an instance of AppText
+/// returned by `AppText.of(context)`.
 ///
-/// Applications need to include `Textos.delegate()` in their app's
+/// Applications need to include `AppText.delegate()` in their app's
 /// `localizationDelegates` list, and the locales they support in the app's
 /// `supportedLocales` list. For example:
 ///
 /// ```dart
-/// import 'l10n/textos.dart';
+/// import 'l10n/app_text.dart';
 ///
 /// return MaterialApp(
-///   localizationsDelegates: Textos.localizationsDelegates,
-///   supportedLocales: Textos.supportedLocales,
+///   localizationsDelegates: AppText.localizationsDelegates,
+///   supportedLocales: AppText.supportedLocales,
 ///   home: MyApplicationHome(),
 /// );
 /// ```
@@ -60,19 +60,19 @@ import 'textos_pt.dart';
 /// Select and expand the newly-created Localizations item then, for each
 /// locale your application supports, add a new item and select the locale
 /// you wish to add from the pop-up menu in the Value field. This list should
-/// be consistent with the languages listed in the Textos.supportedLocales
+/// be consistent with the languages listed in the AppText.supportedLocales
 /// property.
-abstract class Textos {
-  Textos(String locale)
+abstract class AppText {
+  AppText(String locale)
     : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
-  static Textos of(BuildContext context) {
-    return Localizations.of<Textos>(context, Textos)!;
+  static AppText of(BuildContext context) {
+    return Localizations.of<AppText>(context, AppText)!;
   }
 
-  static const LocalizationsDelegate<Textos> delegate = _TextosDelegate();
+  static const LocalizationsDelegate<AppText> delegate = _AppTextDelegate();
 
   /// A list of this localizations delegate along with the default localizations
   /// delegates.
@@ -99,35 +99,35 @@ abstract class Textos {
     Locale('pt'),
   ];
 
-  /// No description provided for @appTitulo.
+  /// No description provided for @appTitle.
   ///
   /// In pt, this message translates to:
   /// **'Solumia: configurador'**
-  String get appTitulo;
+  String get appTitle;
 
-  /// No description provided for @iniciandoNucleo.
+  /// No description provided for @startingCore.
   ///
   /// In pt, this message translates to:
   /// **'Abrindo o cofre e iniciando o núcleo…'**
-  String get iniciandoNucleo;
+  String get startingCore;
 
-  /// No description provided for @tentarDeNovo.
+  /// No description provided for @tryAgain.
   ///
   /// In pt, this message translates to:
   /// **'Tentar de novo'**
-  String get tentarDeNovo;
+  String get tryAgain;
 
-  /// No description provided for @navInicio.
+  /// No description provided for @navHome.
   ///
   /// In pt, this message translates to:
   /// **'Início'**
-  String get navInicio;
+  String get navHome;
 
-  /// No description provided for @navConta.
+  /// No description provided for @navAccount.
   ///
   /// In pt, this message translates to:
   /// **'Conta'**
-  String get navConta;
+  String get navAccount;
 
   /// No description provided for @navVps.
   ///
@@ -135,11 +135,11 @@ abstract class Textos {
   /// **'VPS'**
   String get navVps;
 
-  /// No description provided for @navPastas.
+  /// No description provided for @navFolders.
   ///
   /// In pt, this message translates to:
   /// **'Pastas'**
-  String get navPastas;
+  String get navFolders;
 
   /// No description provided for @navCraft.
   ///
@@ -153,100 +153,100 @@ abstract class Textos {
   /// **'Apps'**
   String get navApps;
 
-  /// No description provided for @navRegistro.
+  /// No description provided for @navRunLog.
   ///
   /// In pt, this message translates to:
   /// **'Registro'**
-  String get navRegistro;
+  String get navRunLog;
 
-  /// No description provided for @aparencia.
+  /// No description provided for @appearance.
   ///
   /// In pt, this message translates to:
   /// **'Aparência'**
-  String get aparencia;
+  String get appearance;
 
-  /// No description provided for @tema.
+  /// No description provided for @theme.
   ///
   /// In pt, this message translates to:
   /// **'Tema'**
-  String get tema;
+  String get theme;
 
-  /// No description provided for @temaSistema.
+  /// No description provided for @themeSystem.
   ///
   /// In pt, this message translates to:
   /// **'Do sistema'**
-  String get temaSistema;
+  String get themeSystem;
 
-  /// No description provided for @temaClaro.
+  /// No description provided for @themeLight.
   ///
   /// In pt, this message translates to:
   /// **'Claro'**
-  String get temaClaro;
+  String get themeLight;
 
-  /// No description provided for @temaEscuro.
+  /// No description provided for @themeDark.
   ///
   /// In pt, this message translates to:
   /// **'Escuro'**
-  String get temaEscuro;
+  String get themeDark;
 
-  /// No description provided for @idioma.
+  /// No description provided for @language.
   ///
   /// In pt, this message translates to:
   /// **'Idioma'**
-  String get idioma;
+  String get language;
 
-  /// No description provided for @inicioVersao.
+  /// No description provided for @homeVersion.
   ///
   /// In pt, this message translates to:
   /// **'Configurador {versao} · protocolo {protocolo} · {so} {arquitetura}'**
-  String inicioVersao(
+  String homeVersion(
     Object versao,
     Object protocolo,
     Object so,
     Object arquitetura,
   );
 
-  /// No description provided for @inicioManifesto.
+  /// No description provided for @homeManifest.
   ///
   /// In pt, this message translates to:
   /// **'Manifesto: {caminho}'**
-  String inicioManifesto(Object caminho);
+  String homeManifest(Object caminho);
 
-  /// No description provided for @itemConta.
+  /// No description provided for @itemAccount.
   ///
   /// In pt, this message translates to:
   /// **'Conta e autenticador'**
-  String get itemConta;
+  String get itemAccount;
 
-  /// No description provided for @itemContaDetalhe.
+  /// No description provided for @itemAccountDetail.
   ///
   /// In pt, this message translates to:
   /// **'Usuário, senha e 2º fator'**
-  String get itemContaDetalhe;
+  String get itemAccountDetail;
 
-  /// No description provided for @itemVpsDetalhe.
+  /// No description provided for @itemVpsDetail.
   ///
   /// In pt, this message translates to:
   /// **'Endereço e domínio'**
-  String get itemVpsDetalhe;
+  String get itemVpsDetail;
 
-  /// No description provided for @itemPastas.
+  /// No description provided for @itemFolders.
   ///
   /// In pt, this message translates to:
   /// **'Pastas de mídia'**
-  String get itemPastas;
+  String get itemFolders;
 
-  /// No description provided for @itemPastasDetalhe.
+  /// No description provided for @itemFoldersDetail.
   ///
   /// In pt, this message translates to:
   /// **'Imagens, vídeos, áudio, produção'**
-  String get itemPastasDetalhe;
+  String get itemFoldersDetail;
 
-  /// No description provided for @itemCraftDetalhe.
+  /// No description provided for @itemCraftDetail.
   ///
   /// In pt, this message translates to:
   /// **'{instalados} de {total} instalados'**
-  String itemCraftDetalhe(int instalados, int total);
+  String itemCraftDetail(int instalados, int total);
 
   /// No description provided for @itemApps.
   ///
@@ -254,89 +254,89 @@ abstract class Textos {
   /// **'Apps Solumia'**
   String get itemApps;
 
-  /// No description provided for @itemAppsDetalhe.
+  /// No description provided for @itemAppsDetail.
   ///
   /// In pt, this message translates to:
   /// **'Celular, relógio, PC e notebook'**
-  String get itemAppsDetalhe;
+  String get itemAppsDetail;
 
-  /// No description provided for @inicioConvivencia.
+  /// No description provided for @homeCoexistence.
   ///
   /// In pt, this message translates to:
   /// **'Serviços do Solumia usam nomes e portas próprios (prefixo {prefixo}, gateway {gateway}, túnel {tunel}) e não interferem na instalação atual.'**
-  String inicioConvivencia(Object prefixo, Object gateway, Object tunel);
+  String homeCoexistence(Object prefixo, Object gateway, Object tunel);
 
-  /// No description provided for @contaTitulo.
+  /// No description provided for @accountTitle.
   ///
   /// In pt, this message translates to:
   /// **'Conta de acesso'**
-  String get contaTitulo;
+  String get accountTitle;
 
-  /// No description provided for @contaDescricao.
+  /// No description provided for @accountDescription.
   ///
   /// In pt, this message translates to:
   /// **'Usuário e senha do app, com segundo fator (Google Authenticator ou similar). A senha nunca sai deste computador: só o hash vai para a VPS.'**
-  String get contaDescricao;
+  String get accountDescription;
 
-  /// No description provided for @usuario.
+  /// No description provided for @user.
   ///
   /// In pt, this message translates to:
   /// **'Usuário'**
-  String get usuario;
+  String get user;
 
-  /// No description provided for @senha.
+  /// No description provided for @password.
   ///
   /// In pt, this message translates to:
   /// **'Senha'**
-  String get senha;
+  String get password;
 
-  /// No description provided for @senhaAjuda.
+  /// No description provided for @passwordHelp.
   ///
   /// In pt, this message translates to:
   /// **'Mínimo 12 caracteres, maiúsculas, minúsculas e número'**
-  String get senhaAjuda;
+  String get passwordHelp;
 
-  /// No description provided for @confirmarSenha.
+  /// No description provided for @confirmPassword.
   ///
   /// In pt, this message translates to:
   /// **'Confirmar senha'**
-  String get confirmarSenha;
+  String get confirmPassword;
 
-  /// No description provided for @salvarConta.
+  /// No description provided for @saveAccount.
   ///
   /// In pt, this message translates to:
   /// **'Salvar conta'**
-  String get salvarConta;
+  String get saveAccount;
 
-  /// No description provided for @senhasNaoConferem.
+  /// No description provided for @passwordsDoNotMatch.
   ///
   /// In pt, this message translates to:
   /// **'As senhas não conferem'**
-  String get senhasNaoConferem;
+  String get passwordsDoNotMatch;
 
-  /// No description provided for @contaSalva.
+  /// No description provided for @accountSaved.
   ///
   /// In pt, this message translates to:
   /// **'Conta salva no cofre (só o hash da senha)'**
-  String get contaSalva;
+  String get accountSaved;
 
-  /// No description provided for @qrInstrucao.
+  /// No description provided for @qrInstruction.
   ///
   /// In pt, this message translates to:
   /// **'Escaneie no autenticador. Este QR só aparece agora: ele não é mostrado de novo.'**
-  String get qrInstrucao;
+  String get qrInstruction;
 
-  /// No description provided for @codigo6.
+  /// No description provided for @code6.
   ///
   /// In pt, this message translates to:
   /// **'Código de 6 dígitos'**
-  String get codigo6;
+  String get code6;
 
-  /// No description provided for @conferir.
+  /// No description provided for @check.
   ///
   /// In pt, this message translates to:
   /// **'Conferir'**
-  String get conferir;
+  String get check;
 
   /// No description provided for @totpOk.
   ///
@@ -344,47 +344,47 @@ abstract class Textos {
   /// **'Autenticador configurado corretamente.'**
   String get totpOk;
 
-  /// No description provided for @totpFalhou.
+  /// No description provided for @totpFailed.
   ///
   /// In pt, this message translates to:
   /// **'Código não confere. Confira o relógio do celular.'**
-  String get totpFalhou;
+  String get totpFailed;
 
-  /// No description provided for @vpsDescricao.
+  /// No description provided for @vpsDescription.
   ///
   /// In pt, this message translates to:
   /// **'Instala gateway, túnel, Collabora, nginx e TLS, e endurece SSH e firewall. Tudo com nomes e portas do Solumia, sem tocar na instalação atual.'**
-  String get vpsDescricao;
+  String get vpsDescription;
 
-  /// No description provided for @topologia.
+  /// No description provided for @topology.
   ///
   /// In pt, this message translates to:
   /// **'Topologia'**
-  String get topologia;
+  String get topology;
 
-  /// No description provided for @topoHibrida.
+  /// No description provided for @topologyHybrid.
   ///
   /// In pt, this message translates to:
   /// **'Híbrida (VPS + este PC)'**
-  String get topoHibrida;
+  String get topologyHybrid;
 
-  /// No description provided for @topoNuvem.
+  /// No description provided for @topologyCloud.
   ///
   /// In pt, this message translates to:
   /// **'Só nuvem (só VPS)'**
-  String get topoNuvem;
+  String get topologyCloud;
 
-  /// No description provided for @dominio.
+  /// No description provided for @domain.
   ///
   /// In pt, this message translates to:
   /// **'Domínio'**
-  String get dominio;
+  String get domain;
 
-  /// No description provided for @dominioAjuda.
+  /// No description provided for @domainHelp.
   ///
   /// In pt, this message translates to:
   /// **'ex.: solumia.seudominio.com (registro A apontando para a VPS)'**
-  String get dominioAjuda;
+  String get domainHelp;
 
   /// No description provided for @emailTls.
   ///
@@ -392,11 +392,11 @@ abstract class Textos {
   /// **'E-mail para o certificado TLS'**
   String get emailTls;
 
-  /// No description provided for @emailTlsAjuda.
+  /// No description provided for @emailTlsHelp.
   ///
   /// In pt, this message translates to:
   /// **'avisos de expiração do Let\'s Encrypt'**
-  String get emailTlsAjuda;
+  String get emailTlsHelp;
 
   /// No description provided for @cloudflare.
   ///
@@ -404,83 +404,83 @@ abstract class Textos {
   /// **'Domínio atrás da Cloudflare (proxy)'**
   String get cloudflare;
 
-  /// No description provided for @acessoSsh.
+  /// No description provided for @sshAccess.
   ///
   /// In pt, this message translates to:
   /// **'Acesso SSH'**
-  String get acessoSsh;
+  String get sshAccess;
 
-  /// No description provided for @hostVps.
+  /// No description provided for @vpsHost.
   ///
   /// In pt, this message translates to:
   /// **'IP ou nome da VPS'**
-  String get hostVps;
+  String get vpsHost;
 
-  /// No description provided for @porta.
+  /// No description provided for @port.
   ///
   /// In pt, this message translates to:
   /// **'Porta'**
-  String get porta;
+  String get port;
 
-  /// No description provided for @lerImpressao.
+  /// No description provided for @readFingerprint.
   ///
   /// In pt, this message translates to:
   /// **'Ler impressão digital da VPS'**
-  String get lerImpressao;
+  String get readFingerprint;
 
-  /// No description provided for @impressaoConfirmada.
+  /// No description provided for @fingerprintConfirmed.
   ///
   /// In pt, this message translates to:
   /// **'Confirmada: {impressao}'**
-  String impressaoConfirmada(Object impressao);
+  String fingerprintConfirmed(Object impressao);
 
-  /// No description provided for @conferirImpressao.
+  /// No description provided for @checkFingerprint.
   ///
   /// In pt, this message translates to:
   /// **'Confira se é a sua VPS antes de confirmar. No painel do provedor (console web) rode:'**
-  String get conferirImpressao;
+  String get checkFingerprint;
 
-  /// No description provided for @confirmoVps.
+  /// No description provided for @confirmVps.
   ///
   /// In pt, this message translates to:
   /// **'Confirmo: é a minha VPS'**
-  String get confirmoVps;
+  String get confirmVps;
 
-  /// No description provided for @primeiroAcesso.
+  /// No description provided for @firstAccess.
   ///
   /// In pt, this message translates to:
   /// **'Primeiro acesso'**
-  String get primeiroAcesso;
+  String get firstAccess;
 
-  /// No description provided for @primeiroAcessoDescricao.
+  /// No description provided for @firstAccessDescription.
   ///
   /// In pt, this message translates to:
   /// **'A senha é usada uma vez para instalar a chave do configurador e não é gravada. Depois disso o acesso é só por chave.'**
-  String get primeiroAcessoDescricao;
+  String get firstAccessDescription;
 
-  /// No description provided for @senhaVps.
+  /// No description provided for @vpsPassword.
   ///
   /// In pt, this message translates to:
   /// **'Senha da VPS (só no 1º acesso)'**
-  String get senhaVps;
+  String get vpsPassword;
 
-  /// No description provided for @senhaSudo.
+  /// No description provided for @sudoPassword.
   ///
   /// In pt, this message translates to:
   /// **'Senha do sudo (se o usuário não for root)'**
-  String get senhaSudo;
+  String get sudoPassword;
 
-  /// No description provided for @desativarSenha.
+  /// No description provided for @disablePassword.
   ///
   /// In pt, this message translates to:
   /// **'Desativar login por senha no SSH (recomendado)'**
-  String get desativarSenha;
+  String get disablePassword;
 
-  /// No description provided for @desativarSenhaAjuda.
+  /// No description provided for @disablePasswordHelp.
   ///
   /// In pt, this message translates to:
   /// **'Com desfazer automático em 5 min se o acesso por chave falhar'**
-  String get desativarSenhaAjuda;
+  String get disablePasswordHelp;
 
   /// No description provided for @nginxAuto.
   ///
@@ -500,137 +500,137 @@ abstract class Textos {
   /// **'nginx já instalado na VPS'**
   String get nginxHost;
 
-  /// No description provided for @salvar.
+  /// No description provided for @save.
   ///
   /// In pt, this message translates to:
   /// **'Salvar'**
-  String get salvar;
+  String get save;
 
-  /// No description provided for @verPlano.
+  /// No description provided for @viewPlan.
   ///
   /// In pt, this message translates to:
   /// **'Ver plano de instalação'**
-  String get verPlano;
+  String get viewPlan;
 
-  /// No description provided for @confirmeImpressao.
+  /// No description provided for @confirmFingerprint.
   ///
   /// In pt, this message translates to:
   /// **'Confirme a impressão digital primeiro'**
-  String get confirmeImpressao;
+  String get confirmFingerprint;
 
-  /// No description provided for @vpsSalva.
+  /// No description provided for @vpsSaved.
   ///
   /// In pt, this message translates to:
   /// **'Configuração da VPS salva'**
-  String get vpsSalva;
+  String get vpsSaved;
 
-  /// No description provided for @pastasTitulo.
+  /// No description provided for @foldersTitle.
   ///
   /// In pt, this message translates to:
   /// **'Pastas de mídia'**
-  String get pastasTitulo;
+  String get foldersTitle;
 
-  /// No description provided for @pastasDescricao.
+  /// No description provided for @foldersDescription.
   ///
   /// In pt, this message translates to:
   /// **'Onde ficam imagens, vídeos e áudio neste computador ({so}). Podem estar em outro disco. Não podem ser iguais nem uma dentro da outra.'**
-  String pastasDescricao(Object so);
+  String foldersDescription(Object so);
 
-  /// No description provided for @pastaImagens.
+  /// No description provided for @folderImages.
   ///
   /// In pt, this message translates to:
   /// **'Imagens'**
-  String get pastaImagens;
+  String get folderImages;
 
-  /// No description provided for @pastaVideos.
+  /// No description provided for @folderVideos.
   ///
   /// In pt, this message translates to:
   /// **'Vídeos'**
-  String get pastaVideos;
+  String get folderVideos;
 
-  /// No description provided for @pastaAudio.
+  /// No description provided for @folderAudio.
   ///
   /// In pt, this message translates to:
   /// **'Áudio'**
-  String get pastaAudio;
+  String get folderAudio;
 
-  /// No description provided for @pastaProducao.
+  /// No description provided for @folderProduction.
   ///
   /// In pt, this message translates to:
   /// **'Vídeos para produção'**
-  String get pastaProducao;
+  String get folderProduction;
 
-  /// No description provided for @pastaProduzidos.
+  /// No description provided for @folderProduced.
   ///
   /// In pt, this message translates to:
   /// **'Vídeos produzidos'**
-  String get pastaProduzidos;
+  String get folderProduced;
 
-  /// No description provided for @ajudaImagens.
+  /// No description provided for @helpImages.
   ///
   /// In pt, this message translates to:
   /// **'Imagens usadas nos vídeos (acervo e geradas)'**
-  String get ajudaImagens;
+  String get helpImages;
 
-  /// No description provided for @ajudaVideos.
+  /// No description provided for @helpVideos.
   ///
   /// In pt, this message translates to:
   /// **'Acervo de vídeos brutos'**
-  String get ajudaVideos;
+  String get helpVideos;
 
-  /// No description provided for @ajudaAudio.
+  /// No description provided for @helpAudio.
   ///
   /// In pt, this message translates to:
   /// **'Trilhas, efeitos e narrações'**
-  String get ajudaAudio;
+  String get helpAudio;
 
-  /// No description provided for @ajudaProducao.
+  /// No description provided for @helpProduction.
   ///
   /// In pt, this message translates to:
   /// **'Vídeos em produção (entrada da esteira)'**
-  String get ajudaProducao;
+  String get helpProduction;
 
-  /// No description provided for @ajudaProduzidos.
+  /// No description provided for @helpProduced.
   ///
   /// In pt, this message translates to:
   /// **'Vídeos prontos (saída)'**
-  String get ajudaProduzidos;
+  String get helpProduced;
 
-  /// No description provided for @escolherPasta.
+  /// No description provided for @pickFolder.
   ///
   /// In pt, this message translates to:
   /// **'Escolher pasta'**
-  String get escolherPasta;
+  String get pickFolder;
 
-  /// No description provided for @usarEstaPasta.
+  /// No description provided for @useThisFolder.
   ///
   /// In pt, this message translates to:
   /// **'Usar esta pasta'**
-  String get usarEstaPasta;
+  String get useThisFolder;
 
-  /// No description provided for @validar.
+  /// No description provided for @validate.
   ///
   /// In pt, this message translates to:
   /// **'Validar'**
-  String get validar;
+  String get validate;
 
-  /// No description provided for @salvarECriar.
+  /// No description provided for @saveAndCreate.
   ///
   /// In pt, this message translates to:
   /// **'Salvar e criar pastas'**
-  String get salvarECriar;
+  String get saveAndCreate;
 
-  /// No description provided for @corrijaPastas.
+  /// No description provided for @fixFolders.
   ///
   /// In pt, this message translates to:
   /// **'Corrija as pastas marcadas'**
-  String get corrijaPastas;
+  String get fixFolders;
 
-  /// No description provided for @craftDescricao.
+  /// No description provided for @craftDescription.
   ///
   /// In pt, this message translates to:
   /// **'Baixados do GitHub de cada projeto. Antes de instalar, o configurador confere a assinatura (chave fixada) e o SHA-256: um arquivo adulterado nunca é instalado.'**
-  String get craftDescricao;
+  String get craftDescription;
 
   /// No description provided for @craftFilmcraft.
   ///
@@ -656,107 +656,107 @@ abstract class Textos {
   /// **'Editor de fotos'**
   String get craftPhotocraft;
 
-  /// No description provided for @consultandoVersao.
+  /// No description provided for @checkingVersion.
   ///
   /// In pt, this message translates to:
   /// **'Consultando a última versão…'**
-  String get consultandoVersao;
+  String get checkingVersion;
 
-  /// No description provided for @ultimaVersao.
+  /// No description provided for @latestVersion.
   ///
   /// In pt, this message translates to:
   /// **'Última: {versao} · {arquivo}'**
-  String ultimaVersao(Object versao, Object arquivo);
+  String latestVersion(Object versao, Object arquivo);
 
-  /// No description provided for @naoInstalado.
+  /// No description provided for @notInstalled.
   ///
   /// In pt, this message translates to:
   /// **'Não instalado'**
-  String get naoInstalado;
+  String get notInstalled;
 
-  /// No description provided for @instaladoEm.
+  /// No description provided for @installedAt.
   ///
   /// In pt, this message translates to:
   /// **'Instalado: {versao} em {caminho}'**
-  String instaladoEm(Object versao, Object caminho);
+  String installedAt(Object versao, Object caminho);
 
-  /// No description provided for @formatoPortatil.
+  /// No description provided for @formatPortable.
   ///
   /// In pt, this message translates to:
   /// **'Portátil (sem administrador)'**
-  String get formatoPortatil;
+  String get formatPortable;
 
-  /// No description provided for @formatoMsi.
+  /// No description provided for @formatMsi.
   ///
   /// In pt, this message translates to:
   /// **'Instalador .msi'**
-  String get formatoMsi;
+  String get formatMsi;
 
-  /// No description provided for @formatoAppimage.
+  /// No description provided for @formatAppimage.
   ///
   /// In pt, this message translates to:
   /// **'AppImage (sem administrador)'**
-  String get formatoAppimage;
+  String get formatAppimage;
 
-  /// No description provided for @formatoDeb.
+  /// No description provided for @formatDeb.
   ///
   /// In pt, this message translates to:
   /// **'.deb (pede administrador)'**
-  String get formatoDeb;
+  String get formatDeb;
 
-  /// No description provided for @baixarInstalar.
+  /// No description provided for @downloadInstall.
   ///
   /// In pt, this message translates to:
   /// **'Baixar e instalar'**
-  String get baixarInstalar;
+  String get downloadInstall;
 
-  /// No description provided for @atualizar.
+  /// No description provided for @update.
   ///
   /// In pt, this message translates to:
   /// **'Atualizar'**
-  String get atualizar;
+  String get update;
 
-  /// No description provided for @reinstalar.
+  /// No description provided for @reinstall.
   ///
   /// In pt, this message translates to:
   /// **'Reinstalar'**
-  String get reinstalar;
+  String get reinstall;
 
-  /// No description provided for @appsTitulo.
+  /// No description provided for @appsTitle.
   ///
   /// In pt, this message translates to:
   /// **'Apps Solumia'**
-  String get appsTitulo;
+  String get appsTitle;
 
-  /// No description provided for @appsDescricao.
+  /// No description provided for @appsDescription.
   ///
   /// In pt, this message translates to:
   /// **'O app do Solumia para cada dispositivo, das releases oficiais no GitHub. O configurador confere assinatura e SHA-256 antes de salvar ou instalar.'**
-  String get appsDescricao;
+  String get appsDescription;
 
-  /// No description provided for @appCelular.
+  /// No description provided for @appPhone.
   ///
   /// In pt, this message translates to:
   /// **'Celular e tablet'**
-  String get appCelular;
+  String get appPhone;
 
-  /// No description provided for @appCelularDetalhe.
+  /// No description provided for @appPhoneDetail.
   ///
   /// In pt, this message translates to:
   /// **'Android (APK)'**
-  String get appCelularDetalhe;
+  String get appPhoneDetail;
 
-  /// No description provided for @appRelogio.
+  /// No description provided for @appWatch.
   ///
   /// In pt, this message translates to:
   /// **'Relógio'**
-  String get appRelogio;
+  String get appWatch;
 
-  /// No description provided for @appRelogioDetalhe.
+  /// No description provided for @appWatchDetail.
   ///
   /// In pt, this message translates to:
   /// **'Wear OS (APK)'**
-  String get appRelogioDetalhe;
+  String get appWatchDetail;
 
   /// No description provided for @appLinux.
   ///
@@ -764,11 +764,11 @@ abstract class Textos {
   /// **'PC e notebook'**
   String get appLinux;
 
-  /// No description provided for @appLinuxDetalhe.
+  /// No description provided for @appLinuxDetail.
   ///
   /// In pt, this message translates to:
   /// **'Linux (AppImage)'**
-  String get appLinuxDetalhe;
+  String get appLinuxDetail;
 
   /// No description provided for @appWindows.
   ///
@@ -776,163 +776,283 @@ abstract class Textos {
   /// **'PC e notebook'**
   String get appWindows;
 
-  /// No description provided for @appWindowsDetalhe.
+  /// No description provided for @appWindowsDetail.
   ///
   /// In pt, this message translates to:
   /// **'Windows (instalador)'**
-  String get appWindowsDetalhe;
+  String get appWindowsDetail;
 
-  /// No description provided for @appsVersao.
+  /// No description provided for @appsVersion.
   ///
   /// In pt, this message translates to:
   /// **'Versão publicada: {versao}'**
-  String appsVersao(Object versao);
+  String appsVersion(Object versao);
 
-  /// No description provided for @appsSemRelease.
+  /// No description provided for @appsNoRelease.
   ///
   /// In pt, this message translates to:
   /// **'Nenhuma release encontrada. Os arquivos aparecem aqui assim que forem publicados.'**
-  String get appsSemRelease;
+  String get appsNoRelease;
 
-  /// No description provided for @appsSemAssinatura.
+  /// No description provided for @appsUnsigned.
   ///
   /// In pt, this message translates to:
   /// **'Downloads bloqueados por segurança: a chave que assina as releases do Solumia ainda não foi fixada no configurador.'**
-  String get appsSemAssinatura;
+  String get appsUnsigned;
 
-  /// No description provided for @appsPasta.
+  /// No description provided for @appsFolder.
   ///
   /// In pt, this message translates to:
   /// **'Arquivos salvos em {pasta}'**
-  String appsPasta(Object pasta);
+  String appsFolder(Object pasta);
 
-  /// No description provided for @abrirReleases.
+  /// No description provided for @openReleases.
   ///
   /// In pt, this message translates to:
   /// **'Abrir releases no GitHub'**
-  String get abrirReleases;
+  String get openReleases;
 
-  /// No description provided for @arquivoIndisponivel.
+  /// No description provided for @fileUnavailable.
   ///
   /// In pt, this message translates to:
   /// **'Arquivo não publicado nesta versão'**
-  String get arquivoIndisponivel;
+  String get fileUnavailable;
 
-  /// No description provided for @baixarParaEstePc.
+  /// No description provided for @downloadToThisPc.
   ///
   /// In pt, this message translates to:
   /// **'Baixar para este PC'**
-  String get baixarParaEstePc;
+  String get downloadToThisPc;
 
-  /// No description provided for @instalarNestePc.
+  /// No description provided for @installOnThisPc.
   ///
   /// In pt, this message translates to:
   /// **'Instalar neste PC'**
-  String get instalarNestePc;
+  String get installOnThisPc;
 
-  /// No description provided for @mostrarQr.
+  /// No description provided for @showQr.
   ///
   /// In pt, this message translates to:
   /// **'QR para o celular'**
-  String get mostrarQr;
+  String get showQr;
 
-  /// No description provided for @qrCelular.
+  /// No description provided for @qrPhone.
   ///
   /// In pt, this message translates to:
   /// **'Aponte a câmera do celular para baixar direto do GitHub. O Android confere a assinatura do APK ao instalar.'**
-  String get qrCelular;
+  String get qrPhone;
 
-  /// No description provided for @relogioInstrucao.
+  /// No description provided for @watchInstruction.
   ///
   /// In pt, this message translates to:
   /// **'Baixe o APK aqui e envie ao relógio pelo app do celular ou instale no próprio relógio.'**
-  String get relogioInstrucao;
+  String get watchInstruction;
 
-  /// No description provided for @planoNadaAlterado.
+  /// No description provided for @planNothingChanged.
   ///
   /// In pt, this message translates to:
   /// **'Nada foi alterado ainda. Confira o que vai acontecer:'**
-  String get planoNadaAlterado;
+  String get planNothingChanged;
 
-  /// No description provided for @planoExecucao.
+  /// No description provided for @planRun.
   ///
   /// In pt, this message translates to:
   /// **'Execução: {estado}'**
-  String planoExecucao(Object estado);
+  String planRun(Object estado);
 
-  /// No description provided for @codigoDestrutivo.
+  /// No description provided for @destructiveCode.
   ///
   /// In pt, this message translates to:
   /// **'Código do autenticador (ação destrutiva)'**
-  String get codigoDestrutivo;
+  String get destructiveCode;
 
-  /// No description provided for @cancelar.
+  /// No description provided for @cancel.
   ///
   /// In pt, this message translates to:
   /// **'Cancelar'**
-  String get cancelar;
+  String get cancel;
 
-  /// No description provided for @aplicar.
+  /// No description provided for @apply.
   ///
   /// In pt, this message translates to:
   /// **'Aplicar'**
-  String get aplicar;
+  String get apply;
 
-  /// No description provided for @pararAposPasso.
+  /// No description provided for @stopAfterStep.
   ///
   /// In pt, this message translates to:
   /// **'Parar após o passo atual'**
-  String get pararAposPasso;
+  String get stopAfterStep;
 
-  /// No description provided for @fechar.
+  /// No description provided for @close.
   ///
   /// In pt, this message translates to:
   /// **'Fechar'**
-  String get fechar;
+  String get close;
 
-  /// No description provided for @estadoRodando.
+  /// No description provided for @stateRunning.
   ///
   /// In pt, this message translates to:
   /// **'em andamento…'**
-  String get estadoRodando;
+  String get stateRunning;
 
-  /// No description provided for @estadoConcluida.
+  /// No description provided for @stateFinished.
   ///
   /// In pt, this message translates to:
   /// **'concluída'**
-  String get estadoConcluida;
+  String get stateFinished;
 
-  /// No description provided for @estadoFalhou.
+  /// No description provided for @stateFailed.
   ///
   /// In pt, this message translates to:
   /// **'falhou (pode corrigir e aplicar de novo: retoma de onde parou)'**
-  String get estadoFalhou;
+  String get stateFailed;
 
-  /// No description provided for @estadoCancelada.
+  /// No description provided for @stateCancelled.
   ///
   /// In pt, this message translates to:
   /// **'parada'**
-  String get estadoCancelada;
+  String get stateCancelled;
 
-  /// No description provided for @registroTitulo.
+  /// No description provided for @runLogTitle.
   ///
   /// In pt, this message translates to:
   /// **'Registro'**
-  String get registroTitulo;
+  String get runLogTitle;
 
-  /// No description provided for @registroVazio.
+  /// No description provided for @runLogEmpty.
   ///
   /// In pt, this message translates to:
   /// **'Nenhuma aplicação ainda.'**
-  String get registroVazio;
+  String get runLogEmpty;
+
+  /// No description provided for @navWorker.
+  ///
+  /// In pt, this message translates to:
+  /// **'Worker'**
+  String get navWorker;
+
+  /// No description provided for @navAssistant.
+  ///
+  /// In pt, this message translates to:
+  /// **'Assistente'**
+  String get navAssistant;
+
+  /// No description provided for @itemWorker.
+  ///
+  /// In pt, this message translates to:
+  /// **'Worker neste PC'**
+  String get itemWorker;
+
+  /// No description provided for @itemWorkerDetail.
+  ///
+  /// In pt, this message translates to:
+  /// **'Serviço solumia-worker, em paralelo ao agent-worker'**
+  String get itemWorkerDetail;
+
+  /// No description provided for @workerIntro.
+  ///
+  /// In pt, this message translates to:
+  /// **'O worker roda neste PC como serviço do usuário e conecta ao gateway da sua VPS. Ele tem nome, porta e configuração próprios: o worker da instalação antiga continua como está.'**
+  String get workerIntro;
+
+  /// No description provided for @workerState.
+  ///
+  /// In pt, this message translates to:
+  /// **'{unidade}: {estado}'**
+  String workerState(String unidade, String estado);
+
+  /// No description provided for @workerLlama.
+  ///
+  /// In pt, this message translates to:
+  /// **'llama-server do Solumia na porta {porta} (o antigo usa 8081). Os dois dividem a GPU: evite usar os dois ao mesmo tempo com modelos grandes.'**
+  String workerLlama(String porta);
+
+  /// No description provided for @workerInstall.
+  ///
+  /// In pt, this message translates to:
+  /// **'Instalar ou atualizar o worker'**
+  String get workerInstall;
+
+  /// No description provided for @assistantIntro.
+  ///
+  /// In pt, this message translates to:
+  /// **'O Claude Code deste PC ajuda você a seguir as etapas. Ele não tem ferramentas: não lê arquivos, não roda comandos e não aplica nada. Recebe só o estado resumido abaixo, sem senhas, chaves, IPs, domínio ou usuários, e a conversa fica só na memória desta sessão.'**
+  String get assistantIntro;
+
+  /// No description provided for @assistantUnavailable.
+  ///
+  /// In pt, this message translates to:
+  /// **'Claude Code não encontrado neste computador. Instale e faça login no Claude Code para usar o assistente.'**
+  String get assistantUnavailable;
+
+  /// No description provided for @assistantHint.
+  ///
+  /// In pt, this message translates to:
+  /// **'Pergunte, por exemplo: por onde eu começo?'**
+  String get assistantHint;
+
+  /// No description provided for @assistantSend.
+  ///
+  /// In pt, this message translates to:
+  /// **'Enviar'**
+  String get assistantSend;
+
+  /// No description provided for @assistantClear.
+  ///
+  /// In pt, this message translates to:
+  /// **'Limpar conversa'**
+  String get assistantClear;
+
+  /// No description provided for @assistantContext.
+  ///
+  /// In pt, this message translates to:
+  /// **'O que o Claude recebe'**
+  String get assistantContext;
+
+  /// No description provided for @assistantOpenScreen.
+  ///
+  /// In pt, this message translates to:
+  /// **'Abrir a tela sugerida'**
+  String get assistantOpenScreen;
+
+  /// No description provided for @assistantThinking.
+  ///
+  /// In pt, this message translates to:
+  /// **'O Claude está pensando…'**
+  String get assistantThinking;
+
+  /// No description provided for @assistantNoSecrets.
+  ///
+  /// In pt, this message translates to:
+  /// **'Não cole senhas, chaves ou códigos aqui: o que parecer segredo é ocultado antes de sair do PC.'**
+  String get assistantNoSecrets;
+
+  /// No description provided for @updateConfigurator.
+  ///
+  /// In pt, this message translates to:
+  /// **'Atualizar o configurador'**
+  String get updateConfigurator;
+
+  /// No description provided for @updateConfiguratorDetail.
+  ///
+  /// In pt, this message translates to:
+  /// **'Compila e reinstala a partir do código deste repositório; a versão nova abre no próximo início.'**
+  String get updateConfiguratorDetail;
+
+  /// No description provided for @updateButton.
+  ///
+  /// In pt, this message translates to:
+  /// **'Atualizar'**
+  String get updateButton;
 }
 
-class _TextosDelegate extends LocalizationsDelegate<Textos> {
-  const _TextosDelegate();
+class _AppTextDelegate extends LocalizationsDelegate<AppText> {
+  const _AppTextDelegate();
 
   @override
-  Future<Textos> load(Locale locale) {
-    return SynchronousFuture<Textos>(lookupTextos(locale));
+  Future<AppText> load(Locale locale) {
+    return SynchronousFuture<AppText>(lookupAppText(locale));
   }
 
   @override
@@ -940,22 +1060,22 @@ class _TextosDelegate extends LocalizationsDelegate<Textos> {
       <String>['en', 'es', 'pt'].contains(locale.languageCode);
 
   @override
-  bool shouldReload(_TextosDelegate old) => false;
+  bool shouldReload(_AppTextDelegate old) => false;
 }
 
-Textos lookupTextos(Locale locale) {
+AppText lookupAppText(Locale locale) {
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
     case 'en':
-      return TextosEn();
+      return AppTextEn();
     case 'es':
-      return TextosEs();
+      return AppTextEs();
     case 'pt':
-      return TextosPt();
+      return AppTextPt();
   }
 
   throw FlutterError(
-    'Textos.delegate failed to load unsupported locale "$locale". This is likely '
+    'AppText.delegate failed to load unsupported locale "$locale". This is likely '
     'an issue with the localizations generation tool. Please file an issue '
     'on GitHub with a reproducible sample app and the gen-l10n configuration '
     'that was used.',

@@ -9,6 +9,18 @@ configurador/
 └── app/    interface Flutter desktop (Linux e Windows) que só conversa com o núcleo
 ```
 
+## Instalar neste PC (Linux)
+
+```bash
+configurador/empacotar_deb              # gera configurador/build/solumia-configurador_<versão>_amd64.deb
+sudo apt install ./configurador/build/solumia-configurador_*_amd64.deb
+```
+
+Instala em `/opt/solumia-configurador` (núcleo num venv próprio com as versões do `uv.lock`), atalho
+"Solumia: configurador" no menu e o comando `solumia-configurador`. O núcleo usa este repositório
+(`SOLUMIA_REPO`, gravado no pacote) para empacotar o código da VPS e rodar o worker. Depois de
+instalado, o botão **Atualizar** no Início gera o .deb novo e instala (a senha é pedida numa janela).
+
 ## Rodar em desenvolvimento
 
 ```bash
@@ -31,9 +43,11 @@ Testes: `cd core && .venv/bin/python -m pytest -q` · `cd app && flutter analyze
 | Pastas | imagens, vídeos, áudio, vídeos para produção e produzidos (Linux e Windows) |
 | Craft Apps | FilmCraft, SoundCraft, EffectCraft e PhotoCraft direto do GitHub Releases |
 | Apps | app do Solumia para celular/tablet e relógio (APK), PC e notebook (Linux/Windows), das releases de `thiagobenevide/solumia`; QR para o celular |
+| Worker | instala `solumia-worker` (systemd do usuário) em paralelo ao `agent-worker`, sem tocá-lo |
 | Registro | todas as aplicações, com estado final |
+| Assistente | conversa com o Claude Code deste PC para seguir as etapas (ver Segurança) |
 
-Aparência e idioma (botão no pé do menu): tema claro, escuro ou do sistema, com a paleta própria do Solumia (`app/lib/tema.dart`); português, inglês e espanhol (`app/lib/l10n/*.arb`). Mensagens que vêm do núcleo (passos do plano, logs, erros) ainda saem em português.
+Aparência e idioma (botão no pé do menu): tema claro, escuro ou do sistema, com a paleta própria do Solumia (`app/lib/theme.dart`); português, inglês e espanhol (`app/lib/l10n/*.arb`). Mensagens que vêm do núcleo (passos do plano, logs, erros) ainda saem em português.
 
 Toda mudança aparece primeiro como **plano**; nada roda sem "Aplicar". Uma aplicação que falha pode
 ser repetida e retoma do passo que parou.
@@ -72,10 +86,17 @@ ou o modo "nginx já instalado na VPS".
   assinado por chave com **impressão fixada** (`2B76741B414AAD6CD33E631213A005C0B9D7C3ED`,
   ArtCraft Release Signing Key) e SHA-256 do arquivo conferidos antes de instalar; extração
   protegida contra zip/tar slip; instalação na pasta do usuário.
+- **Assistente**: `claude -p` da assinatura deste PC (sem chave de API; `ANTHROPIC_API_KEY` é
+  removida do ambiente), sem ferramentas, MCP, configurações ou sessão salva, numa pasta vazia: não lê
+  arquivos nem roda nada. Recebe só um resumo de estados (botão "O que o Claude recebe"), sem valores
+  do cofre, hosts, domínio, usuários ou impressões digitais; pergunta e resposta passam pela máscara
+  do cofre e por remoção de chaves/tokens. A conversa fica só na memória do núcleo.
+- **Worker**: unidade, `worker.env` (0600), porta do llama (8181) e pasta de trabalho próprias; a pasta
+  de trabalho fica fora do repositório para não carregar `plataforma/worker/.env` da instalação antiga.
 - **Ações destrutivas** exigem o código TOTP; aplicar exige o `hash` do plano mostrado.
 
 ## Ainda não implementado (próximas fases do roadmap)
 
-Entrega da VPS por pacote isolado (`agent-node`), adopt da instalação atual, worker/esteira/túnel
-como serviços `solumia-*` no host (geradores prontos em `generate.py`), pareamento por QR, IA local e
+Entrega da VPS por pacote isolado (`agent-node`), adopt da instalação atual, esteira/túnel como serviços
+`solumia-*` no host (geradores prontos em `generate.py`; o worker já tem tela), pareamento por QR, IA local e
 nuvem, módulos, backup, empacotamento (AppImage/instalador Windows) e CI.
