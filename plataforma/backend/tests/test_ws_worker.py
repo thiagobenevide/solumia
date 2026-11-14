@@ -22,11 +22,11 @@ def settings() -> Settings:
 
 @pytest.fixture
 def client(settings: Settings) -> Iterator[TestClient]:
-    # Entrar via `with` fixa o TestClient num único portal/event loop para
-    # todo o teste — necessário para que a conexão WS e chamadas HTTP
-    # concorrentes compartilhem o mesmo loop (asyncio.Future não é
-    # thread-safe entre loops diferentes). Sem isso, cada chamada abriria
-    # seu próprio portal efêmero e as duas pontas nunca se encontrariam.
+    # Entering through `with` pins the TestClient to a single portal/event loop
+    # for the whole test — needed so the WS connection and concurrent HTTP calls
+    # share the same loop (asyncio.Future is not thread-safe across loops).
+    # Without it, each call would open its own ephemeral portal and the two ends
+    # would never meet.
     with TestClient(create_app(settings=settings)) as test_client:
         yield test_client
 

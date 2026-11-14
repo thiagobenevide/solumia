@@ -40,7 +40,7 @@ def _novo(api: TestClient) -> dict:
     return api.get(f"/api/design/wireframes/{w['id']}").json()
 
 
-def test_ida_e_volta_preserva_o_documento() -> None:
+def test_round_trip_keeps_document() -> None:
     doc = {
         "titulo": "ND",
         "paginas": [{**ai_wireframe.screen_default(), "id": "t1"}],
@@ -54,20 +54,20 @@ def test_ida_e_volta_preserva_o_documento() -> None:
     assert lap["paginas"][0]["id"] == "t1"
 
 
-def test_rejeita_tipo_desconhecido_dizendo_onde() -> None:
+def test_rejects_unknown_type_saying_where() -> None:
     swap = ai_wireframe.for_ai({"titulo": "x", "paginas": [], "elementos": []})
     swap["telas"][0]["componentes"] = [{"id": "z", "tipo": "div", "x": 0, "y": 0}]
     with pytest.raises(ai_wireframe.FormatInvalid, match="componente z"):
         ai_wireframe.of_ai(swap)
 
 
-def test_le_bloco_json_colado_de_chat() -> None:
+def test_reads_json_block_pasted_from_chat() -> None:
     swap = ai_wireframe.for_ai({"titulo": "Chat", "paginas": [], "elementos": []})
     text = f"Aqui está:\n```json\n{json.dumps(swap)}\n```\n"
     assert ai_wireframe.read(text.encode())["titulo"] == "Chat"
 
 
-def test_exporta_pacote_e_reimporta(api: TestClient) -> None:
+def test_exports_package_and_reimports(api: TestClient) -> None:
     w = _novo(api)
     screen = w["paginas"][0]["id"]
     png = b"\x89PNG\r\n\x1a\n" + b"0" * 20

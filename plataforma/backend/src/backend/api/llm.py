@@ -16,7 +16,7 @@ router = APIRouter(
     prefix="/api/llm", tags=["llm"], dependencies=[Depends(require_client_api_key)]
 )
 
-# Carregar um .gguf na GPU pode levar minutos.
+# Loading a .gguf onto the GPU can take minutes.
 _TIME_LOAD_S = 330.0
 
 
@@ -29,7 +29,7 @@ def _parts(request: Request) -> tuple[WorkerRegistry, ModelLLM]:
 
 
 async def _on_worker(registry: WorkerRegistry) -> dict[str, Any]:
-    """Pergunta ao worker os modelos (atualiza a lista), os carregados e os que processam."""
+    """Asks the worker for the models (refreshes the list), the loaded ones and the busy ones."""
     worker = registry.pick_worker(None)
     if worker is None:
         return {}
@@ -42,8 +42,8 @@ async def _on_worker(registry: WorkerRegistry) -> dict[str, Any]:
 
 
 def _in_use(registry: WorkerRegistry, ocupados: list[str]) -> list[dict[str, Any]]:
-    """Pedidos deste backend + modelos processando no llama-server sem pedido daqui: uso direto
-    (a esteira fala com o llama-server sem passar pelo backend)."""
+    """Requests of this backend + models processing on llama-server without a request from here:
+    direct use (the pipeline talks to llama-server without going through the backend)."""
     nossos = registry.in_usage()
     models_nossos = {u["modelo"] for u in nossos}
     diretos = [
@@ -51,7 +51,7 @@ def _in_use(registry: WorkerRegistry, ocupados: list[str]) -> list[dict[str, Any
         for m in ocupados
         if m not in models_nossos
     ]
-    # Pedido nosso sem modelo explícito também ocupa o llama-server: não conta em dobro.
+    # Our own request without an explicit model also occupies llama-server: do not count it twice.
     return nossos + ([] if "" in models_nossos else diretos)
 
 

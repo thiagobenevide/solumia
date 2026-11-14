@@ -1,7 +1,7 @@
-"""Download automático do PDF de uma referência de acesso aberto. Procura a obra no OpenAlex
-(pelo DOI do texto da referência ou, sem DOI, pelo título, aceitando só título bem parecido) e
-tenta os links de PDF aberto que ele conhece, mais os links `.pdf`/arXiv da própria referência.
-Só aceita resposta que começa com `%PDF`; obra fechada (paywall) simplesmente fica sem PDF."""
+"""Automatic PDF download of an open-access reference. Looks the work up on OpenAlex (by the DOI
+in the reference text or, without a DOI, by title, accepting only a very similar title) and tries
+the open PDF links it knows, plus the `.pdf`/arXiv links of the reference itself. Only accepts a
+response starting with `%PDF`; a closed work (paywall) simply stays without a PDF."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def doi_of_reference(text: str) -> str | None:
 
 
 def links_of_reference(text: str) -> list[str]:
-    """Links diretos para PDF citados na referência (terminados em .pdf ou do arXiv)."""
+    """Direct PDF links cited in the reference (ending in .pdf or from arXiv)."""
     links = []
     for url in re.findall(r"https?://[^\s<>)\]]+", text):
         url = re.sub(r"[.,;]+$", "", url)
@@ -48,7 +48,7 @@ def links_of_reference(text: str) -> list[str]:
 
 
 def links_openalex(work: dict[str, Any]) -> list[str]:
-    """Links de PDF aberto de uma obra do OpenAlex, do melhor para o pior."""
+    """Open PDF links of an OpenAlex work, from best to worst."""
     links = []
     for loc in [work.get("best_oa_location") or {}, *(work.get("locations") or [])]:
         if loc.get("pdf_url") and loc.get("is_oa"):
@@ -87,7 +87,7 @@ async def _download(cliente: httpx.AsyncClient, url: str) -> bytes | None:
             parts, total = [], 0
             async for block in r.aiter_bytes():
                 if not parts and not block.lstrip()[:5].startswith(b"%PDF"):
-                    return None  # página HTML (paywall, captcha): não é o PDF
+                    return None  # HTML page (paywall, captcha): not the PDF
                 total += len(block)
                 if total > LIMIT_BYTES:
                     return None
@@ -105,10 +105,10 @@ def _doi_url(doi: str) -> str:
 async def fetch_pdf_open(
     ref: dict[str, Any], extras: list[str] | None = None, baixar: bool = True
 ) -> dict[str, Any]:
-    """Acha a obra (OpenAlex) e, com [baixar], o PDF de acesso aberto. Devolve `pdf` (bytes ou
-    `None`), `url_pdf` (de onde veio), `doi` e `link` (página do artigo: DOI, página do periódico
-    ou o próprio PDF), para a planilha citar com o link. [extras]: links de PDF já conhecidos
-    (achados na web), tentados primeiro."""
+    """Finds the work (OpenAlex) and, when downloading, the open-access PDF. Returns `pdf` (bytes
+    or `None`), `url_pdf` (where it came from), `doi` and `link` (article page: DOI, journal page
+    or the PDF itself), for the spreadsheet to cite with the link. Extras: already known PDF links
+    (found on the web), tried first."""
     found: dict[str, Any] = {"pdf": None, "url_pdf": "", "doi": "", "link": ""}
     doi = doi_of_reference(ref.get("referencia") or "")
     if doi:

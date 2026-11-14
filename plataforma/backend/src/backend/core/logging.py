@@ -11,7 +11,7 @@ request_id_ctx: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
 class RequestIdFilter(logging.Filter):
-    """Injeta o request_id do contexto atual (se houver) em cada log record."""
+    """Injects the request_id of the current context (if any) into each log record."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.request_id = request_id_ctx.get()
@@ -19,7 +19,7 @@ class RequestIdFilter(logging.Filter):
 
 
 class JsonFormatter(logging.Formatter):
-    """Formata cada log record como uma linha JSON, adequada para produção."""
+    """Formats each log record as one JSON line, suitable for production."""
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
@@ -37,7 +37,7 @@ class JsonFormatter(logging.Formatter):
 
 
 class ConsoleFormatter(logging.Formatter):
-    """Formato legível por humano, usado em desenvolvimento."""
+    """Human-readable format, used in development."""
 
     def format(self, record: logging.LogRecord) -> str:
         request_id = getattr(record, "request_id", None)
@@ -52,7 +52,7 @@ class ConsoleFormatter(logging.Formatter):
 
 
 def configure_logging(settings: Settings) -> None:
-    """Configura o logging raiz da aplicação de acordo com as settings do Gateway."""
+    """Configures the application root logging according to the Gateway settings."""
     handler = logging.StreamHandler(stream=sys.stdout)
     handler.addFilter(RequestIdFilter())
     handler.setFormatter(JsonFormatter() if settings.log_format == "json" else ConsoleFormatter())
@@ -62,6 +62,6 @@ def configure_logging(settings: Settings) -> None:
     root_logger.addHandler(handler)
     root_logger.setLevel(settings.log_level.upper())
 
-    # Bibliotecas de terceiros ficam em WARNING para não poluir o log de acesso.
+    # Third-party libraries stay at WARNING so they do not clutter the access log.
     for noisy_logger in ("uvicorn.error", "uvicorn.access"):
         logging.getLogger(noisy_logger).setLevel(logging.WARNING)

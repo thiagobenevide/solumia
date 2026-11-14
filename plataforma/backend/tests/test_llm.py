@@ -11,7 +11,7 @@ from backend.core.worker_registry import WorkerRegistry
 from backend.main import create_app
 
 
-def _cliente(tmp_path: Path) -> tuple[TestClient, WorkerRegistry]:
+def _client_for(tmp_path: Path) -> tuple[TestClient, WorkerRegistry]:
     settings = Settings(
         environment="development",
         client_api_keys=CLIENT_API_KEY,
@@ -36,8 +36,8 @@ def _worker(registry: WorkerRegistry, ocupados: list[str] | None = None) -> Asyn
     return worker
 
 
-def test_sem_escolha_usa_o_padrao_do_env(tmp_path: Path) -> None:
-    client, _ = _cliente(tmp_path)
+def test_without_choice_uses_env_default(tmp_path: Path) -> None:
+    client, _ = _client_for(tmp_path)
     r = client.get("/api/llm", headers=AUTH_HEADERS)
     assert r.status_code == 200
     assert r.json() == {
@@ -49,8 +49,8 @@ def test_sem_escolha_usa_o_padrao_do_env(tmp_path: Path) -> None:
     }
 
 
-def test_troca_carrega_no_worker_e_salva(tmp_path: Path) -> None:
-    client, registry = _cliente(tmp_path)
+def test_switch_loads_on_worker_and_saves(tmp_path: Path) -> None:
+    client, registry = _client_for(tmp_path)
     _worker(registry)
     r = client.put("/api/llm", json={"modelo": "b"}, headers=AUTH_HEADERS)
     assert r.status_code == 200
@@ -58,8 +58,8 @@ def test_troca_carrega_no_worker_e_salva(tmp_path: Path) -> None:
     assert ModelLLM(str(tmp_path / "llm.json")).atual == "b"
 
 
-def test_troca_proibida_com_outro_modulo_usando(tmp_path: Path) -> None:
-    client, registry = _cliente(tmp_path)
+def test_switch_forbidden_while_other_module_uses(tmp_path: Path) -> None:
+    client, registry = _client_for(tmp_path)
     _worker(registry)
     registry._in_use["x"] = {
         "origem": "Rotinas",
@@ -76,15 +76,15 @@ def test_troca_proibida_com_outro_modulo_usando(tmp_path: Path) -> None:
     assert ModelLLM(str(tmp_path / "llm.json"), "padrao").atual == "padrao"
 
 
-def test_modelo_inexistente(tmp_path: Path) -> None:
-    client, registry = _cliente(tmp_path)
+def test_missing_model(tmp_path: Path) -> None:
+    client, registry = _client_for(tmp_path)
     _worker(registry)
     r = client.put("/api/llm", json={"modelo": "z"}, headers=AUTH_HEADERS)
     assert r.status_code == 422
 
 
-def test_troca_proibida_com_a_esteira_usando_direto(tmp_path: Path) -> None:
-    client, registry = _cliente(tmp_path)
+def test_switch_forbidden_while_pipeline_uses_directly(tmp_path: Path) -> None:
+    client, registry = _client_for(tmp_path)
     _worker(registry, ocupados=["a"])
     assert client.get("/api/llm", headers=AUTH_HEADERS).json()["em_uso"][0]["origem"] == (
         "Esteira (empreendimento)"

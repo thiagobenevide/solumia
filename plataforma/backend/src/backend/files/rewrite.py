@@ -1,5 +1,6 @@
-"""Reescrita de trechos de documentos (TCC) pelo Claude Code — `shared.claude_code`, rodando no
-worker do PC (assinatura logada lá); sem worker, no próprio backend se ele tiver o `claude`."""
+"""Rewriting of document excerpts (thesis) through Claude Code — `shared.claude_code`, running on
+the PC worker (subscription logged in there); without a worker, on the backend itself if it has
+`claude`."""
 
 import subprocess
 from collections.abc import Awaitable, Callable
@@ -10,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.api.deps import require_client_api_key
-from backend.files.library import FileNotFound, Collection
+from backend.files.library import Collection, FileNotFound
 from shared.claude_code import (
     REWRITE_GOALS,
     REWRITE_SCHEMA,
@@ -55,7 +56,8 @@ RewriteDep = Annotated[Rewrite, Depends(get_rewrite)]
 
 
 def text_of_document(collection: Collection, id_: str) -> str:
-    """Texto do PDF exibido (DOCX já convertido) pelo pdftotext; vazio se não houver."""
+    """Text of the displayed PDF (DOCX already converted) through pdftotext; empty if there is
+    none."""
     pdf = collection.path_pdf(id_)
     if pdf is None:
         return ""
@@ -75,7 +77,7 @@ def state(reescrita: RewriteDep) -> Any:
 
 @router.post("/reescrever")
 async def rewrite(pedido: RequestRewrite, request: Request, reescrita: RewriteDep) -> Any:
-    # traduzir vai pela LLM local quando houver; os demais objetivos, pelo Claude
+    # translating goes through the local LLM when available; the other goals, through Claude
     local = reescrita.traducao_json if pedido.objetivo == "traduzir" else None
     reason = None if local else reescrita.disponivel()
     if reason:
@@ -89,7 +91,7 @@ async def rewrite(pedido: RequestRewrite, request: Request, reescrita: RewriteDe
             raise HTTPException(404, "Arquivo não encontrado") from e
         data["contexto"] = text_of_document(collection, pedido.arquivo_id)
     try:
-        build_rewrite_prompt(data)  # valida antes de ocupar o worker
+        build_rewrite_prompt(data)  # validate before occupying the worker
     except InvalidRewriteRequest as e:
         raise HTTPException(422, str(e)) from e
     try:
@@ -103,20 +105,21 @@ async def rewrite(pedido: RequestRewrite, request: Request, reescrita: RewriteDe
         raise HTTPException(502, str(e)) from e
 
 
-# --- tradução do documento, frase a frase (o leitor liga cada frase em português ao original) ---
+# --- document translation, sentence by sentence (the reader links each Portuguese sentence to the
+# original) ---
 
-SYSTEM_TRANSLATION = """Você traduz artigos acadêmicos para o português do Brasil, para um leitor \
-que está aprendendo inglês e precisa ler o documento inteiro.
+SYSTEM_TRANSLATION = """You translate academic papers into Brazilian Portuguese, for a reader who \
+is learning English and needs to read the whole document.
 
-Regras fixas:
-- Recebe frases numeradas ([n] texto), extraídas do PDF na ordem de leitura; devolva uma tradução \
-para cada número, sem juntar, dividir, pular nem reordenar frases.
-- Tradução fiel e completa (sem resumir nem comentar), em registro acadêmico; termos técnicos \
-consagrados em português, ou o termo original quando é assim que se usa na área.
-- Mantenha números, fórmulas, siglas, nomes próprios, citações (AUTOR, ano) e referências \
-bibliográficas como estão (traduza só as palavras comuns delas).
-- Hifenização de quebra de linha ("trans- lation") é uma palavra só. Cabeçalhos, legendas e \
-fragmentos soltos também são traduzidos, do jeito que vierem."""
+Fixed rules:
+- You receive numbered sentences ([n] text), extracted from the PDF in reading order; return one \
+translation for each number, without merging, splitting, skipping or reordering sentences.
+- Faithful and complete translation (no summarizing or commenting), in academic register; \
+established technical terms in Portuguese, or the original term when that is how the field uses it.
+- Keep numbers, formulas, acronyms, proper names, citations (AUTHOR, year) and bibliographic \
+references as they are (translate only their common words).
+- Line-break hyphenation ("trans- lation") is a single word. Headers, captions and loose fragments \
+are also translated, as they come."""
 
 SCHEMA_TRANSLATION = {
     "type": "object",
@@ -151,7 +154,7 @@ class RequestTranslation(BaseModel):
 
 def prompt_translation(titulo: str, segments: list[str]) -> str:
     lines = "\n".join(f"[{n}] {s}" for n, s in enumerate(segments, 1))
-    return f"Documento: {titulo}\n\nTraduza cada frase:\n\n{lines}"
+    return f"Document: {titulo}\n\nTranslate each sentence:\n\n{lines}"
 
 
 @router.get("/{id_}/traducao")
@@ -167,7 +170,8 @@ def translation(id_: str, request: Request) -> Any:
 async def translate(
     id_: str, pedido: RequestTranslation, request: Request, reescrita: RewriteDep
 ) -> Any:
-    """Traduz as páginas pedidas (as que já estão no cache com as mesmas frases voltam direto)."""
+    """Translates the requested pages (the ones already cached with the same sentences come back
+    directly)."""
     collection: Collection = request.app.state.collection
     try:
         meta = collection.obter(id_)

@@ -1,4 +1,4 @@
-# ruff: noqa: E501  (XML de exemplo do draw.io: as linhas são o próprio arquivo)
+# ruff: noqa: E501  (sample draw.io XML: the lines are the file itself)
 import base64
 import zlib
 from pathlib import Path
@@ -34,23 +34,23 @@ MODELO = """<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>
 </root></mxGraphModel>"""
 
 
-def _comprimido(xml: str) -> str:
+def _compressed(xml: str) -> str:
     c = zlib.compressobj(9, zlib.DEFLATED, -15)
     return base64.b64encode(c.compress(quote(xml).encode()) + c.flush()).decode()
 
 
 ARQUIVO = (
     f'<mxfile><diagram id="a" name="1. Investimento">{MODELO}</diagram>'
-    f'<diagram id="b" name="2. Verbas">{_comprimido(MODELO)}</diagram></mxfile>'
+    f'<diagram id="b" name="2. Verbas">{_compressed(MODELO)}</diagram></mxfile>'
 )
 
 
-def test_le_paginas_formas_cores_e_contêiner() -> None:
+def test_reads_pages_shapes_colors_and_container() -> None:
     r = drawio.read(ARQUIVO)
     assert [p["nome"] for p in r["paginas"]] == ["1. Investimento", "2. Verbas"]
     pag1 = [e for e in r["elementos"] if e["pagina"] == r["paginas"][0]["id"]]
     pag2 = [e for e in r["elementos"] if e["pagina"] == r["paginas"][1]["id"]]
-    assert len(pag1) == len(pag2) == 9  # a página comprimida lê igual
+    assert len(pag1) == len(pag2) == 9  # the compressed page reads the same
     nodes = {e["id"].split(".")[1]: e for e in pag1 if e["tipo"] == "no"}
     assert {k: v["no"] for k, v in nodes.items()} == {
         "raia": "container",
@@ -62,16 +62,16 @@ def test_le_paginas_formas_cores_e_contêiner() -> None:
     }
     assert nodes["dec"]["texto"] == "Tipo **válido**?"
     assert nodes["nota"]["texto"] == "Atenção:\nnão sobrescreve"
-    assert nodes["dec"]["a"] == [120.0, 220.0]  # filho do contêiner: posição somada à do pai
+    assert nodes["dec"]["a"] == [120.0, 220.0]  # container child: position added to the parent's
     assert nodes["dec"]["fundo"] == 0xFFFFF2CC and nodes["ini"]["cor"] == 0xFF9673A6
-    assert pag1[0]["no"] == "container"  # contêiner atrás dos blocos
+    assert pag1[0]["no"] == "container"  # container behind the blocks
     setas = [e for e in pag1 if e["tipo"] == "ligacao"]
     assert [(s["rotulo"], s["ortogonal"]) for s in setas] == [("", True), ("Não", True)]
     [text] = [e for e in pag1 if e["tipo"] == "texto"]
     assert text["texto"] == "Título do diagrama"
 
 
-def test_ida_e_volta() -> None:
+def test_round_trip() -> None:
     r = drawio.read(ARQUIVO)
     of_new = drawio.read(drawio.write({"titulo": "x", **r}))
     assert [p["nome"] for p in of_new["paginas"]] == ["1. Investimento", "2. Verbas"]
@@ -82,7 +82,7 @@ def test_ida_e_volta() -> None:
     assert dec["texto"] == "Tipo **válido**?" and dec["fundo"] == 0xFFFFF2CC
 
 
-def test_arquivo_invalido() -> None:
+def test_invalid_file() -> None:
     with pytest.raises(drawio.FileInvalid):
         drawio.read("<html></html>")
 
@@ -93,7 +93,7 @@ def api(tmp_path: Path) -> TestClient:
     return TestClient(create_app(settings=s), headers=AUTH_HEADERS)
 
 
-def test_rotas(api: TestClient) -> None:
+def test_routes(api: TestClient) -> None:
     r = api.post(
         "/api/design/quadros/importar-drawio",
         files={"arquivo": ("hub-verbas.drawio", ARQUIVO.encode())},
@@ -102,7 +102,7 @@ def test_rotas(api: TestClient) -> None:
     q = r.json()
     assert (q["titulo"], q["total"], len(q["paginas"])) == ("hub-verbas", 18, 2)
     complete = api.get(f"/api/design/quadros/{q['id']}").json()
-    # blocos e setas de fluxograma agora gravam (antes o servidor recusava `no`/`ligacao`)
+    # flowchart blocks and arrows now save (before, the server refused `no`/`ligacao`)
     salvo = api.put(
         f"/api/design/quadros/{q['id']}/elementos",
         json={"versao": complete["versao"], "elementos": complete["elementos"]},
@@ -132,8 +132,8 @@ REFERENCIA = Path(__file__).parents[3] / "modulo-verbas-atual.drawio"
 @pytest.mark.skipif(
     not REFERENCIA.exists(), reason="arquivo de referência do usuário fora do repositório"
 )
-def test_arquivo_de_referencia_ida_e_volta() -> None:
-    """O .drawio real (10 páginas): tudo vira bloco/seta/texto e volta igual na exportação."""
+def test_reference_file_round_trip() -> None:
+    """The real .drawio (10 pages): everything becomes block/arrow/text and comes back the same on export."""
     r = drawio.read(REFERENCIA.read_text("utf-8"))
     assert len(r["paginas"]) == 10 and r["ignorados"] == 0
     setas = [e for e in r["elementos"] if e["tipo"] == "ligacao"]

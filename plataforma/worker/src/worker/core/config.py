@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class WorkerSettings(BaseSettings):
-    """Configuração do Worker, lida de variáveis de ambiente (prefixo WORKER_)."""
+    """Worker configuration, read from environment variables (WORKER_ prefix)."""
 
     model_config = SettingsConfigDict(
         env_prefix="WORKER_",
@@ -44,7 +44,7 @@ class WorkerSettings(BaseSettings):
     reconnect_min_backoff_seconds: float = 1.0
     reconnect_max_backoff_seconds: float = 30.0
 
-    # --- Voz (tarefas `transcrever` e `falar`) ---
+    # --- Voice (tasks `transcrever` and `falar`) ---
     whisper_modelo: str = ""
     """Modelo do faster-whisper (tiny … large-v3, large-v3-turbo); vazio = large-v3-turbo na GPU e
     small na CPU."""
@@ -108,7 +108,7 @@ class WorkerSettings(BaseSettings):
     espeak_bin: str = "espeak-ng"
     espeak_voz: str = "pt-br"
 
-    # --- Código (sessões do Claude Code pedidas pelo app) ---
+    # --- Code (Claude Code sessions requested by the app) ---
     codigo_dir: str = "~/Documents/github/agent"
     """Repositório onde o `claude` roda (carrega o CLAUDE.md de lá)."""
 
@@ -151,5 +151,5 @@ class WorkerSettings(BaseSettings):
 
 @lru_cache
 def get_settings() -> WorkerSettings:
-    """Retorna a instância cacheada de WorkerSettings (lida uma única vez por processo)."""
+    """Returns the cached WorkerSettings instance (read only once per process)."""
     return WorkerSettings()

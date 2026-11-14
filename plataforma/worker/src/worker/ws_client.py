@@ -20,10 +20,10 @@ from shared.protocol import (
     parse_gateway_message,
 )
 from worker import pc, resources
-from worker.coding import TASKS as TAREFAS_CODIGO
-from worker.coding import Code
 from worker.claude_accounts import TASKS as TAREFAS_CONTAS
 from worker.claude_accounts import Accounts
+from worker.coding import TASKS as TAREFAS_CODIGO
+from worker.coding import Code
 from worker.core.config import WorkerSettings
 from worker.providers.base import Provider
 from worker.voice import TASKS, Voice
@@ -34,8 +34,8 @@ _HELLO_ACK_TIMEOUT_SECONDS = 10.0
 
 
 class WorkerClient:
-    """Mantém a conexão WebSocket com o Gateway: handshake, heartbeat, dispatch
-    de chat_request para o Provider local, e reconexão com backoff exponencial.
+    """Keeps the WebSocket connection with the Gateway: handshake, heartbeat, dispatch
+    of chat_request to the local Provider, and reconnection with exponential backoff.
     """
 
     def __init__(
@@ -46,9 +46,10 @@ class WorkerClient:
         self._voice = voice or Voice(settings)
         self._background_tasks: set[asyncio.Task[None]] = set()
         self._websocket: websockets.WebSocketClientProtocol | None = None
-        # Sessões do Claude Code sobrevivem a reconexões: a etapa vai pela conexão do momento.
+        # Claude Code sessions survive reconnections: each step goes through the current connection.
         self._codigo = Code(settings, self._issue_code)
-        # conta do Claude Code ativa (troca pelo app): vale para todo `claude` deste processo
+        # active Claude Code account (switched from the app): applies to every `claude` of this
+        # process
         self._contas = Accounts(settings.claude_contas_dir, settings.codigo_claude_bin)
 
     async def run_forever(self) -> None:
@@ -123,7 +124,7 @@ class WorkerClient:
                 task = asyncio.create_task(self._handle_chat_request(websocket, message))
                 self._background_tasks.add(task)
                 task.add_done_callback(self._background_tasks.discard)
-            # HeartbeatAck: nada a fazer, só confirma que a conexão está viva.
+            # HeartbeatAck: nothing to do, it only confirms the connection is alive.
 
     async def _handle_chat_request(
         self, websocket: websockets.WebSocketClientProtocol, message: ChatRequest
@@ -145,10 +146,10 @@ class WorkerClient:
                     str(message.payload["netlist"]), float(message.payload.get("timeout_s", 120))
                 )
             elif task == "reescrever":
-                # Claude Code com a assinatura logada neste PC (nunca a API da Anthropic)
+                # Claude Code with the subscription logged in on this PC (never the Anthropic API)
                 payload = await rewrite(message.payload)
             elif task == "claude_json":
-                # genérico (ex.: plano de Concursos): prompt, sistema e esquema vêm do backend
+                # generic (e.g. Concursos plan): prompt, system and schema come from the backend
                 p = message.payload
                 payload = await claude_json(
                     str(p["prompt"]),
@@ -160,7 +161,8 @@ class WorkerClient:
                     tools=str(p.get("ferramentas") or ""),
                 )
             elif task == "buscar_web":
-                # do IP de casa: os buscadores barram o da VPS (see shared.web_search)
+                # from the home IP: search engines block the VPS one (see shared.web_search)
+
                 async with httpx.AsyncClient(follow_redirects=True) as cliente:
                     payload = await web_search.search(cliente, str(message.payload["consulta"]))
             elif task == "listar_modelos":

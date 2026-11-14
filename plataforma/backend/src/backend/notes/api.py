@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from backend.api.deps import require_client_api_key
-from backend.notes.vault import Vault, NoteConflict, NoteNotFound
 from backend.notes.note_types import KINDS
+from backend.notes.vault import NoteConflict, NoteNotFound, Vault
 
 router = APIRouter(
     prefix="/api/notas", tags=["notas"], dependencies=[Depends(require_client_api_key)]
@@ -72,7 +72,7 @@ def graph(cofre: VaultDep) -> Any:
 
 @router.get("/espelho")
 def mirror(cofre: VaultDep) -> Any:
-    """Todas as notas completas numa chamada: o app guarda para ler e editar sem conexão."""
+    """All notes in full in one call: the app stores them to read and edit offline."""
     return [cofre.obter(r["id"]) for r in cofre.list_all()]
 
 

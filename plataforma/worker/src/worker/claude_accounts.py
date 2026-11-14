@@ -1,13 +1,13 @@
-"""Contas do Claude Code no PC, para trocar pelo app quando uma bate o limite da janela.
+"""Claude Code accounts on the PC, to switch from the app when one hits the window limit.
 
-Cada conta extra é uma pasta de configuração (`CLAUDE_CONFIG_DIR`) com o próprio login; a
-"principal" é a padrão (`~/.claude`, a do terminal). A ativa vale para todo `claude` que o worker
-sobe: a variável fica no ambiente do processo. `projects`, `settings.json`, `skills` e `plugins`
-das contas extras são links para os da principal, para as abas continuarem (`--resume`) e a
-memória ser a mesma depois da troca.
+Each extra account is a config folder (`CLAUDE_CONFIG_DIR`) with its own login; the "principal"
+one is the default (`~/.claude`, the terminal's). The active one applies to every `claude` the
+worker starts: the variable lives in the process environment. `projects`, `settings.json`,
+`skills` and `plugins` of the extra accounts are links to the principal's, so tabs keep going
+(`--resume`) and memory stays the same after a switch.
 
-Login: `claude auth login` num pseudo-terminal; o app recebe o link, a pessoa autoriza no
-navegador (qualquer aparelho) e cola o código mostrado, que é escrito no terminal."""
+Login: `claude auth login` in a pseudo-terminal; the app receives the link, the person authorizes
+in the browser (any device) and pastes the code shown, which is written into the terminal."""
 
 import asyncio
 import contextlib
@@ -26,7 +26,7 @@ TASKS = {"contas.listar", "contas.ativar", "contas.entrar", "contas.codigo", "co
 MAIN = "principal"
 _NAME = re.compile(r"^[a-z0-9][a-z0-9_-]{0,30}$")
 _SHARED = ("projects", "settings.json", "skills", "plugins")
-# Link do login: dentro do hyperlink do terminal (OSC 8) ou solto.
+# Login link: inside the terminal hyperlink (OSC 8) or bare.
 _URL_OSC = re.compile(rb"\x1b\]8;;(https://[^\x07\x1b]+/oauth/authorize\?[^\x07\x1b]+)")
 _URL = re.compile(rb"(https://\S+/oauth/authorize\?[^\s\x07\x1b]+)")
 _ESCAPE = re.compile(r"\x1b\][^\x07]*\x07|\x1b\[[0-9;?]*[A-Za-z]")
@@ -40,7 +40,8 @@ class _Login:
 
 
 def _read(fd: int, ate: re.Pattern[bytes] | None, limit_s: float) -> bytes:
-    """Lê o terminal até achar [ate], o processo fechar o terminal ou passar [limite_s]."""
+    """Reads the terminal until the pattern shows up, the process closes the terminal or the time
+    limit passes."""
     output = b""
     end = time.monotonic() + limit_s
     while time.monotonic() < end:
@@ -49,7 +50,7 @@ def _read(fd: int, ate: re.Pattern[bytes] | None, limit_s: float) -> bytes:
             continue
         try:
             chunk = os.read(fd, 4096)
-        except OSError:  # processo saiu
+        except OSError:  # the process exited
             break
         if not chunk:
             break
@@ -168,7 +169,8 @@ class Accounts:
             os.close(login.fd)
 
     async def enter(self, nome: str) -> dict[str, Any]:
-        """Começa o login da conta (cria a pasta se for nova) e devolve o link de autorização."""
+        """Starts the account login (creates the folder if new) and returns the authorization
+        link."""
         self._validate(nome, existente=False)
         if nome != MAIN:
             self._prepare(nome)
@@ -177,7 +179,7 @@ class Accounts:
         try:
             process = await asyncio.create_subprocess_exec(
                 self._bin, "auth", "login",
-                env={**self._environment(nome), "BROWSER": "/bin/true"},  # o navegador é o do app
+                env={**self._environment(nome), "BROWSER": "/bin/true"},  # the browser is the app's
                 stdin=escravo, stdout=escravo, stderr=escravo,
                 start_new_session=True,
             )
@@ -192,23 +194,24 @@ class Accounts:
             with contextlib.suppress(ProcessLookupError):
                 process.kill()
             os.close(mestre)
-            raise RuntimeError(f"O login não mostrou o link: {_clean(output)[-300:] or 'sem saída'}")
+            shown = _clean(output)[-300:] or "sem saída"
+            raise RuntimeError(f"O login não mostrou o link: {shown}")
         login = self._logins[nome] = _Login(process, mestre)
 
-        def abandonar() -> None:  # só se ainda for este login (não um começado depois)
+        def abandonar() -> None:  # only if it is still this login (not one started later)
             if self._logins.get(nome) is login:
                 self._cancel(nome)
 
         asyncio.get_running_loop().call_later(_ABANDONMENT_S, abandonar)
         return {"nome": nome, "url": found[1].decode()}
 
-    async def codigo(self, nome: str, codigo: str) -> dict[str, Any]:
-        """Cola o código mostrado depois da autorização e espera o login terminar."""
+    async def codigo(self, nome: str, code: str) -> dict[str, Any]:
+        """Pastes the code shown after authorization and waits for the login to finish."""
         login = self._logins.pop(nome, None)
         if login is None:
             raise RuntimeError("Nenhum login em andamento para esta conta. Comece de novo.")
         try:
-            os.write(login.fd, codigo.strip().encode() + b"\r")
+            os.write(login.fd, code.strip().encode() + b"\r")
             output = await asyncio.to_thread(_read, login.fd, None, 40)
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(login.proc.wait(), 5)
@@ -231,5 +234,5 @@ class Accounts:
         if self.ativa() == nome:
             (self._folder / "ativa").write_text(MAIN)
             self._apply(MAIN)
-        shutil.rmtree(self._dir(nome))  # os links compartilhados são apagados, não seguidos
+        shutil.rmtree(self._dir(nome))  # shared links are deleted, not followed
         return await self.list_all()

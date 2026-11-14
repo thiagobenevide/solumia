@@ -22,7 +22,7 @@ async def _run() -> None:
 
 
 def run() -> None:
-    """Entrypoint usado por `python -m worker.main` / script de desenvolvimento."""
+    """Entry point used by `python -m worker.main` / the development script."""
     configure_logging(get_settings())
     asyncio.run(_run())
 

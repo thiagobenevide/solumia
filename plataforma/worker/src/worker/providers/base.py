@@ -3,25 +3,25 @@ from typing import Any
 
 
 class Provider(ABC):
-    """Abstração sobre o backend local de LLM (LM Studio, Ollama, vLLM, ...).
+    """Abstraction over the local LLM backend (LM Studio, Ollama, vLLM, ...).
 
-    O WorkerClient nunca fala diretamente com um backend específico — só com
-    esta interface, para que novas implementações (OllamaProvider,
-    VLLMProvider, ...) possam ser adicionadas sem alterar o resto do Worker.
+    The WorkerClient never talks to a specific backend directly — only to this
+    interface, so new implementations (OllamaProvider, VLLMProvider, ...) can be
+    added without changing the rest of the Worker.
     """
 
     @abstractmethod
     async def list_models(self) -> list[str]:
-        """Lista os ids de modelo atualmente disponíveis no backend local."""
+        """Lists the model ids currently available on the local backend."""
 
     @abstractmethod
     async def chat_completion(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """Executa um chat completion (payload OpenAI-compatible) e retorna a resposta crua."""
+        """Runs a chat completion (OpenAI-compatible payload) and returns the raw response."""
 
     async def estado(self) -> dict[str, Any]:
-        """Modelos disponíveis, carregados e ocupados (processando) agora."""
+        """Models available, loaded and busy (processing) right now."""
         return {"modelos": await self.list_models(), "carregados": [], "ocupados": []}
 
     async def load(self, modelo: str) -> dict[str, Any]:
-        """Troca o modelo carregado (pedido pelo app, via Gateway)."""
+        """Switches the loaded model (requested by the app, through the Gateway)."""
         raise NotImplementedError("Este provider não troca de modelo")

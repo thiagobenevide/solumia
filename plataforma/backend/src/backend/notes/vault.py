@@ -1,9 +1,10 @@
-"""Cofre de notas: arquivos Markdown com frontmatter YAML, legíveis pelo Obsidian.
+"""Notes vault: Markdown files with YAML frontmatter, readable by Obsidian.
 
-O arquivo é a fonte da verdade (D3); o índice em memória é refeito só para os arquivos que mudaram.
-Relações vêm de dois lugares: todo `[[alvo]]` do corpo (tipo `menciona`) e toda propriedade cujos
-valores são links (`depende_de: ["[[X]]"]`), cujo nome vira o tipo da relação. Assim a estrutura
-serve a qualquer módulo sem esquema fixo: o Cobrador lê `status`/`prazo` e as relações `cobra`.
+The file is the source of truth (D3); the in-memory index is rebuilt only for the files that
+changed. Relations come from two places: every `[[target]]` in the body (type `menciona`) and every
+property whose values are links (`depende_de: ["[[X]]"]`), whose name becomes the relation type. So
+the structure serves any module without a fixed schema: the Nagger reads `status`/`prazo` and the
+`cobra` relations.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ LINK = re.compile(r"\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]")
 RESERVED = ("id", "tipo", "tags", "aliases", "criada", "atualizada")
 CLOSED = {"concluida", "cancelada", "resolvida", "arquivada"}
 DAYS_STOP = 14
-# tipos do app e como o vault do Obsidian costuma escrevê-los (`type: task`, `tipo: projeto`...)
+# app types and how the Obsidian vault usually writes them (`type: task`, `tipo: projeto`...)
 KINDS_DO_APP = {
     "nota": "nota",
     "tarefa": "tarefa",
@@ -51,7 +52,7 @@ class NoteConflict(ValueError):
 
 
 def key(text: str) -> str:
-    """Forma normalizada para resolver links: sem acento, minúsculas, espaços simples."""
+    """Normalized form to resolve links: no accents, lowercase, single spaces."""
     s = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     return re.sub(r"\s+", " ", s).strip().lower()
 
@@ -61,7 +62,7 @@ def name_file(titulo: str) -> str:
 
 
 def _json(v: Any) -> Any:
-    """YAML devolve date/datetime; a API só fala JSON."""
+    """YAML returns date/datetime; the API only speaks JSON."""
     if isinstance(v, datetime | date):
         return v.isoformat()
     if isinstance(v, dict):
@@ -84,7 +85,7 @@ def _now() -> str:
 @dataclass
 class Note:
     id: str
-    caminho: Path  # relativo ao cofre
+    caminho: Path  # relative to the vault
     titulo: str
     tipo: str
     tags: list[str]
@@ -94,7 +95,8 @@ class Note:
     criada: str
     atualizada: str
     mtime_ns: int = 0
-    tipo_original: str = ""  # como estava no arquivo (ex.: `task`); regravado se o tipo não mudou
+    # as it was in the file (e.g. `task`); written back if the type did not change
+    tipo_original: str = ""
 
     @property
     def status(self) -> str | None:
@@ -114,7 +116,7 @@ class Note:
         return self.status is not None and key(self.status) not in CLOSED
 
     def relacoes(self) -> list[tuple[str, str]]:
-        """(tipo, alvo) de cada link: propriedades primeiro, depois o corpo."""
+        """(type, target) of each link: properties first, then the body."""
         rel = []
         for name, value in self.propriedades.items():
             for item in _list(value):
@@ -149,13 +151,13 @@ class Note:
 
 
 def kind_of_app(raw: Any) -> str:
-    """Sinônimo do vault -> tipo do app; os demais (roteiro, canal...) ficam como estão."""
+    """Vault synonym -> app type; the others (roteiro, canal...) stay as they are."""
     text = str(raw or "").strip()
     return KINDS_DO_APP.get(key(text), text or "nota")
 
 
-def read(arquivo: Path, root: Path) -> Note:
-    text = arquivo.read_text("utf-8")
+def read(file: Path, root: Path) -> Note:
+    text = file.read_text("utf-8")
     meta: dict[str, Any] = {}
     body = text
     if text.startswith("---\n"):
@@ -168,15 +170,16 @@ def read(arquivo: Path, root: Path) -> Note:
             if isinstance(carregado, dict):
                 meta = _json(carregado)
                 body = text[end + 4 :].lstrip("\n")
-    rel = arquivo.relative_to(root)
-    mtime = arquivo.stat().st_mtime_ns
+    rel = file.relative_to(root)
+    mtime = file.stat().st_mtime_ns
     data_file = datetime.fromtimestamp(mtime / 1e9, UTC).replace(microsecond=0).isoformat()
     return Note(
-        # notas criadas fora do app (vault) não têm id: deriva do caminho, sem regravar o arquivo
+        # notes created outside the app (vault) have no id: derive it from the path, without
+        # rewriting the file
         id=str(meta.get("id") or hashlib.sha1(str(rel).encode()).hexdigest()[:10]),
         caminho=rel,
-        titulo=arquivo.stem,
-        # sem tipo mas com `status: todo` (tarefas do Obsidian) conta como tarefa
+        titulo=file.stem,
+        # no type but with `status: todo` (Obsidian tasks) counts as a task
         tipo=kind_of_app(
             meta.get("tipo")
             or meta.get("type")
@@ -199,7 +202,7 @@ class Vault:
         self._notes: dict[str, Note] = {}
         self._lock = threading.RLock()
 
-    # ---------- índice ----------
+    # ---------- index ----------
 
     def _sync(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -223,7 +226,7 @@ class Vault:
         return idx
 
     def _inputs(self, idx: dict[str, Note]) -> dict[str, list[tuple[Note, str, str]]]:
-        """id -> [(origem, tipo, alvo como escrito)]."""
+        """id -> [(source, type, target as written)]."""
         ent: dict[str, list[tuple[Note, str, str]]] = {}
         for n in self._notes.values():
             for kind, target in n.relacoes():
@@ -238,7 +241,7 @@ class Vault:
             raise NoteNotFound(id_)
         return self._notes[id_]
 
-    # ---------- leitura ----------
+    # ---------- reading ----------
 
     def list_all(self, q: str = "", tipo: str | None = None, tag: str | None = None) -> list[dict]:
         with self._lock:
@@ -247,7 +250,7 @@ class Vault:
             term = key(q)
             output = []
             for n in self._notes.values():
-                # "nota" também traz os tipos que o app não conhece (roteiro, moc...)
+                # "nota" also brings the types the app does not know (roteiro, moc...)
                 outro = tipo == "nota" and n.tipo not in KINDS_DO_APP.values()
                 if tipo and n.tipo != tipo and not outro or tag and tag not in n.tags:
                     continue
@@ -290,8 +293,8 @@ class Vault:
             }
 
     def in_folder(self, pasta: str) -> list[dict[str, Any]]:
-        """Notas dentro de `pasta` (e subpastas), com propriedades: para módulos que organizam
-        o cofre por pastas, como o YouTube (`Notas/Empreendimento/YouTube/<canal>/...`)."""
+        """Notes inside the folder (and subfolders), with properties: for modules that organize
+        the vault by folders, like YouTube (`Notas/Empreendimento/YouTube/<canal>/...`)."""
         root = Path(pasta)
         with self._lock:
             self._sync()
@@ -318,7 +321,7 @@ class Vault:
             ]
 
     def analysis(self, hoje: date | None = None) -> dict[str, Any]:
-        """Visão do cofre para o painel e o Cobrador: saúde dos links e o que está atrasado."""
+        """Vault overview for the dashboard and the Nagger: link health and what is overdue."""
         hoje = hoje or date.today()
         with self._lock:
             self._sync()
@@ -389,7 +392,7 @@ class Vault:
             ]
             return {"nos": nodes, "arestas": arestas}
 
-    # ---------- escrita ----------
+    # ---------- writing ----------
 
     def criar(self, dados: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
@@ -439,7 +442,7 @@ class Vault:
             del self._notes[id_]
 
     def _rename(self, n: Note, new: str) -> None:
-        """Move o arquivo e reescreve os links das outras notas, como o Obsidian faz."""
+        """Moves the file and rewrites the links of the other notes, like Obsidian does."""
         old = key(n.titulo)
 
         def trocar(m: re.Match[str]) -> str:

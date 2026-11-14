@@ -1,8 +1,8 @@
-"""Comandos no PC pedidos pelo chat: abrir site, pesquisar, abrir programa e desligar.
+"""PC commands requested by the chat: open a site, search, open a program and shut down.
 
-Só ações desta lista, nunca um comando de shell livre: o pedido vem pela internet
+Only actions from this list, never a free shell command: the request comes over the internet
 (app → VPS → worker).
-Rodam no ambiente gráfico do worker (serviço systemd do usuário, com DISPLAY da sessão)."""
+They run in the worker's graphical environment (systemd user service, with the session DISPLAY)."""
 
 import asyncio
 import shutil
@@ -14,7 +14,7 @@ TASK = "pc"
 
 BROWSERS = {"brave": "brave-browser", "firefox": "firefox"}
 
-# nome falado → executável; só os instalados aparecem como disponíveis
+# spoken name → executable; only the installed ones show up as available
 PROGRAMS = {
     "brave": "brave-browser",
     "navegador": "brave-browser",
@@ -44,7 +44,7 @@ def programs() -> list[str]:
 
 
 def _post(*args: str) -> None:
-    # sessão própria: o programa continua aberto se o worker reiniciar
+    # own session: the program stays open if the worker restarts
     subprocess.Popen(
         args,
         stdin=subprocess.DEVNULL,
@@ -72,8 +72,8 @@ def _url(url: str) -> str:
 
 async def execute(payload: dict[str, Any]) -> dict[str, Any]:
     """`payload["acao"]`: `abrir_site` (url), `pesquisar` (consulta, onde=google|youtube),
-    `abrir_programa` (nome), `desligar` (minutos=0) ou `cancelar_desligar`.
-    Devolve `{"ok": True, "detalhe": "..."}`; pedido inválido levanta [ComandoInvalido]."""
+    `abrir_programa` (nome), `desligar` (minutos=0) or `cancelar_desligar`.
+    Returns `{"ok": True, "detalhe": "..."}`; an invalid request raises [CommandInvalid]."""
     action = str(payload.get("acao", ""))
     if action == "abrir_site":
         url = _url(str(payload.get("url", "")))
@@ -100,7 +100,7 @@ async def execute(payload: dict[str, Any]) -> dict[str, Any]:
         if minutes:
             await _run("shutdown", "-h", f"+{minutes}")
             return {"ok": True, "detalhe": f"PC desliga em {minutes} min"}
-        # alguns segundos para a resposta chegar ao app antes de a rede cair
+        # a few seconds for the answer to reach the app before the network goes down
         _post("sh", "-c", "sleep 3; systemctl poweroff")
         return {"ok": True, "detalhe": "Desligando o PC"}
     if action == "cancelar_desligar":

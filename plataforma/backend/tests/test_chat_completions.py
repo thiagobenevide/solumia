@@ -26,9 +26,9 @@ def settings() -> Settings:
 
 @pytest.fixture
 def client(settings: Settings) -> Iterator[TestClient]:
-    # Ver comentário equivalente em test_ws_worker.py: precisa ser o mesmo
-    # portal/event loop para o WS (fake worker) e o POST concorrente se
-    # encontrarem através do asyncio.Future do WorkerRegistry.
+    # See the matching comment in test_ws_worker.py: the WS (fake worker) and
+    # the concurrent POST need the same portal/event loop to meet through the
+    # WorkerRegistry asyncio.Future.
     with TestClient(create_app(settings=settings)) as test_client:
         yield test_client
 

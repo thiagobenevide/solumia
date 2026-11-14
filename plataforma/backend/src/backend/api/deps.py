@@ -11,13 +11,13 @@ from backend.core.worker_registry import WorkerRegistry
 
 
 def get_settings(request: Request) -> Settings:
-    """Settings do app atual (`app.state.settings`), não o singleton de processo.
+    """Settings of the current app (`app.state.settings`), not the process singleton.
 
-    `create_app(settings=...)` permite instanciar o app com Settings
-    explícitas (usado pelos testes) — resolver via `request.app.state`
-    garante que essas settings sejam realmente usadas pelos endpoints, em
-    vez do singleton `gateway.core.config.get_settings()` cacheado a partir
-    do ambiente/.env do processo.
+    `create_app(settings=...)` allows instantiating the app with explicit
+    Settings (used by the tests) — resolving through `request.app.state`
+    makes sure those settings are really used by the endpoints, instead of
+    the `backend.core.config.get_settings()` singleton cached from the
+    process environment/.env.
     """
     settings: Settings = request.app.state.settings
     return settings
@@ -27,11 +27,11 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 def require_client_api_key(request: Request, settings: SettingsDep) -> None:
-    """Exige `Authorization: Bearer <token>`: o token de sessão do login do app (JWT) ou uma das
-    chaves de cliente de GATEWAY_CLIENT_API_KEYS (ferramentas OpenAI-compatible em /v1).
+    """Requires `Authorization: Bearer <token>`: the app login session token (JWT) or one of the
+    client keys in GATEWAY_CLIENT_API_KEYS (OpenAI-compatible tools on /v1).
 
-    Fail-secure: sem chave nem login configurados, todo pedido é negado. Em sucesso, o usuário
-    fica em `request.state.usuario`.
+    Fail-secure: with no key and no login configured, every request is denied. On success, the
+    user goes into `request.state.usuario`.
     """
     auth_header = request.headers.get("authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -46,7 +46,7 @@ def require_client_api_key(request: Request, settings: SettingsDep) -> None:
         request.state.usuario = payload["sub"]
         request.state.session = payload
         return
-    # Compara com todas as chaves em tempo constante (sem `in`, que para no primeiro acerto).
+    # Compare with every key in constant time (no `in`, which stops at the first match).
     scope = None
     for key, esc in settings.client_api_key_scopes.items():
         if token and hmac.compare_digest(token.encode(), key.encode()):
@@ -58,7 +58,7 @@ def require_client_api_key(request: Request, settings: SettingsDep) -> None:
     raise openai_error(401, "Token inválido ou expirado.", "invalid_api_key")
 
 
-# Rotas de cada escopo de chave (`escopo:chave` em GATEWAY_CLIENT_API_KEYS).
+# Routes of each key scope (`escopo:chave` in GATEWAY_CLIENT_API_KEYS).
 SCOPES: dict[str, tuple[str, ...]] = {
     "relogio": (
         "/api/saude/",
@@ -73,25 +73,27 @@ SCOPES: dict[str, tuple[str, ...]] = {
 
 def _scope_allows(scope: str, caminho: str) -> bool:
     if not scope:
-        return True  # chave sem prefixo: acesso completo (como antes)
+        return True  # key without a prefix: full access (as before)
     return any(caminho.startswith(p) for p in SCOPES.get(scope, ()))
 
 
 def session_validates(token: str, settings: Settings) -> dict[str, object] | None:
-    """Payload do token de sessão do login: assinatura e validade ok, sem escopo (o de mídia não
-    abre a API) e de geração não revogada por "sair de todos os aparelhos"."""
+    """Payload of the login session token: signature and validity ok, no scope (the media one does
+    not open the API) and from a generation not revoked by "sign out of all devices"."""
     payload = validate_token(token, settings.jwt_secret_key.get_secret_value()) if token else None
     if payload is None or payload.get("esc"):
         return None
     generation = payload.get("ger", 0)
-    if not isinstance(generation, int) or generation < read_generation(settings.sessoes_geracao_arquivo):
+    if not isinstance(generation, int) or generation < read_generation(
+        settings.sessoes_geracao_arquivo
+    ):
         return None
     return payload
 
 
 def require_totp_recent(request: Request, settings: SettingsDep) -> None:
-    """Para rotas que executam comandos no PC (módulo Código): além do token, um código do
-    Authenticator digitado nas últimas `codigo_totp_horas` (claim `totp` do token de sessão)."""
+    """For routes that run commands on the PC (Code module): besides the token, an Authenticator
+    code typed within the last `codigo_totp_horas` (claim `totp` of the session token)."""
     session = getattr(request.state, "session", None)
     if not isinstance(session, dict):
         raise openai_error(403, "O Código só abre com o login do app.", "totp_required")

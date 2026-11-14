@@ -6,9 +6,9 @@ import pytest
 from conftest import AUTH_HEADERS, CLIENT_API_KEY
 from fastapi.testclient import TestClient
 
+from backend.core.config import Settings
 from backend.files import wopi
 from backend.files.library import Collection
-from backend.core.config import Settings
 from backend.main import create_app
 
 DISCOVERY = """<?xml version="1.0" encoding="utf-8"?>
@@ -25,7 +25,7 @@ DOCX = b"PK\x03\x04 docx de mentira"
 
 @pytest.fixture
 def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
-    # Sem LibreOffice nos testes: a reconversão agendada pelo PutFile não faz nada.
+    # No LibreOffice in tests: the reconversion scheduled by PutFile does nothing.
     monkeypatch.setattr(Collection, "convert", lambda self, id_: {})
     monkeypatch.setitem(
         wopi._discovery, "http://collabora:9980", (time.time(), wopi._read_discovery(DISCOVERY))
@@ -42,7 +42,7 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     return TestClient(create_app(settings=s), headers=AUTH_HEADERS)
 
 
-def _sessao(api: TestClient) -> tuple[str, dict]:
+def _session(api: TestClient) -> tuple[str, dict]:
     r = api.post("/api/arquivos", files={"arquivo": ("Relatório.docx", DOCX)})
     assert r.status_code == 201, r.text
     id_ = r.json()["id"]
@@ -51,8 +51,8 @@ def _sessao(api: TestClient) -> tuple[str, dict]:
     return id_, s.json()
 
 
-def test_sessao_monta_action_url(api: TestClient) -> None:
-    id_, s = _sessao(api)
+def test_session_builds_action_url(api: TestClient) -> None:
+    id_, s = _session(api)
     url = urlsplit(s["url"])
     assert (url.scheme, url.netloc, url.path) == (
         "https",
@@ -62,14 +62,14 @@ def test_sessao_monta_action_url(api: TestClient) -> None:
     assert "<" not in s["url"]
     assert parse_qs(url.query)["WOPISrc"] == [f"http://gateway:48080/wopi/files/{id_}"]
     assert s["access_token_ttl"] > time.time() * 1000
-    # sem a chave do app não abre sessão
+    # without the app key no session opens
     without_key = TestClient(api.app).post(f"/api/arquivos/{id_}/collabora")
     assert without_key.status_code == 401
 
 
 def test_check_get_put(api: TestClient) -> None:
-    id_, s = _sessao(api)
-    wopi_cli = TestClient(api.app)  # o Collabora não tem a chave do app
+    id_, s = _session(api)
+    wopi_cli = TestClient(api.app)  # Collabora does not have the app key
     q = {"access_token": s["access_token"]}
     info = wopi_cli.get(f"/wopi/files/{id_}", params=q).json()
     assert info["BaseFileName"] == "Relatório.docx" and info["Size"] == len(DOCX)
@@ -86,8 +86,8 @@ def test_check_get_put(api: TestClient) -> None:
     assert api.get(f"/api/arquivos/{id_}").json()["status"] == "convertendo"
 
 
-def test_token_invalido_ou_expirado(api: TestClient) -> None:
-    id_, s = _sessao(api)
+def test_invalid_or_expired_token(api: TestClient) -> None:
+    id_, s = _session(api)
     cli = TestClient(api.app)
     assert cli.get(f"/wopi/files/{id_}").status_code == 401
     assert (
@@ -98,12 +98,12 @@ def test_token_invalido_ou_expirado(api: TestClient) -> None:
     assert cli.get(f"/wopi/files/{id_}", params={"access_token": vencido}).status_code == 401
     outro, _ = wopi.generate_token(b"segredo-de-teste", "aaaaaaaaaaaa", 60)
     assert cli.get(f"/wopi/files/{id_}/contents", params={"access_token": outro}).status_code == 401
-    # a chave do app não serve de token WOPI
+    # the app key does not work as a WOPI token
     assert cli.get(f"/wopi/files/{id_}", params={"access_token": CLIENT_API_KEY}).status_code == 401
 
 
-def test_travas(api: TestClient) -> None:
-    id_, s = _sessao(api)
+def test_locks(api: TestClient) -> None:
+    id_, s = _session(api)
     cli = TestClient(api.app)
     q = {"access_token": s["access_token"]}
     url = f"/wopi/files/{id_}"
@@ -116,14 +116,14 @@ def test_travas(api: TestClient) -> None:
 
     assert op("GET_LOCK").headers["X-WOPI-Lock"] == ""
     assert op("LOCK", "A").status_code == 200
-    assert op("LOCK", "A").status_code == 200  # mesma trava renova
+    assert op("LOCK", "A").status_code == 200  # the same lock renews
     r = op("LOCK", "B")
     assert r.status_code == 409 and r.headers["X-WOPI-Lock"] == "A"
     assert op("GET_LOCK").headers["X-WOPI-Lock"] == "A"
     assert op("REFRESH_LOCK", "A").status_code == 200
     assert op("REFRESH_LOCK", "B").status_code == 409
 
-    # PutFile com outra trava é recusado
+    # PutFile with another lock is refused
     put = cli.post(
         f"{url}/contents",
         params=q,
@@ -138,8 +138,8 @@ def test_travas(api: TestClient) -> None:
     assert op("GET_LOCK").headers["X-WOPI-Lock"] == ""
 
 
-def test_pagina_abrir(api: TestClient) -> None:
-    id_, s = _sessao(api)
+def test_open_page(api: TestClient) -> None:
+    id_, s = _session(api)
     r = TestClient(api.app).get(f"/wopi/abrir/{id_}", params={"t": s["access_token"]})
     assert r.status_code == 200
     assert (
@@ -150,7 +150,7 @@ def test_pagina_abrir(api: TestClient) -> None:
     assert TestClient(api.app).get(f"/wopi/abrir/{id_}", params={"t": "x"}).status_code == 401
 
 
-def test_sem_collabora_configurado(tmp_path: Path) -> None:
+def test_without_collabora_configured(tmp_path: Path) -> None:
     s = Settings(
         client_api_keys=CLIENT_API_KEY, arquivos_dir=str(tmp_path), notas_dir=str(tmp_path)
     )

@@ -1,13 +1,14 @@
-"""Mapeamento reverso de citações: o autor anexa o documento (pré-TCC inteiro ou só uma parte,
-como introdução ou resumo, em .docx ou PDF) a um projeto de leitura; o arquivo fica nos Arquivos e
-o Claude (Claude Code, `claude_json` no worker, nunca a LLM local nem a API) lista as referências
-(documento inteiro), depois as citações (o texto em partes, para não estourar a resposta), liga
-cada referência a um PDF da biblioteca, baixa sozinho o PDF das obras de acesso aberto (OpenAlex e,
-sem ele, o Claude buscando na web) e acha em cada PDF o trecho citado. O trecho vira um destaque no
-PDF, no projeto (`projetos: [id]`), já classificado (seção, tipo de citação, "Usado"); as
-referências fechadas viram pendências de download (tarefas no Quadro de Rotinas). "Refazer" roda
-tudo de novo e só acrescenta o que ainda não foi marcado (id do destaque estável por citação).
-Nada gravado para o autor (comentário, observação) menciona a IA: ele revisa e decide."""
+"""Reverse citation mapping: the author attaches the document (whole pre-thesis or just a part,
+such as the introduction or abstract, as .docx or PDF) to a reading project; the file stays in Files
+and Claude (Claude Code, `claude_json` on the worker, never the local LLM or the API) lists the
+references (whole document), then the citations (the text in parts, so the answer does not
+overflow), links each reference to a library PDF, downloads by itself the PDF of open-access works
+(OpenAlex and, without it, Claude searching the web) and finds the cited excerpt in each PDF. The
+excerpt becomes a highlight in the PDF, in the project (`projetos: [id]`), already classified
+(section, citation type, "Usado"); closed-access references become download to-dos (tasks on the
+Routines board). "Refazer" runs everything again and only adds what is not marked yet (highlight id
+stable per citation). Nothing stored for the author (comment, note) mentions the AI: they review
+and decide."""
 
 from __future__ import annotations
 
@@ -32,19 +33,19 @@ from backend.api.deps import require_client_api_key
 from backend.files.download_references import fetch_pdf_open
 from backend.files.library import (
     AnnotationsConflict,
+    Collection,
     FileInvalid,
     FileNotFound,
-    Collection,
 )
 from backend.files.rewrite import Rewrite
 
 logger = logging.getLogger("gateway.mapeamento")
 
-COLOR_HIGHLIGHT = 0x66FFD54F  # amarelo translúcido, como o marca-texto
-LIMIT_CATALOG = 400  # caracteres da 1ª página de cada PDF para o Claude reconhecer a obra
-LIMIT_PDF = 160_000  # caracteres de um PDF por pedido (livro grande: só as páginas prováveis)
-LIMIT_PART = 30_000  # caracteres do documento por pedido de citações
-MODEL = "opus"  # mapeamento delicado: o modelo mais capaz do Claude Code
+COLOR_HIGHLIGHT = 0x66FFD54F  # translucent yellow, like a highlighter
+LIMIT_CATALOG = 400  # characters of each PDF's first page for Claude to recognize the work
+LIMIT_PDF = 160_000  # characters of a PDF per request (large book: only the likely pages)
+LIMIT_PART = 30_000  # document characters per citations request
+MODEL = "opus"  # delicate mapping: Claude Code's most capable model
 SEARCHES_CONCURRENT = 3
 TAG_TASK = "download-referencia"
 
@@ -56,11 +57,11 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-# --- texto do documento e dos PDFs ---
+# --- document and PDF text ---
 
 
 def text_docx(content: bytes) -> str:
-    """Parágrafos do corpo (com os títulos marcados por `#`) e as notas de rodapé."""
+    """Body paragraphs (with headings marked by `#`) and the footnotes."""
     try:
         zipado = zipfile.ZipFile(io.BytesIO(content))
         body = ET.fromstring(zipado.read("word/document.xml"))
@@ -97,8 +98,9 @@ def text_docx(content: bytes) -> str:
 
 
 def divide_document(text: str, limite: int = LIMIT_PART) -> list[str]:
-    """Partes de até [limite] caracteres, cortadas de preferência num título (`#`); cada parte
-    que começa no meio de uma seção leva o título dela, para a citação sair com a seção certa."""
+    """Parts of up to the limit in characters, cut preferably at a heading (`#`); each part that
+    starts in the middle of a section carries its heading, so the citation comes out with the right
+    section."""
     parts: list[str] = []
     current: list[str] = []
     size, secao, secao_of_part = 0, "", ""
@@ -121,7 +123,7 @@ def divide_document(text: str, limite: int = LIMIT_PART) -> list[str]:
 
 
 def pages_pdf(pdf: Path) -> list[str]:
-    """Texto de cada página (pdftotext; páginas separadas por form feed)."""
+    """Text of each page (pdftotext; pages separated by form feed)."""
     try:
         r = subprocess.run(
             ["pdftotext", str(pdf), "-"], capture_output=True, timeout=120, text=True
@@ -135,8 +137,8 @@ def pages_pdf(pdf: Path) -> list[str]:
 
 
 def words_pdf(pdf: Path, page: int) -> list[tuple[str, list[float], int]]:
-    """Palavras da página (0-based) com a caixa em pontos PDF, origem no canto de cima (como o
-    leitor do app) e o número da linha."""
+    """Words of the page (0-based) with their box in PDF points, origin at the top corner (like the
+    app reader) and the line number."""
     try:
         r = subprocess.run(
             ["pdftotext", "-bbox-layout", "-f", str(page + 1), "-l", str(page + 1),
@@ -160,20 +162,20 @@ def _norm(text: str) -> str:
 
 
 def _tokens(text: str) -> list[str]:
-    text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)  # hifenização de quebra de linha
+    text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)  # line-break hyphenation
     return [t for t in (_norm(p) for p in text.split()) if t]
 
 
 def locate(
     words: list[tuple[str, list[float], int]], span: str
 ) -> tuple[list[list[float]], str, float]:
-    """Acha [trecho] nas palavras da página (aproximado: o PDF quebra linhas, hifeniza e às vezes
-    o trecho vem com pequenas diferenças). Devolve um retângulo por linha, o texto como está no PDF
-    e a cobertura (0–1)."""
+    """Finds the excerpt in the page words (approximate: the PDF breaks lines, hyphenates and
+    sometimes the excerpt comes with small differences). Returns one rectangle per line, the text as
+    it is in the PDF and the coverage (0–1)."""
     target = _tokens(span)
     if not target or not words:
         return [], "", 0.0
-    # junta palavra hifenizada no fim da linha com a primeira da linha seguinte
+    # join a hyphenated word at the end of the line with the first one of the next line
     toks: list[str] = []
     origin: list[list[int]] = []
     i = 0
@@ -222,21 +224,22 @@ def locate(
 
 # --- Claude ---
 
-SYSTEM_REFERENCES = """Você analisa trabalhos acadêmicos brasileiros (pré-projeto de TCC, \
-monografia, artigo) em ABNT para o mapeamento reverso das citações: lista as obras que o \
-documento cita, para o autor marcar os trechos nas obras originais.
+SYSTEM_REFERENCES = """You analyze Brazilian academic works (TCC pre-project, monograph, paper) in \
+ABNT format for the reverse mapping of citations: you list the works the document cites, so that \
+the author can mark the passages in the original works.
 
-Regras fixas:
-- Uma entrada por obra da lista de REFERÊNCIAS do documento e também por obra citada no texto \
-que não está na lista (`fora_da_lista` = true). O documento pode ser só uma parte do trabalho \
-(introdução, resumo/abstract, um capítulo) sem lista de referências: então monte uma entrada \
-para cada obra citada no texto, todas com `fora_da_lista` = true.
-- `referencia`: a entrada completa como está no documento; sem ela, o que o texto traz \
-("SILVA, 2020"). `autor_citacao`: como aparece no texto ("Silva", "Silva e Souza", "Silva et \
-al."). `titulo`: só o título da obra, como está no documento; "" se o documento não traz.
-- `arquivo_id`: o id do catálogo de PDFs da biblioteca que é essa mesma obra (confira título, \
-autores e ano pelo início do texto); "" se nenhum for ela. Nunca ligue a uma obra parecida.
-- Não invente obras nem complete dados que o documento não traz."""
+Fixed rules:
+- One entry per work in the document's REFERENCES list and also per work cited in the text that is \
+not in the list (`fora_da_lista` = true). The document may be only a part of the work \
+(introduction, abstract, one chapter) with no reference list: then build one entry for each work \
+cited in the text, all with `fora_da_lista` = true.
+- `referencia`: the complete entry as it is in the document; without it, what the text brings \
+("SILVA, 2020"). `autor_citacao`: as it appears in the text ("Silva", "Silva e Souza", "Silva et \
+al."). `titulo`: only the title of the work, as it is in the document; "" if the document does not \
+give it.
+- `arquivo_id`: the id in the library's PDF catalog that is this very same work (check title, \
+authors and year from the start of the text); "" if none is it. Never link to a similar work.
+- Do not invent works or complete data the document does not give."""
 
 SCHEMA_REFERENCES = {
     "type": "object",
@@ -264,23 +267,25 @@ SCHEMA_REFERENCES = {
     "additionalProperties": False,
 }
 
-SYSTEM_QUOTES = """Você faz o mapeamento reverso das citações de um trabalho acadêmico \
-brasileiro (ABNT): recebe a lista numerada das obras citadas e uma parte do texto, e lista cada \
-citação feita nessa parte.
+SYSTEM_QUOTES = """You do the reverse mapping of the citations of a Brazilian academic work \
+(ABNT): you receive the numbered list of cited works and one part of the text, and you list each \
+citation made in that part.
 
-Regras fixas:
-- Cada ocorrência de citação no corpo do texto, na ordem, com `ref` = o número da obra na lista. \
-Ignore a própria lista de referências, sumário e cabeçalhos.
-- `trecho_documento`: a frase (ou frases) do documento que traz a citação, copiada como está.
-- `citacao`: nas diretas, só o texto entre aspas ou o recuado; "" nas indiretas.
-- `tipo`: "direta", "indireta" ou "apud" (citação de citação: `ref` é a obra consultada, a que \
-tem o "apud").
-- `pagina`: a página citada como está ("p. 23"), ou "".
-- `secao`: o título da seção onde a citação está (linhas começando com # são títulos; \
-"continuação da seção" diz a seção do começo da parte). Sem títulos marcados, use o título \
-que o texto mostra (ex.: "Introdução", "Resumo").
-- Uma mesma frase citando duas obras gera duas citações. Não invente citações; citação de obra \
-que não está na lista fica de fora."""
+Fixed rules:
+- Each occurrence of a citation in the body of the text, in order, with `ref` = the number of the \
+work in the list. Ignore the reference list itself, the table of contents and headers.
+- `trecho_documento`: the sentence (or sentences) of the document that brings the citation, copied \
+as it is.
+- `citacao`: for direct quotes, only the text in quotation marks or the indented block; "" for \
+indirect ones.
+- `tipo`: "direta", "indireta" or "apud" (a citation of a citation: `ref` is the work consulted, \
+the one that has the "apud").
+- `pagina`: the cited page as it is ("p. 23"), or "".
+- `secao`: the title of the section where the citation is (lines starting with # are titles; \
+"continuação da seção" gives the section at the start of the part). With no marked titles, use \
+the title the text shows (e.g.: "Introdução", "Resumo").
+- One sentence citing two works produces two citations. Do not invent citations; a citation of a \
+work that is not in the list is left out."""
 
 SCHEMA_QUOTES = {
     "type": "object",
@@ -306,18 +311,20 @@ SCHEMA_QUOTES = {
     "additionalProperties": False,
 }
 
-SYSTEM_FETCH = """Você acha na internet o PDF gratuito e público de uma obra acadêmica citada \
-num trabalho, para baixar. Use a busca na web e abra as páginas para conferir.
+SYSTEM_FETCH = """You find on the internet the free, public PDF of an academic work cited in a \
+paper, to download it. Use web search and open the pages to check them.
 
-Regras fixas:
-- Identifique a obra pela referência; se ela está incompleta (só autor e ano), use as frases \
-que a citam para achar qual é. Sem certeza de que é a mesma obra, `encontrado` = false.
-- `urls_pdf`: links que baixam direto o PDF da própria obra (mesmo título, autores e ano; \
-preprint/versão aceita do mesmo trabalho vale), de acesso aberto: repositórios institucionais, \
-SciELO, PubMed Central, arXiv, site do periódico ou do autor. Do melhor para o pior. Nunca \
-sites piratas nem páginas que pedem login ou pagamento.
-- `titulo`, `doi` e `referencia_completa` (ABNT) da obra identificada; "" no que não achar.
-- Obra fechada, sem PDF público: `encontrado` = true e `urls_pdf` vazio."""
+Fixed rules:
+- Identify the work by its reference; if it is incomplete (only author and year), use the \
+sentences that cite it to find out which one it is. Without certainty that it is the same work, \
+`encontrado` = false.
+- `urls_pdf`: links that directly download the PDF of the work itself (same title, authors and \
+year; a preprint/accepted version of the same work counts), in open access: institutional \
+repositories, SciELO, PubMed Central, arXiv, the journal's or the author's site. From best to \
+worst. Never pirate sites or pages that ask for login or payment.
+- `titulo`, `doi` and `referencia_completa` (ABNT) of the identified work; "" for whatever you \
+cannot find.
+- Closed work, with no public PDF: `encontrado` = true and empty `urls_pdf`."""
 
 SCHEMA_FETCH = {
     "type": "object",
@@ -333,19 +340,21 @@ SCHEMA_FETCH = {
     "additionalProperties": False,
 }
 
-SYSTEM_LOCATE = """Você confere citações de um trabalho acadêmico nas obras originais, como o \
-autor faria com o marca-texto: para cada citação, acha na obra o trecho que ela usa.
+SYSTEM_LOCATE = """You check the citations of an academic work against the original works, as the \
+author would with a highlighter: for each citation, you find in the work the passage it uses.
 
-Regras fixas:
-- A obra vem página por página ("=== Página N ===", N é a página do PDF, que pode diferir da \
-numeração impressa citada no trabalho).
-- `trecho`: copie da obra, palavra por palavra como está no texto da página (mesmo com erros de \
-extração), o trecho que a citação usa: nas diretas, exatamente o texto citado; nas indiretas \
-(paráfrase), a frase ou as poucas frases que sustentam a ideia (no máximo um parágrafo).
-- `pagina`: o N da página onde o trecho começa. Se a citação não está nesta obra ou nas páginas \
-enviadas, devolva `encontrado` = false, com o motivo em `observacao`.
-- `confianca`: "alta" quando o trecho é claramente o citado, "media" ou "baixa" quando é o mais \
-provável. Não invente texto que não está na obra."""
+Fixed rules:
+- The work comes page by page ("=== Page N ===", N is the PDF page, which may differ from the \
+printed numbering cited in the paper).
+- `trecho`: copy from the work, word for word as it is in the page text (even with extraction \
+errors), the passage the citation uses: for direct quotes, exactly the quoted text; for indirect \
+ones (paraphrase), the sentence or the few sentences that support the idea (at most one \
+paragraph).
+- `pagina`: the N of the page where the passage starts. If the citation is not in this work or in \
+the pages sent, return `encontrado` = false, with the reason in `observacao` (in Brazilian \
+Portuguese).
+- `confianca`: "alta" when the passage is clearly the cited one, "media" or "baixa" when it is the \
+most likely one. Do not invent text that is not in the work."""
 
 SCHEMA_LOCATE = {
     "type": "object",
@@ -374,15 +383,15 @@ SCHEMA_LOCATE = {
 
 def prompt_references(document: str, catalog: list[dict[str, Any]]) -> str:
     lines = [
-        f'- id "{c["id"]}" · arquivo: {c["titulo"]}'
-        + (f" · ficha: {c['ficha']}" if c.get("ficha") else "")
-        + f"\n  início: {c['inicio']}"
+        f'- id "{c["id"]}" · file: {c["titulo"]}'
+        + (f" · record: {c['ficha']}" if c.get("ficha") else "")
+        + f"\n  start: {c['inicio']}"
         for c in catalog
     ]
     return (
-        "<catalogo_de_pdfs>\n" + ("\n".join(lines) or "(biblioteca vazia)")
-        + "\n</catalogo_de_pdfs>\n\n<documento>\n" + document + "\n</documento>\n\n"
-        "Liste todas as obras citadas no documento, ligando ao catálogo."
+        "<pdf_catalog>\n" + ("\n".join(lines) or "(empty library)")
+        + "\n</pdf_catalog>\n\n<document>\n" + document + "\n</document>\n\n"
+        "List every work cited in the document, linking it to the catalog."
     )
 
 
@@ -397,25 +406,25 @@ def _list_works(refs: dict[int, dict[str, Any]]) -> str:
 
 def prompt_quotes(part: str, refs: dict[int, dict[str, Any]], k: int, total: int) -> str:
     return (
-        f"<obras>\n{_list_works(refs)}\n</obras>\n\n"
-        f"<texto parte=\"{k} de {total}\">\n{part}\n</texto>\n\n"
-        "Liste todas as citações desta parte do texto."
+        f"<works>\n{_list_works(refs)}\n</works>\n\n"
+        f"<text part=\"{k} of {total}\">\n{part}\n</text>\n\n"
+        "List every citation in this part of the text."
     )
 
 
 def prompt_fetch(ref: dict[str, Any], cits: list[dict[str, Any]]) -> str:
     sentences = "\n".join(f"- {c['trecho_documento'][:400]}" for c in cits[:4])
     return (
-        f"Referência como está no trabalho: {ref['referencia']}\n"
-        f"Autor no texto: {ref['autor_citacao']} · ano: {ref['ano']}"
-        + (f" · título: {ref['titulo']}" if ref.get("titulo") else "")
-        + (f"\n\nFrases do trabalho que citam a obra:\n{sentences}" if sentences else "")
-        + "\n\nAche o PDF público desta obra."
+        f"Reference as it is in the paper: {ref['referencia']}\n"
+        f"Author in the text: {ref['autor_citacao']} · year: {ref['ano']}"
+        + (f" · title: {ref['titulo']}" if ref.get("titulo") else "")
+        + (f"\n\nSentences of the paper that cite the work:\n{sentences}" if sentences else "")
+        + "\n\nFind the public PDF of this work."
     )
 
 
 def _pages_likely(pages: list[str], citacoes: list[dict[str, Any]]) -> list[int]:
-    """Livro grande: as páginas com mais palavras em comum com as citações, até o limite."""
+    """Large book: the pages with the most words in common with the citations, up to the limit."""
     total = sum(len(p) for p in pages)
     if total <= LIMIT_PDF:
         return list(range(len(pages)))
@@ -438,20 +447,20 @@ def _pages_likely(pages: list[str], citacoes: list[dict[str, Any]]) -> list[int]
 def prompt_locate(ref: dict[str, Any], citacoes: list[dict[str, Any]], pages: list[str],
                      indexes: list[int]) -> str:
     cits = "\n\n".join(
-        f"[{n}] tipo: {c['tipo']}" + (f" · página citada: {c['pagina']}" if c["pagina"] else "")
-        + f"\nno trabalho: {c['trecho_documento']}"
-        + (f"\ntexto citado: {c['citacao']}" if c["citacao"] else "")
+        f"[{n}] tipo: {c['tipo']}" + (f" · cited page: {c['pagina']}" if c["pagina"] else "")
+        + f"\nin the paper: {c['trecho_documento']}"
+        + (f"\nquoted text: {c['citacao']}" if c["citacao"] else "")
         for n, c in enumerate(citacoes)
     )
-    work = "\n\n".join(f"=== Página {i + 1} ===\n{pages[i].strip()}" for i in indexes)
+    work = "\n\n".join(f"=== Page {i + 1} ===\n{pages[i].strip()}" for i in indexes)
     return (
-        f"Obra: {ref['referencia']}\n\n<citacoes>\n{cits}\n</citacoes>\n\n"
-        f"<obra>\n{work}\n</obra>\n\nAche na obra o trecho de cada citação (`c` = número entre "
-        "colchetes)."
+        f"Work: {ref['referencia']}\n\n<citations>\n{cits}\n</citations>\n\n"
+        f"<work>\n{work}\n</work>\n\nFind in the work the passage of each citation (`c` = the "
+        "number in brackets)."
     )
 
 
-# --- processo ---
+# --- process ---
 
 
 def _kind_quote(c: dict[str, Any], text: str) -> str:
@@ -468,8 +477,8 @@ def _id_highlight(project_id: str, c: dict[str, Any]) -> str:
 
 
 class Mapper:
-    """Roda um mapeamento por projeto por vez, em segundo plano; o estado fica no projeto
-    (`mapeamento`), para o app acompanhar."""
+    """Runs one mapping per project at a time, in the background; the state stays in the project
+    (`mapeamento`), for the app to follow."""
 
     def __init__(self, request_app: Any) -> None:
         self.app = request_app
@@ -544,7 +553,7 @@ class Mapper:
     async def _run(self, project_id: str, documento_id: str) -> None:
         try:
             await self._mapear(project_id, documento_id)
-        except Exception as e:  # noqa: BLE001 — qualquer falha vira estado legível no app
+        except Exception as e:  # noqa: BLE001 — any failure becomes a readable state in the app
             logger.exception("mapeamento do projeto %s falhou", project_id)
             self._save(project_id, estado="erro", erro=str(e) or type(e).__name__,
                          concluido=_now())
@@ -624,7 +633,7 @@ class Mapper:
             cits = [c for c in quotes if int(c["ref"]) == ref["n"]]
             try:
                 await self._mark_work(project_id, ref, cits)
-            except Exception as e:  # noqa: BLE001 — uma obra com problema não para as outras
+            except Exception as e:  # noqa: BLE001 — a work with a problem does not stop the others
                 logger.exception("marcação em %s falhou", ref["arquivo_id"])
                 ref["nao_localizadas"].append(f"Falhou nesta obra ({e}); toque em Refazer.")
             marcadas += ref["marcadas"]
@@ -646,9 +655,9 @@ class Mapper:
 
     async def _download_abertos(self, project_id: str, referencias: list[dict[str, Any]],
                               citacoes: list[dict[str, Any]]) -> None:
-        """Para cada referência: DOI e link do artigo (para a planilha citar com o link) e, se
-        ainda não tem PDF, baixa sozinho o de acesso aberto (OpenAlex; sem ele, o Claude busca
-        na web) para Arquivos (pasta "Referências"). As fechadas ficam como pendência."""
+        """For each reference: DOI and article link (for the spreadsheet to cite with the link) and,
+        if it has no PDF yet, downloads the open-access one by itself (OpenAlex; without it, Claude
+        searches the web) into Files ("Referências" folder). Closed ones stay as to-dos."""
         lock = asyncio.Semaphore(SEARCHES_CONCURRENT)
         done = 0
 
@@ -658,7 +667,7 @@ class Mapper:
                 try:
                     await self._fetch_work(ref, [c for c in citacoes
                                                   if int(c["ref"]) == ref["n"]])
-                except Exception:  # noqa: BLE001 — falha numa obra não para o mapeamento
+                except Exception:  # noqa: BLE001 — a failure in one work does not stop the mapping
                     logger.exception("busca da referência %r falhou", ref.get("titulo"))
                 done += 1
                 self._save(project_id, referencias=referencias,
@@ -715,7 +724,7 @@ class Mapper:
         pages = await asyncio.to_thread(pages_pdf, pdf)
         existentes = {d["id"] for d in self.collection.annotations(aid)["destaques"]}
         a_fazer = [c for c in cits if _id_highlight(project_id, c) not in existentes]
-        ref["marcadas"] = len(cits) - len(a_fazer)  # já marcadas num mapeamento anterior
+        ref["marcadas"] = len(cits) - len(a_fazer)  # already marked in a previous mapping
         if not a_fazer or not pages:
             if not pages:
                 ref["nao_localizadas"] = ["PDF sem texto (escaneado?): marque à mão."]
@@ -797,10 +806,11 @@ class Mapper:
         raise RuntimeError("Não consegui gravar as marcações (arquivo sendo editado).")
 
     def _card_readings(self, referencias: list[dict[str, Any]]) -> None:
-        """Cria a ficha da leitura (autor, ano, referência, DOI e link) dos PDFs ligados que ainda
-        não têm, e completa DOI/link/referência que faltam nas existentes, para a matriz e a
-        planilha citarem certo e com o link do artigo."""
-        from estudos.studies import AREAS
+        """Creates the reading record (author, year, reference, DOI and link) for the linked PDFs
+        that
+        have none yet, and fills missing DOI/link/reference in the existing ones, so the matrix and
+        the spreadsheet cite correctly and with the article link."""
+        from studies.studies import AREAS
 
         cards = {
             x["arquivo_id"]: x for x in self.studies.readings.ler() if x.get("arquivo_id")
@@ -833,8 +843,8 @@ class Mapper:
             })
 
     def _tasks_download(self, project_id: str, referencias: list[dict[str, Any]]) -> None:
-        """Pendência de download no Quadro de Rotinas para cada referência sem PDF; a que já
-        tem PDF é concluída."""
+        """Download to-do on the Routines board for each reference without a PDF; the one that
+        already has a PDF is completed."""
         frame = getattr(self.app.state, "quadro", None)
         if frame is None:
             return
@@ -881,7 +891,7 @@ MapperDep = Annotated[Mapper, Depends(get_mapper)]
 
 
 def _project(m: Mapper, id_: str) -> dict[str, Any]:
-    from estudos.studies import NotFound
+    from studies.studies import NotFound
 
     try:
         project: dict[str, Any] = m.studies.projects.obter(id_)
@@ -900,8 +910,8 @@ def state(id_: str, m: MapperDep) -> Any:
 async def attach(
     id_: str, m: MapperDep, tarefas: BackgroundTasks, arquivo: Annotated[UploadFile, File()]
 ) -> Any:
-    """Guarda o documento nos Arquivos (pasta com o nome do projeto; um documento já anexado é
-    substituído pela versão nova) e começa o mapeamento."""
+    """Stores the document in Files (folder named after the project; an already attached document
+    is replaced by the new version) and starts the mapping."""
     project = _project(m, id_)
     name = arquivo.filename or "documento.docx"
     if Path(name).suffix.lower() not in (".docx", ".pdf"):
@@ -911,7 +921,7 @@ async def attach(
     try:
         current = m.collection.obter(previous) if previous else None
     except FileNotFound:
-        current = None  # o documento anterior foi excluído dos Arquivos
+        current = None  # the previous document was deleted from Files
     try:
         if current and current.get("extensao") == "docx" and name.lower().endswith(".docx"):
             meta = m.collection.substituir(previous, content)

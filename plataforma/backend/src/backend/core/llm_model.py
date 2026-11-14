@@ -3,13 +3,15 @@ from pathlib import Path
 
 
 class ModelLLM:
-    """Modelo do LLM local escolhido no app. Fica em `llm.json` e vale na hora, sem reiniciar.
+    """Local LLM model chosen in the app. Lives in `llm.json` and applies immediately, without a
+    restart.
 
-    Sem escolha salva, usa [padrao] (GATEWAY_ROTINAS_MODELO); vazio = o carregado no worker.
+    Without a saved choice, uses the default (GATEWAY_ROTINAS_MODELO); empty = the one loaded on
+    the worker.
     """
 
-    def __init__(self, arquivo: str, default: str = "") -> None:
-        self._arquivo = Path(arquivo).expanduser()
+    def __init__(self, file: str, default: str = "") -> None:
+        self._arquivo = Path(file).expanduser()
         self._default = default
 
     @property

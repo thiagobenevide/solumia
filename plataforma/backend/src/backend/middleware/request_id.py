@@ -14,9 +14,9 @@ REQUEST_ID_HEADER = "X-Request-ID"
 
 
 class RequestIdMiddleware:
-    """Atribui um request_id único a cada requisição, expõe via header de
-    resposta e disponibiliza no contexto de logging para correlação de logs.
-    Também registra uma linha de acesso com método, path, status e latência.
+    """Assigns a unique request_id to each request, exposes it through a response
+    header and makes it available in the logging context for log correlation.
+    Also logs an access line with method, path, status and latency.
     """
 
     def __init__(self, app: ASGIApp) -> None:

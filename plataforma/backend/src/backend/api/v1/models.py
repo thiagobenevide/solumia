@@ -5,10 +5,10 @@ from backend.api.deps import WorkerRegistryDep
 
 router = APIRouter(tags=["models"])
 
-# Lista mock (Etapa 2 do roadmap): usada só como fallback enquanto nenhum
-# worker está conectado. Os IDs espelham os modelos atualmente servidos via
-# LM Studio, para que extensões (VSCode, Continue.dev etc.) já consigam
-# listar e selecionar modelos mesmo antes de haver um worker real.
+# Mock list (roadmap Stage 2): used only as a fallback while no worker is
+# connected. The IDs mirror the models currently served through LM Studio,
+# so extensions (VSCode, Continue.dev etc.) can already list and select
+# models even before there is a real worker.
 _MOCK_MODEL_IDS = [
     "openai/gpt-oss-20b",
     "deepseek-v4-flash-0731",

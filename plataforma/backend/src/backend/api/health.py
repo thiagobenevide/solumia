@@ -16,9 +16,9 @@ class HealthResponse(BaseModel):
 
 @router.get("/health", response_model=HealthResponse)
 async def health(settings: SettingsDep) -> HealthResponse:
-    """Health check de infraestrutura (usado por Docker/monitoramento).
+    """Infrastructure health check (used by Docker/monitoring).
 
-    Não faz parte da API OpenAI-compatible — não deve ser exposto sob /v1.
+    Not part of the OpenAI-compatible API — must not be exposed under /v1.
     """
     return HealthResponse(
         status="ok",

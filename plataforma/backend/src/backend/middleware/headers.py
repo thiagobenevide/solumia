@@ -2,7 +2,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
-# A API só devolve JSON/arquivos: nada de scripts, frames ou cache de respostas autenticadas.
+# The API only returns JSON/files: no scripts, frames or caching of authenticated responses.
 _HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
