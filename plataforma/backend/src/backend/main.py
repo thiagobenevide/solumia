@@ -689,7 +689,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.modelo_llm,
         "Painel",
         pensar=False,
-        max_tokens=2048,
+        # short answers come back (and start being spoken) sooner; actions still fit
+        max_tokens=1024,
     )
     app.state.painel_llms = _llms_panel(panel_local, settings, app.state.medidor)
     # A flow from large code can take minutes on the local LLM (the answer goes through a task).

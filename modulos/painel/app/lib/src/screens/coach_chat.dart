@@ -822,42 +822,78 @@ class _Bubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Align(
-      alignment: fromUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 520),
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: fromUser ? colors.primaryContainer : colors.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(12),
+    final styles = Theme.of(context).textTheme;
+    final maxWidth = math.min(560.0, MediaQuery.sizeOf(context).width * 0.82);
+    final corner = const Radius.circular(18);
+    final tail = const Radius.circular(4);
+    final bubble = Container(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: BoxDecoration(
+        color: fromUser ? colors.primaryContainer : colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.only(
+          topLeft: fromUser ? corner : tail,
+          topRight: fromUser ? tail : corner,
+          bottomLeft: corner,
+          bottomRight: corner,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (fromUser)
-              SelectableText(text, style: TextStyle(color: colors.onPrimaryContainer))
-            else
-              SelectionArea(
-                child: VisualizadorMarkdown(
-                  texto: text,
-                  estilo: Theme.of(context).textTheme.bodyMedium!.copyWith(color: colors.onSurface, height: 1.45),
-                ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (fromUser)
+            SelectableText(text, style: TextStyle(color: colors.onPrimaryContainer, height: 1.4))
+          else
+            SelectionArea(
+              child: VisualizadorMarkdown(
+                texto: text,
+                estilo: Theme.of(context).textTheme.bodyMedium!.copyWith(color: colors.onSurface, height: 1.45),
               ),
-            if (repeat != null)
-              Align(
-                alignment: Alignment.centerRight,
-                child: IconButton(
-                  tooltip: 'Ouvir de novo',
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 18,
-                  icon: const Icon(Icons.replay),
-                  onPressed: repeat,
-                ),
+            ),
+          if (repeat != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                tooltip: 'Ouvir de novo',
+                visualDensity: VisualDensity.compact,
+                iconSize: 18,
+                icon: const Icon(Icons.replay),
+                onPressed: repeat,
               ),
+            ),
+        ],
+      ),
+    );
+    final label = Padding(
+      padding: const EdgeInsets.only(bottom: 4, left: 4, right: 4),
+      child: Text(
+        fromUser ? 'Você' : 'Cobrador',
+        style: styles.labelMedium?.copyWith(color: colors.onSurfaceVariant),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: fromUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!fromUser) ...[
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: colors.primary,
+              foregroundColor: colors.onPrimary,
+              child: const Icon(Icons.sports_score, size: 18),
+            ),
+            const SizedBox(width: 8),
           ],
-        ),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: fromUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [label, bubble],
+            ),
+          ),
+        ],
       ),
     );
   }
