@@ -22,8 +22,8 @@ import pymupdf
 import requests
 from pydantic import BaseModel, Field
 
+from esteira.core import trace
 from esteira.ia import local
-from esteira.nucleo import rastro
 from esteira.projeto import RAIZ
 
 UA = {"User-Agent": "esteira-dark/1.0 (roteiros com fontes abertas)"}
@@ -56,7 +56,7 @@ def _vault():
 def _artigo(*args, timeout=300):
     import os
     env = {**os.environ, "OPENALEX_API_KEY": _chave_openalex(),
-           "ARTIGO_PROGRESSO": str(rastro.arquivo_externo("artigo"))}
+           "ARTIGO_PROGRESSO": str(trace.external_file("artigo"))}
     r = subprocess.run([str(_vault() / ".claude/scripts/artigo"), *map(str, args)], capture_output=True, text=True,
                        timeout=timeout, cwd=_vault(), env=env)
     return r.returncode, r.stdout, r.stderr
@@ -126,13 +126,13 @@ def _candidatos_busca(busca, n=12):
 def fontes_abertas(linha, maximo=4):
     """PDFs abertos baixados para o vídeo: [{arquivo, titulo, autores, ano, revista, doi}]."""
     vistos, fontes = set(), []
-    rastro.passo("openalex", f"base: {linha['base'][:80]} · busca: {linha['busca'][:80]}")
+    trace.step("openalex", f"base: {linha['base'][:80]} · busca: {linha['busca'][:80]}")
     for w in _candidatos_base(linha["base"]) + _candidatos_busca(linha["busca"]):
         doi = w["doi"].replace("https://doi.org/", "")
         if doi.lower() in vistos or len(fontes) >= maximo:
             continue
         vistos.add(doi.lower())
-        rastro.passo("pdf", f"{doi} · {w.get('title', '')[:90]}")
+        trace.step("pdf", f"{doi} · {w.get('title', '')[:90]}")
         cod, out, _ = _artigo("baixar", doi)
         if cod or not out.startswith("ok"):
             continue
@@ -185,12 +185,12 @@ def fatos(linha, fontes):
     termos = [t for t in re.findall(r"[a-z]{4,}", linha["busca"].lower())]
     saida = []
     for f in fontes:
-        rastro.passo("trechos", f"{f['arquivo'].split('/')[-1]} · termos: {', '.join(termos[:8])}")
+        trace.step("trechos", f"{f['arquivo'].split('/')[-1]} · termos: {', '.join(termos[:8])}")
         frases = _frases(f["arquivo"], termos)
         if not frases:
             continue
         lista = "\n".join(f"{i}. (p.{p}) {txt}" for i, (_, p, txt) in enumerate(frases))
-        rastro.passo("fatos", f"{len(frases)} frases com números de {rotulo(f)}")
+        trace.step("fatos", f"{len(frases)} frases com números de {rotulo(f)}")
         r = local.perguntar(local.prompt("roteiro_trechos", tema=linha["titulo"], gancho=linha["gancho"],
                                          estudo=f"{rotulo(f)}, {f['titulo']}", frases=lista),
                             Achados, max_tokens=900)
@@ -198,7 +198,7 @@ def fatos(linha, fontes):
             if not 0 <= a.indice < len(frases):
                 continue
             _, pag, en = frases[a.indice]
-            rastro.passo("citar", f"p.{pag}: {en[:120]}")
+            trace.step("citar", f"p.{pag}: {en[:120]}")
             cod, bloco, _ = _artigo("citar", Path(f["arquivo"]).name, "-p", pag, "-t", en, "-r", a.traducao)
             if cod:
                 continue
@@ -246,8 +246,8 @@ def escrever(linha, fatos_, canal):
         n_falas = max(2, round(palavras / 40) + 1)
         r = None
         for tentativa in (1, 2, 3):
-            rastro.passo("partes", f"parte {i}/{len(estrutura)}: {nome} · ~{palavras} palavras · tentativa {tentativa}")
-            rastro.progresso(i, len(estrutura), nome)
+            trace.step("partes", f"parte {i}/{len(estrutura)}: {nome} · ~{palavras} palavras · tentativa {tentativa}")
+            trace.progress(i, len(estrutura), nome)
             r = local.perguntar(local.prompt(
                 "roteiro_parte", canal=canal, titulo=linha["titulo"], gancho=linha["gancho"], parte_n=i,
                 total=len(estrutura), parte_nome=nome, funcao=funcao, palavras=palavras, n_falas=n_falas,
@@ -255,7 +255,7 @@ def escrever(linha, fatos_, canal):
                 + ("\n(Atenção: na tentativa anterior havia número fora dos FATOS ou o texto ficou curto; "
                    f"escreva {n_falas} falas de 35 a 60 palavras cada.)" if tentativa > 1 else ""),
                 Parte, temperatura=0.4, max_tokens=2200)
-            rastro.passo("validar", f"parte {i}: números de cada fala contra os fatos; tamanho ≥ 70% de {palavras}")
+            trace.step("validar", f"parte {i}: números de cada fala contra os fatos; tamanho ≥ 70% de {palavras}")
             if r and all(_fala_ok(f, fatos_) for f in r.falas) and \
                     sum(len(f.texto.split()) for f in r.falas) >= 0.7 * palavras:
                 break
@@ -345,7 +345,7 @@ def gerar(alvo, ate=None):
         if any((pasta / "Roteiros").glob(f"Roteiro — {k:03d} *.md")):
             print(f"{k:03d}: já existe, pulado")
             continue
-        rastro.no(f"roteiro:{canal}:{k}", "plano", f"vídeo {k} (lote {n}–{ate or n})")
+        trace.node(f"roteiro:{canal}:{k}", "plano", f"vídeo {k} (lote {n}–{ate or n})")
         linha = linha_do_plano(canal, k)
         print(f"{k:03d} · {linha['titulo']} (Fmt {linha['fmt']})")
         fontes = fontes_abertas(linha)
@@ -355,10 +355,10 @@ def gerar(alvo, ate=None):
             print(f"  ✗ {k:03d} pulado: menos de 2 fatos de fontes abertas; precisa de pesquisa manual")
             continue
         partes = escrever(linha, fatos_, canal)
-        rastro.passo("montar", f"{len(partes)} partes, {len(fatos_)} blocos [!cite]")
+        trace.step("montar", f"{len(partes)} partes, {len(fatos_)} blocos [!cite]")
         md, palavras = montar(canal, linha, fontes, fatos_, partes, canal_nota)
         destino = _arquivo(canal, linha)
         destino.write_text(md)
-        rastro.passo("checar", destino.name)
+        trace.step("checar", destino.name)
         cod, out, _ = _artigo("checar", destino)
         print(f"  ✓ {destino.name} · {palavras} palavras · {out.strip().splitlines()[-1] if out.strip() else ''}")

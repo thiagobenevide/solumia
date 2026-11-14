@@ -25,7 +25,7 @@ class FilaAba extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             for (final MapEntry(key: vaga, value: dono) in fila.vagas.entries)
-              SeloEstado(dono == null ? 'livre' : 'rodando', texto: '$vaga: ${dono ?? 'livre'}'),
+              SeloEstado(dono == null ? 'livre' : 'rodando', texto: '${vaga == 'machine' ? 'máquina' : vaga}: ${dono ?? 'livre'}'),
             TextButton.icon(
               icon: const Icon(Icons.cleaning_services_outlined),
               label: const Text('Limpar concluídas'),
@@ -72,7 +72,7 @@ class _TarefaLinha extends StatelessWidget {
             Text(
               [
                 t.estado,
-                'vaga ${t.vaga}',
+                'vaga ${t.vaga == 'machine' ? 'máquina' : t.vaga}',
                 'criada ${diaHora(t.criado)}',
                 if (t.inicio != null) 'duração ${duracao(fim.difference(t.inicio!).inSeconds.toDouble())}',
               ].join(' · '),

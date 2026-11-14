@@ -7,15 +7,15 @@ pelos pontos sem sobrepor e sem passar da densidade máxima. Citações usam a p
 """
 import hashlib
 import json
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from esteira.core import events
 from esteira.graficos import artigos, pecas, render
 from esteira.ia import local
-from esteira.nucleo import eventos
 
 DUR = {"caixas": 4.0, "capitulo": 3.2, "numero": 4.6, "comparacao": 7.0, "frase": 3.0, "fonte": 5.0}
 PESO = {"capitulo": 10, "citacao": 8, "nota": 5, "numero": 3, "frase": 2, "fonte": 1}
@@ -248,7 +248,7 @@ def candidatos(projeto):
             if t is not None:
                 _ancorar(c[-1], t)
             else:
-                eventos.debug("gráfico de número sem a fala do número", numero=r.numero, frase=f["texto"][:80])
+                events.debug("gráfico de número sem a fala do número", numero=r.numero, frase=f["texto"][:80])
         # todo número dito aparece: os que o LLM não escolheu (ou o 2º número da frase) viram gráfico simples
         feitos = {_digitos(c[-1]["dados"]["texto"])} if r and r.usar and c and c[-1]["origem"] == "numero" else set()
         for numero, legenda in _numeros_da_frase(f["texto"]):
@@ -414,14 +414,14 @@ def agendar(cands, duracao, intervalo=1.5, cobertura_max=0.4, fixos=()):
 
 def planejar(projeto):
     cands, fontes, duracao = candidatos(projeto)
-    eventos.debug("gráficos: candidatos", n=len(cands))
+    events.debug("gráficos: candidatos", n=len(cands))
     antigos = projeto.carregar_json("graficos.json") if projeto.caminho("graficos.json").exists() else []
     fixos = [c for c in antigos if c.get("manual")]
     plano = agendar(cands, duracao, fixos=fixos, **projeto.cfg.get("graficos", {}).get("agenda", {}))
     if fixos:
         print(f"  {len(fixos)} gráficos editados à mão mantidos")
     for n, c in enumerate(plano, 1):
-        eventos.progresso(n, len(plano), f"{c['modelo']} {c['inicio']:.0f}s")
+        events.progress(n, len(plano), f"{c['modelo']} {c['inicio']:.0f}s")
         if c["modelo"] == "citacao" and not c.get("roteiro") and not c.get("manual"):
             c.update(_preparar_citacao(c, fontes, projeto))
     projeto.salvar_json("graficos.json", plano)
@@ -464,14 +464,14 @@ def renderizar(projeto):
     fps = projeto.cfg["video"]["fps"]
     motor = g.get("motor", "effectcraft")
     if motor == "effectcraft" and not effectcraft.disponivel():
-        eventos.aviso("effectcraft-cli não encontrado: gráficos pelo Chromium (HTML)")
+        events.warning("effectcraft-cli não encontrado: gráficos pelo Chromium (HTML)")
         motor = "html"
     pasta = projeto.caminho("graficos")
     pasta.mkdir(exist_ok=True)
     rel = lambda a: str(Path(a).relative_to(projeto.pasta))
     editados = 0
     for n, c in enumerate(plano, 1):
-        eventos.progresso(n, len(plano), f"{c['modelo']} {c['inicio']:.0f}s")
+        events.progress(n, len(plano), f"{c['modelo']} {c['inicio']:.0f}s")
         ecp = projeto.pasta / c["ecproj"] if c.get("ecproj") else None
         if motor == "effectcraft" and ecp and ecp.exists() and ecp.stat().st_mtime > c.get("ec_gerado", 0) + 1:
             # editado à mão no EffectCraft: renderiza o projeto como está, com outro nome (o .mov antigo fica)
@@ -491,7 +491,7 @@ def renderizar(projeto):
             continue
         pc = peca(c, pasta, w, h, pasta / f"pag_{arq.stem}.png")
         if not pc:
-            eventos.aviso(f"citação em {c['inicio']:.0f}s: trecho não achado no PDF; gráfico pulado")
+            events.warning(f"citação em {c['inicio']:.0f}s: trecho não achado no PDF; gráfico pulado")
             c["arquivo"] = None
             continue
         if motor == "effectcraft":

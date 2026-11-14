@@ -1,5 +1,5 @@
 """Grafo da operação para o Monitor: nós (passos do roteiro, etapas do episódio e recursos: modelos, APIs,
-programas), arestas e o estado de cada nó a partir do rastro (`nucleo/rastro.py`) e dos processos vivos.
+programas), arestas e o estado de cada nó a partir do rastro (`core/trace.py`) e dos processos vivos.
 Cada nó traz um "como funciona" para quem está aprendendo como a operação com LLM acontece por baixo.
 """
 import json
@@ -9,7 +9,7 @@ from pathlib import Path
 import psutil
 
 from esteira import grafo_dados
-from esteira.nucleo import rastro
+from esteira.core import trace
 
 # (id, rótulo, faixa, motor, explicação)
 _R, _E, _S, _X = "roteiro", "episodio", "estudio", "recurso"
@@ -95,19 +95,28 @@ def recurso_do_modelo(motor, modelo):
 def _externas(pid):
     """Barras gravadas por subprocessos (ex.: download do `artigo baixar`) ligadas ao processo `pid`."""
     saida = {}
-    for arq in rastro.DIR.glob(f"{pid}.ext-*.json"):
+    for arq in trace.DIR.glob(f"{pid}.ext-*.json"):
         try:
             t = json.loads(arq.read_text())
         except (OSError, ValueError):
             continue
         if time.time() - t.get("t", 0) < 15:
-            saida[arq.stem.split(".ext-", 1)[1]] = t
+            saida[arq.stem.split(".ext-", 1)[1]] = _tarefa_externa(t)
     return saida
+
+
+def _tarefa_externa(t):
+    """The vault script (`artigo`) still writes its bar with the old keys; the panel reads the core ones."""
+    nova = dict(t)
+    for antiga, chave in (("rotulo", "label"), ("feito", "done"), ("unidade", "unit"), ("inicio", "start")):
+        if antiga in nova:
+            nova[chave] = nova.pop(antiga)
+    return nova
 
 
 def vivos():
     saida = []
-    for arq in rastro.DIR.glob("*.json") if rastro.DIR.exists() else []:
+    for arq in trace.DIR.glob("*.json") if trace.DIR.exists() else []:
         if ".ext-" in arq.name:
             if not psutil.pid_exists(int(arq.name.split(".", 1)[0])):
                 arq.unlink(missing_ok=True)
@@ -116,21 +125,21 @@ def vivos():
             v = json.loads(arq.read_text())
         except (OSError, ValueError):
             continue
-        v["tarefas"] = {**v.get("tarefas", {}), **_externas(v.get("pid"))}
+        v["tasks"] = {**v.get("tasks", {}), **_externas(v.get("pid"))}
         if not psutil.pid_exists(v.get("pid", -1)):
             arq.unlink(missing_ok=True)
             continue
-        v["id_no"] = no_id(v.get("fluxo"), v.get("no"))
+        v["id_no"] = no_id(v.get("flow"), v.get("node"))
         if v["id_no"]:
             saida.append(v)
     return saida
 
 
 def historico(limite_bytes=600_000):
-    if not rastro.LOG.exists():
+    if not trace.LOG.exists():
         return []
-    with open(rastro.LOG, "rb") as f:
-        f.seek(max(0, rastro.LOG.stat().st_size - limite_bytes))
+    with open(trace.LOG, "rb") as f:
+        f.seek(max(0, trace.LOG.stat().st_size - limite_bytes))
         linhas = f.read().decode("utf-8", "replace").splitlines()[1:]
     regs = []
     for l in linhas:
@@ -138,7 +147,7 @@ def historico(limite_bytes=600_000):
             r = json.loads(l)
         except ValueError:
             continue
-        r["id_no"] = no_id(r.get("fluxo"), r.get("no"))
+        r["id_no"] = no_id(r.get("flow"), r.get("node"))
         regs.append(r)
     return regs
 
@@ -150,30 +159,30 @@ def estado(monitor_atual):
     nos = {i: {"ativo": False, "recente": None, "chamadas": 0, "cache": 0, "tok_s": [], "agora": None} for i in IDS}
     for r in hist:
         alvos = [r["id_no"]] if r["id_no"] else []
-        if r.get("tipo") in ("chamada", "cache"):
-            alvos.append(recurso_do_modelo(r.get("motor", "local"), r.get("modelo")))
+        if r.get("kind") in ("call", "cache"):
+            alvos.append(recurso_do_modelo(r.get("engine", "local"), r.get("model")))
         for a in alvos:
             n = nos.get(a)
             if not n:
                 continue
             n["recente"] = max(n["recente"] or 0, r["t"])
-            if r["tipo"] == "chamada":
+            if r["kind"] == "call":
                 n["chamadas"] += 1
                 if r.get("tok_s"):
                     n["tok_s"].append(r["tok_s"])
-            elif r["tipo"] == "cache":
+            elif r["kind"] == "cache":
                 n["cache"] += 1
     for v in vv:
         n = nos[v["id_no"]]
         n["ativo"] = True
-        c = v.get("chamada")
-        n["agora"] = {"detalhe": v.get("detalhe"), "progresso": v.get("progresso"), "desde": v.get("desde"),
-                      "tarefas": list(v.get("tarefas", {}).values()),
-                      "chamada": c and {"nome": c["nome"], "modelo": c["modelo"], "tokens": c["tokens"],
+        c = v.get("call")
+        n["agora"] = {"detalhe": v.get("detail"), "progresso": v.get("progress"), "desde": v.get("since"),
+                      "tarefas": list(v.get("tasks", {}).values()),
+                      "chamada": c and {"nome": c["name"], "modelo": c["model"], "tokens": c["tokens"],
                                         "max": (c.get("params") or {}).get("num_predict"),
-                                        "seg": round(agora - c["inicio"], 1)}}
+                                        "seg": round(agora - c["start"], 1)}}
         if c:
-            nos[recurso_do_modelo(c["motor"], c["modelo"])]["ativo"] = True
+            nos[recurso_do_modelo(c["engine"], c["model"])]["ativo"] = True
     # processos sem rastro (iniciados antes dele) e programas auxiliares
     rastreados = {v["pid"] for v in vv}
     legado = []
@@ -207,19 +216,19 @@ def detalhe(id_no, monitor_atual, hist_monitor=()):
     info = next(n for n in NOS if n[0] == id_no)
     recurso = info[2] == _X
     vv = [v for v in vivos() if v["id_no"] == id_no or
-          (recurso and v.get("chamada") and recurso_do_modelo(v["chamada"]["motor"], v["chamada"]["modelo"]) == id_no)]
+          (recurso and v.get("call") and recurso_do_modelo(v["call"]["engine"], v["call"]["model"]) == id_no)]
     hist = historico()
     if recurso:
-        chamadas = [r for r in hist if r.get("tipo") == "chamada" and recurso_do_modelo(r.get("motor"), r.get("modelo")) == id_no]
-        caches = sum(1 for r in hist if r.get("tipo") == "cache" and recurso_do_modelo(r.get("motor", "local"), r.get("modelo")) == id_no)
+        chamadas = [r for r in hist if r.get("kind") == "call" and recurso_do_modelo(r.get("engine"), r.get("model")) == id_no]
+        caches = sum(1 for r in hist if r.get("kind") == "cache" and recurso_do_modelo(r.get("engine", "local"), r.get("model")) == id_no)
     else:
-        chamadas = [r for r in hist if r.get("tipo") == "chamada" and r["id_no"] == id_no]
-        caches = sum(1 for r in hist if r.get("tipo") == "cache" and r["id_no"] == id_no)
-    passos = [r for r in hist if r.get("tipo") == "no" and r["id_no"] == id_no][-8:]
+        chamadas = [r for r in hist if r.get("kind") == "call" and r["id_no"] == id_no]
+        caches = sum(1 for r in hist if r.get("kind") == "cache" and r["id_no"] == id_no)
+    passos = [r for r in hist if r.get("kind") == "node" and r["id_no"] == id_no][-8:]
     return {"id": id_no, "rotulo": info[1], "faixa": info[2], "motor": info[3], "como": info[4],
             "usa": [b for a, b in USA if a == id_no], "usado_por": [a for a, b in USA if b == id_no],
             "vivos": vv, "chamadas": chamadas[-8:][::-1], "n_chamadas": len(chamadas), "n_cache": caches,
-            "passos": [{"t": r["t"], "detalhe": r.get("detalhe"), "fluxo": r.get("fluxo")} for r in passos][::-1],
+            "passos": [{"t": r["t"], "detalhe": r.get("detail"), "fluxo": r.get("flow")} for r in passos][::-1],
             "gpu": monitor_atual.get("gpu") if id_no in ("qwen3", "qwen_vl", "whisper", "sdxl") else None,
             "extras": grafo_dados.extras(id_no, chamadas, hist_monitor),
             "ollama": monitor_atual.get("ollama") if id_no in ("qwen3", "qwen_vl") else None}

@@ -14,7 +14,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 from markupsafe import Markup, escape
 
-from esteira.nucleo import rastro
+from esteira.core import trace
 
 RAIZ = Path(__file__).parent
 _jinja = Environment(loader=FileSystemLoader(RAIZ / "modelos"), autoescape=True)
@@ -70,7 +70,7 @@ def _quadros(pagina_html, indices, fps, w, h, pasta, feito=None, total=0, rotulo
             pg.screenshot(path=str(pasta / f"q{i:05d}.png"), omit_background=True)
             if feito is not None:
                 feito[0] += 1
-                rastro.tarefa("render", rotulo, feito[0], total, "quadros")
+                trace.task("render", rotulo, feito[0], total, "quadros")
         nav.close()
 
 
@@ -87,7 +87,7 @@ def renderizar(modelo, dados, segundos, destino, fps=30, w=1920, h=1080, cor="#f
         feito, rotulo = [0], f"quadros de {destino.name} ({paralelo} abas do Chromium)"
         with ThreadPoolExecutor(paralelo) as ex:
             list(ex.map(lambda r: _quadros(pagina, r, fps, w, h, tmp, feito, n, rotulo), partes))
-        rastro.tarefa("render", f"ffmpeg: {n} PNG → ProRes 4444 com alfa", 0, None)
+        trace.task("render", f"ffmpeg: {n} PNG → ProRes 4444 com alfa", 0, None)
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-framerate", str(fps),
                         "-i", tmp / "q%05d.png", "-c:v", "prores_ks", "-profile:v", "4444",
                         "-pix_fmt", "yuva444p10le", "-vendor", "apl0", destino], check=True)
@@ -98,7 +98,7 @@ def renderizar(modelo, dados, segundos, destino, fps=30, w=1920, h=1080, cor="#f
                             "overlay", "-frames:v", "1", destino.with_suffix(".png")], check=True)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
-        rastro.fim_tarefa("render")
+        trace.end_task("render")
     return destino
 
 

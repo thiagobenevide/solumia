@@ -16,7 +16,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
 
-from esteira.nucleo import eventos, rastro
+from esteira.core import events, trace
 from esteira.projeto import CACHE
 
 LIVRO = CACHE / "claude.jsonl"
@@ -65,8 +65,8 @@ def cota():
 
 
 def limite_cota():
-    from esteira.nucleo import opcoes
-    v = opcoes.ler().get("limite_cota")
+    from esteira.core import options
+    v = options.read().get("quota_limit")
     return LIMITE_COTA if v is None else float(v)
 
 
@@ -76,8 +76,8 @@ def cota_cheia():
 
 def consultar(dossie, esquema: type[BaseModel], cfg, ep, motivo, imagem=None):
     """`imagem`: caminho de UMA imagem (folha) que o Claude lê com a ferramenta Read."""
-    from esteira.nucleo import opcoes
-    c = opcoes.claude(cfg.get("claude", {}))
+    from esteira.core import options
+    c = options.claude(cfg.get("claude", {}))
     if not c.get("ativo", True):
         return None
     assinatura = hashlib.sha1(open(imagem, "rb").read()).hexdigest() if imagem else None
@@ -89,7 +89,7 @@ def consultar(dossie, esquema: type[BaseModel], cfg, ep, motivo, imagem=None):
         if r.get("k") == k and r.get("resposta") is not None:
             return esquema.model_validate(r["resposta"])
     if cota_cheia():
-        eventos.aviso(f"Claude não consultado ({motivo}): cota da assinatura em {cota():.0%}")
+        events.warning(f"Claude não consultado ({motivo}): cota da assinatura em {cota():.0%}")
         return None
     if imagem:
         dossie = f"Leia a imagem {imagem} (uma única vez) e então responda.\n\n" + dossie
@@ -99,8 +99,8 @@ def consultar(dossie, esquema: type[BaseModel], cfg, ep, motivo, imagem=None):
            "--system-prompt", SISTEMA, "--json-schema", json.dumps(esquema.model_json_schema()),
            "--max-budget-usd", f"{c.get('teto_chamada_usd', 0.30):.2f}"]
     t = time.monotonic()
-    rastro.chamada_inicio("claude", motivo, c.get("modelo", "claude-sonnet-5-5"), dossie, esquema=esquema.__name__,
-                          esquema_json=esquema.model_json_schema(),
+    trace.call_start("claude", motivo, c.get("modelo", "claude-sonnet-5-5"), dossie, esquema=esquema.__name__,
+                          json_schema=esquema.model_json_schema(),
                           imagem=bool(imagem))
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=300, env=_env_assinatura(),
@@ -115,8 +115,8 @@ def consultar(dossie, esquema: type[BaseModel], cfg, ep, motivo, imagem=None):
         if res is None:
             raise ValueError(f"sem resultado: {out.stderr[-120:]}")
     except (subprocess.TimeoutExpired, ValueError) as e:
-        rastro.chamada_fim(ok=False, erro=str(e)[:200])
-        eventos.aviso(f"Claude falhou ({motivo}): {str(e)[:120]}")
+        trace.call_end(ok=False, error=str(e)[:200])
+        events.warning(f"Claude falhou ({motivo}): {str(e)[:120]}")
         return None
     custo = res.get("total_cost_usd") or 0.0
     try:
@@ -129,9 +129,9 @@ def consultar(dossie, esquema: type[BaseModel], cfg, ep, motivo, imagem=None):
                             "custo": custo, "k": k, "resposta": obj.model_dump() if obj else None},
                            ensure_ascii=False) + "\n")
     u = res.get("usage") or {}
-    rastro.chamada_fim(json.dumps(obj.model_dump(), ensure_ascii=False) if obj else str(res.get("result", ""))[:2000],
+    trace.call_end(json.dumps(obj.model_dump(), ensure_ascii=False) if obj else str(res.get("result", ""))[:2000],
                        ok=obj is not None, custo_usd=custo, tokens_entrada=u.get("input_tokens"),
                        tokens_saida=u.get("output_tokens"), cache_lido=u.get("cache_read_input_tokens"),
                        total_s=round(time.monotonic() - t, 2))
-    eventos.gravar_claude(motivo, custo, round(time.monotonic() - t, 1), ok=obj is not None)
+    events.record_claude(motivo, custo, round(time.monotonic() - t, 1), ok=obj is not None)
     return obj

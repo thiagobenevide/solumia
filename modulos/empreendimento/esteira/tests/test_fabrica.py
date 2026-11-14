@@ -3,7 +3,6 @@ import json
 import shutil
 
 import pytest
-
 from esteira.dataset import registro as R
 from esteira.estudio import fabrica as F
 from esteira.estudio import peca as P
@@ -180,12 +179,12 @@ def test_retomar_volta_a_fila_quando_a_cota_libera(ambiente, monkeypatch):
 
 
 def test_painel_mostra_etapa_quem_fez_e_categorias(ambiente, monkeypatch, tmp_path):
+    from esteira.core import trace
     from esteira.ia import claude
-    from esteira.nucleo import rastro
     from esteira.web import fila
     monkeypatch.setattr(F, "GUIA_N1_EC", ambiente / "GUIA_N1_EC.md")
     (ambiente / "GUIA_N1_EC.md").write_text("# guia\n\n## Lições\n- não empilhe itens (peça x)\n")
-    monkeypatch.setattr(rastro, "DIR", tmp_path / "ao_vivo")
+    monkeypatch.setattr(trace, "DIR", tmp_path / "live")
     monkeypatch.setattr(claude, "_registros", lambda: [])
     p = F.pedido_hibrido("ideias", 8, "finanças")
     F._mudar(p.id, conceitos=[{"ficha": {"id": "ideia_a", "descricao": "uma ideia"}, "conceito": "c"}],

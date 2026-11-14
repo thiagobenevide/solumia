@@ -7,8 +7,8 @@ import json
 
 from pydantic import BaseModel, Field
 
+from esteira.core import events
 from esteira.ia import local
-from esteira.nucleo import eventos
 
 ESTILOS = {
     "finlumia": "finanças pessoais; visual sóbrio de documentário: pessoas comuns, contas, cartões, cidades",
@@ -59,7 +59,7 @@ def curar(projeto, refazer=False):
     notas = _notas_por_tempo(projeto)
     usados, feitas, falhas = [], 0, 0
     for k, c in enumerate(cenas):
-        eventos.progresso(k + 1, len(cenas), f"cena {c['id']}")
+        events.progress(k + 1, len(cenas), f"cena {c['id']}")
         if c.get("busca_definida") or (c.get("curada") and not refazer):
             usados.append(c.get("busca_en") or c["busca"])
             continue

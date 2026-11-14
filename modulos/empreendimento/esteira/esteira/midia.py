@@ -9,13 +9,12 @@ import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-
 from pathlib import Path
 
 import requests
 
 from esteira import acervo
-from esteira.nucleo import eventos, rastro
+from esteira.core import events, trace
 
 UA = {"User-Agent": "esteira-dark/1.0 (uso pessoal)"}
 
@@ -192,8 +191,8 @@ def _baixar(url, destino, tentativas=4):
                 for bloco in r.iter_content(1 << 18):
                     f.write(bloco)
                     feito += len(bloco)
-                    rastro.tarefa("download", f"baixando {Path(destino).name}", feito, total, "B")
-            rastro.fim_tarefa("download")
+                    trace.task("download", f"baixando {Path(destino).name}", feito, total, "B")
+            trace.end_task("download")
             return
 
 
@@ -342,7 +341,7 @@ def buscar(projeto, refazer=False, cenas=None):
                                         max_usos_canal=ac.get("max_usos_canal", 2)) if ac.get("reaproveitar", True) else []
             cands = ordenar([*do_acervo, *_candidatos(cena, tipo, provedores, env, idioma)], chave,
                             exigir=tipo != ordem[-1])
-            eventos.debug(f"cena {cena['id']}: {len(cands)} candidatos ({tipo})", chave=sorted(chave),
+            events.debug(f"cena {cena['id']}: {len(cands)} candidatos ({tipo})", chave=sorted(chave),
                           melhores=[(c["id"], c["relevancia"]) for c in cands[:3]])
             for cand in cands:
                 if cand["id"] in cena.get("rejeitados", []):
@@ -366,16 +365,16 @@ def buscar(projeto, refazer=False, cenas=None):
                 break
         with trava:
             feitas[0] += 1
-            eventos.progresso(feitas[0], len(pendentes), f"cena {cena['id']} [{cena.get('busca_en') or cena['busca']}]")
+            events.progress(feitas[0], len(pendentes), f"cena {cena['id']} [{cena.get('busca_en') or cena['busca']}]")
             if not escolhido:
-                eventos.aviso(f"cena {cena['id']}: nada encontrado para [{cena.get('busca_en') or cena['busca']}]")
+                events.warning(f"cena {cena['id']}: nada encontrado para [{cena.get('busca_en') or cena['busca']}]")
                 return
             cena.update(midia=str(final.relative_to(projeto.pasta)), midia_id=escolhido["id"],
                         relevancia=escolhido.get("relevancia"),
                         midia_tipo=escolhido["tipo"], credito=escolhido["credito"],
                         midia_origem="acervo" if escolhido.get("arquivo") else "banco")
             acervo.marcar_uso(escolhido["id"], projeto.canal, projeto.ep, cena["id"])
-            eventos.debug(f"cena {cena['id']} ← {escolhido['id']}", midia=escolhido["tipo"], busca=cena.get("busca_en"))
+            events.debug(f"cena {cena['id']} ← {escolhido['id']}", midia=escolhido["tipo"], busca=cena.get("busca_en"))
             projeto.salvar_json("plano.json", plano)
 
     with ThreadPoolExecutor(cfg["midia"].get("paralelo", 6)) as ex:

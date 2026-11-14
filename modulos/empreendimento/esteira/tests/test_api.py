@@ -1,7 +1,6 @@
 """API JSON do app Flutter: validações que não dependem dos episódios da máquina."""
-from fastapi.testclient import TestClient
-
 from esteira.web.app import app
+from fastapi.testclient import TestClient
 
 c = TestClient(app, base_url="http://localhost")
 
@@ -27,7 +26,7 @@ def test_cors_libera_o_app_local():
 
 def test_validacoes_das_acoes():
     assert c.post("/api/v1/roteiros/gerar", json={"alvo": "sem-numero"}).status_code == 400
-    assert c.post("/api/v1/opcoes", json={"motor": "gpt"}).status_code == 400
+    assert c.post("/api/v1/opcoes", json={"engine": "gpt"}).status_code == 400
     assert c.post("/api/v1/opcoes/baixar", json={"nome": "rm -rf /"}).status_code == 400
     assert c.post("/api/v1/processos/nao-existe/parar").status_code == 404
     for rota in ("roteiro", "cortes", "cenas", "graficos", "thumbs", "editor/grafico/0", "editor/thumb"):

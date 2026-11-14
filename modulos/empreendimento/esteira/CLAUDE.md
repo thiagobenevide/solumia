@@ -23,12 +23,12 @@ Editor do painel (`esteira/editor.py`): gráficos (dados, tempo, efeitos de entr
 com *destaque*, presets das citações do roteiro) e thumbs (texto, layout, fundo enviado, caixas, vagas A/B), com
 prévia ao vivo e assistente de IA (`[editor] motor_ia`). Gráfico salvo vira `manual: true` (o replanejamento o mantém).
 Monitor do painel (`/monitor`, `esteira/monitor.py` + `esteira/grafo.py`): GPU/CPU/energia e grafo da operação; o
-rastro vem de `esteira/nucleo/rastro.py` (`cache/ao_vivo/<pid>.json` e `cache/rastro.jsonl`), gravado por
-`local.perguntar` (stream), `claude.consultar`, `eventos.etapa` e `roteirista`. Não ler esses arquivos inteiros.
-Vagas (`esteira/nucleo/travas.py`): só um `./dark` pesado por vez na máquina; `--motor claude` em `curar`/`roteiro`
+rastro vem de `esteira/core/trace.py` (`cache/live/<pid>.json` e `cache/trace.jsonl`), gravado por
+`local.perguntar` (stream), `claude.consultar`, `events.stage` e `roteirista`. Não ler esses arquivos inteiros.
+Vagas (`esteira/core/locks.py`, vagas `machine` e `claude`): só um `./dark` pesado por vez na máquina; `--motor claude` em `curar`/`roteiro`
 usa a vaga "claude" e roda em paralelo. A fila do painel tem as duas pistas. Cada processo pesado fica em
-`cache/processos.jsonl` (`esteira/nucleo/processos.py`); monitor individual em `/processos/<id>` (`esteira/monitor_processo.py`).
-Opções de IA (painel → Opções, `esteira/nucleo/opcoes.py`, `cache/opcoes.json`): motor padrão local/Claude, modelo
+`cache/processes.jsonl` (`esteira/core/processes.py`); monitor individual em `/processos/<id>` (`esteira/monitor_processo.py`).
+Opções de IA (painel → Opções, `esteira/core/options.py`, `cache/options.json`): motor padrão local/Claude, modelo
 e tetos do Claude, motor e modelo local por operação (`local.perguntar` resolve pela etapa/prompt) e download
 de modelos GGUF do Hugging Face (`llama.baixar`). `--motor` explícito vale para tudo. `./dark tudo <ep> --refazer` (botão "Refazer tudo
 do zero") retranscreve, refaz cortes e curadoria; com estilo do canal no Estúdio, troca
@@ -82,19 +82,22 @@ baixa/média/alta de som, motion e efeitos (`estilo.NIVEIS`; `--intensidade` por
 cada salvamento é versão guardada em `estilos/versoes/<id>/vN.json`, ref `id@N`; exemplo de 30 s por versão em
 `estudio/amostra.py`, `./dark estudio-amostra id@N`; template do episódio em `<ep>/estudio/template.json`, escolhido
 na aba Roteiros; `previa.mp4` 540p ao lado de cada `final.mp4` para o player do app); Fluxo A
-(`identidade.py`) = Claude propõe só dados pelas referências (pele, `regras.visual`, guia, exemplos); por vídeo, zero Claude (socorro do diretor só com `opcoes.socorro_claude`). CLI: `./dark estudio <ep>`, `estudio-instalar`,
+(`identidade.py`) = Claude propõe só dados pelas referências (pele, `regras.visual`, guia, exemplos); por vídeo, zero Claude (socorro do diretor só com `options.claude_fallback`). CLI: `./dark estudio <ep>`, `estudio-instalar`,
 `estudio-estilo <id>`; API em `web/api_estudio.py` (`/api/v1/estudio`); app: `lib/src/estudio/`. Motor (Node,
 HyperFrames, Chromium) em `estudio/motor.py`. Bancada de LLM: `esteira/bancada.py` (`./dark bancada [gerar|rodar]`,
 gabarito em `$AGENT_DATA/.../bancada/`).
 Edição manual: `./dark abrir <ep>` → FilmCraft; `./dark exportar <ep>` reexporta; `montar` guarda o
 `.fcproj` editado à mão como `projeto.manual-*.fcproj` antes de gerar outro.
 
+Migração para inglês em andamento (`docs/GLOSSARIO-INGLES.md` na raiz): `esteira/core/` já migrado; dados gravados
+antes dela são reescritos por `python -m esteira.migrate_english` (com o painel e os `./dark` parados).
+
 ## Divisão do trabalho
 
 - Código (Python) primeiro; LLM local (`esteira/ia/local.py`, llama.cpp `gemma-4-12b` para texto e visão; o diretor do Estúdio usa `qwen3.8-27b` pelas Opções) para
   decisões operacionais; Claude (`esteira/ia/claude.py`, `claude -p` com teto em `[claude]`) só como
   escalonamento automático. Prompts em `esteira/ia/prompts/*.md`; respostas em cache (`cache/`).
-- Toda etapa grava eventos em `<ep>/log/eventos.jsonl` (`esteira/nucleo/eventos.py`): ler com
+- Toda etapa grava eventos em `<ep>/log/events.jsonl` (`esteira/core/events.py`): ler com
   `./dark status` / `./dark log`, nunca o arquivo inteiro.
 
 ## Economia de tokens (prioridade)

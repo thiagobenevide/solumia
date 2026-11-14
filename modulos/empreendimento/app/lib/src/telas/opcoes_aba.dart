@@ -31,12 +31,12 @@ class _OpcoesAbaState extends State<OpcoesAba> {
     final o = d['opcoes'] as Json;
     final c = d['claude'] as Json;
     _form = {
-      'motor': o['motor'] ?? 'local',
-      'modelo_claude': c['modelo'],
-      'teto_episodio_usd': c['teto_episodio_usd'],
-      'teto_dia_usd': c['teto_dia_usd'],
-      'socorro_claude': o['socorro_claude'] == true,
-      'operacoes': {
+      'engine': o['engine'] ?? 'local',
+      'claude_model': c['modelo'],
+      'episode_cap_usd': c['teto_episodio_usd'],
+      'daily_cap_usd': c['teto_dia_usd'],
+      'claude_fallback': o['claude_fallback'] == true,
+      'operations': {
         for (final op in (d['operacoes'] as List).cast<Json>()) '${op['id']}': {...op['atual'] as Json},
       },
     };
@@ -70,8 +70,8 @@ class _OpcoesAbaState extends State<OpcoesAba> {
             ),
             const Secao('Motor padrão'),
             RadioGroup<String>(
-              groupValue: '${f['motor']}',
-              onChanged: (v) => setState(() => f['motor'] = v),
+              groupValue: '${f['engine']}',
+              onChanged: (v) => setState(() => f['engine'] = v),
               child: const Column(
                 children: [
                   RadioListTile(
@@ -97,7 +97,7 @@ class _OpcoesAbaState extends State<OpcoesAba> {
                 SizedBox(
                   width: 320,
                   child: DropdownButtonFormField<String>(
-                    initialValue: f['modelo_claude'] as String?,
+                    initialValue: f['claude_model'] as String?,
                     isExpanded: true,
                     decoration: const InputDecoration(labelText: 'Modelo', border: OutlineInputBorder(), isDense: true),
                     items: [
@@ -107,12 +107,12 @@ class _OpcoesAbaState extends State<OpcoesAba> {
                           child: Text('${m['nome']} · ${m['descricao']}', overflow: TextOverflow.ellipsis),
                         ),
                     ],
-                    onChanged: (v) => f['modelo_claude'] = v,
+                    onChanged: (v) => f['claude_model'] = v,
                   ),
                 ),
                 for (final (chave, rotulo) in const [
-                  ('teto_episodio_usd', 'Teto por episódio (US\$)'),
-                  ('teto_dia_usd', 'Teto por dia (US\$)'),
+                  ('episode_cap_usd', 'Teto por episódio (US\$)'),
+                  ('daily_cap_usd', 'Teto por dia (US\$)'),
                 ])
                   SizedBox(
                     width: 170,
@@ -137,8 +137,8 @@ class _OpcoesAbaState extends State<OpcoesAba> {
                 'Desligado (padrão): o que a IA local errar duas vezes no diretor cai na regra fixa, sem custo. '
                 'Ligado: vai ao Claude em lote (até 20% das frases por vídeo).',
               ),
-              value: f['socorro_claude'] == true,
-              onChanged: (v) => setState(() => f['socorro_claude'] = v),
+              value: f['claude_fallback'] == true,
+              onChanged: (v) => setState(() => f['claude_fallback'] = v),
             ),
             const Secao('Por operação'),
             Text(
@@ -221,7 +221,7 @@ class _OpcoesAbaState extends State<OpcoesAba> {
   );
 
   Widget _operacao(BuildContext context, Json op, Json f, List<Json> locais, Json padrao) {
-    final atual = (f['operacoes'] as Json)['${op['id']}'] as Json;
+    final atual = (f['operations'] as Json)['${op['id']}'] as Json;
     final tipos = [for (final t in op['tipos'] as List) '$t'];
     return Card(
       margin: const EdgeInsets.only(top: 8),
@@ -243,14 +243,14 @@ class _OpcoesAbaState extends State<OpcoesAba> {
             SizedBox(
               width: 160,
               child: DropdownButtonFormField<String>(
-                initialValue: '${atual['motor'] ?? 'padrao'}',
+                initialValue: '${atual['engine'] ?? 'default'}',
                 decoration: const InputDecoration(labelText: 'Motor', border: OutlineInputBorder(), isDense: true),
                 items: const [
-                  DropdownMenuItem(value: 'padrao', child: Text('Padrão')),
+                  DropdownMenuItem(value: 'default', child: Text('Padrão')),
                   DropdownMenuItem(value: 'local', child: Text('LLM local')),
                   DropdownMenuItem(value: 'claude', child: Text('Claude')),
                 ],
-                onChanged: (v) => atual['motor'] = v,
+                onChanged: (v) => atual['engine'] = v,
               ),
             ),
             for (final t in tipos)
@@ -260,14 +260,14 @@ class _OpcoesAbaState extends State<OpcoesAba> {
                   initialValue: atual[t] as String? ?? '',
                   isExpanded: true,
                   decoration: InputDecoration(
-                    labelText: 'modelo de ${t == 'texto' ? 'texto' : 'visão (imagens)'}',
+                    labelText: 'modelo de ${t == 'text' ? 'texto' : 'visão (imagens)'}',
                     border: const OutlineInputBorder(),
                     isDense: true,
                   ),
                   items: [
                     DropdownMenuItem(value: '', child: Text('padrão (${padrao[t]})')),
                     for (final m in locais)
-                      if (t == 'texto' || m['visao'] == true)
+                      if (t == 'text' || m['visao'] == true)
                         DropdownMenuItem(value: '${m['nome']}', child: Text('${m['nome']} · ${m['gb']} GB')),
                   ],
                   onChanged: (v) => atual[t] = (v == null || v.isEmpty) ? null : v,

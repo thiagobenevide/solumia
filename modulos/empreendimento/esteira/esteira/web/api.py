@@ -12,14 +12,13 @@ import re
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-from pydantic import BaseModel
-
+from esteira.core import status
 from esteira.fontes import gravacoes, obsidian
-from esteira.nucleo import status
 from esteira.projeto import Projeto, ep_id, episodios, pasta_ep
 from esteira.web import app as painel
 from esteira.web import fila
+from fastapi import APIRouter, File, HTTPException, UploadFile
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1", tags=["app"])
 
@@ -184,10 +183,10 @@ def episodio(ep: str):
     pasta = painel._pasta(ep)
     proj = Projeto(pasta)
     rot = _json(pasta / "roteiro.json", {}) or {}
-    est = status.etapas(pasta)
+    est = status.stages(pasta)
     nomes = painel.PIPELINE + [e for e in est if e not in painel.PIPELINE]
-    etapas = [{"id": e, "nome": painel.NOMES.get(e, e), **(est.get(e) or {"status": "pendente"})} for e in nomes]
-    evs = [e for e in status.eventos(pasta) if e["tipo"] in ("saida", "aviso", "erro", "claude", "inicio", "fim")]
+    etapas = [{"id": e, "nome": painel.NOMES.get(e, e), **(est.get(e) or {"status": "pending"})} for e in nomes]
+    evs = [e for e in status.events(pasta) if e["kind"] in ("output", "warning", "error", "claude", "start", "end")]
     final, thumb = painel.final_do_ep(pasta), pasta / "thumb.png"
     modo = producao.modo(proj)
     camera = producao.info_camera(proj) if modo == "apresentador" and producao.camera(proj) else None
@@ -211,7 +210,7 @@ class Rodar(BaseModel):
 
 @router.post("/episodios/{ep}/rodar/{etapa}")
 def rodar(ep: str, etapa: str, corpo: Rodar | None = None):
-    from esteira.nucleo import opcoes
+    from esteira.core import options
     painel._pasta(ep)
     if etapa not in ACOES:
         raise HTTPException(400, "etapa desconhecida")
@@ -219,7 +218,7 @@ def rodar(ep: str, etapa: str, corpo: Rodar | None = None):
     args = ["--refazer"] if corpo.refazer and etapa in ("limpar", "curar", "buscar", "tudo") else []
     if corpo.so_render and etapa == "graficos":
         args = ["--so-render"]
-    return fila.adicionar(ep, etapa, args, corpo.motor or opcoes.ler()["motor"])
+    return fila.adicionar(ep, etapa, args, corpo.motor or options.read()["engine"])
 
 
 @router.post("/episodios/{ep}/abrir")
@@ -462,8 +461,8 @@ def _alvo_edicao(ep, editor, i=None, arquivo=""):
 
 
 def _baixar(ep, editor, i=None, arquivo=""):
-    from fastapi.responses import FileResponse, StreamingResponse
     from esteira import pacote
+    from fastapi.responses import FileResponse, StreamingResponse
     p, alvo = _alvo_edicao(ep, editor, i, arquivo)
     if alvo.suffix == ".pcraft":
         return FileResponse(alvo, filename=f"{ep}-{alvo.name}", media_type="application/octet-stream")
@@ -519,14 +518,14 @@ async def enviar_thumb(ep: str, thumb: str, arquivo: UploadFile = File(...)):
 
 @router.get("/fila")
 def lista_fila():
-    from esteira.nucleo import processos, travas
+    from esteira.core import locks, processes
     tarefas = list(reversed(fila.listar()))
-    proc = {r.get("fila"): r["id"] for r in processos.listar(400) if r.get("fila")}
+    proc = {r.get("queue"): r["id"] for r in processes.list_recent(400) if r.get("queue")}
     for t in tarefas:
         p = pasta_ep(t["ep"]) if ":" not in t["ep"] else None
         t["prog"] = painel._resumo_ep(t["ep"]) if p and p.is_dir() else None
         t["processo"] = proc.get(str(t["id"]))
-    return {"tarefas": tarefas, "vagas": {v: travas.dono(v) for v in travas.VAGAS}}
+    return {"tarefas": tarefas, "vagas": {v: locks.owner(v) for v in locks.SLOTS}}
 
 
 @router.post("/fila/{tid}/cancelar")

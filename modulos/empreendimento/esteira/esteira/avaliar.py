@@ -9,8 +9,8 @@ import subprocess
 from pydantic import BaseModel, Field
 
 from esteira import acervo
+from esteira.core import events
 from esteira.ia import local
-from esteira.nucleo import eventos
 
 
 class Nota(BaseModel):
@@ -37,7 +37,7 @@ def _avaliar(projeto, cenas):
     reaproveitada (sem chamar o modelo de visão); as novas vão para o acervo."""
     notas, reusadas = {}, 0
     for n, c in enumerate(cenas, 1):
-        eventos.progresso(n, len(cenas), f"cena {c['id']}")
+        events.progress(n, len(cenas), f"cena {c['id']}")
         termo = c.get("busca_en") or c["busca"]
         antes = acervo.avaliacao(c["midia_id"], termo) if c.get("midia_id") else None
         if antes:

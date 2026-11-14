@@ -81,7 +81,6 @@ def test_estilo_semente_e_trava(tmp_path, monkeypatch):
 
 def test_corte_pelo_som_vicio_respiro_reversao_e_palavra_protegida():
     import numpy as np
-
     from esteira.estudio import corte as C
     sp = np.zeros(600, bool)          # 6 s; fala em 0–1 s, "éé" em 1,5–2,0 s, fala em 2,3–3,0 s e 4,0–5,0 s
     for a, b in ((0, 100), (150, 200), (230, 300), (400, 500)):
@@ -235,12 +234,12 @@ def test_apontamento_marca_por_texto_e_diretor_respeita(tmp_path, monkeypatch):
 
 
 def test_sem_socorro_do_claude_falha_cai_na_regra(monkeypatch):
+    from esteira.core import options
     from esteira.ia import local
-    from esteira.nucleo import opcoes
     frases = [{"texto": "A taxa chegou a 132% ao ano.", "ini": 0.0, "fim": 3.0}]
     monkeypatch.setattr(local, "perguntar", lambda *a, **k: None)
     monkeypatch.setattr(local, "prompt", lambda nome, **k: local.Prompt(k["frase"]))
-    monkeypatch.setattr(opcoes, "ler", lambda: {**opcoes.PADRAO})
+    monkeypatch.setattr(options, "read", lambda: {**options.DEFAULT})
     monkeypatch.setattr(diretor, "_escalar", lambda *a: (_ for _ in ()).throw(AssertionError("chamou o Claude")))
     esc = diretor.escolher(frases, _estilo())
     assert esc[0][1].cena == "contador" and esc[0][2] == "regra"

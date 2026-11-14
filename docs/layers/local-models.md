@@ -57,7 +57,7 @@ sequenceDiagram
 
 ## GPU sharing rules
 
-- **One heavy job at a time** (`nucleo/travas.py` in the pipeline): Whisper, SDXL and the LLM never compete for
+- **One heavy job at a time** (`core/locks.py` in the pipeline): Whisper, SDXL and the LLM never compete for
   VRAM. `liberar_gpu()` unloads models before Whisper and diffusion.
 - `llama-server` is **shared** between the worker and the pipeline (whoever starts first launches it) and
   outlives the worker.

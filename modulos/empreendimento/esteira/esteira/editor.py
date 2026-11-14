@@ -266,15 +266,15 @@ def sugerir(projeto, ep, estado, pedido, motor="claude", tipo="grafico"):
         "estado; *asteriscos* marcam a palavra em destaque; caixas: x, y, w em % do quadro (x, y = canto superior "
         "esquerdo), tam em px do quadro; não cubra o conteúdo principal do modelo; dados_json com as mesmas chaves "
         "de estado.dados; mantenha o que o pedido não mandou mudar."])
-    from esteira.nucleo import rastro
-    rastro.no(f"editor:{ep}", "editor", pedido[:120])
+    from esteira.core import trace
+    trace.node(f"editor:{ep}", "editor", pedido[:120])
     try:
         if motor == "local":
             r = local.perguntar(dossie, Sugestao, temperatura=0.4, max_tokens=2500, operacao="editor")
         else:
             r = claude.consultar(dossie, Sugestao, projeto.cfg, ep, f"editor: {pedido[:40]}")
     finally:
-        rastro.no(None, None)
+        trace.node(None, None)
     if not r:
         raise ValueError("a IA não respondeu (teto de custo do Claude ou falha do LLM local)")
     try:

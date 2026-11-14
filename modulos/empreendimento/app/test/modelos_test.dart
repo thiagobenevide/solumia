@@ -23,19 +23,19 @@ void main() {
           'id': 'limpar',
           'nome': 'Cortes da narração',
           'status': 'ok',
-          'inicio': '2026-10-27T21:18:29.418',
-          'msg': 'bruta 995s → editada 372s',
-          'avisos': 41,
+          'start': '2026-10-27T21:18:29.418',
+          'message': 'bruta 995s → editada 372s',
+          'warnings': 41,
           'i': 371,
           'n': 371,
-          'resta': 0.0,
-          'dur': 142.7,
+          'remaining': 0.0,
+          'duration': 142.7,
         },
-        {'id': 'graficos', 'nome': 'Gráficos animados', 'status': 'rodando', 'i': 4, 'n': 17, 'resta': 30},
-        {'id': 'thumb', 'nome': 'Thumbnail', 'status': 'pendente'},
+        {'id': 'graficos', 'nome': 'Gráficos animados', 'status': 'running', 'i': 4, 'n': 17, 'remaining': 30},
+        {'id': 'thumb', 'nome': 'Thumbnail', 'status': 'pending'},
       ],
       'eventos': [
-        {'t': '2026-10-27T21:49:27.699', 'etapa': 'thumb', 'tipo': 'fim', 'msg': ''},
+        {'t': '2026-10-27T21:49:27.699', 'stage': 'thumb', 'kind': 'end', 'message': ''},
       ],
       'gasto_claude': 0.12,
       'video': null,
@@ -59,7 +59,7 @@ void main() {
           'ep': 'finlumia-003',
           'comando': 'tudo',
           'args': ['--refazer'],
-          'vaga': 'maquina',
+          'vaga': 'machine',
           'estado': 'rodando',
           'criado': '2026-10-27T21:18:29',
           'inicio': '2026-10-27T21:18:29',
@@ -77,13 +77,13 @@ void main() {
         },
       ],
       'vagas': {
-        'maquina': {'pid': 10, 'comando': 'tudo finlumia-003'},
+        'machine': {'pid': 10, 'command': 'tudo finlumia-003'},
         'claude': null,
       },
     });
     expect(f.tarefas.first.ativa, isTrue);
     expect(f.tarefas.last.prog, isNull);
-    expect(f.vagas, {'maquina': 'tudo finlumia-003', 'claude': null});
+    expect(f.vagas, {'machine': 'tudo finlumia-003', 'claude': null});
   });
 
   test('roteiro ainda sem episódio', () {

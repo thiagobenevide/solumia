@@ -26,7 +26,7 @@ def _decodificar(audio):
     return np.frombuffer(bruto, np.float32)
 
 
-from esteira.nucleo import eventos
+from esteira.core import events
 
 ESTICADA = 1.2   # s: palavra mais longa que isto costuma esconder fala que o Whisper não escreveu (retake)
 LENTO = 1.0      # palavras/s numa janela de 6 palavras: abaixo disto, idem
@@ -87,7 +87,7 @@ def _refinar(modelo, sinal, palavras, idioma, sr=16000):
             palavras = [w for w in palavras if w["ini"] < a] + novas + [w for w in palavras if w["ini"] >= b]
     if recuperadas:
         print(f"  {len(regioes)} regiões com palavras esticadas retranscritas: +{recuperadas} palavras (retakes)")
-        eventos.debug("retranscrição de regiões esticadas", regioes=len(regioes), palavras=recuperadas)
+        events.debug("retranscrição de regiões esticadas", regioes=len(regioes), palavras=recuperadas)
     return palavras
 
 
@@ -117,7 +117,7 @@ def transcrever(projeto, cfg, audio=None, saida_json="transcricao.json"):
                                         hotwords=HOTWORDS if saida_json == "transcricao_bruta.json" else None)
     palavras, textos = [], []
     for seg in segmentos:
-        eventos.progresso(min(int(seg.end), int(info.duration)), int(info.duration), seg.text.strip())
+        events.progress(min(int(seg.end), int(info.duration)), int(info.duration), seg.text.strip())
         textos.append(seg.text.strip())
         for w in seg.words:
             palavras.append({"p": w.word.strip(), "ini": round(w.start, 3), "fim": round(w.end, 3)})

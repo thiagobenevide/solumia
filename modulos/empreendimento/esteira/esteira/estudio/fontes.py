@@ -77,10 +77,10 @@ def faltando(nomes):
 def css(nomes, destino):
     """Copia as fontes usadas para `destino/fonts` e devolve o CSS com os @font-face; fonte fora do catálogo
     cai na padrão (com aviso no log)."""
-    from esteira.nucleo import eventos
+    from esteira.core import events
     todas = {**CATALOGO, **_enviadas()}
     for n in faltando(nomes):
-        eventos.aviso(f"fonte '{n}' não está no catálogo do Estúdio: usando {PADRAO} (envie o .ttf pela aba Estúdio)")
+        events.warning(f"fonte '{n}' não está no catálogo do Estúdio: usando {PADRAO} (envie o .ttf pela aba Estúdio)")
         print(f"  ! fonte '{n}' fora do catálogo → {PADRAO}")
     (destino / "fonts").mkdir(parents=True, exist_ok=True)
     regras = []

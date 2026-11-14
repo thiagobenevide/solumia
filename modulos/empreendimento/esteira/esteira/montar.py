@@ -9,11 +9,11 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+from esteira.core import events
+from esteira.core.display import open_program
 from esteira.filmcraft import FilmCraft, ticks
 from esteira.midia import duracao_midia
 from esteira.n1 import filmcraft as N1
-from esteira.nucleo import eventos
-from esteira.nucleo.tela import abrir_programa
 from esteira.projeto import RAIZ
 
 
@@ -121,7 +121,7 @@ def _batimento(arquivo, duracao, intervalo=10):
         while not parar.wait(intervalo):
             n += 1
             mb = arquivo.stat().st_size / 1e6 if arquivo.exists() else 0
-            eventos.debug("exportando", seg=round(time.monotonic() - t0), mb=round(mb, 1), video_s=duracao)
+            events.debug("exportando", seg=round(time.monotonic() - t0), mb=round(mb, 1), video_s=duracao)
             if n % 6 == 0:  # no terminal, uma linha por minuto
                 print(f"  exportando… {int(time.monotonic() - t0)}s, {mb:.0f} MB")
 
@@ -312,7 +312,7 @@ def _dataset(projeto, plano, doc, rastro, cam, midias=None):
                  extra={"episodio": projeto.ep, "fcproj": "projeto.fcproj",
                         "midias": {k: Path(str(v["caminho"])).name for k, v in (midias or {}).items()}})
     except Exception as e:  # noqa: BLE001
-        eventos.aviso(f"dataset: montagem de {projeto.ep} não gravada ({e})")
+        events.warning(f"dataset: montagem de {projeto.ep} não gravada ({e})")
 
 
 def _exportar(fc, projeto, duracao):
@@ -345,12 +345,12 @@ def _guardar_edicao_manual(projeto):
         return
     copia = fcproj.with_name(f"projeto.manual-{time.strftime('%Y%m%d-%H%M')}.fcproj")
     fcproj.rename(copia)
-    eventos.aviso(f"projeto.fcproj tinha edição manual: guardado em {copia.name}")
+    events.warning(f"projeto.fcproj tinha edição manual: guardado em {copia.name}")
     try:  # a edição vira dado (corrigir_montagem) antes da nova montagem
         from esteira.dataset import edicoes
         edicoes.fcproj_editado(projeto, copia)
     except Exception as e:  # noqa: BLE001
-        eventos.aviso(f"dataset: edição manual de {projeto.ep} não levantada ({e})")
+        events.warning(f"dataset: edição manual de {projeto.ep} não levantada ({e})")
 
 
 def _abrir_religado(fc, projeto):
@@ -387,5 +387,5 @@ def abrir(projeto):
     finally:
         fc.fechar()
     fcproj = projeto.caminho("projeto.fcproj")
-    abrir_programa("filmcraft", str(fcproj))
+    open_program("filmcraft", str(fcproj))
     print(f"  FilmCraft aberto: {fcproj}\n  depois de editar e salvar: ./dark exportar {projeto.ep}")

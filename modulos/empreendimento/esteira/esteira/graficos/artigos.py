@@ -11,7 +11,7 @@ from pathlib import Path
 import pymupdf
 import requests
 
-from esteira.nucleo import eventos
+from esteira.core import events
 from esteira.projeto import CACHE
 
 CACHE = CACHE / "artigos"
@@ -72,7 +72,7 @@ def achar_pdf(fonte, pasta_vault=None):
         urls += _urls_openalex(fonte["doi"])
     for u in urls:
         if _baixar(u, destino) and _parece(fonte["titulo"], destino):
-            eventos.debug("artigo baixado", titulo=fonte["titulo"][:60], url=u)
+            events.debug("artigo baixado", titulo=fonte["titulo"][:60], url=u)
             return destino
         destino.unlink(missing_ok=True)
     return None

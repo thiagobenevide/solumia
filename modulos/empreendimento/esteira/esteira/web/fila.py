@@ -1,7 +1,7 @@
 """Fila de produção do painel: duas pistas, cada uma roda `./dark <comando> <ep> ...` um de cada vez.
-Pista "maquina" (GPU, LLM local, renders: um processo por vez) e pista "claude" (`--motor claude` em
+Pista "machine" (GPU, LLM local, renders: um processo por vez) e pista "claude" (`--motor claude` em
 curar/roteiro, que não usa a GPU e pode rodar junto). O próprio processo ainda toma a vaga em
-`esteira.nucleo.travas`, então a fila também espera o que foi aberto pelo terminal.
+`esteira.core.locks`, então a fila também espera o que foi aberto pelo terminal.
 
 A fila fica em `cache/fila.json` (sobrevive a reinícios do painel; o que estava rodando volta como
 "interrompido"). A saída de cada tarefa vai para `<ep>/log/fila_<id>.log`; o progresso fino vem do log de
@@ -16,8 +16,7 @@ import time
 from datetime import datetime
 
 import psutil
-
-from esteira.nucleo import travas
+from esteira.core import locks
 from esteira.projeto import CACHE, RAIZ, pasta_ep
 
 ARQ = CACHE / "fila.json"
@@ -42,8 +41,8 @@ def listar():
 
 
 def adicionar(ep, comando, args=(), motor="local"):
-    """`ep`: episódio (canal-NNN) ou, para `roteiro`, o alvo canal:N. motor="claude" só vale em travas.CLAUDE_OK."""
-    v = travas.vaga(comando, motor)
+    """`ep`: episódio (canal-NNN) ou, para `roteiro`, o alvo canal:N. motor="claude" só vale em locks.CLAUDE_OK."""
+    v = locks.slot(comando, motor)
     args = list(args) + (["--motor", "claude"] if v == "claude" else [])
     with _trava:
         fila = _ler()
@@ -115,7 +114,7 @@ def limpar_concluidas():
 def _proxima(vaga):
     with _trava:
         fila = _ler()
-        t = next((t for t in fila if t["estado"] == "na fila" and t.get("vaga", "maquina") == vaga), None)
+        t = next((t for t in fila if t["estado"] == "na fila" and t.get("vaga", "machine") == vaga), None)
         if t:
             t.update(estado="rodando", inicio=datetime.now().isoformat(timespec="seconds"))
             _salvar(fila)
@@ -157,7 +156,7 @@ def _worker(vaga):
         with open(_log(t), "w") as log:
             p = subprocess.Popen([str(RAIZ / "dark"), t["comando"], t["ep"], *t["args"]], cwd=RAIZ,
                                  stdout=log, stderr=subprocess.STDOUT,
-                                 env={**os.environ, "ESTEIRA_FILA": str(t["id"])})
+                                 env={**os.environ, "ESTEIRA_QUEUE": str(t["id"])})
             _proc[vaga] = p
             _marcar_pid(t["id"], p.pid)
             codigo = p.wait()
@@ -186,7 +185,7 @@ def iniciar():
             fabrica.limpar_orfas()
         except Exception as e:  # noqa: BLE001 — limpeza nunca impede o painel de subir
             print(f"  ! fila: limpeza de órfãs falhou ({e})")
-    for v in travas.VAGAS:
+    for v in locks.SLOTS:
         threading.Thread(target=_worker, args=(v,), daemon=True).start()
     threading.Thread(target=_relogio, daemon=True).start()
     return True

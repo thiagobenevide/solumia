@@ -9,18 +9,18 @@ Saída: thumbs/*.png (todas), thumb_1..3.png e thumb.png (= thumb_1).
 """
 import hashlib
 import json
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from esteira.core import events
 from esteira.curadoria import ESTILOS
 from esteira.graficos import render
 from esteira.ia import local
-from esteira.nucleo import eventos
 from esteira.projeto import RAIZ
 
 PY_IMG = RAIZ / ".venv-img" / "bin" / "python"
@@ -127,7 +127,7 @@ def _gerar_fundos(pedidos):
     for linha in p.stdout:
         if linha.startswith("{"):
             n += 1
-            eventos.progresso(n, len(pedidos), f"fundo {n} ({json.loads(linha)['seg']}s)")
+            events.progress(n, len(pedidos), f"fundo {n} ({json.loads(linha)['seg']}s)")
     if p.wait():
         raise RuntimeError(f"gerar_sdxl falhou: {p.stderr.read()[-600:]}")
 
@@ -202,7 +202,7 @@ def _dataset(projeto, ctx, ranking, escolhidas):
                                "ordem_claude": ordem.index(nome) + 1 if nome in ordem else None},
                      extra={"episodio": projeto.ep, "arquivo": nome})
     except Exception as e:  # noqa: BLE001
-        eventos.aviso(f"dataset: thumbs de {projeto.ep} não gravadas ({e})")
+        events.warning(f"dataset: thumbs de {projeto.ep} não gravadas ({e})")
 
 
 def thumbs(projeto, n=8):
@@ -255,7 +255,7 @@ def thumbs(projeto, n=8):
         nota = (av.impacto if av else 5) - (3 if av and not av.legivel else 0)
         ranking.append({"arquivo": arq, "nota": nota, "conceito": c.model_dump(), "fundo": fundos[k].name,
                         "problema": av.problema if av else ""})
-        eventos.debug(f"thumb {k}: {c.texto}", nota=nota, problema=av.problema if av else "")
+        events.debug(f"thumb {k}: {c.texto}", nota=nota, problema=av.problema if av else "")
     ranking.sort(key=lambda x: -x["nota"])
     escolhidas = _escolher_com_claude(projeto, ranking, ctx)
     for k, e in enumerate(escolhidas, 1):

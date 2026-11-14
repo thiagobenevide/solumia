@@ -35,8 +35,8 @@ class ProcessosAba extends StatelessWidget {
                 SeloEstado(
                   dono == null ? 'ok' : 'rodando',
                   texto:
-                      '${v == 'maquina' ? 'Máquina (GPU/local)' : 'Claude'}: '
-                      '${dono == null ? 'livre' : 'ocupada por ${(dono as Json)['comando']}'}',
+                      '${v == 'machine' ? 'Máquina (GPU/local)' : 'Claude'}: '
+                      '${dono == null ? 'livre' : 'ocupada por ${(dono as Json)['command']}'}',
                 ),
             ],
           ),
@@ -46,15 +46,15 @@ class ProcessosAba extends StatelessWidget {
             Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
-                leading: SeloEstado('${p['estado']}'),
+                leading: SeloEstado(estadoDaApi(p['state'])),
                 title: Text(
-                  './dark ${p['comando']} ${(p['args'] as List? ?? const []).join(' ')}',
+                  './dark ${p['command']} ${(p['args'] as List? ?? const []).join(' ')}',
                   style: const TextStyle(fontFamily: 'monospace'),
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
-                  '${p['vaga'] == 'claude' ? 'Claude' : 'máquina'} · ${p['fila'] != null ? 'fila' : 'terminal'} · '
-                  '${diaHora(_data(p['inicio']))} · ${duracao((p['dur'] as num?)?.toDouble())}',
+                  '${p['slot'] == 'claude' ? 'Claude' : 'máquina'} · ${p['queue'] != null ? 'fila' : 'terminal'} · '
+                  '${diaHora(_data(p['start']))} · ${duracao((p['duration'] as num?)?.toDouble())}',
                 ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => abrirProcesso(context, api, '${p['id']}'),
@@ -89,14 +89,14 @@ class ProcessoTela extends StatelessWidget {
         final vivo = d['vivo'] as Json?;
         final r = d['recursos'] as Json?;
         final s = (d['resumo'] as Json?) ?? const {};
-        final inicio = _data(p['inicio']);
-        final fim = _data(p['fim']) ?? DateTime.now();
+        final inicio = _data(p['start']);
+        final fim = _data(p['end']) ?? DateTime.now();
         const mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
             SelectableText(
-              './dark ${p['comando']} ${(p['args'] as List? ?? const []).join(' ')}',
+              './dark ${p['command']} ${(p['args'] as List? ?? const []).join(' ')}',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(fontFamily: 'monospace'),
             ),
             const SizedBox(height: 8),
@@ -105,18 +105,18 @@ class ProcessoTela extends StatelessWidget {
               runSpacing: 6,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                SeloEstado('${p['estado']}'),
-                Text(p['vaga'] == 'claude' ? 'vaga Claude (em paralelo)' : 'vaga da máquina'),
-                Text('motor ${p['motor']}'),
-                Text(p['fila'] != null ? 'da fila' : 'do terminal'),
+                SeloEstado(estadoDaApi(p['state'])),
+                Text(p['slot'] == 'claude' ? 'vaga Claude (em paralelo)' : 'vaga da máquina'),
+                Text('motor ${p['engine']}'),
+                Text(p['queue'] != null ? 'da fila' : 'do terminal'),
                 Text('pid ${p['pid']}'),
                 if (inicio != null)
                   Text(
                     'início ${hora(inicio)} · duração ${duracao(fim.difference(inicio).inSeconds.toDouble())}',
                   ),
-                if ('${p['erro'] ?? ''}'.isNotEmpty)
-                  Text('${p['erro']}', style: const TextStyle(color: Colors.redAccent)),
-                if (p['estado'] == 'rodando')
+                if ('${p['error'] ?? ''}'.isNotEmpty)
+                  Text('${p['error']}', style: const TextStyle(color: Colors.redAccent)),
+                if (p['state'] == 'running')
                   OutlinedButton.icon(
                     icon: const Icon(Icons.stop_circle_outlined),
                     label: const Text('Parar processo'),
@@ -170,7 +170,7 @@ class ProcessoTela extends StatelessWidget {
             const Secao('Eventos'),
             for (final e in (d['eventos'] as List).cast<Json>().take(80))
               Text(
-                '${'${e['t']}'.length >= 19 ? '${e['t']}'.substring(11, 19) : e['t']}  ${e['etapa']}  ${e['tipo']}  ${e['msg']}',
+                '${'${e['t']}'.length >= 19 ? '${e['t']}'.substring(11, 19) : e['t']}  ${e['stage']}  ${e['kind']}  ${e['message']}',
                 style: mono,
               ),
             const Secao('Log'),
@@ -217,8 +217,8 @@ class _Agora extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final g = v['progresso'] as Json?;
-    final c = v['chamada'] as Json?;
+    final g = v['progress'] as Json?;
+    final c = v['call'] as Json?;
     final agora = DateTime.now().millisecondsSinceEpoch / 1000;
     return Card(
       child: Padding(
@@ -227,31 +227,31 @@ class _Agora extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: 10,
           children: [
-            Text('${v['nome'] ?? v['no'] ?? ''}', style: Theme.of(context).textTheme.titleMedium),
-            if ('${v['detalhe'] ?? ''}'.isNotEmpty) Text('${v['detalhe']}'),
+            Text('${v['nome'] ?? v['node'] ?? ''}', style: Theme.of(context).textTheme.titleMedium),
+            if ('${v['detail'] ?? ''}'.isNotEmpty) Text('${v['detail']}'),
             if (g != null) ...[
               Text(
-                '${g['msg'] ?? ''} · ${g['i']}/${g['n']}${g['resta'] != null ? ' · resta ${duracao((g['resta'] as num).toDouble())}' : ''}',
+                '${g['message'] ?? ''} · ${g['i']}/${g['n']}${g['remaining'] != null ? ' · resta ${duracao((g['remaining'] as num).toDouble())}' : ''}',
               ),
               LinearProgressIndicator(
                 value: (g['n'] as num? ?? 0) > 0 ? (g['i'] as num) / (g['n'] as num) : null,
               ),
             ],
-            for (final t in ((v['tarefas'] as Json?) ?? const {}).values.cast<Json>()) ...[
+            for (final t in ((v['tasks'] as Json?) ?? const {}).values.cast<Json>()) ...[
               Text(
-                '${t['rotulo']} · ${_tam(t['feito'], t['unidade'])}${t['total'] != null ? ' / ${_tam(t['total'], t['unidade'])}' : ''}',
+                '${t['label']} · ${_tam(t['done'], t['unit'])}${t['total'] != null ? ' / ${_tam(t['total'], t['unit'])}' : ''}',
               ),
               LinearProgressIndicator(
                 value: t['total'] != null && (t['total'] as num) > 0
-                    ? (t['feito'] as num) / (t['total'] as num)
+                    ? (t['done'] as num) / (t['total'] as num)
                     : null,
               ),
             ],
             if (c != null) ...[
               Text(
-                '${c['motor']} · ${c['nome']} · ${c['modelo']} — ${c['tokens'] ?? 0}'
+                '${c['engine']} · ${c['name']} · ${c['model']} — ${c['tokens'] ?? 0}'
                 '${c['params'] is Map && (c['params'] as Map)['num_predict'] != null ? '/${(c['params'] as Map)['num_predict']}' : ''} tokens · '
-                '${c['primeiro'] != null && agora - (c['primeiro'] as num) > 0.5 ? '${((c['tokens'] ?? 0) / (agora - (c['primeiro'] as num))).toStringAsFixed(1)} tok/s' : (c['motor'] == 'claude' ? 'aguardando o Claude' : 'lendo o prompt')}',
+                '${c['first'] != null && agora - (c['first'] as num) > 0.5 ? '${((c['tokens'] ?? 0) / (agora - (c['first'] as num))).toStringAsFixed(1)} tok/s' : (c['engine'] == 'claude' ? 'aguardando o Claude' : 'lendo o prompt')}',
               ),
               Container(
                 constraints: const BoxConstraints(maxHeight: 200),
@@ -260,7 +260,7 @@ class _Agora extends StatelessWidget {
                 child: SingleChildScrollView(
                   reverse: true,
                   child: Text(
-                    '${c['parcial'] ?? '…'}',
+                    '${c['partial'] ?? '…'}',
                     style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                   ),
                 ),

@@ -83,8 +83,7 @@ def situacao(ep):
     projeto = Projeto(pasta_ep(ep))
     base = projeto.pasta / "estudio"
     mapa = base / "mapa.json"
-    from esteira.estudio import corte
-    from esteira.estudio import apontamento
+    from esteira.estudio import apontamento, corte
     ap = apontamento.carregar(projeto)
     from esteira.estudio import ritmo
     r = {"ep": ep, "canal": projeto.canal, "aprovacoes": aprovacoes(projeto), "mapa": None, "formatos": {},
@@ -116,8 +115,8 @@ def estilo_do_mapa(projeto, mapa):
     try:
         base = estilo.carregar(f"{mapa['estilo']}@{mapa['versao']}")
     except KeyError:  # versão antiga não guardada: a atual, avisando
-        from esteira.nucleo import eventos
-        eventos.aviso(f"estilo {mapa['estilo']} v{mapa['versao']} não está guardado; usando a versão atual")
+        from esteira.core import events
+        events.warning(f"estilo {mapa['estilo']} v{mapa['versao']} não está guardado; usando a versão atual")
         base = estilo.carregar(mapa["estilo"])
     est = estilo.com_modo(base, producao.modo(projeto))
     return ritmo.aplicar(est, ritmo.perfil_do(projeto))
@@ -159,9 +158,9 @@ def renderizar_bloco(ep, bloco, formatos=None):
 
 def produzir(ep, estilo_id=None, formatos=None, etapas=ETAPAS, sem_portao=False, intensidade=None):
     """`intensidade` ({"sfx"|"motion"|"efeitos": "baixa"|"media"|"alta"}) vale só para esta produção."""
+    from esteira.core import events
     from esteira.estudio import compilar, diretor, estilo, motor
     from esteira.ia import local
-    from esteira.nucleo import eventos
     projeto = Projeto(pasta_ep(ep))
     est = estilo.carregar(estilo_id) if estilo_id else estilo_padrao(projeto)
     if not est:
@@ -183,25 +182,25 @@ def produzir(ep, estilo_id=None, formatos=None, etapas=ETAPAS, sem_portao=False,
     print(f"  estúdio: {ep} · estilo {est.id} v{est.versao} · {', '.join(formatos)} · níveis {est.regras.niveis} · "
           f"ritmo {perfil.id} · modo {est.modo}")
     if "dirigir" in etapas:
-        from esteira.nucleo import opcoes
-        with eventos.etapa(projeto, "estudio-dirigir"):
-            if opcoes.ler().get("direcao", "blocos") == "blocos":  # direção por bloco com o acervo de peças
+        from esteira.core import options
+        with events.stage(projeto, "estudio-dirigir"):
+            if options.read().get("direction", "blocks") == "blocks":  # direção por bloco com o acervo de peças
                 from esteira.estudio import direcao
                 direcao.dirigir(projeto, est, perfil, formatos)
             else:
                 diretor.dirigir(projeto, est, perfil)
     for fmt in formatos:
         if "compilar" in etapas:
-            with eventos.etapa(projeto, f"estudio-compilar-{fmt}"):
+            with events.stage(projeto, f"estudio-compilar-{fmt}"):
                 compilar.compilar(projeto, est, fmt)
         if "render" in etapas:
             local.liberar_gpu()
-            with eventos.etapa(projeto, f"estudio-render-{fmt}"):
+            with events.stage(projeto, f"estudio-render-{fmt}"):
                 compilar.render(projeto, fmt)
         if "audio" in etapas:
-            with eventos.etapa(projeto, f"estudio-audio-{fmt}"):
+            with events.stage(projeto, f"estudio-audio-{fmt}"):
                 compilar.audio(projeto, est, fmt)
         if "verificar" in etapas:
-            with eventos.etapa(projeto, f"estudio-verificar-{fmt}"):
+            with events.stage(projeto, f"estudio-verificar-{fmt}"):
                 compilar.verificar(projeto, est, fmt)
     return situacao(ep)

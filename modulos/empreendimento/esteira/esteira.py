@@ -37,7 +37,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from esteira.nucleo import eventos
+from esteira.core import events
 from esteira.projeto import RAIZ, Projeto, episodios, pasta_ep
 
 
@@ -50,7 +50,7 @@ def etapa(nome):
     def rodar(a):
         p = resolver(a.projeto)
         print(f"▶ {nome}: {p.ep}")
-        with eventos.etapa(p, nome):
+        with events.stage(p, nome):
             _rodar(nome, p, a)
     return rodar
 
@@ -150,37 +150,38 @@ def cmd_tudo(a):
 def _diagnosticar(p, nome, erro):
     """Erro numa etapa do `tudo`: o Claude lê o traceback + o fim do log e registra causa e ação sugerida."""
     import traceback
-    from pydantic import BaseModel
+
+    from esteira.core import status
     from esteira.ia import claude
-    from esteira.nucleo import status
+    from pydantic import BaseModel
 
     class Diagnostico(BaseModel):
         causa: str
         acao: str
 
-    log = "\n".join(f"{e['etapa']} {e['tipo']} {e['msg'][:160]}" for e in status.eventos(p.pasta)[-25:])
+    log = "\n".join(f"{e['stage']} {e['kind']} {e['message'][:160]}" for e in status.events(p.pasta)[-25:])
     d = claude.consultar(f"A etapa '{nome}' da esteira de vídeo falhou.\n\nTraceback:\n"
                          f"{traceback.format_exc(limit=8)[-2500:]}\n\nÚltimos eventos:\n{log}\n\n"
                          "Diga a causa provável (1 frase) e a ação concreta para o operador (1-2 frases).",
                          Diagnostico, p.cfg, p.ep, f"diagnóstico: erro em {nome}")
     if d:  # só o aviso: a etapa continua marcada como erro no status
         print(f"  ! diagnóstico: {d.causa} → {d.acao}")
-        eventos.Etapa(p, nome).gravar("aviso", f"diagnóstico: {d.causa} → {d.acao}")
+        events.Stage(p, nome).record("warning", f"diagnóstico: {d.causa} → {d.acao}")
 
 
 def cmd_status(a):
-    from esteira.nucleo import status
+    from esteira.core import status
     if a.projeto:
-        status.imprimir_status(resolver(a.projeto).pasta)
+        status.print_status(resolver(a.projeto).pasta)
         return
     for pasta in episodios():
-        if (pasta / "log" / "eventos.jsonl").exists():
-            status.imprimir_status(pasta)
+        if (pasta / "log" / "events.jsonl").exists():
+            status.print_status(pasta)
 
 
 def cmd_log(a):
-    from esteira.nucleo import status
-    status.imprimir_log(resolver(a.projeto).pasta, a.etapa, a.n, a.erros, a.debug)
+    from esteira.core import status
+    status.print_log(resolver(a.projeto).pasta, a.etapa, a.n, a.erros, a.debug)
 
 
 def _cfg_fontes():
@@ -536,29 +537,29 @@ def main():
     # processo pesado: registra (Monitor → Processos) e espera a vaga da máquina (ou a do Claude)
     import os
     import signal
-    from esteira.nucleo import processos, travas
-    from esteira.nucleo import opcoes
-    motor = getattr(a, "motor", None) or opcoes.ler()["motor"]
+
+    from esteira.core import locks, options, processes
+    motor = getattr(a, "motor", None) or options.read()["engine"]
     os.environ["ESTEIRA_MOTOR"] = motor
     if getattr(a, "motor", None):
         os.environ["ESTEIRA_MOTOR_FIXO"] = "1"  # --motor explícito vale para todas as operações
     if getattr(a, "projeto", None) and pasta_ep(a.projeto).is_dir():
         os.environ["ESTEIRA_EP"] = a.projeto
     alvo = getattr(a, "projeto", None) or getattr(a, "alvo", None) or ""
-    v = travas.vaga(a.cmd, motor)
+    v = locks.slot(a.cmd, motor)
     os.environ["ESTEIRA_VAGA"] = v
-    pid_id = processos.registrar(a.cmd, alvo, sys.argv[2:], v, motor)
+    pid_id = processes.register(a.cmd, alvo, sys.argv[2:], v, motor)
 
     def _cancelado(*_):  # Cancelar no painel manda SIGTERM: sai pelo caminho normal (registro, rastro, vaga)
-        processos.cancelado()
+        processes.cancelled()
         sys.exit(143)
     signal.signal(signal.SIGTERM, _cancelado)
-    travas.ocupar(v, " ".join(sys.argv[1:])[:120], proc=pid_id)
+    locks.acquire(v, " ".join(sys.argv[1:])[:120], process=pid_id)
     try:
         a.f(a)
     except BaseException as e:
         if not (isinstance(e, SystemExit) and e.code in (0, None)):
-            processos.falhou(e)
+            processes.failed(e)
         raise
 
 

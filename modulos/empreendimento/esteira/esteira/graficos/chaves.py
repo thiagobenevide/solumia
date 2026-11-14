@@ -9,8 +9,8 @@ import re
 
 from pydantic import BaseModel, Field
 
+from esteira.core import events
 from esteira.cortes import norm
-from esteira.nucleo import eventos
 
 LOTE = 20          # frases por pergunta ao LLM
 DUR = (1.3, 2.2)   # s na tela (mínimo, máximo)
@@ -49,7 +49,7 @@ def escolher(frases):
         dadas = {i.frase: i.palavras for i in r.itens} if r else {}
         for k, f in enumerate(bloco):
             saida[a + k] = [p for p in dadas.get(a + k, []) if p.strip()] or _heuristica(f["texto"])
-        eventos.progresso(min(a + LOTE, len(frases)), len(frases), "palavras-chave")
+        events.progress(min(a + LOTE, len(frases)), len(frases), "palavras-chave")
     return saida
 
 

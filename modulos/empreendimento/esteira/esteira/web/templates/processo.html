@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block titulo %}Processo {{ p.comando }} · Esteira dark{% endblock %}
+{% block titulo %}Processo {{ p.command }} · Esteira dark{% endblock %}
 {% block corpo %}
 <div class="flex flex-wrap items-end justify-between gap-4">
   <div class="min-w-0">
     <p class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase"><a href="/monitor" class="hover:underline">Monitor</a> · <a href="/processos" class="hover:underline">processos</a></p>
-    <h1 class="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight text-white font-mono break-all">./dark {{ p.comando }} {{ p.args|join(' ') }}</h1>
+    <h1 class="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight text-white font-mono break-all">./dark {{ p.command }} {{ p.args|join(' ') }}</h1>
     <p id="cabeca" class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-400"></p>
   </div>
   <form id="parar" method="post" action="/processos/{{ p.id }}/parar" class="hidden"
@@ -52,42 +52,43 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&
 const dur = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
   return (h ? h + "h" : "") + (h || m ? String(m).padStart(h ? 2 : 1, "0") + "m" : "") + String(s % 60).padStart(2, "0") + "s"; };
 const hora = t => new Date(t * 1000).toLocaleTimeString("pt-BR");
-const COR = {rodando: "text-sky-300", ok: "text-emerald-400", erro: "text-rose-400", cancelado: "text-slate-400", interrompido: "text-amber-400"};
+const COR = {running: "text-sky-300", ok: "text-emerald-400", error: "text-rose-400", cancelled: "text-slate-400", interrupted: "text-amber-400"};
+const ESTADO = {running: "rodando", ok: "ok", error: "erro", cancelled: "cancelado", interrupted: "interrompido"};
 const barra = (pct, cor = "bg-azul-400") => `<div class="h-1.5 rounded-full bg-white/5 overflow-hidden"><div class="h-full ${cor} transition-all ${pct == null ? "animate-pulse opacity-60" : ""}" style="width:${pct == null ? 100 : Math.min(100, pct)}%"></div></div>`;
 const tam = (v, u) => u === "bytes" ? (v / 2 ** 20).toFixed(1) + " MB" : v + (u ? " " + u : "");
 
 function cabeca(d) {
-  const p = d.processo, fim = p.fim || Date.now() / 1000;
-  $("cabeca").innerHTML = `<span class="font-mono uppercase text-xs tracking-wider ${COR[p.estado]} ${p.estado === "rodando" ? "animate-pulse" : ""}">${p.estado}</span>
-    · <span>${p.vaga === "claude" ? "vaga Claude (em paralelo)" : "vaga da máquina"}</span>
-    · <span>motor ${esc(p.motor)}</span> · <span>${p.fila ? "da fila" : "do terminal"}</span>
-    · <span class="font-mono">pid ${p.pid}</span> · <span>início ${hora(p.inicio)}</span>
-    · <span>duração ${dur(fim - p.inicio)}</span>${p.erro ? ` · <span class="text-rose-300">${esc(p.erro)}</span>` : ""}`;
-  $("parar").classList.toggle("hidden", p.estado !== "rodando");
+  const p = d.processo, fim = p.end || Date.now() / 1000;
+  $("cabeca").innerHTML = `<span class="font-mono uppercase text-xs tracking-wider ${COR[p.state]} ${p.state === "running" ? "animate-pulse" : ""}">${ESTADO[p.state]}</span>
+    · <span>${p.slot === "claude" ? "vaga Claude (em paralelo)" : "vaga da máquina"}</span>
+    · <span>motor ${esc(p.engine)}</span> · <span>${p.queue ? "da fila" : "do terminal"}</span>
+    · <span class="font-mono">pid ${p.pid}</span> · <span>início ${hora(p.start)}</span>
+    · <span>duração ${dur(fim - p.start)}</span>${p.error ? ` · <span class="text-rose-300">${esc(p.error)}</span>` : ""}`;
+  $("parar").classList.toggle("hidden", p.state !== "running");
 }
 
 function agora(v) {
   $("agora").classList.toggle("hidden", !v);
   if (!v) return;
-  let h = `<div><p class="text-white">${esc(v.nome || v.no)}</p><p class="text-sm text-slate-400">${esc(v.detalhe)}</p></div>`;
-  if (v.progresso) {
-    const g = v.progresso;
-    h += `<div><div class="flex justify-between text-xs text-slate-400 mb-1"><span>${esc(g.msg)}</span><span class="font-mono">${g.i}/${g.n}${g.resta ? " · resta " + dur(g.resta) : ""}</span></div>${barra(100 * g.i / g.n)}</div>`;
+  let h = `<div><p class="text-white">${esc(v.nome || v.node)}</p><p class="text-sm text-slate-400">${esc(v.detail)}</p></div>`;
+  if (v.progress) {
+    const g = v.progress;
+    h += `<div><div class="flex justify-between text-xs text-slate-400 mb-1"><span>${esc(g.message)}</span><span class="font-mono">${g.i}/${g.n}${g.remaining ? " · resta " + dur(g.remaining) : ""}</span></div>${barra(100 * g.i / g.n)}</div>`;
   }
-  for (const t of Object.values(v.tarefas || {})) {
-    const pct = t.total ? 100 * t.feito / t.total : null, seg = (t.t - t.inicio) || 1;
-    h += `<div><div class="flex justify-between text-xs text-slate-400 mb-1"><span>${esc(t.rotulo)}</span><span class="font-mono">${tam(t.feito, t.unidade)}${t.total ? " / " + tam(t.total, t.unidade) : ""}${t.unidade === "bytes" ? " · " + (t.feito / seg / 1024).toFixed(0) + " KB/s" : ""}</span></div>${barra(pct, "bg-sky-400")}</div>`;
+  for (const t of Object.values(v.tasks || {})) {
+    const pct = t.total ? 100 * t.done / t.total : null, seg = (t.t - t.start) || 1;
+    h += `<div><div class="flex justify-between text-xs text-slate-400 mb-1"><span>${esc(t.label)}</span><span class="font-mono">${tam(t.done, t.unit)}${t.total ? " / " + tam(t.total, t.unit) : ""}${t.unit === "bytes" ? " · " + (t.done / seg / 1024).toFixed(0) + " KB/s" : ""}</span></div>${barra(pct, "bg-sky-400")}</div>`;
   }
-  const c = v.chamada;
+  const c = v.call;
   if (c) {
-    const gerando = c.primeiro ? (Date.now() / 1000 - c.primeiro) : 0;
-    const tps = gerando > 0.5 ? (c.tokens / gerando).toFixed(1) + " tok/s" : (c.motor === "claude" ? "aguardando o Claude" : "lendo o prompt");
+    const gerando = c.first ? (Date.now() / 1000 - c.first) : 0;
+    const tps = gerando > 0.5 ? (c.tokens / gerando).toFixed(1) + " tok/s" : (c.engine === "claude" ? "aguardando o Claude" : "lendo o prompt");
     const max = c.params?.num_predict;
     h += `<div><div class="flex flex-wrap justify-between gap-2 text-xs text-slate-400 mb-1">
-        <span><span class="${c.motor === "claude" ? "text-violet-300" : "text-teal-300"}">${esc(c.motor)}</span> · ${esc(c.nome)} · <span class="font-mono">${esc(c.modelo)}</span></span>
-        <span class="font-mono">${c.tokens || 0}${max ? "/" + max : ""} tokens · ${tps} · ${dur(Date.now() / 1000 - c.inicio)}</span></div>
-      ${barra(max ? 100 * (c.tokens || 0) / max : null, c.motor === "claude" ? "bg-violet-400" : "bg-teal-400")}
-      <pre id="parcial" class="mt-2 text-[11px] font-mono text-slate-300 whitespace-pre-wrap break-words max-h-48 overflow-y-auto bg-black/20 rounded-lg p-3">${esc(c.parcial || "…")}</pre></div>`;
+        <span><span class="${c.engine === "claude" ? "text-violet-300" : "text-teal-300"}">${esc(c.engine)}</span> · ${esc(c.name)} · <span class="font-mono">${esc(c.model)}</span></span>
+        <span class="font-mono">${c.tokens || 0}${max ? "/" + max : ""} tokens · ${tps} · ${dur(Date.now() / 1000 - c.start)}</span></div>
+      ${barra(max ? 100 * (c.tokens || 0) / max : null, c.engine === "claude" ? "bg-violet-400" : "bg-teal-400")}
+      <pre id="parcial" class="mt-2 text-[11px] font-mono text-slate-300 whitespace-pre-wrap break-words max-h-48 overflow-y-auto bg-black/20 rounded-lg p-3">${esc(c.partial || "…")}</pre></div>`;
   }
   $("agora-corpo").innerHTML = h;
   const pc = $("parcial"); if (pc) pc.scrollTop = pc.scrollHeight;
@@ -113,18 +114,18 @@ document.addEventListener("toggle", e => { const id = e.target.dataset?.id; if (
 function chamadas(lista) {
   $("chamadas").innerHTML = lista.length ? lista.map(c => `<details data-id="${esc(c.id)}" ${abertas.has(String(c.id)) ? "open" : ""} class="rounded-lg ring-1 ring-white/10 px-3 py-2">
       <summary class="cursor-pointer flex flex-wrap gap-x-3 text-xs"><span class="${c.ok ? "text-emerald-400" : "text-rose-400"}">${c.ok ? "ok" : "falhou"}</span>
-        <span class="${c.motor === "claude" ? "text-violet-300" : "text-teal-300"}">${esc(c.motor)}</span><span class="text-white">${esc(c.nome)}</span>
-        <span class="font-mono text-slate-500">${esc(c.modelo)} · ${c.seg}s${c.tokens_saida ? " · " + c.tokens_saida + " tok" : ""}${c.tok_s ? " · " + c.tok_s + " tok/s" : ""}${c.custo_usd ? " · US$ " + c.custo_usd.toFixed(4) : ""} · ${hora(c.t)}</span>
-        ${c.erro ? `<span class="text-rose-300">${esc(c.erro)}</span>` : ""}</summary>
-      <div class="grid md:grid-cols-2 gap-3 mt-2"><pre class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${esc(c.entrada)}</pre>
-        <pre class="text-[11px] font-mono text-slate-200 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${esc(c.saida)}</pre></div></details>`).join("")
+        <span class="${c.engine === "claude" ? "text-violet-300" : "text-teal-300"}">${esc(c.engine)}</span><span class="text-white">${esc(c.name)}</span>
+        <span class="font-mono text-slate-500">${esc(c.model)} · ${c.seconds}s${c.tokens_saida ? " · " + c.tokens_saida + " tok" : ""}${c.tok_s ? " · " + c.tok_s + " tok/s" : ""}${c.custo_usd ? " · US$ " + c.custo_usd.toFixed(4) : ""} · ${hora(c.t)}</span>
+        ${c.error ? `<span class="text-rose-300">${esc(c.error)}</span>` : ""}</summary>
+      <div class="grid md:grid-cols-2 gap-3 mt-2"><pre class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${esc(c.input)}</pre>
+        <pre class="text-[11px] font-mono text-slate-200 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${esc(c.output)}</pre></div></details>`).join("")
     : '<p class="text-slate-500">Nenhuma chamada de LLM neste processo.</p>';
 }
 
 function eventos(lista) {
-  const cor = {erro: "text-rose-400", aviso: "text-amber-300", claude: "text-violet-300", inicio: "text-sky-300", fim: "text-emerald-400"};
+  const cor = {error: "text-rose-400", warning: "text-amber-300", claude: "text-violet-300", start: "text-sky-300", end: "text-emerald-400"};
   $("eventos").innerHTML = lista.length ? lista.map(e => `<div class="flex gap-2"><span class="font-mono text-slate-500">${e.t.slice(11, 19)}</span>
-    <span class="${cor[e.tipo] || "text-slate-400"}">${esc(e.etapa)}·${esc(e.tipo)}</span><span class="text-slate-300 break-words min-w-0">${esc(e.msg)}</span></div>`).join("")
+    <span class="${cor[e.kind] || "text-slate-400"}">${esc(e.stage)}·${esc(e.kind)}</span><span class="text-slate-300 break-words min-w-0">${esc(e.message)}</span></div>`).join("")
     : '<p class="text-slate-500">Sem eventos de episódio.</p>';
 }
 
@@ -134,7 +135,7 @@ $("log").addEventListener("scroll", e => { const l = e.target; fixoLog = l.scrol
 async function atualizar() {
   let d;
   try { d = await (await fetch(`/api/processos/${ID}`)).json(); } catch { return setTimeout(atualizar, 3000); }
-  const rodando = d.processo.estado === "rodando";
+  const rodando = d.processo.state === "running";
   cabeca(d); agora(d.vivo); caminho(d.caminho, rodando); numeros(d); chamadas(d.chamadas); eventos(d.eventos);
   $("log").textContent = d.log.join("\n") || "(sem log)";
   if (fixoLog) $("log").scrollTop = $("log").scrollHeight;

@@ -25,9 +25,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
+from esteira.core import events, trace
 from esteira.estudio import peca as P
 from esteira.ia import claude
-from esteira.nucleo import eventos, rastro
 from esteira.projeto import DADOS, RAIZ
 
 PASTA = DADOS / "estudio" / "fabrica"
@@ -162,7 +162,7 @@ def _mudar(pid, **campos):
     todos[pid] = p.model_copy(update=campos)
     _gravar(todos)
     if "situacao" in campos:
-        rastro.detalhe(f"{pid}: {campos['situacao']}")
+        trace.detail(f"{pid}: {campos['situacao']}")
     return todos[pid]
 
 
@@ -438,7 +438,7 @@ def _checar_quadros(id_, Visao, local, problemas):
             r = local.perguntar(local.prompt("estudio_visao_prova"), Visao, modelo=local.VISAO, imagens=[str(q)],
                                 max_tokens=200, operacao="estudio_visao")
         except Exception as e:  # noqa: BLE001 — llama fora do ar não pode travar a fábrica
-            eventos.aviso(f"checagem visual pulada: {str(e)[:100]}")
+            events.warning(f"checagem visual pulada: {str(e)[:100]}")
             return []
         if r:
             ruins = [k for k, v in r.model_dump().items() if v and k != "rosto_coberto"]
@@ -542,7 +542,7 @@ def gerar(p: Pedido, modo="nova", alvo="", comentario="", visual=True, motor=Non
            "comentario": comentario, "motor": motor, "tarefa": str(tarefa or "")}
     rg = _dataset(p, ctx, texto, g, r, id_, alvo if modo in ("ajuste", "variacao", "porte") else id_, motor)
     if not r["ok"]:
-        eventos.aviso(f"fábrica: {id_} reprovada no portão; volta ao Claude uma vez")
+        events.warning(f"fábrica: {id_} reprovada no portão; volta ao Claude uma vez")
         texto2 = dossie(p, "corrigir", id_, erros=r["erros"], motor=motor)
         g2, c2 = _consultar(p, texto2)
         custo += c2
@@ -585,7 +585,7 @@ def _dataset(p: Pedido, ctx, texto, g, r, id_, grupo, motor, pai=None):
             portao={"ok": bool(r.get("ok")), "erros": r.get("erros", [])[:8], "render_s": r.get("render_s")},
             versoes={"guia": _sha_guia(motor)}, extra={"peca": id_, "pedido": p.id, "prompt": R.artefato(texto)})
     except Exception as e:  # noqa: BLE001
-        eventos.aviso(f"dataset: rodada de {id_} não gravada ({e})")
+        events.warning(f"dataset: rodada de {id_} não gravada ({e})")
         return None
 
 
@@ -596,7 +596,7 @@ def _avaliar_dataset(rg, veredito, **kw):
         from esteira.dataset import registro as R
         R.avaliar(rg, veredito, **kw)
     except Exception as e:  # noqa: BLE001
-        eventos.aviso(f"dataset: veredito de {rg} não gravado ({e})")
+        events.warning(f"dataset: veredito de {rg} não gravado ({e})")
 
 
 def _veredito_peca(id_, veredito, **kw):
@@ -686,7 +686,7 @@ def _consultar_n1_local(texto):
         # só o que a LLM escreveu: o que ela omite vem do molde (travar_molde), não do padrão do esquema (peso 400…)
         return r and PecaN1Local(peca_n1=r.peca_n1.model_dump(mode="json", exclude_unset=True), comunica=r.comunica)
     except Exception as e:  # noqa: BLE001 — llama fora do ar ou resposta truncada: vira falha da rodada
-        eventos.aviso(f"fábrica: LLM local falhou ({str(e)[:120]})")
+        events.warning(f"fábrica: LLM local falhou ({str(e)[:120]})")
         return None
     finally:
         for k, v in antes.items():
@@ -811,7 +811,7 @@ def _revisar_claude(id_, ficha, conceito, peca_n1):
         rev = claude.consultar(texto, RevisaoN1, {"claude": {"teto_chamada_usd": 0.3}}, ep, "fabrica_revisao",
                                imagem=str(folha))
     except Exception as e:  # noqa: BLE001 — revisão indisponível não derruba a fábrica
-        eventos.aviso(f"fábrica: revisão do Claude falhou ({str(e)[:120]})")
+        events.warning(f"fábrica: revisão do Claude falhou ({str(e)[:120]})")
         rev = None
     custo = round(claude.gasto(ep)[0] - antes, 4)
     if rev:
@@ -1161,11 +1161,11 @@ def limpar_orfas():
 def rodar(pid, visual=True, maximo=80):
     """Modo contínuo do pedido: tarefas da revisão primeiro, depois peças novas até a quantidade ou a cota do Claude."""
     limpar_orfas()  # uma fábrica por vez (vaga "claude"): rascunho local que sobrou é de processo morto
-    rastro.no(f"fabrica:{pid}", "fabrica", f"pedido {pid}")  # nó "Fábrica de peças" no grafo do Monitor
+    trace.node(f"fabrica:{pid}", "fabrica", f"pedido {pid}")  # nó "Fábrica de peças" no grafo do Monitor
     try:
         return _rodar(pid, visual, maximo)
     finally:
-        rastro.no(None, None)
+        trace.node(None, None)
         if pid in _ler():
             _mudar(pid, etapa={})  # o processo saiu: nada em andamento
 
@@ -1194,7 +1194,7 @@ def _frear(pid, motivo):
         if motivo.startswith("freio da fábrica") else [pid]
     for a in alvos:
         _mudar(a, estado="pausado", situacao=motivo[:200])
-    eventos.aviso(f"fábrica: {motivo}")
+    events.warning(f"fábrica: {motivo}")
     _registrar("freio", pedido=pid, motivo=motivo, pausados=alvos)
     return pedido(pid)
 
@@ -1208,7 +1208,7 @@ def _rodar(pid, visual, maximo):
         if p.ia == "claude" and (motivo := _freio(pid)):
             return _frear(pid, motivo)
         if p.ia in ("claude", "hibrido") and claude.cota_cheia():
-            eventos.aviso(f"fábrica: cota da assinatura em {claude.cota():.0%}")
+            events.warning(f"fábrica: cota da assinatura em {claude.cota():.0%}")
             return _mudar(pid, situacao=f"cota do Claude em {claude.cota():.0%}: volta quando a janela virar")
         if p.tarefas:
             t, resto = p.tarefas[0], p.tarefas[1:]
@@ -1572,18 +1572,18 @@ def _categoria(motivo) -> str:
 def _chamadas_vivas():
     """Chamadas de LLM em andamento nos processos da fábrica (rastro ao vivo)."""
     saida = []
-    for arq in rastro.DIR.glob("*.json"):
+    for arq in trace.DIR.glob("*.json"):
         try:
             v = json.loads(arq.read_text())
         except (OSError, ValueError):
             continue
-        c = v.get("chamada")
-        if not c or not str(v.get("fluxo") or "").startswith("fabrica"):
+        c = v.get("call")
+        if not c or not str(v.get("flow") or "").startswith("fabrica"):
             continue
-        saida.append({"pedido": str(v["fluxo"]).split(":", 1)[-1], "motor": c.get("motor"), "nome": c.get("nome"),
-                      "modelo": c.get("modelo"), "tokens": c.get("tokens") or 0,
-                      "segundos": round(time.time() - (c.get("inicio") or time.time()), 1),
-                      "parcial": (c.get("parcial") or "")[-400:]})
+        saida.append({"pedido": str(v["flow"]).split(":", 1)[-1], "motor": c.get("engine"), "nome": c.get("name"),
+                      "modelo": c.get("model"), "tokens": c.get("tokens") or 0,
+                      "segundos": round(time.time() - (c.get("start") or time.time()), 1),
+                      "parcial": (c.get("partial") or "")[-400:]})
     return saida
 
 

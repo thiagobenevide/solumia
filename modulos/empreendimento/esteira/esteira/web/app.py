@@ -7,23 +7,27 @@ lógica própria que divirja do terminal. Atualização ao vivo por polling do H
 """
 import json
 import os
+import re
+import subprocess
 import tomllib
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-import re
-import subprocess
-
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-
+from esteira.core import status
+from esteira.core.display import NoDisplay
 from esteira.fontes import gravacoes, obsidian
-from esteira.nucleo import status
-from esteira.nucleo.tela import SemTela
 from esteira.projeto import PROJETOS, RAIZ, Projeto, ep_id, pasta_ep
 from esteira.web import fila
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 AQUI = Path(__file__).parent
 PIPELINE = ["limpar", "cenas", "curar", "buscar", "avaliar", "graficos", "montar", "thumb"]
@@ -55,7 +59,7 @@ async def _so_local(request: Request, call_next):
     return await call_next(request)
 
 
-@app.exception_handler(SemTela)
+@app.exception_handler(NoDisplay)
 def _sem_tela(_pedido, erro):
     return JSONResponse({"detail": str(erro)}, status_code=503)
 
@@ -83,10 +87,10 @@ MOTORES = {
 
 
 def _motor_ia():
-    from esteira.nucleo import opcoes
-    o = opcoes.ler()
-    if o["motor"] == "claude":
-        return "Claude (" + opcoes.claude({"modelo": "claude-sonnet-5-5"})["modelo"].removeprefix("claude-") + ")"
+    from esteira.core import options
+    o = options.read()
+    if o["engine"] == "claude":
+        return "Claude (" + options.claude({"modelo": "claude-sonnet-5-5"})["modelo"].removeprefix("claude-") + ")"
     return "LLM local"
 
 
@@ -126,13 +130,13 @@ def final_do_ep(pasta):
 
 def _resumo_ep(ep):
     pasta = pasta_ep(ep)
-    est = status.etapas(pasta)
+    est = status.stages(pasta)
     final = final_do_ep(pasta)
     de_estudio = final.parent != pasta
     feitas = sum(1 for e in PIPELINE if est.get(e, {}).get("status") == "ok"
                  or de_estudio and e in ("graficos", "montar"))
-    rodando = next((e for e, v in est.items() if v["status"] == "rodando"), None)
-    erro = next((e for e, v in est.items() if v["status"] == "erro"), None)
+    rodando = next((e for e, v in est.items() if v["status"] == "running"), None)
+    erro = next((e for e, v in est.items() if v["status"] == "error"), None)
     # roteiro reimportado ou gráficos refeitos depois da exportação: o vídeo não tem as mudanças
     fontes = ("estudio/mapa.json", "estudio/corte/corte.json") if de_estudio else ("graficos.json",)
     desatualizado = final.exists() and any((pasta / a).exists() and (pasta / a).stat().st_mtime > final.stat().st_mtime
@@ -205,13 +209,13 @@ def pagina_fila(request: Request):
 
 @app.get("/_fila", response_class=HTMLResponse)
 def fragmento_fila(request: Request):
-    from esteira.nucleo import processos, travas
+    from esteira.core import locks, processes
     tarefas = list(reversed(fila.listar()))
-    proc = {r.get("fila"): r["id"] for r in processos.listar(400) if r.get("fila")}
+    proc = {r.get("queue"): r["id"] for r in processes.list_recent(400) if r.get("queue")}
     for t in tarefas:
         t["prog"] = _resumo_ep(t["ep"]) if ":" not in t["ep"] and pasta_ep(t["ep"]).is_dir() else None
         t["proc"] = proc.get(str(t["id"]))
-    vagas = {v: travas.dono(v) for v in travas.VAGAS}
+    vagas = {v: locks.owner(v) for v in locks.SLOTS}
     return tpl.TemplateResponse(request, "_fila.html", {"tarefas": tarefas, "vagas": vagas})
 
 
@@ -385,15 +389,15 @@ def pagina_monitor(request: Request):
 
 @app.get("/processos", response_class=HTMLResponse)
 def pagina_processos(request: Request):
-    from esteira.nucleo import processos, travas
-    return tpl.TemplateResponse(request, "processos.html", {"processos": processos.listar(300),
-                                                            "vagas": {v: travas.dono(v) for v in travas.VAGAS}})
+    from esteira.core import locks, processes
+    return tpl.TemplateResponse(request, "processos.html", {"processos": processes.list_recent(300),
+                                                            "vagas": {v: locks.owner(v) for v in locks.SLOTS}})
 
 
 @app.get("/processos/{pid_id}", response_class=HTMLResponse)
 def pagina_processo(request: Request, pid_id: str):
-    from esteira.nucleo import processos
-    r = processos.obter(pid_id)
+    from esteira.core import processes
+    r = processes.get(pid_id)
     if not r:
         raise HTTPException(404, "processo não encontrado")
     return tpl.TemplateResponse(request, "processo.html", {"p": r})
@@ -402,14 +406,14 @@ def pagina_processo(request: Request, pid_id: str):
 @app.post("/processos/{pid_id}/parar")
 def parar_processo(pid_id: str):
     """Para o processo (e o que ele abriu), venha da fila ou do terminal."""
-    from esteira.nucleo import processos
-    r = processos.obter(pid_id)
-    if r and r["estado"] == "rodando":
-        t = next((t for t in fila.listar() if str(t["id"]) == str(r.get("fila"))), None)
+    from esteira.core import processes
+    r = processes.get(pid_id)
+    if r and r["state"] == "running":
+        t = next((t for t in fila.listar() if str(t["id"]) == str(r.get("queue"))), None)
         if t:
             fila.cancelar(t["id"])
         else:
-            fila._encerrar({"pid": r["pid"], "comando": r["comando"], "ep": r["alvo"], "args": r["args"]})
+            fila._encerrar({"pid": r["pid"], "comando": r["command"], "ep": r["target"], "args": r["args"]})
     return RedirectResponse(f"/processos/{pid_id}", status_code=303)
 
 
@@ -586,10 +590,10 @@ async def editor_ia(request: Request, ep: str):
     pedido = (corpo.get("pedido") or "").strip()
     if not pedido:
         return _erro("escreva o pedido")
-    from esteira.nucleo import travas
-    if corpo.get("motor", "claude") == "local" and not travas.livre("maquina"):
-        d = travas.dono("maquina")
-        return _erro(f"a máquina está ocupada por `{d['comando']}`: só um processo local por vez. "
+    from esteira.core import locks
+    if corpo.get("motor", "claude") == "local" and not locks.is_free("machine"):
+        d = locks.owner("machine")
+        return _erro(f"a máquina está ocupada por `{d['command']}`: só um processo local por vez. "
                      "Use o motor Claude ou espere terminar.")
     try:
         import asyncio
@@ -670,9 +674,9 @@ def abrir_photocraft(ep: str, arq: str = Form(...)):
 @app.get("/ep/{ep}/_etapas", response_class=HTMLResponse)
 def fragmento_etapas(request: Request, ep: str):
     pasta = _pasta(ep)
-    est = status.etapas(pasta)
+    est = status.stages(pasta)
     linhas = [(e, est.get(e)) for e in PIPELINE] + [(e, v) for e, v in est.items() if e not in PIPELINE]
-    evs = [e for e in status.eventos(pasta) if e["tipo"] in ("saida", "aviso", "erro", "claude", "inicio", "fim")]
+    evs = [e for e in status.events(pasta) if e["kind"] in ("output", "warning", "error", "claude", "start", "end")]
     from esteira.ia import claude
     gasto = claude.gasto(ep)[0]
     return tpl.TemplateResponse(request, "_etapas.html", {"ep": ep, "linhas": linhas, "eventos": evs[-40:][::-1],
@@ -681,11 +685,11 @@ def fragmento_etapas(request: Request, ep: str):
 
 @app.post("/ep/{ep}/rodar/{etapa}")
 def rodar(ep: str, etapa: str, refazer: str = Form(""), motor: str = Form(""), so_render: str = Form("")):
-    from esteira.nucleo import opcoes
+    from esteira.core import options
     _pasta(ep)
     if etapa not in PIPELINE + ["tudo", "quadros", "transcrever", "exportar"]:
         raise HTTPException(400, "etapa desconhecida")
-    motor = motor or opcoes.ler()["motor"]
+    motor = motor or options.read()["engine"]
     args = ["--refazer"] if refazer and etapa in ("limpar", "curar", "buscar", "tudo") else []
     if so_render and etapa == "graficos":
         args = ["--so-render"]
@@ -708,30 +712,30 @@ def _modelos_locais():
 
 @app.get("/opcoes", response_class=HTMLResponse)
 def pagina_opcoes(request: Request, salvo: str = ""):
+    from esteira.core import options
     from esteira.ia import local
-    from esteira.nucleo import opcoes
     cfg = _cfg().get("claude", {})
-    o = opcoes.ler()
-    ops = [(k, nome, desc, tipos, opcoes.operacao(k)) for k, (nome, desc, tipos) in opcoes.OPERACOES.items()]
+    o = options.read()
+    ops = [(k, nome, desc, tipos, options.operation(k)) for k, (nome, desc, tipos) in options.OPERATIONS.items()]
     return tpl.TemplateResponse(request, "opcoes.html", {
-        "o": o, "ops": ops, "modelos_claude": opcoes.MODELOS, "sugestoes": opcoes.SUGESTOES, "locais": _modelos_locais(),
-        "padrao": {"texto": local.TEXTO, "visao": local.VISAO}, "cfg_claude": opcoes.claude(cfg), "salvo": salvo})
+        "o": o, "ops": ops, "modelos_claude": options.MODELS, "sugestoes": options.SUGGESTIONS, "locais": _modelos_locais(),
+        "padrao": {"text": local.TEXTO, "vision": local.VISAO}, "cfg_claude": options.claude(cfg), "salvo": salvo})
 
 
 @app.post("/opcoes")
 async def salvar_opcoes(request: Request):
-    from esteira.nucleo import opcoes
+    from esteira.core import options
     f = await request.form()
     num = lambda v: float(v.replace(",", ".")) if (v or "").strip() else None
     ops = {}
-    for k, (_, _, tipos) in opcoes.OPERACOES.items():
-        d = {"motor": f.get(f"{k}.motor") or "padrao"}
+    for k, (_, _, tipos) in options.OPERATIONS.items():
+        d = {"engine": f.get(f"{k}.motor") or "default"}
         for t in tipos:
             d[t] = f.get(f"{k}.{t}") or None
         ops[k] = d
-    opcoes.salvar(motor=f.get("motor") or "local", modelo_claude=f.get("modelo_claude") or None,
-                  teto_episodio_usd=num(f.get("teto_episodio_usd")), teto_dia_usd=num(f.get("teto_dia_usd")),
-                  operacoes=ops)
+    options.save(engine=f.get("motor") or "local", claude_model=f.get("modelo_claude") or None,
+                  episode_cap_usd=num(f.get("teto_episodio_usd")), daily_cap_usd=num(f.get("teto_dia_usd")),
+                  operations=ops)
     return RedirectResponse("/opcoes?salvo=1", status_code=303)
 
 
@@ -868,12 +872,11 @@ def miniatura_acervo(mid: str):
 
 # ---------- API JSON do app Flutter (plataforma, módulo Empreendimento) ----------
 
-from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-
 from esteira.web.api import router as _api  # noqa: E402  (no fim: a API usa os auxiliares acima)
 from esteira.web.api_editor import router as _api_editor  # noqa: E402
 from esteira.web.api_estudio import router as _api_estudio  # noqa: E402
 from esteira.web.api_sistema import router as _api_sistema  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 app.add_middleware(CORSMiddleware, allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
                    allow_methods=["*"], allow_headers=["*"])

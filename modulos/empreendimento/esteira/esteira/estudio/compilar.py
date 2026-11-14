@@ -11,8 +11,8 @@ import subprocess
 import wave
 from pathlib import Path
 
+from esteira.core import events
 from esteira.estudio import motor
-from esteira.nucleo import eventos
 
 KIT = Path(__file__).parent / "kit"
 DIM = {"16:9": (1920, 1080), "9:16": (1080, 1920)}
@@ -314,7 +314,7 @@ def verificar(projeto, estilo, formato, n_visao=8):
                     f"{escala},tile={4 if W > H else 6}x{3 if W > H else 2}", "-frames:v", "1", str(p / "folha.jpg")])
     problemas = []
     for n, (c, arq) in enumerate(quadros[:n_visao], 1):
-        eventos.progresso(n, min(n_visao, len(quadros)), f"conferindo {c['cena']}")
+        events.progress(n, min(n_visao, len(quadros)), f"conferindo {c['cena']}")
         r = local.perguntar(local.prompt("estudio_visao"), Visao, modelo=local.VISAO, imagens=[str(arq)], max_tokens=200,
                             operacao="estudio_visao")
         if r:

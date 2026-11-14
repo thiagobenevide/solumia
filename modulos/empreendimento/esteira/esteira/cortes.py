@@ -426,8 +426,8 @@ def revisar_com_llm(trechos, frases):
     """O LLM local confirma ou inverte as decisões incertas. Sem LLM, fica a regra."""
     from pydantic import BaseModel, Field
 
+    from esteira.core import events
     from esteira.ia import local
-    from esteira.nucleo import eventos
 
     class Decisao(BaseModel):
         manter: bool
@@ -459,7 +459,7 @@ def revisar_com_llm(trechos, frases):
     duvidas = [t for t in trechos if t["tipo"] in ("improviso", "continuacao", "reformulada", "retake")
                and t["confianca"] < DUVIDA and t.get("por") != "llm"]
     for n, t in enumerate(duvidas, 1):
-        eventos.progresso(n, len(duvidas), t["texto"][:40])
+        events.progress(n, len(duvidas), t["texto"][:40])
         k = trechos.index(t)
         antes = next((x["texto"] for x in reversed(trechos[:k]) if x["manter"]), "")
         depois = next((x["texto"] for x in trechos[k + 1:] if x["manter"]), "")
@@ -748,8 +748,8 @@ def _gravacao_nova(projeto):
     A gravação bruta anterior e as decisões dela vão para gravacoes_anteriores/<data>/."""
     from datetime import datetime
 
+    from esteira.core import events
     from esteira.projeto import AUDIO_EXT
-    from esteira.nucleo import eventos
     reg = projeto.caminho("narracao.render.json")
     tj = projeto.caminho("transcricao.json")
     nova = None
@@ -773,26 +773,25 @@ def _gravacao_nova(projeto):
             projeto.caminho(nome).rename(destino / nome)
     if nova.suffix != ".wav" and projeto.caminho("narracao.wav").exists():
         projeto.caminho("narracao.wav").unlink()  # editada da gravação anterior (Projeto.audio a pegaria antes)
-    eventos.aviso(f"gravação nova ({nova.name}): a anterior e os cortes dela foram para {destino.relative_to(projeto.pasta)}")
+    events.warning(f"gravação nova ({nova.name}): a anterior e os cortes dela foram para {destino.relative_to(projeto.pasta)}")
     print(f"  gravação nova: anterior guardada em {destino.relative_to(projeto.pasta)}")
     return True
 
 
 def aplicar(projeto, refazer=False):
     """Etapa limpar: gravação bruta → narracao.wav + cortes.json/cortes.txt + transcricao.json."""
-    from esteira.nucleo import eventos
-    from esteira.transcrever import transcrever
-
+    from esteira.core import events
     from esteira.fontes import gravacoes
     from esteira.fontes.importar import atualizar_roteiro
+    from esteira.transcrever import transcrever
     if atualizar_roteiro(projeto):  # o narrador lê o roteiro do vault: tem de ser o mesmo texto
         print("  roteiro atualizado do vault")
-        eventos.aviso("roteiro mudou no vault desde a importação: reimportado")
+        events.warning("roteiro mudou no vault desde a importação: reimportado")
         refazer = True
     puxado = gravacoes.atualizar(projeto)  # WAV mais novo do episódio em ~/Music/Youtube/<Canal>/
     if puxado:
         print(f"  gravação nova encontrada: {puxado}")
-        eventos.aviso(f"gravação nova puxada de {puxado}")
+        events.warning(f"gravação nova puxada de {puxado}")
     bruta = next(iter(sorted(projeto.pasta.glob("narracao_bruta.*"))), None)
     if bruta and _gravacao_nova(projeto):
         bruta = None  # a anterior foi para gravacoes_anteriores/; cortes decididos do zero
@@ -826,7 +825,7 @@ def aplicar(projeto, refazer=False):
             n = sum(1 for t in trechos if t["tipo"] == "marcador")
             print(f"  claquete: {n} marcadores, {len(partes)} partes no roteiro")
             for a in avisos:
-                eventos.aviso(a)
+                events.warning(a)
         else:
             trechos, faltando = decidir(frases, palavras)
         duvidas = revisar_com_llm(trechos, frases)
@@ -858,16 +857,16 @@ def aplicar(projeto, refazer=False):
                     if not any(o["ini"] < r["fim"] and r["ini"] < o["fim"] for o in ocultos)]
         falsos = [t for t in ocultos if not _outra_tomada(t, novo["palavras"])]
         for t in falsos:
-            eventos.debug("retake sem outra tomada: fica", editado=t["ini"], texto=t["texto"][:80])
+            events.debug("retake sem outra tomada: fica", editado=t["ini"], texto=t["texto"][:80])
         ocultos = [t for t in ocultos if t not in falsos]
         if not ocultos or passada == 4:
             for t in ocultos:
-                eventos.aviso(f"possível retake na narração editada em {t['ini']:.1f}s: {t['texto'][:70]}")
+                events.warning(f"possível retake na narração editada em {t['ini']:.1f}s: {t['texto'][:70]}")
             break
         for t in ocultos:
             excluir.append([round(_para_bruto(t["ini"] - 0.05, intervalos), 3),
                             round(_para_bruto(t["fim"] + 0.15, intervalos), 3)])
-            eventos.debug("retake oculto", editado=t["ini"], bruto=excluir[-1], texto=t["texto"][:80])
+            events.debug("retake oculto", editado=t["ini"], bruto=excluir[-1], texto=t["texto"][:80])
         print(f"  passada {passada}: {len(ocultos)} retakes ocultos achados; refazendo o áudio")
         arq.write_text(json.dumps({"trechos": trechos, "faltando": faltando, "excluir": excluir},
                                   ensure_ascii=False, indent=1))
@@ -896,9 +895,9 @@ def aplicar(projeto, refazer=False):
         for c in cortadas:
             f.write(f"  {c['t']:7.1f}s (bruta) palavra cortada ({c['perdeu']:.0%} fora): {c['texto']}\n")
     if cortadas:
-        eventos.aviso(f"{len(cortadas)} palavra(s) mantida(s) cortada(s) nas bordas (ver o fim de cortes.txt)")
+        events.warning(f"{len(cortadas)} palavra(s) mantida(s) cortada(s) nas bordas (ver o fim de cortes.txt)")
     if falta_editada or quebradas:
-        eventos.aviso(f"narração editada: {len(falta_editada)} frases faltando e {len(quebradas)} incompletas "
+        events.warning(f"narração editada: {len(falta_editada)} frases faltando e {len(quebradas)} incompletas "
                       f"(ver o fim de cortes.txt)")
     cortados = sum(1 for t in trechos if not t["manter"])
     print(f"  bruta {transc['duracao']:.0f}s → editada {novo['duracao']:.0f}s ({cortados} trechos e "

@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from esteira.nucleo import eventos
+from esteira.core import events
 from esteira.projeto import RAIZ
 
 PY_IMG = RAIZ / ".venv-img" / "bin" / "python"
@@ -42,7 +42,7 @@ def refinar(audio, palavras, cache=None, cfg=None):
         tempos = _rodar(audio, palavras)
     except (subprocess.CalledProcessError, OSError, ValueError) as e:
         erro = (getattr(e, "stderr", None) or str(e)).strip()[-200:]
-        eventos.aviso(f"alinhamento forçado falhou ({erro}); bordas pelo tempo do Whisper")
+        events.warning(f"alinhamento forçado falhou ({erro}); bordas pelo tempo do Whisper")
         return palavras
     saida = combinar(palavras, tempos)
     if cache:

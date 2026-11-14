@@ -12,8 +12,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from esteira.nucleo import rastro
-from esteira.nucleo.tela import abrir_programa
+from esteira.core import trace
+from esteira.core.display import open_program
 
 JSX = Path(__file__).with_name("effectcraft.jsx")
 CLI = "effectcraft-cli"
@@ -35,11 +35,11 @@ def _rodar(cmd, rotulo=None, timeout=600):
     for linha in p.stderr:
         m = re.match(r"progress (\d+) (\d+) ([\d.]+) ([\d.]+|-)", linha)
         if m:
-            rastro.tarefa("render", rotulo, int(m[1]), int(m[2]), "quadros")
+            trace.task("render", rotulo, int(m[1]), int(m[2]), "quadros")
         else:
             erros.append(linha)
     p.wait(timeout)
-    rastro.fim_tarefa("render")
+    trace.end_task("render")
     if p.returncode:
         raise RuntimeError(f"EffectCraft: {''.join(erros).strip()[-400:]}")
 
@@ -90,4 +90,4 @@ def quadro(ecproj, t, destino, w=1920, h=1080, fundo="0x2a2d33", max_lado=None):
 
 def abrir(ecproj):
     """Abre o projeto no EffectCraft (janela), sem prender o processo que chamou."""
-    abrir_programa("effectcraft", str(ecproj))
+    open_program("effectcraft", str(ecproj))

@@ -6,13 +6,11 @@ pronto em PNG (`/editor/quadro`, renderizado por `web/quadros.py`) em vez de emb
 import asyncio
 import json
 
+from esteira import editor
+from esteira.web import api, fila, quadros
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
-
-from esteira import editor
-from esteira.web import api
-from esteira.web import fila, quadros
 
 router = APIRouter(prefix="/api/v1/episodios/{ep}/editor", tags=["editor"])
 
@@ -110,12 +108,12 @@ class Pedido(BaseModel):
 @router.post("/ia")
 async def sugerir(ep: str, corpo: Pedido):
     """Assistente: devolve um estado novo para a prévia (nada é salvo sem o usuário)."""
-    from esteira.nucleo import travas
+    from esteira.core import locks
     if not corpo.pedido.strip():
         raise HTTPException(400, "escreva o pedido")
-    if corpo.motor == "local" and not travas.livre("maquina"):
-        d = travas.dono("maquina")
-        raise HTTPException(409, f"a máquina está ocupada por `{d['comando']}`: só um processo local por vez. "
+    if corpo.motor == "local" and not locks.is_free("machine"):
+        d = locks.owner("machine")
+        raise HTTPException(409, f"a máquina está ocupada por `{d['command']}`: só um processo local por vez. "
                                  "Use o motor Claude ou espere terminar.")
     p = api._projeto(ep)
     try:

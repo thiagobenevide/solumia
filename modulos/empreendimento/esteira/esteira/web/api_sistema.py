@@ -6,11 +6,10 @@ import re
 import threading
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-
 from esteira.web import app as painel
 from esteira.web import fila
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1", tags=["sistema"])
 
@@ -47,9 +46,8 @@ def grafo_no(id_no: str):
 
 @router.get("/processos")
 def processos(limite: int = 300):
-    from esteira.nucleo import processos as P
-    from esteira.nucleo import travas
-    return {"processos": P.listar(limite), "vagas": {v: travas.dono(v) for v in travas.VAGAS}}
+    from esteira.core import locks, processes
+    return {"processos": processes.list_recent(limite), "vagas": {v: locks.owner(v) for v in locks.SLOTS}}
 
 
 @router.get("/processos/{pid_id}")
@@ -60,8 +58,8 @@ def processo(pid_id: str):
 @router.post("/processos/{pid_id}/parar")
 def parar(pid_id: str):
     """Para o processo (e o que ele abriu), venha da fila ou do terminal."""
-    from esteira.nucleo import processos as P
-    if not P.obter(pid_id):
+    from esteira.core import processes
+    if not processes.get(pid_id):
         raise HTTPException(404, "processo não encontrado")
     painel.parar_processo(pid_id)
     return {"ok": True}
@@ -71,43 +69,47 @@ def parar(pid_id: str):
 
 @router.get("/opcoes")
 def opcoes():
+    from esteira.core import options
     from esteira.ia import local
-    from esteira.nucleo import opcoes as O
-    return {"opcoes": O.ler(), "claude": O.claude(painel._cfg().get("claude", {})),
-            "operacoes": [{"id": k, "nome": nome, "descricao": desc, "tipos": tipos, "atual": O.operacao(k)}
-                          for k, (nome, desc, tipos) in O.OPERACOES.items()],
-            "modelos_claude": [{"id": i, "nome": n, "descricao": d} for i, n, d in O.MODELOS],
-            "sugestoes": [{"nome": n, "tipo": t, "descricao": d} for n, t, d in O.SUGESTOES],
-            "locais": painel._modelos_locais(), "padrao": {"texto": local.TEXTO, "visao": local.VISAO}}
+    return {"opcoes": options.read(), "claude": options.claude(painel._cfg().get("claude", {})),
+            "operacoes": [{"id": k, "nome": nome, "descricao": desc, "tipos": tipos, "atual": options.operation(k)}
+                          for k, (nome, desc, tipos) in options.OPERATIONS.items()],
+            "modelos_claude": [{"id": i, "nome": n, "descricao": d} for i, n, d in options.MODELS],
+            "sugestoes": [{"nome": n, "tipo": t, "descricao": d} for n, t, d in options.SUGGESTIONS],
+            "locais": painel._modelos_locais(), "padrao": {"text": local.TEXTO, "vision": local.VISAO}}
 
 
-class Operacao(BaseModel):
-    motor: str = "padrao"
-    texto: str | None = None
-    visao: str | None = None
+class Operation(BaseModel):
+    engine: str = "default"
+    text: str | None = None
+    vision: str | None = None
 
 
-class Opcoes(BaseModel):
-    motor: str = "local"
-    modelo_claude: str | None = None
-    teto_episodio_usd: float | None = None
-    teto_dia_usd: float | None = None
-    operacoes: dict[str, Operacao] = {}
-    socorro_claude: bool = False
+class Options(BaseModel):
+    engine: str = "local"
+    claude_model: str | None = None
+    episode_cap_usd: float | None = None
+    daily_cap_usd: float | None = None
+    operations: dict[str, Operation] = {}
+    claude_fallback: bool = False
 
 
 @router.post("/opcoes")
-def salvar_opcoes(corpo: Opcoes):
-    from esteira.nucleo import opcoes as O
-    if corpo.motor not in ("local", "claude"):
-        raise HTTPException(400, "motor deve ser local ou claude")
+def salvar_opcoes(corpo: Options):
+    from esteira.core import options
+    if corpo.engine not in ("local", "claude"):
+        raise HTTPException(400, "engine must be local or claude")
     ops = {}
-    for k, (_, _, tipos) in O.OPERACOES.items():
-        o = corpo.operacoes.get(k) or Operacao()
-        ops[k] = {"motor": o.motor if o.motor in ("padrao", "local", "claude") else "padrao"} | {
-            t: getattr(o, t) or None for t in tipos}
-    O.salvar(motor=corpo.motor, modelo_claude=corpo.modelo_claude or None, teto_episodio_usd=corpo.teto_episodio_usd,
-             teto_dia_usd=corpo.teto_dia_usd, operacoes=ops, socorro_claude=corpo.socorro_claude)
+    for k, (_, _, kinds) in options.OPERATIONS.items():
+        chosen = corpo.operations.get(k) or Operation()
+        entry = {"engine": "default"}
+        if chosen.engine in ("default", "local", "claude"):
+            entry["engine"] = chosen.engine
+        for kind in kinds:
+            entry[kind] = getattr(chosen, kind) or None
+        ops[k] = entry
+    options.save(engine=corpo.engine, claude_model=corpo.claude_model or None, episode_cap_usd=corpo.episode_cap_usd,
+                 daily_cap_usd=corpo.daily_cap_usd, operations=ops, claude_fallback=corpo.claude_fallback)
     return opcoes()
 
 

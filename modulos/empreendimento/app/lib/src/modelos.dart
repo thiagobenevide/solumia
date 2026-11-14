@@ -5,6 +5,21 @@ typedef Json = Map<String, dynamic>;
 
 double? _num(Object? v) => v is num ? v.toDouble() : null;
 
+// O núcleo da esteira (`esteira/core`) fala inglês; as telas ainda usam o vocabulário em português.
+const _estadosDaApi = {
+  'running': 'rodando',
+  'error': 'erro',
+  'aborted': 'abortado',
+  'pending': 'pendente',
+  'cancelled': 'cancelado',
+  'interrupted': 'interrompido',
+};
+const _tiposDaApi = {'start': 'inicio', 'end': 'fim', 'warning': 'aviso', 'error': 'erro', 'output': 'saida'};
+
+String estadoDaApi(Object? v) => _estadosDaApi['$v'] ?? '${v ?? ''}';
+
+String tipoDaApi(Object? v) => _tiposDaApi['$v'] ?? '${v ?? ''}';
+
 const etapasDoPipeline = [
   'limpar', 'cenas', 'curar', 'buscar', 'avaliar', 'graficos', 'montar', 'thumb', //
 ];
@@ -76,14 +91,14 @@ class Etapa {
   Etapa.fromJson(Json j)
     : id = j['id'] as String,
       nome = j['nome'] as String? ?? j['id'] as String,
-      status = j['status'] as String? ?? 'pendente',
-      msg = j['msg'] as String? ?? '',
-      avisos = j['avisos'] as int? ?? 0,
+      status = estadoDaApi(j['status'] ?? 'pending'),
+      msg = j['message'] as String? ?? '',
+      avisos = j['warnings'] as int? ?? 0,
       feito = j['i'] as int?,
       total = j['n'] as int?,
-      restaSegundos = _num(j['resta']),
-      duracaoSegundos = _num(j['dur']),
-      inicio = DateTime.tryParse(j['inicio'] as String? ?? '');
+      restaSegundos = _num(j['remaining']),
+      duracaoSegundos = _num(j['duration']),
+      inicio = DateTime.tryParse(j['start'] as String? ?? '');
 
   final String id;
   final String nome;
@@ -102,9 +117,9 @@ class Etapa {
 class Evento {
   Evento.fromJson(Json j)
     : t = DateTime.tryParse(j['t'] as String? ?? ''),
-      etapa = j['etapa'] as String? ?? '',
-      tipo = j['tipo'] as String? ?? '',
-      msg = j['msg'] as String? ?? '';
+      etapa = j['stage'] as String? ?? '',
+      tipo = tipoDaApi(j['kind']),
+      msg = j['message'] as String? ?? '';
 
   final DateTime? t;
   final String etapa;
@@ -206,7 +221,7 @@ class Tarefa {
       ep = j['ep'] as String,
       comando = j['comando'] as String,
       args = [for (final a in j['args'] as List? ?? const []) '$a'],
-      vaga = j['vaga'] as String? ?? 'maquina',
+      vaga = j['vaga'] as String? ?? 'machine',
       estado = j['estado'] as String,
       criado = DateTime.tryParse(j['criado'] as String? ?? ''),
       inicio = DateTime.tryParse(j['inicio'] as String? ?? ''),
@@ -236,7 +251,7 @@ class Fila {
     : tarefas = [for (final t in j['tarefas'] as List) Tarefa.fromJson(t as Json)],
       vagas = {
         for (final MapEntry(:key, :value) in (j['vagas'] as Json).entries)
-          key: value == null ? null : '${(value as Json)['comando'] ?? 'ocupada'}',
+          key: value == null ? null : '${(value as Json)['command'] ?? 'ocupada'}',
       };
 
   final List<Tarefa> tarefas;

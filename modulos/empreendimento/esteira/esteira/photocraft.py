@@ -12,7 +12,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from esteira.nucleo.tela import abrir_programa
+from esteira.core.display import open_program
 
 CLI = "photocraft-cli"
 
@@ -72,4 +72,4 @@ def editado(pcraft):
 
 
 def abrir(pcraft):
-    abrir_programa("photocraft", str(pcraft))
+    open_program("photocraft", str(pcraft))

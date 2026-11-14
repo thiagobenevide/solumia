@@ -14,8 +14,8 @@ import re
 from pydantic import BaseModel
 
 from esteira.bancada import CENAS, NUMERICAS, Cena, normalizar, numeros
+from esteira.core import events
 from esteira.ia import local
-from esteira.nucleo import eventos
 
 # cenas só de motion (fundo próprio, cobrem a mídia); as outras ficam sobre a mídia
 TAKEOVER = {"contador", "barras_comparacao", "versus", "linha_do_tempo", "pergunta_destaque", "titulo_capitulo",
@@ -74,7 +74,7 @@ def escolher(frases, estilo, marcas=None, gat=None):
     catalogo = "\n".join(f"- {k}: {CENAS[k]}" for k in permitidas)
     escolhas, falhas = [], []
     for i, f in enumerate(frases):
-        eventos.progresso(i + 1, len(frases), f["texto"][:40])
+        events.progress(i + 1, len(frases), f["texto"][:40])
         cena = marcas.get(i)
         por_fixo = "voce"
         g = gat[i]["gatilho"] if i in gat else None
@@ -112,8 +112,8 @@ def escolher(frases, estilo, marcas=None, gat=None):
         else:
             escolhas.append((i, r, "local"))
     if falhas:
-        from esteira.nucleo import opcoes
-        resolvidas = _escalar(frases, falhas, permitidas, catalogo, estilo) if opcoes.ler()["socorro_claude"] else {}
+        from esteira.core import options
+        resolvidas = _escalar(frases, falhas, permitidas, catalogo, estilo) if options.read()["claude_fallback"] else {}
         escolhas = [(i, *(resolvidas.get(i) or (regra(frases[i]["texto"], permitidas), "regra")))
                     if r is None else (i, r, por) for i, r, por in escolhas]
     return escolhas
@@ -275,8 +275,7 @@ def dirigir(projeto, estilo, perfil=None):
     frases = trechos(frases, palavras, estilo.regras.trecho_max_s)
     arq = pasta / "mapa.json"
     manuais = [c for c in json.loads(arq.read_text())["cenas"] if c.get("manual")] if arq.exists() else []
-    from esteira.estudio import apontamento
-    from esteira.estudio import gatilhos
+    from esteira.estudio import apontamento, gatilhos
     gat = gatilhos.aplicar(frases, estilo.gatilhos)
     escolhas = escolher(frases, estilo, apontamento.marcas(projeto, frases), gat)
     cenas = cronometrar(frases, escolhas, palavras, estilo, duracao, gat)

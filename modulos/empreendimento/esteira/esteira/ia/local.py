@@ -16,8 +16,8 @@ from pathlib import Path
 import requests
 from pydantic import BaseModel, ValidationError
 
+from esteira.core import events, trace
 from esteira.ia import llama
-from esteira.nucleo import eventos, rastro
 from esteira.projeto import CACHE, RAIZ
 
 # ids no roteador do llama.cpp (arquivo/pasta em ~/agent-data/modelos)
@@ -85,19 +85,19 @@ def _operacao(texto, operacao):
         return "acervo"
     if nome.startswith("roteiro"):
         return "roteiro"
-    return eventos._atual.nome if eventos._atual else None
+    return events._current.name if events._current else None
 
 
 def perguntar(texto, esquema: type[BaseModel], modelo=TEXTO, imagens=None, pensar=False, temperatura=0.1,
               max_tokens=600, operacao=None):
     # modelo e motor escolhidos no painel (Opções) para esta operação
-    from esteira.nucleo import opcoes
-    op = opcoes.operacao(_operacao(texto, operacao) or "")
-    tipo = "visao" if modelo == VISAO or imagens else "texto"
+    from esteira.core import options
+    op = options.operation(_operacao(texto, operacao) or "")
+    tipo = "vision" if modelo == VISAO or imagens else "text"
     modelo = LEGADO.get(op[tipo] or modelo, op[tipo] or modelo)
     motor = os.environ.get("ESTEIRA_MOTOR", "local")
-    if op["motor"] != "padrao" and not os.environ.get("ESTEIRA_MOTOR_FIXO") and os.environ.get("ESTEIRA_VAGA") != "claude":
-        motor = op["motor"]  # sem a vaga da máquina (processo na pista do Claude) não dá para usar a GPU
+    if op["engine"] != "default" and not os.environ.get("ESTEIRA_MOTOR_FIXO") and os.environ.get("ESTEIRA_VAGA") != "claude":
+        motor = op["engine"]  # sem a vaga da máquina (processo na pista do Claude) não dá para usar a GPU
     # imagens entram na chave pelo conteúdo (a mídia de uma cena muda sem mudar o caminho)
     assinaturas = [hashlib.sha1(Path(i).read_bytes()).hexdigest() for i in imagens or []]
     k = hashlib.sha1(json.dumps([modelo, texto, esquema.model_json_schema(), assinaturas, pensar],
@@ -105,19 +105,19 @@ def perguntar(texto, esquema: type[BaseModel], modelo=TEXTO, imagens=None, pensa
     nome = getattr(texto, "nome", "livre")
     c = _cache()
     if k in c:
-        rastro.cache(nome, modelo)
+        trace.cache(nome, modelo)
         return esquema.model_validate(c[k])
     if motor == "claude":
         r = _pelo_claude(texto, esquema, nome, imagens)
         # sem resposta (teto de custo, erro): quem tem a vaga da máquina cai no LLM local
-        if r is not None or os.environ.get("ESTEIRA_VAGA") != "maquina":
+        if r is not None or os.environ.get("ESTEIRA_VAGA") != "machine":
             return r
     if not _servidor():
-        eventos.debug("llm indisponível")
+        events.debug("llm indisponível")
         return None
     if modelo not in {m["id"] for m in llama.modelos() or []}:
-        eventos.debug("llm: modelo ausente, usando o padrão", modelo=modelo)
-        modelo = VISAO if tipo == "visao" else TEXTO
+        events.debug("llm: modelo ausente, usando o padrão", modelo=modelo)
+        modelo = VISAO if tipo == "vision" else TEXTO
     msg = {"role": "user", "content": str(texto)}
     if imagens:
         msg["content"] = [{"type": "text", "text": str(texto)}] + [
@@ -125,8 +125,8 @@ def perguntar(texto, esquema: type[BaseModel], modelo=TEXTO, imagens=None, pensa
     for tentativa in (1, 2):
         t = time.monotonic()
         temp = temperatura if tentativa == 1 else 0.5
-        rastro.chamada_inicio("local", nome, modelo, str(texto), esquema=esquema.__name__,
-                          esquema_json=esquema.model_json_schema(), temperatura=temp,
+        trace.call_start("local", nome, modelo, str(texto), esquema=esquema.__name__,
+                          json_schema=esquema.model_json_schema(), temperatura=temp,
                               num_ctx=16384, num_predict=max_tokens, pensar=pensar, imagens=len(imagens or []),
                               tentativa=tentativa)
         conteudo, pensamento, timings, primeiro, n_tok = "", "", None, None, 0
@@ -150,20 +150,20 @@ def perguntar(texto, esquema: type[BaseModel], modelo=TEXTO, imagens=None, pensa
                         conteudo += delta.get("content") or ""
                         pensamento += delta.get("reasoning_content") or ""
                         n_tok += 1
-                        rastro.chamada_parcial((f"[pensando] {pensamento}\n\n" if pensamento else "") + conteudo,
+                        trace.call_partial((f"[pensando] {pensamento}\n\n" if pensamento else "") + conteudo,
                                                n_tok)
             obj = esquema.model_validate_json(conteudo)
         except (ValidationError, ValueError) as e:
-            rastro.chamada_fim(conteudo, ok=False, erro=f"resposta inválida: {str(e)[:200]}",
+            trace.call_end(conteudo, ok=False, error=f"resposta inválida: {str(e)[:200]}",
                                **_metricas(timings, t, primeiro))
-            eventos.debug("llm resposta inválida", modelo=modelo, erro=str(e)[:200], tentativa=tentativa)
+            events.debug("llm resposta inválida", modelo=modelo, erro=str(e)[:200], tentativa=tentativa)
             continue
         except Exception as e:  # servidor caiu, modelo ausente…
-            rastro.chamada_fim(conteudo, ok=False, erro=str(e)[:200])
-            eventos.debug("llm erro", modelo=modelo, erro=str(e)[:200])
+            trace.call_end(conteudo, ok=False, error=str(e)[:200])
+            events.debug("llm erro", modelo=modelo, erro=str(e)[:200])
             return None
-        rastro.chamada_fim(conteudo, ok=True, pensamento=pensamento[:3000], **_metricas(timings, t, primeiro))
-        eventos.debug("llm", modelo=modelo, ms=round((time.monotonic() - t) * 1000),
+        trace.call_end(conteudo, ok=True, pensamento=pensamento[:3000], **_metricas(timings, t, primeiro))
+        events.debug("llm", modelo=modelo, ms=round((time.monotonic() - t) * 1000),
                       tokens=(timings or {}).get("predicted_n"))
         CACHE.parent.mkdir(exist_ok=True)
         with open(CACHE, "a") as f:
@@ -176,6 +176,7 @@ def perguntar(texto, esquema: type[BaseModel], modelo=TEXTO, imagens=None, pensa
 def _pelo_claude(texto, esquema, nome, imagens):
     """Processo com `--motor claude`: a mesma pergunta vai ao Claude (sem GPU), com o teto de [claude]."""
     import tomllib
+
     from esteira.ia import claude
     from esteira.projeto import Projeto, pasta_ep
     ep = os.environ.get("ESTEIRA_EP")
@@ -197,4 +198,4 @@ def liberar_gpu():
     antes = llama.carregados()
     llama.descarregar()
     for m in antes:
-        eventos.debug("gpu: descarregado", modelo=m)
+        events.debug("gpu: descarregado", modelo=m)

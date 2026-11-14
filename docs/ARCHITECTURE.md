@@ -62,7 +62,7 @@ Canais (perfis da esteira): `finlumia`, `benehistory`, `cosmoatomico`, `embarcad
  └──────────────────────────────────────────────────────────────┘
 ```
 
-GPU: a esteira já serializa trabalhos pesados (`nucleo/travas.py`, uma vaga por vez) e libera
+GPU: a esteira já serializa trabalhos pesados (`core/locks.py`, uma vaga por vez) e libera
 a VRAM antes do Whisper e do SDXL (`liberar_gpu()`). O worker passa a respeitar a mesma trava:
 respostas rápidas (chat) só esperam se a vaga estiver ocupada por um job pesado.
 

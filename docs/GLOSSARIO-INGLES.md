@@ -45,4 +45,22 @@ antigas.
 | ev / tipo (`inicio`, `fim`, `progresso`, `saida`, `aviso`, `erro`, `debug`) | event / kind (`start`, `end`, `progress`, `output`, `warning`, `error`, `debug`) | `log/eventos.jsonl` → `log/events.jsonl` |
 | inicio, fim, dur, msg, resta, avisos | start, end, duration, message, remaining, warnings | eventos, processos |
 | alvo, fila, saida | target, queue, output | processos |
-| rastro | trace | `nucleo/rastro.py` |
+| rastro | trace | `core/trace.py`, `cache/rastro.jsonl` → `cache/trace.jsonl` |
+| ao_vivo | live | `cache/ao_vivo/` → `cache/live/` |
+| travas | locks | `cache/travas/` → `cache/locks/` |
+| processos | processes | `core/processes.py`, `cache/processos.jsonl` → `cache/processes.jsonl` |
+| eventos, opcoes, tela | events, options, display | módulos de `core/` |
+| etapa (chave do evento) | stage | eventos |
+| fluxo, no, detalhe, desde | flow, node, detail, since | rastro |
+| chamada, tarefas, progresso | call, tasks, progress | rastro |
+| rotulo, feito, unidade | label, done, unit | tarefas do rastro |
+| entrada, saida, parcial, esquema, primeiro | input, output, partial, schema, first | chamada de LLM no rastro |
+| custo, seg | cost, seconds | evento `claude`, chamada do rastro |
+| ESTEIRA_PROC, ESTEIRA_FILA | ESTEIRA_PROCESS, ESTEIRA_QUEUE | variáveis de ambiente |
+
+Estado da migração da esteira: `core/` feito (código, arquivos em `cache/`, `log/events.jsonl`, painel e app lendo as
+chaves novas). Ainda em português, cada um no seu passo: nomes das etapas/comandos da CLI (inclusive os valores de
+`stage` e os ids das operações nas opções), chaves próprias da API web (`processos`, `vagas`, `etapas`…), chaves de
+`[claude]` no `config.toml`, as métricas que `ia/` grava nas chamadas (`tokens_saida`, `custo_usd`…) e o nome do
+pacote `esteira`. O script `artigo` do vault ainda grava a barra externa com `rotulo`/`feito`/`unidade`
+(`grafo._tarefa_externa` converte).

@@ -21,7 +21,7 @@ import unicodedata
 import numpy as np
 
 from esteira import bordas
-from esteira.nucleo import eventos
+from esteira.core import events
 
 SR, HOP, WIN = 16000, 160, 480            # quadros de 10 ms, janela de análise de 30 ms
 LEAD, TAIL = 0.06, 0.14                   # antes do 1º / depois do último quadro de fala
@@ -306,7 +306,7 @@ def analisar(projeto):
     idioma = projeto.cfg["transcricao"]["idioma"]
     x = _sinal(origem)
     if dados.get("assinatura") != assinatura:
-        eventos.progresso(1, 4, "transcrevendo com o prompt de vícios")
+        events.progress(1, 4, "transcrevendo com o prompt de vícios")
         modelo = _whisper(projeto)
         dados = {"assinatura": assinatura, "palavras": _transcrever(modelo, x, PROMPT_VICIOS, idioma)}
         cache.write_text(json.dumps(dados, ensure_ascii=False))
@@ -314,7 +314,7 @@ def analisar(projeto):
     whisper = dados["palavras"]
     ws = alinhamento.refinar(origem, whisper, p / "alinhamento.json", projeto.cfg)  # tempos certos para as bordas
     cortes = vicios(whisper, ws)
-    eventos.progresso(2, 4, "detectando a fala pelo som")
+    events.progress(2, 4, "detectando a fala pelo som")
     an = bordas.analise(x)
     segs, emendas, protegidas = segmentos(an["fala"], ws, cortes, revertidas, len(x) / SR, an["db"], an["som"])
     fica = mantidas(ws, cortes)
@@ -329,10 +329,10 @@ def analisar(projeto):
         e["id"] = n
         e["out"] = _novo(mapa, e["ate"])
         e["dur"] = round(e["ate"] - e["de"], 3)
-    eventos.progresso(3, 4, "renderizando a narração cortada")
+    events.progress(3, 4, "renderizando a narração cortada")
     destino = p / "narracao.wav"
     _renderizar(origem, segs, destino)
-    eventos.progresso(4, 4, "conferindo o corte")
+    events.progress(4, 4, "conferindo o corte")
     modelo = modelo or _whisper(projeto)
     cortadas = _transcrever(modelo, _sinal(destino), None, idioma)
     conf = conferir(whisper, cortadas, emendas, protegidas, _pausas(destino), geo)

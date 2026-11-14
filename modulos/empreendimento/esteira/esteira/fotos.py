@@ -7,7 +7,7 @@ Desligado por padrão (`[foto] ativo = false`): ligado, a foto tratada substitui
 """
 from pathlib import Path
 
-from esteira.nucleo import eventos
+from esteira.core import events
 
 
 def receita(cfg):
@@ -22,7 +22,7 @@ def tratar(projeto, cenas):
     from esteira import photocraft
     from esteira.n1 import photocraft as N1
     if not photocraft.disponivel():
-        eventos.aviso("fotos: PhotoCraft ausente; seguindo com as originais")
+        events.warning("fotos: PhotoCraft ausente; seguindo com as originais")
         return cenas
     pasta = projeto.caminho("midia/tratadas")
     pasta.mkdir(parents=True, exist_ok=True)
@@ -44,7 +44,7 @@ def tratar(projeto, cenas):
                 ex.executar(doc, destino)
                 photocraft.exportar(destino, png)
             except RuntimeError as e:
-                eventos.aviso(f"fotos: cena {c['id']} sem tratamento ({e})")
+                events.warning(f"fotos: cena {c['id']} sem tratamento ({e})")
                 saida.append(c)
                 continue
             _dataset(projeto, c, r, decisao, formato, ex.rastro)
@@ -62,4 +62,4 @@ def _dataset(projeto, cena, r, decisao, formato, rastro):
                  saida=decisao.model_dump(mode="json"), n0=[p for passada in rastro for p in passada],
                  versoes={"n1": 1, "app": "photocraft"}, extra={"episodio": projeto.ep, "cena": cena["id"]})
     except Exception as e:  # noqa: BLE001
-        eventos.aviso(f"dataset: foto da cena {cena.get('id')} não gravada ({e})")
+        events.warning(f"dataset: foto da cena {cena.get('id')} não gravada ({e})")

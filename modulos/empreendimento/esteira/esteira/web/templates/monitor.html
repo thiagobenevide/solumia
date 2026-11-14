@@ -304,7 +304,7 @@ function fracao(a) {
   if (!a) return null;
   if (a.chamada?.max && a.chamada.tokens) return Math.min(1, a.chamada.tokens / a.chamada.max);
   const t = (a.tarefas || []).find(t => t.total);
-  if (t) return Math.min(1, t.feito / t.total);
+  if (t) return Math.min(1, t.done / t.total);
   if (a.progresso?.n) return Math.min(1, a.progresso.i / a.progresso.n);
   return null;
 }
@@ -324,22 +324,22 @@ function barra({rotulo, feito, total, unidade, inicio, cor = "bg-sky-400", extra
 }
 function barrasVivo(v) {
   let h = "";
-  if (v.progresso?.n) h += barra({rotulo: `Etapa: ${v.progresso.msg || v.no}`, feito: v.progresso.i, total: v.progresso.n, unidade: "itens",
-                                  inicio: v.desde, eta: v.progresso.resta, cor: "bg-azul-400"});
-  for (const t of Object.values(v.tarefas || {})) h += barra({...t, cor: t.unidade == "B" ? "bg-emerald-400" : "bg-orange-400"});
-  const c = v.chamada;
+  if (v.progress?.n) h += barra({rotulo: `Etapa: ${v.progress.message || v.node}`, feito: v.progress.i, total: v.progress.n, unidade: "itens",
+                                  inicio: v.since, eta: v.progress.remaining, cor: "bg-azul-400"});
+  for (const t of Object.values(v.tasks || {})) h += barra({rotulo: t.label, feito: t.done, total: t.total, unidade: t.unit, inicio: t.start, cor: t.unit == "B" ? "bg-emerald-400" : "bg-orange-400"});
+  const c = v.call;
   if (c) {
-    const seg = Date.now() / 1000 - c.inicio, max = c.params?.num_predict;
-    if (c.motor == "claude") h += barra({rotulo: "Claude: aguardando a resposta inteira (JSON)", feito: null, total: null, inicio: c.inicio, cor: "bg-violet-400"});
+    const seg = Date.now() / 1000 - c.start, max = c.params?.num_predict;
+    if (c.engine == "claude") h += barra({rotulo: "Claude: aguardando a resposta inteira (JSON)", feito: null, total: null, inicio: c.start, cor: "bg-violet-400"});
     else if (!c.tokens) {
-      const estTok = Math.round(c.entrada.length / 3.5);
-      h += barra({rotulo: `LLM fase 1/2 · prefill: lendo ~${num(estTok)} tokens do prompt de uma vez`, feito: null, total: null, inicio: c.inicio, cor: "bg-teal-400",
+      const estTok = Math.round(c.input.length / 3.5);
+      h += barra({rotulo: `LLM fase 1/2 · prefill: lendo ~${num(estTok)} tokens do prompt de uma vez`, feito: null, total: null, inicio: c.start, cor: "bg-teal-400",
                   extra: " · se o modelo não estava na VRAM, inclui a carga"});
     } else {
       const ger = c.tokens / Math.max(seg, .1);
-      const ini = c.primeiro || c.inicio;
-      h += barra({rotulo: "LLM fase 1/2 · prefill concluído", feito: 1, total: 1, inicio: c.inicio, cor: "bg-teal-700", fixo: true,
-                  extra: c.primeiro ? ` · ${(c.primeiro - c.inicio).toFixed(1)} s até o 1º token (fila + carga + leitura do prompt)` : ""});
+      const ini = c.first || c.start;
+      h += barra({rotulo: "LLM fase 1/2 · prefill concluído", feito: 1, total: 1, inicio: c.start, cor: "bg-teal-700", fixo: true,
+                  extra: c.first ? ` · ${(c.first - c.start).toFixed(1)} s até o 1º token (fila + carga + leitura do prompt)` : ""});
       h += barra({rotulo: `LLM fase 2/2 · gerando token a token (limite num_predict = ${max})`, feito: c.tokens, total: max, unidade: "tokens", inicio: ini, cor: "bg-teal-400",
                   extra: " · o JSON costuma fechar antes do limite"});
     }
@@ -391,11 +391,11 @@ function metricas(c) {
   if (c.tokens_entrada != null) m.push(`entrada ${c.tokens_entrada} tok`);
   if (c.tokens_saida != null) m.push(`saída ${c.tokens_saida} tok`);
   if (c.carga_s) m.push(`carga ${c.carga_s}s`);
-  if (c.prefill_s != null && c.motor != "claude") m.push(`prefill ${c.prefill_s}s${c.prefill_tok_s ? " (" + c.prefill_tok_s + " t/s)" : ""}`);
-  if (c.geracao_s != null && c.motor != "claude") m.push(`geração ${c.geracao_s}s${c.tok_s ? " (" + c.tok_s + " t/s)" : ""}`);
+  if (c.prefill_s != null && c.engine != "claude") m.push(`prefill ${c.prefill_s}s${c.prefill_tok_s ? " (" + c.prefill_tok_s + " t/s)" : ""}`);
+  if (c.geracao_s != null && c.engine != "claude") m.push(`geração ${c.geracao_s}s${c.tok_s ? " (" + c.tok_s + " t/s)" : ""}`);
   if (c.custo_usd != null) m.push(`US$ ${(+c.custo_usd).toFixed(4)} (equiv. API)`);
   if (c.cache_lido) m.push(`cache Anthropic ${c.cache_lido} tok`);
-  m.push(`total ${c.total_s ?? c.seg}s`);
+  m.push(`total ${c.total_s ?? c.seconds}s`);
   return m.join(" · ");
 }
 
@@ -502,17 +502,17 @@ async function detalheNo() {
   h += `<h4 class="mt-4 text-xs font-semibold uppercase tracking-wider text-sky-300">Agora</h4>`;
   if (!d.vivos.length) h += `<p class="mt-1 text-xs text-slate-500">Nada rodando neste nó.</p>`;
   for (const v of d.vivos) {
-    const c = v.chamada, seg = c ? (Date.now() / 1000 - c.inicio) : 0;
+    const c = v.call, seg = c ? (Date.now() / 1000 - c.start) : 0;
     h += `<div class="mt-2 rounded-lg border border-sky-400/20 p-3 space-y-2">
-      <p class="text-[11px] font-mono text-slate-400">pid ${v.pid} · ${esc(v.fluxo)} · nó ${esc(v.no)} há ${tempo(Math.round(Date.now() / 1000 - v.desde))}</p>
-      ${v.detalhe ? `<p class="text-xs text-slate-200">${esc(v.detalhe)}</p>` : ""}
+      <p class="text-[11px] font-mono text-slate-400">pid ${v.pid} · ${esc(v.flow)} · nó ${esc(v.node)} há ${tempo(Math.round(Date.now() / 1000 - v.since))}</p>
+      ${v.detail ? `<p class="text-xs text-slate-200">${esc(v.detail)}</p>` : ""}
       ${barrasVivo(v)}
-      ${c ? `<p class="text-[11px] text-slate-300"><b>${esc(c.motor == "claude" ? "Claude" : "LLM local")}</b> · modelo <span class="font-mono">${esc(c.modelo)}</span> · prompt <span class="font-mono">${esc(c.nome)}</span></p>
+      ${c ? `<p class="text-[11px] text-slate-300"><b>${esc(c.engine == "claude" ? "Claude" : "LLM local")}</b> · modelo <span class="font-mono">${esc(c.model)}</span> · prompt <span class="font-mono">${esc(c.name)}</span></p>
         <p class="text-[11px] font-mono text-slate-400">${Object.entries(c.params || {}).map(([k, x]) => `${k}=${x}`).join(" · ")}</p>
-        <details data-k="ent" ${aberto.has("ent") ? "open" : ""}><summary class="text-[11px] text-slate-400 cursor-pointer">prompt enviado (${c.entrada.length} caracteres ≈ ${Math.round(c.entrada.length / 3.5)} tokens)</summary>
-          <pre class="mt-1 p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-60 overflow-y-auto text-slate-300">${esc(c.entrada)}</pre></details>
+        <details data-k="ent" ${aberto.has("ent") ? "open" : ""}><summary class="text-[11px] text-slate-400 cursor-pointer">prompt enviado (${c.input.length} caracteres ≈ ${Math.round(c.input.length / 3.5)} tokens)</summary>
+          <pre class="mt-1 p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-60 overflow-y-auto text-slate-300">${esc(c.input)}</pre></details>
         <p class="text-[11px] text-slate-400">resposta sendo gerada (JSON restrito pelo esquema):</p>
-        <pre class="ao-vivo p-2 rounded bg-black/40 text-[11px] whitespace-pre-wrap max-h-56 overflow-y-auto text-teal-200">${esc(c.parcial || "…lendo o prompt (prefill)")}</pre>` : ""}
+        <pre class="ao-vivo p-2 rounded bg-black/40 text-[11px] whitespace-pre-wrap max-h-56 overflow-y-auto text-teal-200">${esc(c.partial || "…lendo o prompt (prefill)")}</pre>` : ""}
     </div>`;
   }
   h += extrasHTML(d, aberto);
@@ -520,13 +520,13 @@ async function detalheNo() {
   if (!d.chamadas.length) h += `<p class="mt-1 text-xs text-slate-500">${d.faixa == "recurso" || ["local", "claude"].includes(d.motor) ? "Nenhuma chamada registrada ainda." : "Este passo é Python: não chama modelo."}</p>`;
   d.chamadas.forEach((c, i) => {
     h += `<details data-k="c${i}" ${aberto.has("c" + i) ? "open" : ""} class="mt-2 rounded-lg border border-white/10 p-2.5">
-      <summary class="cursor-pointer text-[11.5px] ${c.ok ? "text-slate-200" : "text-rose-300"}">${new Date(c.t * 1000).toLocaleTimeString("pt-BR")} · <span class="font-mono">${esc(c.nome)}</span> · ${esc(c.modelo)}${c.ok ? "" : " · ✗ " + esc(c.erro)}</summary>
+      <summary class="cursor-pointer text-[11.5px] ${c.ok ? "text-slate-200" : "text-rose-300"}">${new Date(c.t * 1000).toLocaleTimeString("pt-BR")} · <span class="font-mono">${esc(c.name)}</span> · ${esc(c.model)}${c.ok ? "" : " · ✗ " + esc(c.error)}</summary>
       <p class="mt-1.5 text-[11px] font-mono text-slate-400">${metricas(c)}</p>
       <p class="mt-1 text-[11px] text-slate-500">${Object.entries(c.params || {}).map(([k, x]) => `${k}=${x}`).join(" · ")}</p>
-      ${c.esquema ? `<details class="mt-2"><summary class="text-[11px] text-slate-400 cursor-pointer">esquema JSON que restringiu a resposta</summary><pre class="mt-1 p-2 rounded bg-black/30 text-[10px] whitespace-pre-wrap max-h-40 overflow-y-auto text-slate-400">${esc(c.esquema)}</pre></details>` : ""}
-      <p class="mt-2 text-[11px] text-slate-400">prompt</p><pre class="p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-48 overflow-y-auto text-slate-300">${esc(c.entrada)}</pre>
+      ${c.schema ? `<details class="mt-2"><summary class="text-[11px] text-slate-400 cursor-pointer">esquema JSON que restringiu a resposta</summary><pre class="mt-1 p-2 rounded bg-black/30 text-[10px] whitespace-pre-wrap max-h-40 overflow-y-auto text-slate-400">${esc(c.schema)}</pre></details>` : ""}
+      <p class="mt-2 text-[11px] text-slate-400">prompt</p><pre class="p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-48 overflow-y-auto text-slate-300">${esc(c.input)}</pre>
       ${c.pensamento ? `<p class="mt-2 text-[11px] text-slate-400">raciocínio (think)</p><pre class="p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-40 overflow-y-auto text-slate-400">${esc(c.pensamento)}</pre>` : ""}
-      <p class="mt-2 text-[11px] text-slate-400">resposta</p><pre class="p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-48 overflow-y-auto text-teal-200">${esc(c.saida)}</pre></details>`;
+      <p class="mt-2 text-[11px] text-slate-400">resposta</p><pre class="p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-48 overflow-y-auto text-teal-200">${esc(c.output)}</pre></details>`;
   });
   if (d.passos.length) {
     h += `<h4 class="mt-4 text-xs font-semibold uppercase tracking-wider text-slate-300">Passagens recentes</h4>`;

@@ -644,15 +644,15 @@ class _Chamada extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 6),
       child: ExpansionTile(
         dense: true,
-        leading: SeloMotor('${c['motor'] ?? 'local'}'),
-        title: Text('${c['nome'] ?? ''} · ${c['modelo'] ?? ''}', overflow: TextOverflow.ellipsis),
+        leading: SeloMotor('${c['engine'] ?? 'local'}'),
+        title: Text('${c['name'] ?? ''} · ${c['model'] ?? ''}', overflow: TextOverflow.ellipsis),
         subtitle: Text(
           [
             if (!ok) 'falhou',
             if (c['cache'] == true) 'do cache',
             if (c['tokens_saida'] != null || c['tokens'] != null)
               '${c['tokens_saida'] ?? c['tokens']} tokens',
-            if (c['seg'] != null) '${(c['seg'] as num).toStringAsFixed(1)} s',
+            if (c['seconds'] != null) '${(c['seconds'] as num).toStringAsFixed(1)} s',
             if (c['tok_s'] != null) '${c['tok_s']} tok/s',
             if (c['custo'] != null) dolares(c['custo'] as num, casas: 4),
           ].join(' · '),
@@ -661,14 +661,14 @@ class _Chamada extends StatelessWidget {
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (c['entrada'] != null) ...[const Text('Prompt'), SelectableText('${c['entrada']}', style: mono)],
-          if (c['saida'] != null || c['resposta'] != null) ...[
+          if (c['input'] != null) ...[const Text('Prompt'), SelectableText('${c['input']}', style: mono)],
+          if (c['output'] != null || c['resposta'] != null) ...[
             const SizedBox(height: 8),
             const Text('Resposta'),
-            SelectableText('${c['saida'] ?? c['resposta']}', style: mono),
+            SelectableText('${c['output'] ?? c['resposta']}', style: mono),
           ],
-          if ('${c['erro'] ?? ''}'.isNotEmpty)
-            Text('${c['erro']}', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          if ('${c['error'] ?? ''}'.isNotEmpty)
+            Text('${c['error']}', style: TextStyle(color: Theme.of(context).colorScheme.error)),
         ],
       ),
     );

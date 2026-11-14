@@ -24,10 +24,10 @@ from pydantic import BaseModel, Field
 
 from esteira.bancada import EscolhaPeca as Escolha
 from esteira.bancada import normalizar, numeros
+from esteira.core import events
 from esteira.estudio import peca as P
 from esteira.estudio import ritmo as R
 from esteira.ia import local
-from esteira.nucleo import eventos
 
 TRATAMENTOS = ("voz_motion", "midia_motion", "camera_cheia", "camera_peca", "camera_2_5d", "3d")
 SO_APRESENTADOR = {"camera_cheia", "camera_peca", "camera_2_5d"}
@@ -554,12 +554,12 @@ def dirigir(projeto, estilo, perfil=None, formatos=None):
     vet_f = _vetores_fichas(fichas)
     vet_m = E.vetores([m["texto"] for m in todos], E.CONSULTA) if vet_f is not None else None
     if vet_f is None:
-        eventos.aviso("direção: sem o modelo de embeddings; candidatas por palavras em comum")
+        events.warning("direção: sem o modelo de embeddings; candidatas por palavras em comum")
     vet_por = {id(m): (vet_m[k] if vet_m else None) for k, m in enumerate(todos)}
     cenas, usadas, escolhidas, decisoes = [], {}, [], {"local": 0, "regra": 0, "voce": 0, "gatilho": 0, "midia": 0}
     antes = ""
     for b, ms in zip(bls, ms_por_bloco, strict=True):
-        eventos.progresso(b["i"] + 1, len(bls), f"bloco {b['i'] + 1}: {b['texto'][:50]}")
+        events.progress(b["i"] + 1, len(bls), f"bloco {b['i'] + 1}: {b['texto'][:50]}")
         leituras, origem = ler(b, ms, estilo.modo, perfil, antes)
         antes = b["texto"]
         trats = tratar(leituras, estilo.modo)
@@ -592,7 +592,7 @@ def dirigir(projeto, estilo, perfil=None, formatos=None):
                     break
             if not preenchido:
                 decisoes["midia"] += 1
-                eventos.aviso(f"direção: nenhuma peça preenchida em {m['ini']:.1f}s; fica a mídia")
+                events.warning(f"direção: nenhuma peça preenchida em {m['ini']:.1f}s; fica a mídia")
                 continue
             enc, bot = preenchido
             dur = min(m["fim"] - m["ini"] + 0.3, f.duracao_max, perfil.peca_s[1])

@@ -65,17 +65,17 @@ def estatisticas(chamadas, hist_monitor=()):
     tout = [c["tokens_saida"] for c in ok if c.get("tokens_saida")]
     tok_s = [c["tok_s"] for c in ok if c.get("tok_s")]
     pre = [c["prefill_tok_s"] for c in ok if c.get("prefill_tok_s")]
-    lat = [c.get("total_s") or c.get("seg") for c in ok if c.get("total_s") or c.get("seg")]
+    lat = [c.get("total_s") or c.get("seconds") for c in ok if c.get("total_s") or c.get("seconds")]
     por_prompt = {}
     for c in chamadas:
-        d = por_prompt.setdefault(c.get("nome") or "?", {"n": 0, "seg": 0.0, "tokens": 0})
+        d = por_prompt.setdefault(c.get("name") or "?", {"n": 0, "seg": 0.0, "tokens": 0})
         d["n"] += 1
-        d["seg"] += c.get("total_s") or c.get("seg") or 0
+        d["seg"] += c.get("total_s") or c.get("seconds") or 0
         d["tokens"] += c.get("tokens_saida") or 0
     # energia: integra a potência da GPU (amostras de 2 s do monitor) dentro da janela de cada chamada
     wh, tok_e = 0.0, 0
     for c in ok:
-        ini, fim = c["t"] - (c.get("total_s") or c.get("seg") or 0), c["t"]
+        ini, fim = c["t"] - (c.get("total_s") or c.get("seconds") or 0), c["t"]
         amostras = [h["gpu_w"] for h in hist_monitor if h.get("gpu_w") and ini - 1 <= h["t"] <= fim + 1]
         if amostras:
             wh += statistics.mean(amostras) * (fim - ini) / 3600
@@ -88,7 +88,7 @@ def estatisticas(chamadas, hist_monitor=()):
         "lat_p50": _pct(lat, .5), "lat_p95": _pct(lat, .95), "custo_usd": round(sum(c.get("custo_usd") or 0 for c in chamadas), 4),
         "wh": round(wh, 3) if wh else None, "wh_por_mil_tokens": round(wh / tok_e * 1000, 4) if tok_e else None,
         "por_prompt": sorted(({"nome": k, **v, "seg": round(v["seg"], 1)} for k, v in por_prompt.items()), key=lambda x: -x["n"])[:8],
-        "serie": [{"t": c["t"], "tok_s": c.get("tok_s"), "seg": c.get("total_s") or c.get("seg"),
+        "serie": [{"t": c["t"], "tok_s": c.get("tok_s"), "seg": c.get("total_s") or c.get("seconds"),
                    "tokens": c.get("tokens_saida"), "ok": c.get("ok")} for c in chamadas[-40:]],
     }
 
@@ -119,10 +119,10 @@ def historico_eventos_llm(modelo):
     """Chamadas antigas (antes do rastro) gravadas como eventos `llm` nos episódios: ms e tokens gerados."""
     def ler():
         regs = []
-        for arq in PROJETOS.glob("*/*/log/eventos.jsonl"):
+        for arq in PROJETOS.glob("*/*/log/events.jsonl"):
             for e in _cauda(arq, 800_000):
-                if e.get("msg") == "llm" and e.get("modelo") in (modelo, ANTIGOS.get(modelo)):
-                    regs.append({"ms": e.get("ms"), "tokens": e.get("tokens"), "etapa": e.get("etapa"), "ep": e.get("ep")})
+                if e.get("message") == "llm" and e.get("modelo") in (modelo, ANTIGOS.get(modelo)):
+                    regs.append({"ms": e.get("ms"), "tokens": e.get("tokens"), "etapa": e.get("stage"), "ep": e.get("ep")})
         if not regs:
             return None
         ms = [r["ms"] for r in regs if r["ms"]]
@@ -186,29 +186,29 @@ def execucoes(etapa):
     """Últimas execuções da etapa em todos os episódios + mensagens, avisos e chamadas registradas nelas."""
     def ler():
         runs, msgs, n_llm, n_claude = [], [], 0, 0
-        for arq in PROJETOS.glob("*/*/log/eventos.jsonl"):
+        for arq in PROJETOS.glob("*/*/log/events.jsonl"):
             atual = None
             for e in _cauda(arq, 800_000):
-                if e.get("etapa") != etapa:
+                if e.get("stage") != etapa:
                     continue
-                tipo = e.get("tipo")
-                if tipo == "inicio":
+                tipo = e.get("kind")
+                if tipo == "start":
                     atual = {"ep": e["ep"], "inicio": e["t"], "status": "rodando", "avisos": 0, "dur": None, "ultima": ""}
                     runs.append(atual)
                 elif atual is None:
                     continue
-                elif tipo in ("fim", "erro"):
-                    atual.update(status="ok" if tipo == "fim" else "erro", dur=e.get("dur"), ultima=e.get("msg") or atual["ultima"])
-                elif tipo == "aviso":
+                elif tipo in ("end", "error"):
+                    atual.update(status="ok" if tipo == "end" else "erro", dur=e.get("duration"), ultima=e.get("message") or atual["ultima"])
+                elif tipo == "warning":
                     atual["avisos"] += 1
-                    msgs.append({"t": e["t"], "ep": e["ep"], "tipo": "aviso", "msg": e.get("msg")})
-                elif tipo == "saida":
-                    atual["ultima"] = e.get("msg")
-                    msgs.append({"t": e["t"], "ep": e["ep"], "tipo": "saida", "msg": e.get("msg")})
+                    msgs.append({"t": e["t"], "ep": e["ep"], "tipo": "aviso", "msg": e.get("message")})
+                elif tipo == "output":
+                    atual["ultima"] = e.get("message")
+                    msgs.append({"t": e["t"], "ep": e["ep"], "tipo": "saida", "msg": e.get("message")})
                 elif tipo == "claude":
                     n_claude += 1
-                    msgs.append({"t": e["t"], "ep": e["ep"], "tipo": "claude", "msg": f"{e.get('msg')} · US$ {e.get('custo', 0):.4f}"})
-                elif tipo == "debug" and e.get("msg") == "llm":
+                    msgs.append({"t": e["t"], "ep": e["ep"], "tipo": "claude", "msg": f"{e.get('message')} · US$ {e.get('cost', 0):.4f}"})
+                elif tipo == "debug" and e.get("message") == "llm":
                     n_llm += 1
         runs.sort(key=lambda r: r["inicio"])
         durs = [r["dur"] for r in runs if r["status"] == "ok" and r["dur"]]

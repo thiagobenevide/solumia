@@ -4,7 +4,7 @@ import json
 import subprocess
 import time
 
-from esteira.nucleo import eventos
+from esteira.core import events
 
 TICKS = 254016000000  # ticks por segundo do FilmCraft
 
@@ -60,9 +60,9 @@ class FilmCraft:
         try:
             res = self.tool("command_run", id=cmd_id, params=params)
         except ErroFilmCraft as e:
-            eventos.debug(f"fc {cmd_id} falhou", params=str(params)[:300], erro=str(e)[:300])
+            events.debug(f"fc {cmd_id} falhou", params=str(params)[:300], erro=str(e)[:300])
             raise
-        eventos.debug(f"fc {cmd_id}", ms=round((time.monotonic() - t) * 1000))
+        events.debug(f"fc {cmd_id}", ms=round((time.monotonic() - t) * 1000))
         return res
 
     def fechar(self):

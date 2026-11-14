@@ -59,9 +59,9 @@ def faltam(app: str) -> dict[str, int]:
 
 
 def treinar(app: str, base: str = BASE, epocas: float = 2.0, forcar: bool = False) -> dict:
+    from esteira.core import locks
     from esteira.estudio import treino
     from esteira.ia import local
-    from esteira.nucleo import travas
     from esteira.projeto import RAIZ
     if (b := bilhoes(base)) is None or b > MAX_B:
         raise SystemExit(f"base {base}: só se treinam modelos de até {MAX_B}B")
@@ -85,8 +85,8 @@ def treinar(app: str, base: str = BASE, epocas: float = 2.0, forcar: bool = Fals
                 n += lado == "train" and sum(1 for _ in arq.open())
     if not n:
         raise SystemExit(f"{app}: a exportação {exp.name} não tem casos de treino")
-    if "maquina" not in travas._seguras:  # o `./dark` já ocupa a vaga ao iniciar; segunda trava no mesmo processo trava
-        travas.ocupar("maquina", f"treino {nome}")
+    if "machine" not in locks._held:  # o `./dark` já ocupa a vaga ao iniciar; segunda trava no mesmo processo trava
+        locks.acquire("machine", f"treino {nome}")
     local.liberar_gpu()
     parados = _parar_servicos()  # worker da plataforma (+ voz XTTS) ocupa ~3 GB de VRAM
     try:
