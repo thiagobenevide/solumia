@@ -123,7 +123,7 @@
   "installOnThisPc": "Instalar en este PC",
   "showQr": "QR para el celular",
   "qrPhone": "Apunta la cámara del celular para descargar directamente de GitHub. Android verifica la firma del APK al instalar.",
-  "watchInstruction": "Descarga el APK aquí y envíalo al reloj desde la app del celular, o instálalo en el propio reloj.",
+  "watchInstruction": "Instálalo directo en el reloj por Wi‑Fi, o descarga el APK aquí.",
   "planNothingChanged": "Todavía no se cambió nada. Revisa lo que va a pasar:",
   "planRun": "Ejecución: {estado}",
   "destructiveCode": "Código del autenticador (acción destructiva)",
@@ -156,5 +156,16 @@
   "assistantNoSecrets": "No pegues contraseñas, claves ni códigos aquí: lo que parezca secreto se oculta antes de salir del PC.",
   "updateConfigurator": "Actualizar el configurador",
   "updateConfiguratorDetail": "Compila y reinstala desde el código de este repositorio; la versión nueva abre en el próximo inicio.",
-  "updateButton": "Actualizar"
+  "updateButton": "Actualizar",
+  "watchInstallButton": "Instalar en el reloj (Wi‑Fi)",
+  "watchInstallTitle": "Instalar en el reloj por la red",
+  "watchSteps": "1. En el reloj: Ajustes › Acerca de › Software, toca 7 veces \"Versión de software\" para activar las Opciones de desarrollador.\n2. En Opciones de desarrollador, activa \"Depuración ADB\" y \"Depuración por Wi‑Fi\" (reloj y PC en la misma red).\n3. La primera vez: en Depuración por Wi‑Fi › \"Vincular nuevo dispositivo\", completa la IP, el puerto y el código que muestra y toca Vincular.\n4. Después: completa el puerto que aparece en la pantalla Depuración por Wi‑Fi (IP:puerto) y toca Instalar.",
+  "watchIp": "IP del reloj",
+  "watchPairPort": "Puerto de vinculación",
+  "watchPairCode": "Código de 6 dígitos",
+  "watchConnectPort": "Puerto de conexión",
+  "watchPair": "Vincular",
+  "watchPaired": "Reloj vinculado. Ahora completa el puerto de conexión y toca Instalar.",
+  "watchInstall": "Instalar",
+  "watchFillFields": "Completa la IP y los puertos con números."
 }

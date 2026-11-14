@@ -162,8 +162,15 @@ class _MainShellState extends State<MainShell> {
           labelType: NavigationRailLabelType.all,
           onDestinationSelected: (i) => setState(() => _index = i),
           leading: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Icon(Icons.wb_sunny_rounded, color: c.primary, size: 32),
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset('assets/logo.png', width: 40, height: 40),
+              ),
+              const SizedBox(height: 6),
+              Text('Solumia', style: TextStyle(color: c.onSurface, fontWeight: FontWeight.w600)),
+            ]),
           ),
           trailing: Expanded(
             child: Align(

@@ -418,7 +418,7 @@ class AppTextEn extends AppText {
 
   @override
   String get watchInstruction =>
-      'Download the APK here and send it to the watch through the phone app, or install it on the watch itself.';
+      'Install it straight on the watch over Wi‑Fi, or download the APK here.';
 
   @override
   String get planNothingChanged =>
@@ -532,4 +532,39 @@ class AppTextEn extends AppText {
 
   @override
   String get updateButton => 'Update';
+
+  @override
+  String get watchInstallButton => 'Install on the watch (Wi‑Fi)';
+
+  @override
+  String get watchInstallTitle => 'Install on the watch over the network';
+
+  @override
+  String get watchSteps =>
+      '1. On the watch: Settings › About › Software, tap \"Software version\" 7 times to unlock Developer options.\n2. In Developer options, turn on \"ADB debugging\" and \"Debug over Wi‑Fi\" (watch and PC on the same network).\n3. The first time: in Debug over Wi‑Fi › \"Pair new device\", fill in the IP, port and code it shows and tap Pair.\n4. Then: fill in the port shown on the Debug over Wi‑Fi screen (IP:port) and tap Install.';
+
+  @override
+  String get watchIp => 'Watch IP';
+
+  @override
+  String get watchPairPort => 'Pairing port';
+
+  @override
+  String get watchPairCode => '6-digit code';
+
+  @override
+  String get watchConnectPort => 'Connection port';
+
+  @override
+  String get watchPair => 'Pair';
+
+  @override
+  String get watchPaired =>
+      'Watch paired. Now fill in the connection port and tap Install.';
+
+  @override
+  String get watchInstall => 'Install';
+
+  @override
+  String get watchFillFields => 'Fill in the IP and the ports with numbers.';
 }

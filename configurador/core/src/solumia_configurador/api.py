@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hmac
 import secrets
+import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
@@ -33,11 +34,13 @@ from . import (
     assistant,
     craft_apps,
     folders,
+    generate,
     manifest,
     names,
     secret_store,
     self_update,
     solumia_apps,
+    watch,
 )
 from .engine import Execucao, Mask, Plan, Step, list_runs
 from .manifest import Folders, Manifest
@@ -102,6 +105,17 @@ class CraftInput(BaseModel):
 class SolumiaAppInput(BaseModel):
     versao: str = "ultima"
     instalar: bool = False
+
+
+class WatchPairInput(BaseModel):
+    host: str
+    porta: int
+    codigo: str
+
+
+class WatchInstallInput(BaseModel):
+    host: str
+    porta: int
 
 
 class FingerprintInput(BaseModel):
@@ -316,6 +330,51 @@ def create_app(state: State, token: str, porta: int) -> FastAPI:
         return s.store_plan(Plan(f"{action} Solumia ({app_id})", [
             Step("baixar", f"{action} {a.modelo.format(v='X.Y.Z')} de {solumia_apps.url_releases()}",
                   f"assinatura (chave fixada) e SHA-256 conferidos; salvo em {dir_downloads(s.sistema)}", baixar)]))
+
+    # --- watch (Wear OS over Wi-Fi) -------------------------------------------------------------------
+    @app.post("/relogio/parear")
+    def parear_relogio(dados: WatchPairInput) -> dict[str, bool]:
+        try:
+            watch.pair(dados.host, dados.porta, dados.codigo, log=lambda _line: None)
+        except (watch.WatchError, OSError, subprocess.TimeoutExpired) as error:
+            raise HTTPException(422, str(error)) from error
+        return {"ok": True}
+
+    @app.post("/relogio/plano")
+    def plano_relogio(dados: WatchInstallInput, s: State = Depends(e)) -> dict[str, Any]:
+        domain = s.manifest().topologia.dominio
+        if not domain:
+            raise HTTPException(422, "configure a VPS (domínio) antes de instalar o relógio")
+        try:
+            watch.check_address(dados.host, dados.porta)
+        except watch.WatchError as error:
+            raise HTTPException(422, str(error)) from error
+        url = f"https://{domain}"
+        key = generate.watch_key(s.cofre)
+
+        def conectar(ctx) -> None:  # noqa: ANN001
+            ctx.recursos["relogio"] = watch.connect(dados.host, dados.porta, log=ctx.log)
+
+        def conferir_chave(ctx) -> None:  # noqa: ANN001
+            watch.check_key(url, key, log=ctx.log)
+
+        def baixar(ctx) -> None:  # noqa: ANN001
+            info = solumia_apps.download("wear", s.sistema, log=ctx.log)
+            ctx.recursos["apk_relogio"] = info["caminho"]
+
+        def instalar(ctx) -> None:  # noqa: ANN001
+            watch.install(ctx.recursos["relogio"], Path(ctx.recursos["apk_relogio"]), url, key, log=ctx.log)
+
+        return s.store_plan(Plan("Instalar o Solumia no relógio", [
+            Step("conectar", f"Conectar ao relógio {dados.host}:{dados.porta}",
+                 "adb por Wi-Fi (depuração sem fio ligada no relógio)", conectar),
+            Step("chave", f"Conferir a chave do relógio em {url}",
+                 "chave própria do relógio: só abre as rotas dele", conferir_chave),
+            Step("baixar", "Baixar o app do relógio da release",
+                 "assinatura (chave fixada) e SHA-256 conferidos", baixar),
+            Step("instalar", "Instalar e configurar no relógio",
+                 "o app abre já com o endereço do servidor e a chave", instalar),
+        ]))
 
     # --- VPS -----------------------------------------------------------------------------------------
     @app.post("/vps/impressao")

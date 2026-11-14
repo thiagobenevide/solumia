@@ -24,7 +24,8 @@ cd "$here/app"
 grep -qs 'CMAKE_INSTALL_PREFIX:PATH=/usr/local' build/linux/x64/release/CMakeCache.txt && rm -rf build/linux
 "$flutter" build linux --release >/dev/null
 
-rm -rf "$stage" && mkdir -p "$stage$opt/nucleo" "$stage/usr/bin" "$stage/usr/share/applications" "$stage/DEBIAN"
+rm -rf "$stage" && mkdir -p "$stage$opt/nucleo" "$stage/usr/bin" "$stage/usr/share/applications" "$stage/DEBIAN" \
+    "$stage/usr/share/icons/hicolor/256x256/apps"
 cp -r build/linux/x64/release/bundle/. "$stage$opt/"
 
 echo "→ núcleo (Python, venv próprio com as versões do uv.lock)"
@@ -44,13 +45,18 @@ EOF
 chmod 0755 "$stage$opt/nucleo/$name"
 ln -s "$opt/solumia_configurador" "$stage/usr/bin/$name"
 
-cat > "$stage/usr/share/applications/$name.desktop" <<EOF
+# Solumia logo as the app icon. The .desktop file is named after the GTK application id
+# (configurador/app/linux/CMakeLists.txt) so GNOME on Wayland matches the window to it; on X11
+# StartupWMClass (the binary name) does the same.
+cp "$here/app/assets/logo.png" "$stage/usr/share/icons/hicolor/256x256/apps/$name.png"
+cat > "$stage/usr/share/applications/dev.solumia.solumia_configurador.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Solumia: configurador
+Name=Solumia
+GenericName=Configurador do Solumia
 Comment=Instalar, configurar e operar o Solumia
 Exec=$opt/solumia_configurador
-Icon=preferences-system
+Icon=$name
 Terminal=false
 Categories=Utility;Settings;
 StartupWMClass=solumia_configurador

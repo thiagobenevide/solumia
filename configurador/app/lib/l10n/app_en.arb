@@ -123,7 +123,7 @@
   "installOnThisPc": "Install on this PC",
   "showQr": "QR for the phone",
   "qrPhone": "Point your phone camera here to download straight from GitHub. Android checks the APK signature when installing.",
-  "watchInstruction": "Download the APK here and send it to the watch through the phone app, or install it on the watch itself.",
+  "watchInstruction": "Install it straight on the watch over Wi‑Fi, or download the APK here.",
   "planNothingChanged": "Nothing has been changed yet. Review what will happen:",
   "planRun": "Run: {estado}",
   "destructiveCode": "Authenticator code (destructive action)",
@@ -156,5 +156,16 @@
   "assistantNoSecrets": "Do not paste passwords, keys or codes here: anything that looks like a secret is hidden before leaving the PC.",
   "updateConfigurator": "Update the configurator",
   "updateConfiguratorDetail": "Rebuilds and reinstalls from this repository's code; the new version opens on the next start.",
-  "updateButton": "Update"
+  "updateButton": "Update",
+  "watchInstallButton": "Install on the watch (Wi‑Fi)",
+  "watchInstallTitle": "Install on the watch over the network",
+  "watchSteps": "1. On the watch: Settings › About › Software, tap \"Software version\" 7 times to unlock Developer options.\n2. In Developer options, turn on \"ADB debugging\" and \"Debug over Wi‑Fi\" (watch and PC on the same network).\n3. The first time: in Debug over Wi‑Fi › \"Pair new device\", fill in the IP, port and code it shows and tap Pair.\n4. Then: fill in the port shown on the Debug over Wi‑Fi screen (IP:port) and tap Install.",
+  "watchIp": "Watch IP",
+  "watchPairPort": "Pairing port",
+  "watchPairCode": "6-digit code",
+  "watchConnectPort": "Connection port",
+  "watchPair": "Pair",
+  "watchPaired": "Watch paired. Now fill in the connection port and tap Install.",
+  "watchInstall": "Install",
+  "watchFillFields": "Fill in the IP and the ports with numbers."
 }

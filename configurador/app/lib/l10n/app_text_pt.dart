@@ -419,7 +419,7 @@ class AppTextPt extends AppText {
 
   @override
   String get watchInstruction =>
-      'Baixe o APK aqui e envie ao relógio pelo app do celular ou instale no próprio relógio.';
+      'Instale direto no relógio pela rede Wi‑Fi, ou baixe o APK aqui.';
 
   @override
   String get planNothingChanged =>
@@ -533,4 +533,39 @@ class AppTextPt extends AppText {
 
   @override
   String get updateButton => 'Atualizar';
+
+  @override
+  String get watchInstallButton => 'Instalar no relógio (Wi‑Fi)';
+
+  @override
+  String get watchInstallTitle => 'Instalar no relógio pela rede';
+
+  @override
+  String get watchSteps =>
+      '1. No relógio: Configurações › Sobre › Software, toque 7 vezes em \"Versão do software\" para liberar as Opções do desenvolvedor.\n2. Em Opções do desenvolvedor, ligue \"Depuração ADB\" e \"Depuração por Wi‑Fi\" (relógio e PC na mesma rede).\n3. Na primeira vez: em Depuração por Wi‑Fi › \"Parear novo dispositivo\", preencha o IP, a porta e o código mostrados e toque em Parear.\n4. Depois: preencha a porta mostrada na tela Depuração por Wi‑Fi (IP:porta) e toque em Instalar.';
+
+  @override
+  String get watchIp => 'IP do relógio';
+
+  @override
+  String get watchPairPort => 'Porta de pareamento';
+
+  @override
+  String get watchPairCode => 'Código de 6 dígitos';
+
+  @override
+  String get watchConnectPort => 'Porta de conexão';
+
+  @override
+  String get watchPair => 'Parear';
+
+  @override
+  String get watchPaired =>
+      'Relógio pareado. Agora preencha a porta de conexão e toque em Instalar.';
+
+  @override
+  String get watchInstall => 'Instalar';
+
+  @override
+  String get watchFillFields => 'Preencha o IP e as portas com números.';
 }
