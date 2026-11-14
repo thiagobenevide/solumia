@@ -40,7 +40,13 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - name: Version from tag
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+        # Build number from the version (X.Y.Z -> X*10000 + Y*100 + Z): the same rule as
+        # infra/scripts/release_local, so Android never sees a lower number on update.
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          IFS=. read -r major minor patch <<< "$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$((major * 10000 + minor * 100 + patch))" >> "$GITHUB_ENV"
       - name: Release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -63,7 +69,7 @@ jobs:
       - name: Build APK
         working-directory: plataforma/app
         run: |
-          flutter build apk --release --build-name "$VERSION" --build-number "$GITHUB_RUN_NUMBER"
+          flutter build apk --release --build-name "$VERSION" --build-number "$BUILD_NUMBER"
           mkdir -p "$GITHUB_WORKSPACE/dist"
           cp build/app/outputs/flutter-apk/app-release.apk "$GITHUB_WORKSPACE/dist/solumia-$VERSION-android.apk"
       - name: Remove keystore
@@ -91,11 +97,17 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
       - name: Version from tag
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+        # Build number from the version (X.Y.Z -> X*10000 + Y*100 + Z): the same rule as
+        # infra/scripts/release_local, so Android never sees a lower number on update.
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          IFS=. read -r major minor patch <<< "$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$((major * 10000 + minor * 100 + patch))" >> "$GITHUB_ENV"
       - run: flutter pub get
       - name: Build Linux bundle
         working-directory: plataforma/app
-        run: flutter build linux --release --build-name "$VERSION" --build-number "$GITHUB_RUN_NUMBER"
+        run: flutter build linux --release --build-name "$VERSION" --build-number "$BUILD_NUMBER"
       - name: Package AppImage
         run: |
           appdir="$RUNNER_TEMP/Solumia.AppDir"
