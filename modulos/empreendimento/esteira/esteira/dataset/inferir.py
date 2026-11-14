@@ -19,11 +19,11 @@ def exemplos(tarefa: str, contexto: dict, k: int = 3, fora: set[str] = frozenset
     if not pares:
         return []
     try:
-        from esteira.ia import embeddings
-        if not embeddings.disponivel():
+        from esteira.ai import embeddings
+        if not embeddings.available():
             raise RuntimeError
-        alvo, *vs = embeddings.vetores([_resumo(contexto)] + [_resumo(cx) for _, cx, _ in pares])
-        ordem = sorted(range(len(pares)), key=lambda i: -embeddings.cosseno(alvo, vs[i]))
+        alvo, *vs = embeddings.vectors([_resumo(contexto)] + [_resumo(cx) for _, cx, _ in pares])
+        ordem = sorted(range(len(pares)), key=lambda i: -embeddings.cosine(alvo, vs[i]))
     except Exception:  # noqa: BLE001 — sem embeddings: os mais recentes
         ordem = list(range(len(pares)))[::-1]
     escolhidos = []
@@ -40,10 +40,10 @@ def prompt(tarefa: str, contexto: dict, k: int = 3, fora: set[str] = frozenset()
 def gerar(tarefa: str, contexto: dict, modelo: str | None = None, k: int = 3):
     """Uma resposta do modelo local, validada pelo esquema N1 da tarefa (ou None)."""
     from esteira.dataset import treino_app
-    from esteira.ia import local
+    from esteira.ai import local
     esq = X.esquema(tarefa)
     app = R.TAREFAS[tarefa]
     modelo = modelo or treino_app.promovido(app)  # o adaptador promovido da app, se houver
     kw = {"modelo": modelo} if modelo else {}
-    return local.perguntar(prompt(tarefa, contexto, k, fora=X.ouro(tarefa)), esq, temperatura=0.2, max_tokens=6000,
-                           operacao=f"n1_{tarefa}", **kw)
+    return local.ask(prompt(tarefa, contexto, k, fora=X.ouro(tarefa)), esq, temperature=0.2, max_tokens=6000,
+                           operation=f"n1_{tarefa}", **kw)

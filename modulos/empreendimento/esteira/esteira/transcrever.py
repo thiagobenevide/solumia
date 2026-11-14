@@ -92,8 +92,8 @@ def _refinar(modelo, sinal, palavras, idioma, sr=16000):
 
 
 def transcrever(projeto, cfg, audio=None, saida_json="transcricao.json"):
-    from esteira.ia.local import liberar_gpu
-    liberar_gpu()  # o Whisper large-v3 precisa da VRAM que o LLM local ocupa
+    from esteira.ai.local import free_gpu
+    free_gpu()  # o Whisper large-v3 precisa da VRAM que o LLM local ocupa
     _carregar_libs_cuda()
     from faster_whisper import WhisperModel
 

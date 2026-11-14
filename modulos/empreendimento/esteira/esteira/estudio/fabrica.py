@@ -2,10 +2,10 @@
 lugar em que o Claude trabalha no Estúdio; depois, a produção de cada vídeo usa só a IA local.
 
 - Pedido (app → Estúdio → Fábrica): `livre` ("3 linhas do tempo com fotos de época"), `referencia` (imagem
-  enviada) ou `lacunas` (o código conta o acervo por intenção × peso e pede o que falta); quantidade (o freio é a cota da assinatura, `claude.LIMITE_COTA`).
+  enviada) ou `lacunas` (o código conta o acervo por intenção × peso e pede o que falta); quantidade (o freio é a cota da assinatura, `claude.QUOTA_LIMIT`).
 - `./dark studio-factory fabrica:<pedido>` (fila, vaga "claude"): primeiro as tarefas pedidas na revisão (ajuste,
   variação), depois gera até o pedido ter `quantidade` peças aprovadas + em revisão, ou até a cota do Claude chegar a 90%.
-- Cada geração: Claude (`ia/claude.consultar`) escreve peça + ficha seguindo `pecas/GUIA.md` → portão de entrada
+- Cada geração: Claude (`ai/claude.query`) escreve peça + ficha seguindo `pecas/GUIA.md` → portão de entrada
   (`peca.portao`) + checagem visual local nos quadros da prova → reprovou: volta ao Claude uma vez com o erro;
   reprovou de novo: descartada com o motivo.
 - Revisão (app): aprovar (entra no acervo), pedir ajuste (nova rodada na mesma peça), variação (irmã com outro
@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from esteira.core import events, trace
 from esteira.estudio import peca as P
-from esteira.ia import claude
+from esteira.ai import claude
 from esteira.projeto import DADOS, RAIZ
 
 PASTA = DADOS / "estudio" / "fabrica"
@@ -258,9 +258,9 @@ def lacunas():
 
 
 def gasto_hoje():
-    from esteira.ia import claude
+    from esteira.ai import claude
     hoje = date.today().isoformat()
-    return round(sum(r["custo"] for r in claude._registros()
+    return round(sum((r.get("cost") or 0) for r in claude._records()
                      if str(r.get("ep", "")).startswith("fabrica") and r["t"].startswith(hoje)), 4)
 
 
@@ -417,7 +417,7 @@ def _escrever(g: PecaGerada, id_, versao=None, motor="html"):
 def checagem_visual(id_):
     """IA local olha os quadros da prova (texto cortado, sobreposição, ilegível). Sem modelo de visão: pula."""
     from esteira.bancada import Visao
-    from esteira.ia import local
+    from esteira.ai import local
     problemas = []
     # o processo roda com `--motor claude`: sem fixar, a visão iria ao Claude e gastaria a cota da assinatura
     antes = {k: os.environ.get(k) for k in ("ESTEIRA_ENGINE", "ESTEIRA_ENGINE_FIXED")}
@@ -435,8 +435,8 @@ def checagem_visual(id_):
 def _checar_quadros(id_, Visao, local, problemas):
     for q in sorted((P.pasta(id_) / "prova").glob("*.jpg")):
         try:
-            r = local.perguntar(local.prompt("estudio_visao_prova"), Visao, modelo=local.VISAO, imagens=[str(q)],
-                                max_tokens=200, operacao="studio_vision")
+            r = local.ask(local.prompt("estudio_visao_prova"), Visao, model=local.VISION, images=[str(q)],
+                                max_tokens=200, operation="studio_vision")
         except Exception as e:  # noqa: BLE001 — llama fora do ar não pode travar a fábrica
             events.warning(f"checagem visual pulada: {str(e)[:100]}")
             return []
@@ -468,24 +468,24 @@ def _descartar(id_, motivo):
 def _consultar(p: Pedido, texto, imagem=None):
     if p.ia == "local":
         return _consultar_local(texto), 0.0
-    from esteira.ia import claude
+    from esteira.ai import claude
     ep = f"fabrica-{date.today().isoformat()}"
-    antes = claude.gasto(ep)[0]
+    antes = claude.spent(ep)[0]
     cfg = {"claude": {"teto_chamada_usd": TETO_CHAMADA}}  # sem teto diário: o limite é a cota da assinatura (90%)
-    g = claude.consultar(texto, PecaGerada, cfg, ep, "fabrica_peca", imagem=imagem)
-    return g, round(claude.gasto(ep)[0] - antes, 4)
+    g = claude.query(texto, PecaGerada, cfg, ep, "fabrica_peca", image=imagem)
+    return g, round(claude.spent(ep)[0] - antes, 4)
 
 
 def _consultar_local(texto):
     """A peça pelo LLM local (JSON forçado pelo esquema). Sem imagem de referência. O processo da fábrica
     roda na vaga "claude" com `--motor claude`: aqui o motor local é fixado só durante a chamada."""
-    from esteira.ia import local
+    from esteira.ai import local
     antes = {k: os.environ.get(k) for k in ("ESTEIRA_ENGINE", "ESTEIRA_ENGINE_FIXED")}
     os.environ.update(ESTEIRA_ENGINE="local", ESTEIRA_ENGINE_FIXED="1")
     try:
         # o número da tentativa muda o texto: sem ele o cache devolveria a mesma peça descartada
-        r = local.perguntar(f"{texto}\n\n(tentativa {time.time_ns()})", PecaLocal, modelo=MODELO_LOCAL,
-                            temperatura=0.5, max_tokens=9000, operacao="factory")
+        r = local.ask(f"{texto}\n\n(tentativa {time.time_ns()})", PecaLocal, model=MODELO_LOCAL,
+                            temperature=0.5, max_tokens=9000, operation="factory")
         return r and PecaGerada(**r.model_dump(mode="json"))
     finally:
         for k, v in antes.items():
@@ -504,7 +504,7 @@ def gerar(p: Pedido, modo="nova", alvo="", comentario="", visual=True, motor=Non
         r = _gerar_local_n1(p, modo, alvo, ideia, visual)
         if r["ok"]:
             return {**r, "quem": "local"}
-        if claude.cota_cheia() or modo == "porte" or not SOCORRO_IDEIAS:  # o Claude fica só com o criativo
+        if claude.quota_full() or modo == "porte" or not SOCORRO_IDEIAS:  # o Claude fica só com o criativo
             return {**r, "quem": "local"}
         if modo == "conceito":  # socorro: o Claude escreve a peça da própria ideia
             tarefa = (f"Escreva a peça desta ideia (a LLM local não conseguiu: {r['motivo'][:200]}).\n"
@@ -672,7 +672,7 @@ def _dossie_local(modo, ficha, alvo="", ideia=None, erros=(), rascunho=None, ant
 
 
 def _consultar_n1_local(texto):
-    from esteira.ia import local
+    from esteira.ai import local
     from esteira.n1 import effectcraft as N1EC
 
     class Resposta(BaseModel):
@@ -681,8 +681,8 @@ def _consultar_n1_local(texto):
     antes = {k: os.environ.get(k) for k in ("ESTEIRA_ENGINE", "ESTEIRA_ENGINE_FIXED")}
     os.environ.update(ESTEIRA_ENGINE="local", ESTEIRA_ENGINE_FIXED="1")
     try:
-        r = local.perguntar(f"{texto}\n\n(tentativa {time.time_ns()})", Resposta, modelo=MODELO_LOCAL, temperatura=0.4,
-                            max_tokens=7000, operacao="fabrica_n1")
+        r = local.ask(f"{texto}\n\n(tentativa {time.time_ns()})", Resposta, model=MODELO_LOCAL, temperature=0.4,
+                            max_tokens=7000, operation="fabrica_n1")
         # só o que a LLM escreveu: o que ela omite vem do molde (travar_molde), não do padrão do esquema (peso 400…)
         return r and PecaN1Local(peca_n1=r.peca_n1.model_dump(mode="json", exclude_unset=True), comunica=r.comunica)
     except Exception as e:  # noqa: BLE001 — llama fora do ar ou resposta truncada: vira falha da rodada
@@ -806,14 +806,14 @@ def _revisar_claude(id_, ficha, conceito, peca_n1):
              f"=== CONCEITO ===\n{conceito or '(porte de peça HTML)'}\n\n"
              f"=== N1 ===\n{json.dumps(peca_n1, ensure_ascii=False)}")
     ep = f"fabrica-{date.today().isoformat()}"
-    antes = claude.gasto(ep)[0]
+    antes = claude.spent(ep)[0]
     try:
-        rev = claude.consultar(texto, RevisaoN1, {"claude": {"teto_chamada_usd": 0.3}}, ep, "fabrica_revisao",
-                               imagem=str(folha))
+        rev = claude.query(texto, RevisaoN1, {"claude": {"teto_chamada_usd": 0.3}}, ep, "fabrica_revisao",
+                               image=str(folha))
     except Exception as e:  # noqa: BLE001 — revisão indisponível não derruba a fábrica
         events.warning(f"fábrica: revisão do Claude falhou ({str(e)[:120]})")
         rev = None
-    custo = round(claude.gasto(ep)[0] - antes, 4)
+    custo = round(claude.spent(ep)[0] - antes, 4)
     if rev:
         novas = licao_n1(rev.regras, id_)
         _registrar("revisao", peca=id_, aprovada=rev.aprovada, problemas=rev.problemas[:6], causas=rev.causas[:6],
@@ -1042,7 +1042,7 @@ def _gerar_local_n1(p: Pedido, modo, alvo, ideia, visual):
         if r["ok"] and visual:  # aprovação explícita do Claude é obrigatória (sem revisão, não passa)
             passou = True
             rev = None
-            if revisoes < REVISOES_CLAUDE and not claude.cota_cheia():
+            if revisoes < REVISOES_CLAUDE and not claude.quota_full():
                 _mudar(p.id, etapa=_etapa("revisao", id_, rodada))
                 rev, c = _revisar_claude(id_, f, (ideia or {}).get("conceito") or "", g.peca_n1)
                 custo += c
@@ -1093,8 +1093,8 @@ def _vocabulario_n1():
 
 def _consultar_ideias(p: Pedido, n):
     """O Claude só cria: `n` ideias (ficha + conceito) numa chamada. → (lista de dicts, custo)."""
-    from esteira.ia import claude as C
-    if p.ia == "local" or C.cota_cheia():
+    from esteira.ai import claude as C
+    if p.ia == "local" or C.quota_full():
         return [], 0.0
     texto = ("Você é o diretor criativo do acervo de motion graphics do Estúdio (YouTube em pt-BR). Crie "
              f"{n} peças NOVAS e diferentes entre si e do acervo: para cada uma, a ficha completa (contrato: "
@@ -1108,7 +1108,7 @@ def _consultar_ideias(p: Pedido, n):
              f"=== PEDIDO ===\n{p.texto or 'preencher lacunas do acervo com peças úteis para vídeos de finanças, história, ciência'}")
     ep = f"fabrica-{date.today().isoformat()}"
     antes = C.gasto(ep)[0]
-    r = C.consultar(texto, Ideias, {"claude": {"teto_chamada_usd": TETO_CHAMADA}}, ep, "fabrica_ideias")
+    r = C.query(texto, Ideias, {"claude": {"teto_chamada_usd": TETO_CHAMADA}}, ep, "fabrica_ideias")
     return ([i.model_dump(mode="json") for i in r.itens] if r else []), round(C.gasto(ep)[0] - antes, 4)
 
 
@@ -1207,9 +1207,9 @@ def _rodar(pid, visual, maximo):
             return p
         if p.ia == "claude" and (motivo := _freio(pid)):
             return _frear(pid, motivo)
-        if p.ia in ("claude", "hibrido") and claude.cota_cheia():
-            events.warning(f"fábrica: cota da assinatura em {claude.cota():.0%}")
-            return _mudar(pid, situacao=f"cota do Claude em {claude.cota():.0%}: volta quando a janela virar")
+        if p.ia in ("claude", "hibrido") and claude.quota_full():
+            events.warning(f"fábrica: cota da assinatura em {claude.quota():.0%}")
+            return _mudar(pid, situacao=f"cota do Claude em {claude.quota():.0%}: volta quando a janela virar")
         if p.tarefas:
             t, resto = p.tarefas[0], p.tarefas[1:]
             _mudar(pid, tarefas=resto, situacao=f"{t.tipo} de {t.alvo}")
@@ -1505,8 +1505,8 @@ def ampliar():
     a = ampliacao()
     if not a.ativo:
         return None, "desligada"
-    if claude.cota_cheia():
-        return None, f"cota do Claude em {claude.cota():.0%}"
+    if claude.quota_full():
+        return None, f"cota do Claude em {claude.quota():.0%}"
     if len(fila_revisao()) >= a.revisao_max:
         return None, f"{a.revisao_max}+ peças esperando revisão"
     if not lacunas():
@@ -1526,7 +1526,7 @@ def ampliar():
 def retomar():
     """Relógio da fila: com a cota abaixo do limite, volta à fila todo pedido do Claude ativo que ainda não
     terminou (parado pela cota, ou interrompido por reinício do painel). Os pausados (pessoa ou freio) ficam."""
-    if claude.cota_cheia():
+    if claude.quota_full():
         return []
     voltaram = []
     for p in pedidos():
@@ -1589,7 +1589,7 @@ def _chamadas_vivas():
 
 def _janelas_cota():
     try:
-        j = json.loads(claude.COTA.read_text())
+        j = json.loads(claude.QUOTA_FILE.read_text())
     except (OSError, ValueError):
         j = {}
     agora = time.time()
@@ -1616,9 +1616,9 @@ def painel():
     motivos = Counter(_categoria(r.get("motivo")) for r in feitos if r["evento"] == "descartada")
     revs = [r for r in reg if r.get("evento") == "revisao"]
     gastos = Counter()
-    for r in claude._registros():
+    for r in claude._records():
         if str(r.get("ep", "")) == f"fabrica-{hoje}":
-            gastos[r.get("motivo") or "outro"] += r.get("custo") or 0
+            gastos[r.get("reason") or "outro"] += r.get("cost") or 0
     acervo = Counter((f.motor, f.estado) for f in P.listar())
     sit = indice.situacao()
     thumbs = [{"ep": t["ep"], "estado": t["estado"], "inicio": t.get("inicio")} for t in tarefas
@@ -1629,7 +1629,7 @@ def painel():
                    "na_fila": p.id in na_fila, "etapa": p.etapa if p.id in rodando else {}, "situacao": p.situacao}
                   for p in hibridos],
         "chamadas": _chamadas_vivas(),
-        "cota": {"janelas": _janelas_cota(), "limite": claude.limite_cota(), "cheia": claude.cota_cheia()},
+        "cota": {"janelas": _janelas_cota(), "limite": claude.quota_limit(), "cheia": claude.quota_full()},
         "pedidos": [{"id": p.id, "tipo": p.tipo, "texto": p.texto[:120], "estado": p.estado, "quantidade": p.quantidade,
                      "pecas": len(p.pecas), "descartadas": p.descartadas, "ideias_na_fila": len(p.conceitos),
                      "alvos": len(p.alvos), "feitos": len(p.feitos), "gasto_usd": p.gasto_usd,
@@ -1639,8 +1639,8 @@ def painel():
                             "intencoes": (c.get("ficha") or {}).get("intencoes") or [], "conceito": c.get("conceito", "")[:300]}
                            for p in hibridos for c in p.conceitos],
         "hoje": {
-            "ideias": {"lotes": sum(1 for r in claude._registros() if r.get("ep") == f"fabrica-{hoje}"
-                                    and r.get("motivo") == "fabrica_ideias"),
+            "ideias": {"lotes": sum(1 for r in claude._records() if r.get("ep") == f"fabrica-{hoje}"
+                                    and r.get("reason") == "fabrica_ideias"),
                        "custo": round(gastos["fabrica_ideias"], 3)},
             "motion": {"tentativas": len(feitos), "geradas": sum(r["evento"] == "gerada" for r in feitos),
                        "descartadas": sum(r["evento"] == "descartada" for r in feitos),

@@ -138,14 +138,14 @@ def janela_do_bloco(mapa, bloco):
 def renderizar_bloco(ep, bloco, formatos=None):
     """Render só do bloco alterado: trecho [de, ate] → emenda no bruto → loudness e prévia de novo."""
     from esteira.estudio import compilar
-    from esteira.ia import local
+    from esteira.ai import local
     projeto = Projeto(pasta_ep(ep))
     mapa = json.loads((projeto.pasta / "estudio" / "mapa.json").read_text())
     est = estilo_do_mapa(projeto, mapa)
     de, ate = janela_do_bloco(mapa, bloco)
     feitos = []
     for fmt in formatos or [f.replace("x", ":") for f in ("16x9", "9x16") if (compilar.pasta(projeto, f.replace("x", ":")) / "render" / "bruto.mp4").exists()]:
-        local.liberar_gpu()
+        local.free_gpu()
         trecho = compilar.render_trecho(projeto, est, fmt, de, ate, f"bloco{bloco:03d}")
         compilar.emendar(projeto, fmt, de, ate, trecho)
         compilar.audio(projeto, est, fmt)
@@ -160,7 +160,7 @@ def produzir(ep, estilo_id=None, formatos=None, etapas=ETAPAS, sem_portao=False,
     """`intensidade` ({"sfx"|"motion"|"efeitos": "baixa"|"media"|"alta"}) vale só para esta produção."""
     from esteira.core import events
     from esteira.estudio import compilar, diretor, estilo, motor
-    from esteira.ia import local
+    from esteira.ai import local
     projeto = Projeto(pasta_ep(ep))
     est = estilo.carregar(estilo_id) if estilo_id else estilo_padrao(projeto)
     if not est:
@@ -194,7 +194,7 @@ def produzir(ep, estilo_id=None, formatos=None, etapas=ETAPAS, sem_portao=False,
             with events.stage(projeto, f"estudio-compilar-{fmt}"):
                 compilar.compilar(projeto, est, fmt)
         if "render" in etapas:
-            local.liberar_gpu()
+            local.free_gpu()
             with events.stage(projeto, f"estudio-render-{fmt}"):
                 compilar.render(projeto, fmt)
         if "audio" in etapas:

@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 from esteira.core import events
 from esteira.graficos import artigos, pecas, render
-from esteira.ia import local
+from esteira.ai import local
 
 DUR = {"caixas": 4.0, "capitulo": 3.2, "numero": 4.6, "comparacao": 7.0, "frase": 3.0, "fonte": 5.0}
 PESO = {"capitulo": 10, "citacao": 8, "nota": 5, "numero": 3, "frase": 2, "fonte": 1}
@@ -236,7 +236,7 @@ def candidatos(projeto):
         if f["ini"] is None or not RE_NUM.search(f["texto"]):
             continue
         ctx = " ".join(x["texto"] for x in frases[max(i - 1, 0):i + 2])
-        r = local.perguntar(local.prompt("grafico_numero", fala=f["texto"], contexto=ctx,
+        r = local.ask(local.prompt("grafico_numero", fala=f["texto"], contexto=ctx,
                                          fontes="; ".join(f"{k}: {_ref(x)}" for k, x in enumerate(fontes)) or "nenhuma"),
                             Numero)
         if r and r.usar and r.numero and _numero_na_fala(r.numero, f["texto"]):
@@ -269,7 +269,7 @@ def candidatos(projeto):
             continue
         k0 = mapa[min(nota["antes_da_fala"], len(mapa) - 1)] if mapa else 0
         falas = " ".join(x["texto"] for x in frases[k0:k0 + 3])
-        r = local.perguntar(local.prompt("grafico_nota", nota=nota["texto"], falas=falas), Nota)
+        r = local.ask(local.prompt("grafico_nota", nota=nota["texto"], falas=falas), Nota)
         if not r or r.tipo not in ("lista", "numero", "comparacao", "frase", "fonte"):
             continue
         d = {"lista": lambda: {"itens": [i.model_dump() for i in r.itens], "titulo": r.titulo, "rotulo": r.rotulo},
@@ -334,13 +334,13 @@ def _preparar_citacao(cand, fontes, projeto):
         return tarja
     cands = artigos.candidatos_trecho(pdf, cand["fala"])
     if len(cands) < 2:
-        r = local.perguntar(local.prompt("termos_en", fala=cand["fala"]), Termos)
+        r = local.ask(local.prompt("termos_en", fala=cand["fala"]), Termos)
         if r:
             cands = artigos.candidatos_trecho(pdf, cand["fala"], r.termos)
     if not cands:
         return tarja
     lista = "\n".join(f"{k}. {t[2][:300]}" for k, t in enumerate(cands))
-    r = local.perguntar(local.prompt("grafico_citacao", fala=cand["fala"], estudo=_ref(f), trechos=lista), Trecho)
+    r = local.ask(local.prompt("grafico_citacao", fala=cand["fala"], estudo=_ref(f), trechos=lista), Trecho)
     if not r or not 0 <= r.indice < len(cands):
         return tarja
     _, pagina, trecho = cands[r.indice]

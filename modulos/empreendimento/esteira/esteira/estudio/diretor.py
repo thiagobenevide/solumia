@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from esteira.bancada import CENAS, NUMERICAS, Cena, normalizar, numeros
 from esteira.core import events
-from esteira.ia import local
+from esteira.ai import local
 
 # cenas só de motion (fundo próprio, cobrem a mídia); as outras ficam sobre a mídia
 TAKEOVER = {"contador", "barras_comparacao", "versus", "linha_do_tempo", "pergunta_destaque", "titulo_capitulo",
@@ -95,16 +95,16 @@ def escolher(frases, estilo, marcas=None, gat=None):
                                 "Responda com essa cena e preencha só a âncora, o título e os valores ditos.")
             base.nome = "estudio_cena"
             perm = permitidas + [cena]
-            r = local.perguntar(base, Cena, max_tokens=400, operacao="studio_scene")
+            r = local.ask(base, Cena, max_tokens=400, operation="studio_scene")
             ok = r and not problemas(f["texto"], r, perm)
             escolhas.append((i, _marcada(f["texto"], cena, r if ok else None), por_fixo))
             continue
-        r = local.perguntar(base, Cena, max_tokens=400, operacao="studio_scene")
+        r = local.ask(base, Cena, max_tokens=400, operation="studio_scene")
         erros = problemas(f["texto"], r, permitidas) if r else ["sem resposta"]
         if erros and r:
             texto = local.Prompt(f"{base}\n\nSua resposta anterior foi recusada: {'; '.join(erros)}. Corrija.")
             texto.nome = "estudio_cena"
-            r = local.perguntar(texto, Cena, max_tokens=400, operacao="studio_scene")
+            r = local.ask(texto, Cena, max_tokens=400, operation="studio_scene")
             erros = problemas(f["texto"], r, permitidas) if r else ["sem resposta"]
         if erros:
             falhas.append(i)
@@ -128,12 +128,12 @@ def _escalar(frases, falhas, permitidas, catalogo, estilo):
     teto = max(1, int(len(frases) * CLAUDE_MAX))
     if not falhas or len(falhas) > teto * 3:
         return {}
-    from esteira.ia import claude
+    from esteira.ai import claude
     alvo = falhas[:teto]
     dossie = (f"Guia do canal: {estilo.guia}\nCenas permitidas:\n{catalogo}\n\nPara cada frase, escolha a cena, a âncora "
               "(palavras exatas da frase), um título curto e só números ditos. Responda na mesma ordem.\n"
               + "\n".join(f"{n + 1}. {frases[i]['texto']}" for n, i in enumerate(alvo)))
-    r = claude.consultar(dossie, _Lote, {"claude": {}}, "estudio", "estudio_cena")
+    r = claude.query(dossie, _Lote, {"claude": {}}, "estudio", "estudio_cena")
     if not r or len(r.cenas) != len(alvo):
         return {}
     return {i: (c, "claude") for i, c in zip(alvo, r.cenas, strict=True)

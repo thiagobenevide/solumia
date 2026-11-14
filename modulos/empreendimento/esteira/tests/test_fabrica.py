@@ -123,7 +123,7 @@ def test_ajuste_que_nao_passa_devolve_a_versao_anterior(ambiente, monkeypatch):
 
 def test_cota_da_assinatura_para_a_fabrica(ambiente, monkeypatch):
     _claude(monkeypatch, [_resposta()])
-    monkeypatch.setattr(F.claude, "cota", lambda: 0.92)
+    monkeypatch.setattr(F.claude, "quota", lambda: 0.92)
     p = F.novo_pedido("livre", "x", quantidade=1)
     assert "cota do Claude em 92%" in F.rodar(p.id, visual=False).situacao and not F.pedido(p.id).pecas
 
@@ -172,20 +172,20 @@ def test_retomar_volta_a_fila_quando_a_cota_libera(ambiente, monkeypatch):
     b = F.novo_pedido("livre", "b", quantidade=1)
     F._mudar(a.id, situacao="cota do Claude em 90%: volta quando a janela virar")
     F.pausar(b.id)
-    monkeypatch.setattr(F.claude, "cota", lambda: 0.95)
+    monkeypatch.setattr(F.claude, "quota", lambda: 0.95)
     assert F.retomar() == []
-    monkeypatch.setattr(F.claude, "cota", lambda: 0.10)
+    monkeypatch.setattr(F.claude, "quota", lambda: 0.10)
     assert F.retomar() == [a.id]  # o pausado fica parado
 
 
 def test_painel_mostra_etapa_quem_fez_e_categorias(ambiente, monkeypatch, tmp_path):
     from esteira.core import trace
-    from esteira.ia import claude
+    from esteira.ai import claude
     from esteira.web import fila
     monkeypatch.setattr(F, "GUIA_N1_EC", ambiente / "GUIA_N1_EC.md")
     (ambiente / "GUIA_N1_EC.md").write_text("# guia\n\n## Lições\n- não empilhe itens (peça x)\n")
     monkeypatch.setattr(trace, "DIR", tmp_path / "live")
-    monkeypatch.setattr(claude, "_registros", lambda: [])
+    monkeypatch.setattr(claude, "_records", lambda: [])
     p = F.pedido_hibrido("ideias", 8, "finanças")
     F._mudar(p.id, conceitos=[{"ficha": {"id": "ideia_a", "descricao": "uma ideia"}, "conceito": "c"}],
              etapa=F._etapa("n1", "ideia_a", 2))

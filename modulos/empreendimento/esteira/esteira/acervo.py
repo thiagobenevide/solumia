@@ -273,7 +273,7 @@ def descrever(limite=200):
     """Descreve com o modelo de visão local (sem tokens do Claude) os itens que ainda não têm descrição:
     a busca no acervo passa a achar a mídia pelo que aparece nela, não só pelo termo que a encontrou."""
     from pydantic import BaseModel, Field
-    from esteira.ia import local
+    from esteira.ai import local
 
     class Descricao(BaseModel):
         descricao: str = Field(max_length=220)
@@ -285,7 +285,7 @@ def descrever(limite=200):
         mini = miniatura(it)
         if not mini.exists():
             continue
-        r = local.perguntar(local.prompt("acervo_descrever"), Descricao, modelo=local.VISAO, imagens=[mini],
+        r = local.ask(local.prompt("acervo_descrever"), Descricao, model=local.VISION, images=[mini],
                             max_tokens=160)
         if r:
             salvar_descricao(it["id"], r.descricao, r.tags)

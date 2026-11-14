@@ -56,7 +56,7 @@ def _folha(id_):
 def propor(id_, nicho=""):
     """Pede ao Claude a identidade do estilo a partir das referências; grava a versão nova e devolve o estilo."""
     from esteira.estudio import fontes
-    from esteira.ia import claude
+    from esteira.ai import claude
     atual = E.carregar(id_)
     folha = _folha(id_)
     dossie = (
@@ -74,8 +74,8 @@ def propor(id_, nicho=""):
            if folha else "Sem referências visuais: proponha a partir do nicho.\n")
         + "Regras: cores em #rrggbb com contraste alto entre texto e fundo; 'destaque' é a cor de ênfase; 5 a 8 "
         "exemplos frase→cena típicos do nicho; takeover_max entre 0,35 e 0,65 (muito motion graphics, mas com respiro).")
-    r = claude.consultar(dossie, Proposta, {"claude": {}}, f"estilo:{id_}", "estudio_identidade",
-                         imagem=str(folha) if folha else None)
+    r = claude.query(dossie, Proposta, {"claude": {}}, f"estilo:{id_}", "estudio_identidade",
+                         image=str(folha) if folha else None)
     if not r:
         raise RuntimeError("o Claude não respondeu (teto de custo ou erro); tente de novo")
     novo = atual.model_copy(update={

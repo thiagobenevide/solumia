@@ -240,7 +240,7 @@ def _numeros(texto):
 
 def sugerir(projeto, ep, estado, pedido, motor="claude", tipo="grafico"):
     """Devolve (estado_novo, explicacao, avisos) ou levanta ValueError."""
-    from esteira.ia import claude, local
+    from esteira.ai import claude, local
     thumb = tipo == "thumb"
     if thumb:
         e = _limpo_thumb(projeto, estado)
@@ -270,9 +270,9 @@ def sugerir(projeto, ep, estado, pedido, motor="claude", tipo="grafico"):
     trace.node(f"editor:{ep}", "editor", pedido[:120])
     try:
         if motor == "local":
-            r = local.perguntar(dossie, Sugestao, temperatura=0.4, max_tokens=2500, operacao="editor")
+            r = local.ask(dossie, Sugestao, temperature=0.4, max_tokens=2500, operation="editor")
         else:
-            r = claude.consultar(dossie, Sugestao, projeto.cfg, ep, f"editor: {pedido[:40]}")
+            r = claude.query(dossie, Sugestao, projeto.cfg, ep, f"editor: {pedido[:40]}")
     finally:
         trace.node(None, None)
     if not r:

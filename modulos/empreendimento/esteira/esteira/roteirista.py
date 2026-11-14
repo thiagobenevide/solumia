@@ -23,7 +23,7 @@ import requests
 from pydantic import BaseModel, Field
 
 from esteira.core import trace
-from esteira.ia import local
+from esteira.ai import local
 from esteira.projeto import RAIZ
 
 UA = {"User-Agent": "esteira-dark/1.0 (roteiros com fontes abertas)"}
@@ -191,7 +191,7 @@ def fatos(linha, fontes):
             continue
         lista = "\n".join(f"{i}. (p.{p}) {txt}" for i, (_, p, txt) in enumerate(frases))
         trace.step("fatos", f"{len(frases)} frases com números de {rotulo(f)}")
-        r = local.perguntar(local.prompt("roteiro_trechos", tema=linha["titulo"], gancho=linha["gancho"],
+        r = local.ask(local.prompt("roteiro_trechos", tema=linha["titulo"], gancho=linha["gancho"],
                                          estudo=f"{rotulo(f)}, {f['titulo']}", frases=lista),
                             Achados, max_tokens=900)
         for a in (r.achados if r else []):
@@ -248,13 +248,13 @@ def escrever(linha, fatos_, canal):
         for tentativa in (1, 2, 3):
             trace.step("partes", f"parte {i}/{len(estrutura)}: {nome} · ~{palavras} palavras · tentativa {tentativa}")
             trace.progress(i, len(estrutura), nome)
-            r = local.perguntar(local.prompt(
+            r = local.ask(local.prompt(
                 "roteiro_parte", canal=canal, titulo=linha["titulo"], gancho=linha["gancho"], parte_n=i,
                 total=len(estrutura), parte_nome=nome, funcao=funcao, palavras=palavras, n_falas=n_falas,
                 anterior=f"Última fala da parte anterior: \"{anterior}\"" if anterior else "", fatos=lista)
                 + ("\n(Atenção: na tentativa anterior havia número fora dos FATOS ou o texto ficou curto; "
                    f"escreva {n_falas} falas de 35 a 60 palavras cada.)" if tentativa > 1 else ""),
-                Parte, temperatura=0.4, max_tokens=2200)
+                Parte, temperature=0.4, max_tokens=2200)
             trace.step("validar", f"parte {i}: números de cada fala contra os fatos; tamanho ≥ 70% de {palavras}")
             if r and all(_fala_ok(f, fatos_) for f in r.falas) and \
                     sum(len(f.texto.split()) for f in r.falas) >= 0.7 * palavras:
@@ -317,7 +317,7 @@ modo: dark
 
 > [!info] Vídeo {linha['n']} · Fio {linha['fio']} · Formato {fmt} · Termômetro: **{linha['evidencia']}**
 > **Gancho do plano:** {linha['gancho']}
-> Gerado por Python + LLM local ({local.TEXTO}) com fontes de acesso aberto; ~{palavras} palavras de fala. Revisar o texto antes de gravar.
+> Gerado por Python + LLM local ({local.TEXT}) com fontes de acesso aberto; ~{palavras} palavras de fala. Revisar o texto antes de gravar.
 
 ## Leitura antes de gravar
 

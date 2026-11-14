@@ -4,7 +4,7 @@
   "claude" (every LLM question goes to Claude; Whisper, SDXL and render stay on the machine). `--engine` on the
   command line takes priority.
 - `operations`: per operation (cuts, curation, evaluation…), the engine ("default", "local", "claude") and the
-  local text and/or vision model. Empty = the default (`local.TEXTO` / `local.VISAO`).
+  local text and/or vision model. Empty = the default (`local.TEXT` / `local.VISION`).
 - `claude_model` and the cost caps: override `[claude]` from config.toml.
 
 The operation ids are the stage names and the labels/descriptions are panel text (pt-BR).

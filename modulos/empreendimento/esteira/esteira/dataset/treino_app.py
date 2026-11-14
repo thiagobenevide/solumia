@@ -28,8 +28,8 @@ SIGLA = {"effectcraft": "ec", "filmcraft": "fc", "photocraft": "pc"}
 
 
 def _pasta():
-    from esteira.ia import llama
-    return llama.MODELOS / "adaptadores"
+    from esteira.ai import llama
+    return llama.MODELS_DIR / "adaptadores"
 
 
 def bilhoes(base: str) -> float | None:
@@ -61,7 +61,7 @@ def faltam(app: str) -> dict[str, int]:
 def treinar(app: str, base: str = BASE, epocas: float = 2.0, forcar: bool = False) -> dict:
     from esteira.core import locks
     from esteira.estudio import treino
-    from esteira.ia import local
+    from esteira.ai import local
     from esteira.projeto import RAIZ
     if (b := bilhoes(base)) is None or b > MAX_B:
         raise SystemExit(f"base {base}: só se treinam modelos de até {MAX_B}B")
@@ -87,37 +87,37 @@ def treinar(app: str, base: str = BASE, epocas: float = 2.0, forcar: bool = Fals
         raise SystemExit(f"{app}: a exportação {exp.name} não tem casos de treino")
     if "machine" not in locks._held:  # o `./dark` já ocupa a vaga ao iniciar; segunda trava no mesmo processo trava
         locks.acquire("machine", f"treino {nome}")
-    local.liberar_gpu()
+    local.free_gpu()
     parados = _parar_servicos()  # worker da plataforma (+ voz XTTS) ocupa ~3 GB de VRAM
     try:
-        subprocess.run([str(py), str(RAIZ / "esteira/ia/treinar_lora.py"), str(dados), str(saida), "--base", base,
-                        "--epocas", str(epocas), "--so-adaptador"], check=True,
+        subprocess.run([str(py), str(RAIZ / "esteira/ai/train_lora.py"), str(dados), str(saida), "--base", base,
+                        "--epochs", str(epocas), "--adapter-only"], check=True,
                        env={**__import__("os").environ, "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
     finally:
         for s in parados:
             subprocess.run(["systemctl", "--user", "start", s], check=False)
-    info = json.loads((saida / "treino.json").read_text())
+    info = json.loads((saida / "training.json").read_text())
     destino = _pasta() / f"{nome}.gguf"
     destino.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(info["adaptador"], destino)
+    shutil.copy(info["adapter"], destino)
     from esteira.n1 import effectcraft, filmcraft, photocraft
     manifesto = {"nome": nome, "app": app, "base": base, "base_gguf": BASE_GGUF, "em": datetime.now().isoformat(),
                  "exportacao": exp.name, "hash_exportacao": X.hash_exportacao(exp), "casos_treino": n,
                  "n1": {"filmcraft": filmcraft.VERSAO, "photocraft": photocraft.VERSAO,
                         "effectcraft": effectcraft.VERSAO}[app],
-                 "perda": info.get("perda"), "perda_val": info.get("perda_val"), "forcado": forcar, "promovido": False}
+                 "perda": info.get("loss"), "perda_val": info.get("val_loss"), "forcado": forcar, "promovido": False}
     destino.with_suffix(".json").write_text(json.dumps(manifesto, ensure_ascii=False, indent=1))
     return manifesto
 
 
 def _base_gguf() -> Path:
-    from esteira.ia import llama
-    return next((llama.MODELOS / BASE_GGUF).glob("*.gguf")) if (llama.MODELOS / BASE_GGUF).is_dir() \
-        else llama.MODELOS / f"{BASE_GGUF}.gguf"
+    from esteira.ai import llama
+    return next((llama.MODELS_DIR / BASE_GGUF).glob("*.gguf")) if (llama.MODELS_DIR / BASE_GGUF).is_dir() \
+        else llama.MODELS_DIR / f"{BASE_GGUF}.gguf"
 
 
 def _escrever_presets(entradas: dict[str, Path]) -> None:
-    from esteira.ia import llama
+    from esteira.ai import llama
     base = next(p for p in _base_gguf().parent.glob("*.gguf") if not p.name.startswith("mmproj")) \
         if _base_gguf().parent.is_dir() else _base_gguf()
     linhas = ["; gerado por esteira/dataset/treino_app.py: base + adaptador LoRA por app", ""]
@@ -128,7 +128,7 @@ def _escrever_presets(entradas: dict[str, Path]) -> None:
 
 
 def _ler_presets() -> dict[str, Path]:
-    from esteira.ia import llama
+    from esteira.ai import llama
     if not llama.PRESETS.exists():
         return {}
     saida, atual = {}, None
@@ -148,14 +148,14 @@ def promovido(app: str) -> str | None:
 def promover(app: str, nome: str, n: int | None = None) -> dict:
     """Portão de promoção: base × candidato no ouro das tarefas da app (bancada). Promove só se ganhar."""
     from esteira import bancada
-    from esteira.ia import llama
+    from esteira.ai import llama
     adaptador = _pasta() / f"{nome}.gguf"
     if not adaptador.exists():
         raise SystemExit(f"adaptador inexistente: {adaptador}")
     presets = _ler_presets()
     candidato = f"{nome}-candidato"
     _escrever_presets({**presets, candidato: adaptador})
-    if not llama.reiniciar():
+    if not llama.restart():
         raise SystemExit("o roteador não voltou com o preset novo")
     tarefas = [f"n1_{t}" for t in TAREFAS_APP[app] if bancada.casos(f"n1_{t}")]
     if not tarefas:
@@ -168,7 +168,7 @@ def promover(app: str, nome: str, n: int | None = None) -> dict:
     if ganhou:
         presets[f"{SIGLA[app]}-atual"] = adaptador
     _escrever_presets(presets)
-    llama.reiniciar()
+    llama.restart()
     man = adaptador.with_suffix(".json")
     if man.exists():
         d = json.loads(man.read_text())

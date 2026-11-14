@@ -43,17 +43,17 @@ def _versao_node():
 
 
 def estado():
-    from esteira.ia import llama, local
-    ids = {m["id"] for m in llama.modelos() or []}
+    from esteira.ai import llama, local
+    ids = {m["id"] for m in llama.models() or []}
     return {
         "node": _versao_node(),
         "pacotes": (MOTOR / "node_modules" / "hyperframes").is_dir(),
         "chromium": _chromium(),
         "ffmpeg": bool(shutil.which("ffmpeg")),
         "opencv": _opencv(),  # rosto no modo apresentador
-        "llama": llama.modelos() is not None,
-        "modelo_texto": local.TEXTO if local.TEXTO in ids else None,
-        "modelo_visao": local.VISAO if local.VISAO in ids else None,
+        "llama": llama.models() is not None,
+        "modelo_texto": local.TEXT if local.TEXT in ids else None,
+        "modelo_visao": local.VISION if local.VISION in ids else None,
     }
 
 

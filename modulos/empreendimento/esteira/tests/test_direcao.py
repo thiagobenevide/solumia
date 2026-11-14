@@ -91,12 +91,12 @@ def _ia_falsa(monkeypatch, vistos):
         if num:
             enc["valores"] = [{"rotulo": "dado", "valor": num.group(0)}]
         return D.Preenchimento(encaixes=enc)
-    monkeypatch.setattr(D.local, "perguntar", falsa)
+    monkeypatch.setattr(D.local, "ask", falsa)
 
 
 def test_dirigir_monta_o_mapa_do_kit(tmp_path, monkeypatch):
-    from esteira.ia import embeddings
-    monkeypatch.setattr(embeddings, "vetores", lambda textos, prefixo="": None)
+    from esteira.ai import embeddings
+    monkeypatch.setattr(embeddings, "vectors", lambda textos, prefixo="": None)
     vistos = []
     _ia_falsa(monkeypatch, vistos)
     frases = [{"texto": "Hoje 81% das famílias estão endividadas.", "ini": 0.2, "fim": 3.0, "destaques": []},
@@ -165,5 +165,5 @@ def test_recusa_cta_sem_chamada_e_barras_sem_numero():
 
 def test_conferencia_da_llm_devolve_o_problema(monkeypatch):
     f = P.carregar("conceito_icone")
-    monkeypatch.setattr(D.local, "perguntar", lambda *a, **k: D.Conferencia(fiel=False, problema="custo trocado"))
+    monkeypatch.setattr(D.local, "ask", lambda *a, **k: D.Conferencia(fiel=False, problema="custo trocado"))
     assert "custo trocado" in D.conferir(f, {"titulo": "Custo da *avalanche*"}, {"texto": "espalhar custa caro"}, "")[0]

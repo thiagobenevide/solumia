@@ -179,7 +179,7 @@ def lista_episodios(canal: str = ""):
 @router.get("/episodios/{ep}")
 def episodio(ep: str):
     from esteira import producao
-    from esteira.ia import claude
+    from esteira.ai import claude
     pasta = painel._pasta(ep)
     proj = Projeto(pasta)
     rot = _json(pasta / "roteiro.json", {}) or {}
@@ -190,7 +190,7 @@ def episodio(ep: str):
     final, thumb = painel.final_do_ep(pasta), pasta / "thumb.png"
     modo = producao.modo(proj)
     camera = producao.info_camera(proj) if modo == "apresentador" and producao.camera(proj) else None
-    return {**_resumo(pasta), "etapas": etapas, "eventos": evs[-40:][::-1], "gasto_claude": claude.gasto(ep)[0],
+    return {**_resumo(pasta), "etapas": etapas, "eventos": evs[-40:][::-1], "gasto_claude": claude.spent(ep)[0],
             "video": _video_leve(ep, final),
             "thumb": f"/arq/{ep}/thumb.png?v={_v(thumb)}" if thumb.exists() else None,
             "vertical": proj.cfg["video"].get("formato", "16:9") == "9:16", "modo": modo,
@@ -551,9 +551,9 @@ class RodarBancada(BaseModel):
 def ver_bancada():
     """Gabarito (casos por tarefa), modelos do roteador e o último resultado da bancada."""
     from esteira import bancada
-    from esteira.ia import llama
+    from esteira.ai import llama
     return {"gabarito": {t: len(bancada.casos(t)) for t in bancada.TAREFAS},
-            "modelos": [m["id"] for m in llama.modelos() or []], "resultado": bancada.ultimo()}
+            "modelos": [m["id"] for m in llama.models() or []], "resultado": bancada.ultimo()}
 
 
 @router.post("/bancada/rodar")

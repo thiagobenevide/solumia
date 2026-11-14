@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from esteira import acervo
 from esteira.core import events
-from esteira.ia import local
+from esteira.ai import local
 
 
 class Nota(BaseModel):
@@ -43,8 +43,8 @@ def _avaliar(projeto, cenas):
         if antes:
             r, reusadas = Nota(nota=antes["nota"], problema=antes["problema"] or ""), reusadas + 1
         else:
-            r = local.perguntar(local.prompt("avaliar", texto=c["texto"], busca=termo),
-                                Nota, modelo=local.VISAO, imagens=[_quadro(projeto, c)], max_tokens=120)
+            r = local.ask(local.prompt("avaliar", texto=c["texto"], busca=termo),
+                                Nota, model=local.VISION, images=[_quadro(projeto, c)], max_tokens=120)
             if r and c.get("midia_id"):
                 acervo.salvar_avaliacao(c["midia_id"], termo, r.nota, r.problema)
         if r:
@@ -57,7 +57,7 @@ def _avaliar(projeto, cenas):
 
 def _claude(projeto, plano, fracas):
     """Cenas que o modelo local não resolveu: uma folha com todas para o Claude sugerir novos termos."""
-    from esteira.ia import claude
+    from esteira.ai import claude
     from esteira.midia import folha
 
     class Troca(BaseModel):
@@ -76,12 +76,12 @@ def _claude(projeto, plano, fracas):
     linhas = "\n".join(f"{c['id']}: fala \"{c['texto'][:140]}\" | busca atual \"{c.get('busca_en')}\" | "
                        f"problema: {c.get('problema_midia', '')}" for c in fracas)
     canal = getattr(projeto, "canal", "") or "documentário"
-    r = claude.consultar(
+    r = claude.query(
         f"Canal {canal}. A folha mostra o fundo atual de cenas cujas imagens não combinaram com a fala "
         f"(número da cena no canto). Para cada cena, proponha uma busca melhor para Pexels/Pixabay: 2-4 palavras "
         f"em inglês, concretas e filmáveis, que ilustrem a ideia da fala sem ser literal demais, e o tipo "
         f"(video para ambiente/ação, imagem para objeto/pessoa/documento).\n\n{linhas}",
-        Resposta, projeto.cfg, projeto.ep, f"mídia: {len(fracas)} cenas fracas", imagem=destino)
+        Resposta, projeto.cfg, projeto.ep, f"mídia: {len(fracas)} cenas fracas", image=destino)
     if not r:
         return False
     por_id = {c["id"]: c for c in plano["cenas"]}
@@ -111,7 +111,7 @@ def avaliar(projeto, rodadas=2, minimo=3):
                 c["busca_en"] = s
             c.pop("nota_midia", None)
         projeto.salvar_json("plano.json", plano)
-        local.liberar_gpu()
+        local.free_gpu()
         buscar(projeto, refazer=True, cenas=[c["id"] for c in fracas])
         plano = projeto.carregar_json("plano.json")
         ids = {c["id"] for c in fracas}

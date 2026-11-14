@@ -115,7 +115,7 @@ function chamadas(lista) {
   $("chamadas").innerHTML = lista.length ? lista.map(c => `<details data-id="${esc(c.id)}" ${abertas.has(String(c.id)) ? "open" : ""} class="rounded-lg ring-1 ring-white/10 px-3 py-2">
       <summary class="cursor-pointer flex flex-wrap gap-x-3 text-xs"><span class="${c.ok ? "text-emerald-400" : "text-rose-400"}">${c.ok ? "ok" : "falhou"}</span>
         <span class="${c.engine === "claude" ? "text-violet-300" : "text-teal-300"}">${esc(c.engine)}</span><span class="text-white">${esc(c.name)}</span>
-        <span class="font-mono text-slate-500">${esc(c.model)} · ${c.seconds}s${c.tokens_saida ? " · " + c.tokens_saida + " tok" : ""}${c.tok_s ? " · " + c.tok_s + " tok/s" : ""}${c.custo_usd ? " · US$ " + c.custo_usd.toFixed(4) : ""} · ${hora(c.t)}</span>
+        <span class="font-mono text-slate-500">${esc(c.model)} · ${c.seconds}s${c.output_tokens ? " · " + c.output_tokens + " tok" : ""}${c.tok_s ? " · " + c.tok_s + " tok/s" : ""}${c.custo_usd ? " · US$ " + c.custo_usd.toFixed(4) : ""} · ${hora(c.t)}</span>
         ${c.error ? `<span class="text-rose-300">${esc(c.error)}</span>` : ""}</summary>
       <div class="grid md:grid-cols-2 gap-3 mt-2"><pre class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${esc(c.input)}</pre>
         <pre class="text-[11px] font-mono text-slate-200 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${esc(c.output)}</pre></div></details>`).join("")

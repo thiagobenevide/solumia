@@ -70,13 +70,13 @@ def parar(pid_id: str):
 @router.get("/opcoes")
 def opcoes():
     from esteira.core import options
-    from esteira.ia import local
+    from esteira.ai import local
     return {"opcoes": options.read(), "claude": options.claude(painel._cfg().get("claude", {})),
             "operacoes": [{"id": k, "nome": nome, "descricao": desc, "tipos": tipos, "atual": options.operation(k)}
                           for k, (nome, desc, tipos) in options.OPERATIONS.items()],
             "modelos_claude": [{"id": i, "nome": n, "descricao": d} for i, n, d in options.MODELS],
             "sugestoes": [{"nome": n, "tipo": t, "descricao": d} for n, t, d in options.SUGGESTIONS],
-            "locais": painel._modelos_locais(), "padrao": {"text": local.TEXTO, "vision": local.VISAO}}
+            "locais": painel._modelos_locais(), "padrao": {"text": local.TEXT, "vision": local.VISION}}
 
 
 class Operation(BaseModel):
@@ -139,15 +139,15 @@ def baixando():
 
 @router.get("/custos")
 def custos():
-    from esteira.ia import claude
-    regs = list(reversed(claude._registros()))
+    from esteira.ai import claude
+    regs = list(reversed(claude._records()))
     por_ep = {}
     for r in regs:
-        por_ep[r["ep"]] = por_ep.get(r["ep"], 0) + r["custo"]
+        por_ep[r["ep"]] = por_ep.get(r["ep"], 0) + (r.get("cost") or 0)
     hoje = datetime.now().date().isoformat()
     cfg = painel._cfg().get("claude", {})
     return {"registros": regs[:200], "n_registros": len(regs), "total": sum(por_ep.values()),
-            "hoje": sum(r["custo"] for r in regs if r["t"].startswith(hoje)),
+            "hoje": sum((r.get("cost") or 0) for r in regs if r["t"].startswith(hoje)),
             "por_episodio": [{"ep": ep, "custo": v} for ep, v in sorted(por_ep.items(), key=lambda x: -x[1])],
             "teto_dia_usd": cfg.get("teto_dia_usd", 3), "teto_episodio_usd": cfg.get("teto_episodio_usd", 1),
             "modelo": cfg.get("modelo", "")}

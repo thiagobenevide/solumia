@@ -19,8 +19,8 @@ from typing import Literal
 import requests
 from pydantic import BaseModel, Field, ValidationError
 
-from esteira.ia import llama
-from esteira.ia.local import _data_url, prompt
+from esteira.ai import llama
+from esteira.ai.local import _data_url, prompt
 from esteira.projeto import DADOS, PROJETOS
 
 PASTA = DADOS / "bancada"
@@ -315,16 +315,16 @@ def _chamar(modelo, texto, esquema, imagens=None, max_tokens=1200):
 
 def rodar(modelos, tarefas=None, n=None, progresso=print):
     """Roda cada modelo em cada tarefa; devolve e grava o resultado."""
-    if not llama.servidor():
+    if not llama.server():
         raise RuntimeError("llama-server fora do ar")
-    disponiveis = {m["id"]: m for m in llama.modelos() or []}
+    disponiveis = {m["id"]: m for m in llama.models() or []}
     tarefas = tarefas or list(TAREFAS)
     res = {"data": datetime.now().isoformat(timespec="seconds"), "modelos": {}}
     for modelo in modelos:
         if modelo not in disponiveis:
             progresso(f"{modelo}: ausente no roteador, pulado")
             continue
-        llama.descarregar()
+        llama.unload()
         t0 = time.monotonic()
         try:
             _chamar(modelo, "Responda ok.", Legenda)  # carrega o modelo
@@ -333,7 +333,7 @@ def rodar(modelos, tarefas=None, n=None, progresso=print):
             continue
         info = {"carga_s": round(time.monotonic() - t0, 1), "vram_gb": _vram_gb(), "tarefas": {}}
         for tarefa in tarefas:
-            if tarefa == "visao" and not llama.visao(disponiveis[modelo]):
+            if tarefa == "visao" and not llama.vision(disponiveis[modelo]):
                 continue
             lista = casos(tarefa)[:n]
             if not lista:
@@ -372,7 +372,7 @@ def rodar(modelos, tarefas=None, n=None, progresso=print):
         # grava a cada modelo: uma falha no meio não perde o que já foi medido
         RESULTADOS.mkdir(parents=True, exist_ok=True)
         (RESULTADOS / f"{res['data'].replace(':', '-')}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1))
-    llama.descarregar()
+    llama.unload()
     return res
 
 

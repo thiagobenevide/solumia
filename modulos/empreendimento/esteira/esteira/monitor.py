@@ -66,8 +66,8 @@ def _temp_cpu():
 
 def _ollama():
     """Modelos na VRAM agora (llama.cpp; a chave `ollama` ficou pelo app e o grafo). Tamanho = o do GGUF."""
-    from esteira.ia import llama
-    ms = llama.modelos()
+    from esteira.ai import llama
+    ms = llama.models()
     if ms is None:
         return None
     return [{"modelo": m["id"], "vram_gb": llama.gb(m["id"])} for m in ms if m["status"]["value"] == "loaded"]

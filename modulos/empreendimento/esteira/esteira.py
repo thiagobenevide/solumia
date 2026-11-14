@@ -162,7 +162,7 @@ def _diagnose(p, name, error):
     import traceback
 
     from esteira.core import status
-    from esteira.ia import claude
+    from esteira.ai import claude
     from pydantic import BaseModel
 
     class Diagnosis(BaseModel):
@@ -170,7 +170,7 @@ def _diagnose(p, name, error):
         action: str
 
     log = "\n".join(f"{e['stage']} {e['kind']} {e['message'][:160]}" for e in status.events(p.pasta)[-25:])
-    d = claude.consultar(f"The stage '{name}' of the video pipeline failed.\n\nTraceback:\n"
+    d = claude.query(f"The stage '{name}' of the video pipeline failed.\n\nTraceback:\n"
                          f"{traceback.format_exc(limit=8)[-2500:]}\n\nLatest events:\n{log}\n\n"
                          "State the likely cause (1 sentence) and the concrete action for the operator "
                          "(1-2 sentences). Write both in Brazilian Portuguese.",
@@ -256,11 +256,11 @@ def cmd_bench(a):
         print(f"  answer key: {bancada.gerar()}")
         return
     if a.action == "run":
-        from esteira.ia import llama
+        from esteira.ai import llama
         models = _csv(a.models)
         if models is None:
             models = []
-            for m in llama.modelos() or []:
+            for m in llama.models() or []:
                 models.append(m["id"])
         bancada.rodar(models, _csv(a.tasks), a.n, progresso=_print_line)
     print("\n".join(bancada.tabela()))

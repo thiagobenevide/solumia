@@ -650,8 +650,8 @@ class _Chamada extends StatelessWidget {
           [
             if (!ok) 'falhou',
             if (c['cache'] == true) 'do cache',
-            if (c['tokens_saida'] != null || c['tokens'] != null)
-              '${c['tokens_saida'] ?? c['tokens']} tokens',
+            if (c['output_tokens'] != null || c['tokens'] != null)
+              '${c['output_tokens'] ?? c['tokens']} tokens',
             if (c['seconds'] != null) '${(c['seconds'] as num).toStringAsFixed(1)} s',
             if (c['tok_s'] != null) '${c['tok_s']} tok/s',
             if (c['custo'] != null) dolares(c['custo'] as num, casas: 4),

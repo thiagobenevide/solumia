@@ -1,5 +1,5 @@
-"""Tempos de palavra precisos por alinhamento forçado: o Whisper diz O QUE foi dito; o alinhamento (CTC, `ia/
-alinhar_ctc.py` no `.venv-img`) diz ONDE, com erro de ~20–40 ms contra 100–300 ms do Whisper. Usado só pelas
+"""Tempos de palavra precisos por alinhamento forçado: o Whisper diz O QUE foi dito; o alinhamento (CTC, `ai/
+ctc_align.py` no `.venv-img`) diz ONDE, com erro de ~20–40 ms contra 100–300 ms do Whisper. Usado só pelas
 bordas dos cortes (`cortes._intervalos`, `estudio/corte.analisar`).
 
 Sem `.venv-img`, sem o modelo ou com erro: fica o tempo do Whisper (o núcleo de `bordas.py` ainda corrige pelo som)
@@ -64,15 +64,15 @@ def combinar(palavras, tempos):
 
 
 def _rodar(audio, palavras):
-    from esteira.ia.local import liberar_gpu
+    from esteira.ai.local import free_gpu
     from esteira.transcrever import _decodificar
-    liberar_gpu()
+    free_gpu()
     with tempfile.TemporaryDirectory() as tmp:
         cru = Path(tmp) / "audio.f32"
         _decodificar(audio).tofile(cru)
         pedido = Path(tmp) / "pedido.json"
-        pedido.write_text(json.dumps({"audio": str(cru), "palavras": palavras, "modelo": MODELO}))
-        r = subprocess.run([str(PY_IMG), "-I", str(RAIZ / "esteira/ia/alinhar_ctc.py"), str(pedido)],
+        pedido.write_text(json.dumps({"audio": str(cru), "words": palavras, "model": MODELO}))
+        r = subprocess.run([str(PY_IMG), "-I", str(RAIZ / "esteira/ai/ctc_align.py"), str(pedido)],
                            capture_output=True, text=True, check=True)
     tempos = json.loads(r.stdout.strip().splitlines()[-1])
     if len(tempos) != len(palavras):

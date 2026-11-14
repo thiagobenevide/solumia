@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from esteira.core import events
 from esteira.curadoria import ESTILOS
 from esteira.graficos import render
-from esteira.ia import local
+from esteira.ai import local
 from esteira.projeto import RAIZ
 
 PY_IMG = RAIZ / ".venv-img" / "bin" / "python"
@@ -118,7 +118,7 @@ def _compor(c, fundo, destino, cfg):
 def _gerar_fundos(pedidos):
     if not PY_IMG.exists():
         raise SystemExit("geração de imagem não instalada (.venv-img); veja docs/PLANO.md")
-    local.liberar_gpu()
+    local.free_gpu()
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(pedidos, f)
     p = subprocess.Popen([str(PY_IMG), str(RAIZ / "esteira/imagem/gerar_sdxl.py"), f.name],
@@ -137,18 +137,18 @@ def _avaliar(arq, c, ctx):
     pequena = arq.with_name(f".peq_{arq.stem}.jpg")
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-i", arq, "-vf",
                     "scale=168:94,scale=504:282:flags=neighbor", "-q:v", "3", "-update", "1", pequena], check=True)
-    r = local.perguntar(
+    r = local.ask(
         f'Esta é uma thumbnail de YouTube vista no tamanho do feed do celular. Título do vídeo: "{ctx["titulo"]}". '
         f'Texto da thumb: "{c.texto}". De 1 a 10, quanto ela faz a pessoa sentir {c.emocao} e precisar clicar '
         f'AGORA (ponto focal claro, emoção forte, contraste)? O texto é legível nesse tamanho? '
         f'Responda em JSON: {{"impacto": 1-10, "legivel": true|false, "problema": "até 10 palavras"}}',
-        Impacto, modelo=local.VISAO, imagens=[pequena], max_tokens=100)
+        Impacto, model=local.VISION, images=[pequena], max_tokens=100)
     pequena.unlink(missing_ok=True)
     return r
 
 
 def _escolher_com_claude(projeto, ranking, ctx):
-    from esteira.ia import claude
+    from esteira.ai import claude
     from esteira.midia import folha
 
     class Escolha(BaseModel):
@@ -171,12 +171,12 @@ def _escolher_com_claude(projeto, ranking, ctx):
     linhas = "\n".join(f"{k}: texto \"{r['conceito']['texto']}\", emoção {r['conceito']['emocao']}, "
                        f"gatilho: {r['conceito']['gatilho']}{contexto(r['conceito']['texto'])}"
                        for k, r in enumerate(top))
-    r = claude.consultar(
+    r = claude.query(
         f"Thumbnails candidatas para o vídeo \"{ctx['titulo']}\" (número no canto). Escolha as 3 que mais fazem "
         f"a pessoa parar de rolar e clicar NA HORA, com emoções/abordagens diferentes entre si (para teste A/B), "
         f"legíveis no celular e honestas com o conteúdo: recuse a que distorce o número ou promete o que o "
         f"vídeo não diz (compare com a frase do roteiro). Ordene da melhor para a pior.\n\n{linhas}",
-        Escolha, projeto.cfg, projeto.ep, "thumb: escolher 3 de 6", imagem=destino)
+        Escolha, projeto.cfg, projeto.ep, "thumb: escolher 3 de 6", image=destino)
     if not r:
         return top[:3]
     return [top[k] for k in r.escolhidas if 0 <= k < len(top)] or top[:3]
@@ -221,7 +221,7 @@ def thumbs(projeto, n=8):
     for tentativa in range(3):
         aviso = "" if not tentativa else ("\n\nATENÇÃO: na resposta anterior quase todos os textos tinham mais de 4 "
                                           "palavras ou números que não estão no roteiro. Use NO MÁXIMO 4 palavras.")
-        r = local.perguntar(prompt + aviso, Conceitos, temperatura=0.8 + 0.1 * tentativa, max_tokens=3000)
+        r = local.ask(prompt + aviso, Conceitos, temperature=0.8 + 0.1 * tentativa, max_tokens=3000)
         for c in (r.conceitos if r else []):
             if c.texto.upper() in vistos:
                 continue

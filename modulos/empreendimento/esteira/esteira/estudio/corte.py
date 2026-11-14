@@ -73,9 +73,9 @@ def mantidas(palavras, cortes):
 
 
 def _whisper(projeto):
-    from esteira.ia.local import liberar_gpu
+    from esteira.ai.local import free_gpu
     from esteira.transcrever import _carregar_libs_cuda
-    liberar_gpu()
+    free_gpu()
     _carregar_libs_cuda()
     import ctranslate2
     from faster_whisper import WhisperModel

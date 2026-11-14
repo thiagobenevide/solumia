@@ -203,7 +203,7 @@ def test_apontamento_marca_por_texto_e_diretor_respeita(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
     from esteira.estudio import apontamento
-    from esteira.ia import local
+    from esteira.ai import local
     projeto = SimpleNamespace(pasta=tmp_path)
     frases = [{"texto": "A taxa chegou a 132% ao ano.", "ini": 0.0, "fim": 3.0},
               {"texto": "Pensa nisso com calma.", "ini": 3.2, "fim": 5.0},
@@ -216,7 +216,7 @@ def test_apontamento_marca_por_texto_e_diretor_respeita(tmp_path, monkeypatch):
     assert marcas == {0: "versus", 1: "nenhuma"}
     # a IA local erra a cena marcada e escolhe outra na livre: a marcada fica, a livre segue a IA
     resp = Cena(cena="frase_destaque", ancora="acontece com", titulo="Muita gente", valores=[])
-    monkeypatch.setattr(local, "perguntar", lambda *a, **k: resp)
+    monkeypatch.setattr(local, "ask", lambda *a, **k: resp)
     monkeypatch.setattr(local, "prompt", lambda nome, **k: local.Prompt(k["frase"]))
     esc = diretor.escolher(frases, _estilo(cenas=["frase_destaque", "contador"]), marcas)
     assert esc[0][1].cena == "versus" and esc[0][2] == "voce"
@@ -235,9 +235,9 @@ def test_apontamento_marca_por_texto_e_diretor_respeita(tmp_path, monkeypatch):
 
 def test_sem_socorro_do_claude_falha_cai_na_regra(monkeypatch):
     from esteira.core import options
-    from esteira.ia import local
+    from esteira.ai import local
     frases = [{"texto": "A taxa chegou a 132% ao ano.", "ini": 0.0, "fim": 3.0}]
-    monkeypatch.setattr(local, "perguntar", lambda *a, **k: None)
+    monkeypatch.setattr(local, "ask", lambda *a, **k: None)
     monkeypatch.setattr(local, "prompt", lambda nome, **k: local.Prompt(k["frase"]))
     monkeypatch.setattr(options, "read", lambda: {**options.DEFAULT})
     monkeypatch.setattr(diretor, "_escalar", lambda *a: (_ for _ in ()).throw(AssertionError("chamou o Claude")))

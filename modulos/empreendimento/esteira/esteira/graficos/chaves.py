@@ -40,12 +40,12 @@ def _heuristica(texto):
 
 def escolher(frases):
     """{índice da frase: [palavras-chave]}."""
-    from esteira.ia import local
+    from esteira.ai import local
     saida = {}
     for a in range(0, len(frases), LOTE):
         bloco = frases[a:a + LOTE]
         lista = "\n".join(f"{a + k}: {f['texto']}" for k, f in enumerate(bloco))
-        r = local.perguntar(local.prompt("chaves", frases=lista), Escolha, max_tokens=1500, operacao="graphics")
+        r = local.ask(local.prompt("chaves", frases=lista), Escolha, max_tokens=1500, operation="graphics")
         dadas = {i.frase: i.palavras for i in r.itens} if r else {}
         for k, f in enumerate(bloco):
             saida[a + k] = [p for p in dadas.get(a + k, []) if p.strip()] or _heuristica(f["texto"])

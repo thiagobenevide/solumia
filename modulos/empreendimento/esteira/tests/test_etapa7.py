@@ -60,9 +60,9 @@ def test_ampliacao_cria_um_pedido_por_dia_e_respeita_os_freios(ambiente, monkeyp
     assert filas == [p.id]
     p2, motivo2 = F.ampliar()
     assert p2.id == p.id and motivo2 == "pedido do dia" and len(F.pedidos()) == 1
-    monkeypatch.setattr(F.claude, "cota", lambda: 0.95)
+    monkeypatch.setattr(F.claude, "quota", lambda: 0.95)
     assert F.ampliar() == (None, "cota do Claude em 95%")
-    monkeypatch.setattr(F.claude, "cota", lambda: 0.1)
+    monkeypatch.setattr(F.claude, "quota", lambda: 0.1)
     monkeypatch.setattr(F, "fila_revisao", lambda: [{}] * 8)
     assert F.ampliar()[1].startswith("8+ peças esperando")
     with pytest.raises(ValueError):

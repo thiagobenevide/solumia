@@ -9,7 +9,7 @@ preenchimento. Substitui o diretor por frase (`diretor.py`) quando Opções → 
    corrige o que o modo não permite e quebra três tratamentos iguais seguidos.
 3. Candidatas (código): peças aprovadas do canal (`peca.no_canal`), no formato e na duração, filtradas pelo
    tratamento; ordem = semelhança do momento com os `exemplos_sim` (menos os `exemplos_nao`) por embeddings locais
-   (`ia/embeddings.py`; sem o modelo, palavras em comum), + intenção que bate, − peça usada há pouco
+   (`ai/embeddings.py`; sem o modelo, palavras em comum), + intenção que bate, − peça usada há pouco
    (anti-repetição) e cotas (3D, só texto). Saem 5.
 4. Escolha (IA local, `direcao_escolha`): 1 das 5 com motivo; fora da lista = a primeira.
 5. Preenchimento (IA local, `direcao_preencher`): encaixes + botões; o código valida (limites da ficha, número que
@@ -27,7 +27,7 @@ from esteira.bancada import normalizar, numeros
 from esteira.core import events
 from esteira.estudio import peca as P
 from esteira.estudio import ritmo as R
-from esteira.ia import local
+from esteira.ai import local
 
 TRATAMENTOS = ("voz_motion", "midia_motion", "camera_cheia", "camera_peca", "camera_2_5d", "3d")
 SO_APRESENTADOR = {"camera_cheia", "camera_peca", "camera_2_5d"}
@@ -180,7 +180,7 @@ def ler(bloco, ms, modo, perfil, antes=""):
                          regras_tratamento=REGRAS_TRATAMENTO.get(modo, REGRAS_TRATAMENTO["dark"]), modo=modo,
                          ritmo=perfil.id, antes=antes[-300:], n=len(ms),
                          momentos="\n".join(f"{k + 1}. {m['texto']}" for k, m in enumerate(ms)))
-    r = local.perguntar(texto, LeituraBloco, max_tokens=300 + 160 * len(ms), operacao="direction")
+    r = local.ask(texto, LeituraBloco, max_tokens=300 + 160 * len(ms), operation="direction")
     if not r or len(r.momentos) != len(ms):
         return [_regra(m) for m in ms], "regra"
     return [_corrigir(x, m) for x, m in zip(r.momentos, ms, strict=True)], "local"
@@ -216,13 +216,13 @@ def tratar(leituras, modo):
 
 def _vetores_fichas(fichas):
     """{id: (vetor dos exemplos_sim, vetor dos exemplos_nao)} pelos embeddings; None sem o modelo."""
-    from esteira.ia import embeddings as E
+    from esteira.ai import embeddings as E
     textos = sorted({x for f in fichas for x in f.exemplos_sim + f.exemplos_nao + [f.comunica]})
-    vs = E.vetores(textos, E.DOCUMENTO) if textos else []
+    vs = E.vectors(textos, E.DOCUMENT) if textos else []
     if vs is None:
         return None
     d = dict(zip(textos, vs, strict=True))
-    return {f.id: (E.media([d[x] for x in f.exemplos_sim + [f.comunica]]), E.media([d[x] for x in f.exemplos_nao]))
+    return {f.id: (E.mean([d[x] for x in f.exemplos_sim + [f.comunica]]), E.mean([d[x] for x in f.exemplos_nao]))
             for f in fichas}
 
 
@@ -255,7 +255,7 @@ def _cabe(f, tratamento, dur, formatos):
 def candidatas(m, leitura, tratamento, fichas, vet_m, vet_f, usadas, formatos, perfil, escolhidas):
     """As N_CANDIDATAS melhores [(pontos, ficha)] para o momento. `usadas`: {peça: último t}; `escolhidas`: [(ficha,
     t)] já escolhidas no vídeo (cotas). Se o tratamento deixar menos de 5, completa com as outras que cabem no formato."""
-    from esteira.ia import embeddings as E
+    from esteira.ai import embeddings as E
     dur = m["fim"] - m["ini"]
     texto_n = sum(1 for f, _ in escolhidas if f.peso == "texto")
     ultimo_3d = max((t for f, t in escolhidas if f.peso == "3d"), default=-1e9)
@@ -263,7 +263,7 @@ def candidatas(m, leitura, tratamento, fichas, vet_m, vet_f, usadas, formatos, p
     def pontos(f):
         if vet_m is not None and vet_f is not None:
             sim, nao = vet_f[f.id]
-            s = E.cosseno(vet_m, sim) - (PESO_NAO * E.cosseno(vet_m, nao) if nao else 0.0)
+            s = E.cosine(vet_m, sim) - (PESO_NAO * E.cosine(vet_m, nao) if nao else 0.0)
         else:
             s = _semelhanca_palavras(m["texto"], f)
         if leitura.intencao in f.intencoes:
@@ -300,7 +300,7 @@ def escolher(m, leitura, tratamento, cands):
     texto = local.prompt("direcao_escolha", texto=m["texto"], intencao=leitura.intencao, tom=leitura.tom,
                          tratamento=tratamento, numeros=", ".join(leitura.entidades.numeros) or "nenhum",
                          candidatas=linhas)
-    r = local.perguntar(texto, Escolha, max_tokens=200, operacao="direction")
+    r = local.ask(texto, Escolha, max_tokens=200, operation="direction")
     por_id = {f.id: f for _, f in cands}
     if r and r.escolha in por_id:
         return por_id[r.escolha], r.motivo[:200], "local"
@@ -354,9 +354,9 @@ def problemas(f, enc, bot, texto):
 
 def conferir(f, enc, m, contexto):
     """Segunda passada da LLM local: o texto de tela diz o que a fala diz? Sem resposta, passa."""
-    r = local.perguntar(local.prompt("direcao_conferir", texto=m["texto"], contexto=contexto[-300:], peca=f.id,
+    r = local.ask(local.prompt("direcao_conferir", texto=m["texto"], contexto=contexto[-300:], peca=f.id,
                                      comunica=f.comunica, tela=json.dumps(enc, ensure_ascii=False)),
-                        Conferencia, max_tokens=300, operacao="direction")
+                        Conferencia, max_tokens=300, operation="direction")
     return [f"o texto de tela não bate com a fala: {r.problema}"] if getattr(r, "fiel", True) is False else []
 
 
@@ -411,7 +411,7 @@ def preencher(f, m, leitura, cits=(), contexto=""):
             nomes=", ".join(leitura.entidades.nomes) or "nenhum", encaixes=_descrever_encaixes(f),
             botoes="\n".join(f"- {b.nome}: {b.valores} (padrão {b.padrao})" for b in f.botoes) or "(nenhum)",
             erros=("\nSua resposta anterior foi recusada: " + "; ".join(erros) + ". Corrija.\n") if erros else "")
-        r = local.perguntar(texto, Preenchimento, max_tokens=500, operacao="direction")
+        r = local.ask(texto, Preenchimento, max_tokens=500, operation="direction")
         if not r:
             erros = ["resposta vazia"]
             continue
@@ -532,7 +532,7 @@ def _fixa(m, marcas, gat, fichas_id):
 def dirigir(projeto, estilo, perfil=None, formatos=None):
     """Escreve `<ep>/estudio/mapa.json` pela direção por bloco; devolve o mapa."""
     from esteira.estudio import apontamento, corte, diretor, gatilhos
-    from esteira.ia import embeddings as E
+    from esteira.ai import embeddings as E
     perfil = perfil or R.perfil_do(projeto)
     formatos = formatos or estilo.formatos
     pasta = projeto.pasta / "estudio"
@@ -552,7 +552,7 @@ def dirigir(projeto, estilo, perfil=None, formatos=None):
     ms_por_bloco = [momentos(b, trechos, perfil) for b in bls]
     todos = [m for ms in ms_por_bloco for m in ms]
     vet_f = _vetores_fichas(fichas)
-    vet_m = E.vetores([m["texto"] for m in todos], E.CONSULTA) if vet_f is not None else None
+    vet_m = E.vectors([m["texto"] for m in todos], E.QUERY) if vet_f is not None else None
     if vet_f is None:
         events.warning("direção: sem o modelo de embeddings; candidatas por palavras em comum")
     vet_por = {id(m): (vet_m[k] if vet_m else None) for k, m in enumerate(todos)}

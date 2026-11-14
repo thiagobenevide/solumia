@@ -8,7 +8,7 @@ import json
 from pydantic import BaseModel, Field
 
 from esteira.core import events
-from esteira.ia import local
+from esteira.ai import local
 
 ESTILOS = {
     "finlumia": "finanças pessoais; visual sóbrio de documentário: pessoas comuns, contas, cartões, cidades",
@@ -70,10 +70,10 @@ def curar(projeto, refazer=False):
                       depois=cenas[k + 1]["texto"][:160] if k + 1 < len(cenas) else "",
                       nota=f'Direção de cena do roteiro: "{nota}"' if nota else "",
                       usados=", ".join(usados[-6:]) or "nenhum")
-        r = local.perguntar(local.prompt("curadoria", **campos), Curadoria)
+        r = local.ask(local.prompt("curadoria", **campos), Curadoria)
         if r and _repetido(r.busca_en, usados[-6:]):
             campos["usados"] += f'. PROIBIDO repetir "{r.busca_en}": escolha outro assunto visual da fala'
-            r = local.perguntar(local.prompt("curadoria", **campos), Curadoria, temperatura=0.7) or r
+            r = local.ask(local.prompt("curadoria", **campos), Curadoria, temperature=0.7) or r
         if not r:
             falhas += 1
             continue

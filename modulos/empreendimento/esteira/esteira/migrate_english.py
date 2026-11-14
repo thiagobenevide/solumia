@@ -23,7 +23,12 @@ PROCESS_EVENTS = {"inicio": "start", "fim": "end"}
 SLOTS = {"maquina": "machine"}
 TRACE_KEYS = {"tipo": "kind", "proc": "process", "fluxo": "flow", "no": "node", "detalhe": "detail",
               "motor": "engine", "nome": "name", "modelo": "model", "entrada": "input", "saida": "output",
-              "esquema": "schema", "erro": "error", "seg": "seconds"}
+              "esquema": "schema", "erro": "error", "seg": "seconds", "tokens_entrada": "input_tokens",
+              "tokens_saida": "output_tokens", "geracao_s": "generation_s", "carga_s": "load_s",
+              "custo_usd": "cost_usd", "cache_lido": "cache_read"}
+CALL_PARAMS = {"tentativa": "attempt", "pensar": "think", "imagens": "images", "imagem": "image",
+               "temperatura": "temperature"}
+LEDGER_KEYS = {"motivo": "reason", "custo": "cost", "resposta": "answer"}
 TRACE_KINDS = {"no": "node", "chamada": "call"}
 OPTION_KEYS = {"motor": "engine", "modelo_claude": "claude_model", "teto_episodio_usd": "episode_cap_usd",
                "teto_dia_usd": "daily_cap_usd", "operacoes": "operations", "socorro_claude": "claude_fallback",
@@ -94,7 +99,13 @@ def _trace(record):
     record = _rename(record, TRACE_KEYS)
     _translate(record, "kind", TRACE_KINDS)
     _translate(record, "node", COMMANDS)
+    if isinstance(record.get("params"), dict):
+        record["params"] = _rename(record["params"], CALL_PARAMS)
     return record
+
+
+def _ledger(record):
+    return _rename(record, LEDGER_KEYS)
 
 
 def _options(record):
@@ -190,6 +201,18 @@ def migrate_queue(dry_run):
     return True
 
 
+def migrate_claude(dry_run):
+    """`cache/claude.jsonl` keeps its name (only the keys change); the quota reading file is renamed."""
+    done = migrate_jsonl(CACHE / "claude.pt.jsonl", CACHE / "claude.jsonl", _ledger, dry_run)
+    old = CACHE / "cota_claude.json"
+    if old.exists():
+        print(f"{old} → claude_quota.json")
+        if not dry_run:
+            old.replace(CACHE / "claude_quota.json")
+        done += 1
+    return done
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true")
@@ -197,6 +220,7 @@ def main():
     done = 0
     done += migrate_options(args.dry_run)
     done += migrate_queue(args.dry_run)
+    done += migrate_claude(args.dry_run)
     done += migrate_jsonl(CACHE / "processos.jsonl", CACHE / "processes.jsonl", _process, args.dry_run)
     done += migrate_jsonl(CACHE / "rastro.jsonl", CACHE / "trace.jsonl", _trace, args.dry_run)
     logs = set()

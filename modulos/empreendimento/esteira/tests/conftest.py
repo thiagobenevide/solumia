@@ -12,6 +12,6 @@ def dataset_temporario(tmp_path, monkeypatch):
                         "EVENTOS": base / "registro" / "_eventos"}.items():
         monkeypatch.setattr(R, nome, valor)
     monkeypatch.setattr(indice, "ARQUIVO", base / "indice.db")
-    from esteira.ia import claude
-    monkeypatch.setattr(claude, "limite_cota", lambda: claude.LIMITE_COTA)  # as Opções reais não entram nos testes
+    from esteira.ai import claude
+    monkeypatch.setattr(claude, "quota_limit", lambda: claude.QUOTA_LIMIT)  # as Opções reais não entram nos testes
     return base

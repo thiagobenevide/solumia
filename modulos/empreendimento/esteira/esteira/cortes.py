@@ -427,7 +427,7 @@ def revisar_com_llm(trechos, frases):
     from pydantic import BaseModel, Field
 
     from esteira.core import events
-    from esteira.ia import local
+    from esteira.ai import local
 
     class Decisao(BaseModel):
         manter: bool
@@ -446,7 +446,7 @@ def revisar_com_llm(trechos, frases):
             continue
         k = trechos.index(t)
         depois = next((x["texto"] for x in trechos[k + 1:] if x["manter"]), "")
-        r = local.perguntar(local.prompt("corte_par", a=a["texto"], b=t["texto"],
+        r = local.ask(local.prompt("corte_par", a=a["texto"], b=t["texto"],
                                          depois=" ".join(depois.split()[:20])), Par)
         if r:
             # a tomada do roteiro (A) nunca sai por esta comparação: o par é escolhido por palavras em comum e às
@@ -465,7 +465,7 @@ def revisar_com_llm(trechos, frases):
         depois = next((x["texto"] for x in trechos[k + 1:] if x["manter"]), "")
         ka, kb = t.get("entre", [t.get("frase", 0)] * 2)
         regiao = [frases[i]["texto"] for i in range(max(ka, 0), min(kb + 1, len(frases)))][:4]
-        d = local.perguntar(local.prompt("corte", antes=" ".join(antes.split()[-25:]),
+        d = local.ask(local.prompt("corte", antes=" ".join(antes.split()[-25:]),
                                          depois=" ".join(depois.split()[:25]), roteiro=json.dumps(regiao, ensure_ascii=False),
                                          trecho=t["texto"], tipo=t["tipo"], motivo=t["motivo"]), Decisao)
         if d is None:
@@ -485,7 +485,7 @@ def escalar_ao_claude(trechos, projeto):
     """Uma chamada em lote com o que o LLM local deixou incerto (confiança < 0.5 ou sem LLM)."""
     from pydantic import BaseModel
 
-    from esteira.ia import claude
+    from esteira.ai import claude
 
     duvidas = [t for t in trechos if not t.get("garantida")
                and (t.get("por") == "regra" and len(t["texto"].split()) >= 2
@@ -513,7 +513,7 @@ def escalar_ao_claude(trechos, projeto):
               "Para cada TRECHO (transcrição automática), decida se FICA (completa a frase, acréscimo útil, "
               "versão própria de uma frase) ou SAI (bastidor, começo abandonado, repetição, palavra solta). "
               "A fala final deve ser contínua e sem frases quebradas.\n\n" + "\n".join(linhas))
-    r = claude.consultar(dossie, Resposta, projeto.cfg, projeto.ep, f"cortes: {len(duvidas)} trechos incertos")
+    r = claude.query(dossie, Resposta, projeto.cfg, projeto.ep, f"cortes: {len(duvidas)} trechos incertos")
     if not r:
         return 0
     for d in r.decisoes:

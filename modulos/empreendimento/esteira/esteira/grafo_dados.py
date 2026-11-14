@@ -61,8 +61,8 @@ def estatisticas(chamadas, hist_monitor=()):
     if not chamadas:
         return None
     ok = [c for c in chamadas if c.get("ok")]
-    tin = [c["tokens_entrada"] for c in ok if c.get("tokens_entrada")]
-    tout = [c["tokens_saida"] for c in ok if c.get("tokens_saida")]
+    tin = [c["input_tokens"] for c in ok if c.get("input_tokens")]
+    tout = [c["output_tokens"] for c in ok if c.get("output_tokens")]
     tok_s = [c["tok_s"] for c in ok if c.get("tok_s")]
     pre = [c["prefill_tok_s"] for c in ok if c.get("prefill_tok_s")]
     lat = [c.get("total_s") or c.get("seconds") for c in ok if c.get("total_s") or c.get("seconds")]
@@ -71,7 +71,7 @@ def estatisticas(chamadas, hist_monitor=()):
         d = por_prompt.setdefault(c.get("name") or "?", {"n": 0, "seg": 0.0, "tokens": 0})
         d["n"] += 1
         d["seg"] += c.get("total_s") or c.get("seconds") or 0
-        d["tokens"] += c.get("tokens_saida") or 0
+        d["tokens"] += c.get("output_tokens") or 0
     # energia: integra a potência da GPU (amostras de 2 s do monitor) dentro da janela de cada chamada
     wh, tok_e = 0.0, 0
     for c in ok:
@@ -79,28 +79,28 @@ def estatisticas(chamadas, hist_monitor=()):
         amostras = [h["gpu_w"] for h in hist_monitor if h.get("gpu_w") and ini - 1 <= h["t"] <= fim + 1]
         if amostras:
             wh += statistics.mean(amostras) * (fim - ini) / 3600
-            tok_e += (c.get("tokens_entrada") or 0) + (c.get("tokens_saida") or 0)
+            tok_e += (c.get("input_tokens") or 0) + (c.get("output_tokens") or 0)
     return {
-        "n": len(chamadas), "ok_pct": round(100 * len(ok) / len(chamadas)), "tentativas_extra": sum(1 for c in chamadas if (c.get("params") or {}).get("tentativa", 1) > 1),
+        "n": len(chamadas), "ok_pct": round(100 * len(ok) / len(chamadas)), "tentativas_extra": sum(1 for c in chamadas if (c.get("params") or {}).get("attempt", 1) > 1),
         "tokens_entrada": sum(tin), "tokens_saida": sum(tout),
         "media_entrada": round(statistics.mean(tin)) if tin else None, "media_saida": round(statistics.mean(tout)) if tout else None,
         "tok_s": round(statistics.median(tok_s), 1) if tok_s else None, "prefill_tok_s": round(statistics.median(pre)) if pre else None,
-        "lat_p50": _pct(lat, .5), "lat_p95": _pct(lat, .95), "custo_usd": round(sum(c.get("custo_usd") or 0 for c in chamadas), 4),
+        "lat_p50": _pct(lat, .5), "lat_p95": _pct(lat, .95), "custo_usd": round(sum(c.get("cost_usd") or 0 for c in chamadas), 4),
         "wh": round(wh, 3) if wh else None, "wh_por_mil_tokens": round(wh / tok_e * 1000, 4) if tok_e else None,
         "por_prompt": sorted(({"nome": k, **v, "seg": round(v["seg"], 1)} for k, v in por_prompt.items()), key=lambda x: -x["n"])[:8],
         "serie": [{"t": c["t"], "tok_s": c.get("tok_s"), "seg": c.get("total_s") or c.get("seconds"),
-                   "tokens": c.get("tokens_saida"), "ok": c.get("ok")} for c in chamadas[-40:]],
+                   "tokens": c.get("output_tokens"), "ok": c.get("ok")} for c in chamadas[-40:]],
     }
 
 
 def ficha_modelo(nome):
     """Metadados do GGUF pelo llama-server (`/props`; só com o modelo carregado) e o tamanho em disco."""
     def ler():
-        from esteira.ia import llama
-        m = next((m for m in llama.modelos() or [] if m["id"] == nome), None)
+        from esteira.ai import llama
+        m = next((m for m in llama.models() or [] if m["id"] == nome), None)
         if m is None:
             return None
-        ficha = {"formato": "gguf", "gb": llama.gb(nome), "visao": llama.visao(m), "estado": m["status"]["value"]}
+        ficha = {"formato": "gguf", "gb": llama.gb(nome), "visao": llama.vision(m), "estado": m["status"]["value"]}
         if ficha["estado"] == "loaded":
             try:
                 req = urllib.request.Request(f"{llama.HOST}/props?model={urllib.parse.quote(nome)}")

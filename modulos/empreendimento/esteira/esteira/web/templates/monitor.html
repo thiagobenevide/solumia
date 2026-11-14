@@ -388,13 +388,13 @@ async function atualizarGrafo() {
 }
 function metricas(c) {
   const m = [];
-  if (c.tokens_entrada != null) m.push(`entrada ${c.tokens_entrada} tok`);
-  if (c.tokens_saida != null) m.push(`saída ${c.tokens_saida} tok`);
-  if (c.carga_s) m.push(`carga ${c.carga_s}s`);
+  if (c.input_tokens != null) m.push(`entrada ${c.input_tokens} tok`);
+  if (c.output_tokens != null) m.push(`saída ${c.output_tokens} tok`);
+  if (c.load_s) m.push(`carga ${c.load_s}s`);
   if (c.prefill_s != null && c.engine != "claude") m.push(`prefill ${c.prefill_s}s${c.prefill_tok_s ? " (" + c.prefill_tok_s + " t/s)" : ""}`);
-  if (c.geracao_s != null && c.engine != "claude") m.push(`geração ${c.geracao_s}s${c.tok_s ? " (" + c.tok_s + " t/s)" : ""}`);
-  if (c.custo_usd != null) m.push(`US$ ${(+c.custo_usd).toFixed(4)} (equiv. API)`);
-  if (c.cache_lido) m.push(`cache Anthropic ${c.cache_lido} tok`);
+  if (c.generation_s != null && c.engine != "claude") m.push(`geração ${c.generation_s}s${c.tok_s ? " (" + c.tok_s + " t/s)" : ""}`);
+  if (c.cost_usd != null) m.push(`US$ ${(+c.cost_usd).toFixed(4)} (equiv. API)`);
+  if (c.cache_read) m.push(`cache Anthropic ${c.cache_read} tok`);
   m.push(`total ${c.total_s ?? c.seconds}s`);
   return m.join(" · ");
 }

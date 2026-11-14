@@ -292,7 +292,7 @@ def _quadro(video, t, destino):
 def verificar(projeto, estilo, formato, n_visao=8):
     """Portão final: loudness, folha de quadros e conferência visual (IA local) nos quadros das cenas."""
     from esteira.bancada import Visao
-    from esteira.ia import local
+    from esteira.ai import local
     p = pasta(projeto, formato)
     final = p / "final.mp4"
     mapa = json.loads((projeto.pasta / "estudio" / "mapa.json").read_text())
@@ -315,8 +315,8 @@ def verificar(projeto, estilo, formato, n_visao=8):
     problemas = []
     for n, (c, arq) in enumerate(quadros[:n_visao], 1):
         events.progress(n, min(n_visao, len(quadros)), f"conferindo {c['cena']}")
-        r = local.perguntar(local.prompt("estudio_visao"), Visao, modelo=local.VISAO, imagens=[str(arq)], max_tokens=200,
-                            operacao="studio_vision")
+        r = local.ask(local.prompt("estudio_visao"), Visao, model=local.VISION, images=[str(arq)], max_tokens=200,
+                            operation="studio_vision")
         if r:
             ruins = [k for k, v in r.model_dump().items() if v]
             if ruins:

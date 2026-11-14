@@ -83,12 +83,31 @@ Variáveis de ambiente: `ESTEIRA_MOTOR` → `ESTEIRA_ENGINE`, `ESTEIRA_MOTOR_FIX
 | custo, seg | cost, seconds | evento `claude`, chamada do rastro |
 | ESTEIRA_PROC, ESTEIRA_FILA | ESTEIRA_PROCESS, ESTEIRA_QUEUE | variáveis de ambiente |
 
-Estado da migração da esteira: `core/` e a CLI (`esteira.py`: comandos, flags, ids das etapas e das operações)
+## Esteira — IA (`esteira/ia/` → `esteira/ai/`)
+
+| pt | en | onde |
+|---|---|---|
+| perguntar, liberar_gpu, TEXTO, VISAO | ask, free_gpu, TEXT, VISION | `ai/local.py` |
+| esquema, modelo, imagens, pensar, temperatura, operacao | schema, model, images, think, temperature, operation | argumentos de `local.ask` |
+| consultar, gasto, cota, cota_cheia, limite_cota | query, spent, quota, quota_full, quota_limit | `ai/claude.py` |
+| motivo, custo, resposta | reason, cost, answer | `cache/claude.jsonl` |
+| cota_claude.json | claude_quota.json | `cache/` |
+| modelos, servidor, reiniciar, carregados, descarregar, visao, baixar | models, server, restart, loaded, unload, vision, download | `ai/llama.py` |
+| disponivel, vetores, cosseno, media | available, vectors, cosine, mean | `ai/embeddings.py` |
+| alinhar_ctc.py (`palavras`, `modelo`) | ctc_align.py (`words`, `model`) | pedido do alinhamento |
+| treinar_lora.py (`--epocas`, `--contexto`, `--so-adaptador`) | train_lora.py (`--epochs`, `--context`, `--adapter-only`) | treino LoRA |
+| treino.json (`epocas`, `arquivos`, `perda`, `perda_val`, `adaptador`), adaptador.gguf | training.json (`epochs`, `files`, `loss`, `val_loss`, `adapter`), adapter.gguf | saída do treino |
+| tokens_entrada, tokens_saida, geracao_s, carga_s, custo_usd, cache_lido, tentativa | input_tokens, output_tokens, generation_s, load_s, cost_usd, cache_read, attempt | chamada de LLM no rastro |
+| LLAMA_MODELOS_DIR, EMBEDDINGS_MODELO | LLAMA_MODELS_DIR, EMBEDDINGS_MODEL | variáveis de ambiente |
+
+Os prompts (`ai/prompts/*.md`: nome do arquivo, texto, campos e o esquema da resposta) migram junto com o módulo
+dono de cada um, porque os campos e as chaves do JSON de resposta são do módulo.
+
+Estado da migração da esteira: `core/`, `ai/` e a CLI (`esteira.py`: comandos, flags, ids das etapas e das operações)
 feitos, com painel, fila, grafo do monitor e app usando os nomes novos. Ainda em português, cada um no seu passo:
 os módulos fora de `core/` (nomes de arquivo, funções, mensagens), as etapas internas do Estúdio (`dirigir`,
 `compilar`… e os eventos `estudio-<etapa>`), rótulos de alvo da fila (`fabrica:`, `peca:`, `treino:`, `roteiro:`),
 valores de `--mode`/`--intensity`, chaves próprias da API web (`processos`, `vagas`, `etapas`…) e da fila
-(`comando`, `vaga`, `estado`), chaves do `config.toml`, as métricas que `ia/` grava nas chamadas (`tokens_saida`,
-`custo_usd`…) e o nome do pacote `esteira`. O script `artigo` do vault ainda grava a barra externa com
+(`comando`, `vaga`, `estado`), chaves do `config.toml`, os prompts de `ai/prompts/` e o nome do pacote `esteira`. O script `artigo` do vault ainda grava a barra externa com
 `rotulo`/`feito`/`unidade` (`grafo._tarefa_externa` converte). O serviço do painel instalado por
 `infra/scripts/conectar_vps` precisa ser reinstalado: o comando agora é `dark panel --port 8765`.

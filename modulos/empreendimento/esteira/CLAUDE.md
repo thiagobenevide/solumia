@@ -24,13 +24,13 @@ com *destaque*, presets das citações do roteiro) e thumbs (texto, layout, fund
 prévia ao vivo e assistente de IA (`[editor] motor_ia`). Gráfico salvo vira `manual: true` (o replanejamento o mantém).
 Monitor do painel (`/monitor`, `esteira/monitor.py` + `esteira/grafo.py`): GPU/CPU/energia e grafo da operação; o
 rastro vem de `esteira/core/trace.py` (`cache/live/<pid>.json` e `cache/trace.jsonl`), gravado por
-`local.perguntar` (stream), `claude.consultar`, `events.stage` e `roteirista`. Não ler esses arquivos inteiros.
+`local.ask` (stream), `claude.query`, `events.stage` e `roteirista`. Não ler esses arquivos inteiros.
 Vagas (`esteira/core/locks.py`, vagas `machine` e `claude`): só um `./dark` pesado por vez na máquina; `--engine claude` em `curate`/`script`
 usa a vaga "claude" e roda em paralelo. A fila do painel tem as duas pistas. Cada processo pesado fica em
 `cache/processes.jsonl` (`esteira/core/processes.py`); monitor individual em `/processos/<id>` (`esteira/monitor_processo.py`).
 Opções de IA (painel → Opções, `esteira/core/options.py`, `cache/options.json`): motor padrão local/Claude, modelo
-e tetos do Claude, motor e modelo local por operação (`local.perguntar` resolve pela etapa/prompt) e download
-de modelos GGUF do Hugging Face (`llama.baixar`). `--engine` explícito vale para tudo. `./dark all <ep> --redo` (botão "Refazer tudo
+e tetos do Claude, motor e modelo local por operação (`local.ask` resolve pela etapa/prompt) e download
+de modelos GGUF do Hugging Face (`llama.download`). `--engine` explícito vale para tudo. `./dark all <ep> --redo` (botão "Refazer tudo
 do zero") retranscreve, refaz cortes e curadoria; com estilo do canal no Estúdio, troca
 graficos+montar pelo corte pelo som + `estudio.produzir` (acervo de peças, sem os portões; para se o corte cortar palavra). Cortes: `transcrever._refinar` retranscreve regiões com palavras
 esticadas (retakes que o Whisper engoliu); `cortes.repeticoes` corta retakes que sobraram na narração editada.
@@ -55,7 +55,7 @@ para foto. Pixabay: `PIXABAY_API_KEY_IMAGE`/`_VIDEO`, cache de 24 h em `cache/pi
 Dinamismo: todo número com unidade dito vira gráfico (`plano._numeros_da_frase`, fora do teto de cobertura);
 `graficos/chaves.py` escolhe 1–2 palavras-chave por frase (LLM, prompt `chaves`) → `chaves.json` → texto com
 "pop" na V3 no instante dito, fora dos gráficos; o montar dá "socos" de zoom (`_ken_burns(socos)`) nesses instantes.
-Direção por bloco (padrão; `estudio/direcao.py`, embeddings em `ia/embeddings.py` na porta 8082): blocos do roteiro →
+Direção por bloco (padrão; `estudio/direcao.py`, embeddings em `ai/embeddings.py` na porta 8082): blocos do roteiro →
 momentos → leitura → 5 candidatas do acervo → escolha → preenchimento validado; tarefa `bloco_peca` na bancada.
 Estúdio (`esteira/estudio/`, plano em `docs/PLANO-ESTUDIO.md`): vídeo + estilo → corte pelo som da narração editada
 (`estudio/corte.py`, `./dark studio-cut`; emendas com reversão; tempos remapeados por `corte.palavras/frases/novo`) → portão do corte → apontamento (`estudio/apontamento.py`: cena por trecho marcada pela pessoa; confirmar libera) → `diretor` (frase/trecho →
@@ -89,14 +89,14 @@ gabarito em `$AGENT_DATA/.../bancada/`).
 Edição manual: `./dark open <ep>` → FilmCraft; `./dark export <ep>` reexporta; `assemble` guarda o
 `.fcproj` editado à mão como `projeto.manual-*.fcproj` antes de gerar outro.
 
-Migração para inglês em andamento (`docs/GLOSSARIO-INGLES.md` na raiz): `esteira/core/` já migrado; dados gravados
+Migração para inglês em andamento (`docs/GLOSSARIO-INGLES.md` na raiz): `esteira/core/`, `esteira/ai/` e a CLI já migrados; dados gravados
 antes dela são reescritos por `python -m esteira.migrate_english` (com o painel e os `./dark` parados).
 
 ## Divisão do trabalho
 
-- Código (Python) primeiro; LLM local (`esteira/ia/local.py`, llama.cpp `gemma-4-12b` para texto e visão; o diretor do Estúdio usa `qwen3.8-27b` pelas Opções) para
-  decisões operacionais; Claude (`esteira/ia/claude.py`, `claude -p` com teto em `[claude]`) só como
-  escalonamento automático. Prompts em `esteira/ia/prompts/*.md`; respostas em cache (`cache/`).
+- Código (Python) primeiro; LLM local (`esteira/ai/local.py`, llama.cpp `gemma-4-12b` para texto e visão; o diretor do Estúdio usa `qwen3.8-27b` pelas Opções) para
+  decisões operacionais; Claude (`esteira/ai/claude.py`, `claude -p` com teto em `[claude]`) só como
+  escalonamento automático. Prompts em `esteira/ai/prompts/*.md`; respostas em cache (`cache/`).
 - Toda etapa grava eventos em `<ep>/log/events.jsonl` (`esteira/core/events.py`): ler com
   `./dark status` / `./dark log`, nunca o arquivo inteiro.
 
@@ -126,9 +126,9 @@ antes dela são reescritos por `python -m esteira.migrate_english` (com o painel
   refaz o PNG ao abrir a aba Thumbs. Fontes do projeto instaladas como TTF em `~/.local/share/fonts` (Inter Var,
   Playfair Display, JetBrains Mono): sem elas o EffectCraft/PhotoCraft trocam a fonte.
 - Geração de imagem (thumbs): RealVisXL em `.venv-img` (PyTorch cu128), chamado por subprocesso.
-- llama.cpp em modo roteador (`esteira/ia/llama.py`): um `llama-server` em :8081, compartilhado com o worker da
+- llama.cpp em modo roteador (`esteira/ai/llama.py`): um `llama-server` em :8081, compartilhado com o worker da
   plataforma, serve os GGUF de `~/agent-data/modelos` (visão = subpasta com `mmproj-*`); binário em
-  `~/development/llama.cpp/build/bin`. `liberar_gpu()` antes do Whisper/SDXL (16 GB de VRAM).
+  `~/development/llama.cpp/build/bin`. `free_gpu()` antes do Whisper/SDXL (16 GB de VRAM).
 
 ## Compact instructions
 

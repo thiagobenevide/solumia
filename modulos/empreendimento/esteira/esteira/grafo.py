@@ -43,7 +43,7 @@ NOS = [
     ("openalex", "API OpenAlex", _X, "py", "Base aberta de ~250 milhões de trabalhos científicos. A esteira usa a API com chave própria (cota diária)."),
     ("qwen3", "qwen3-14b", _X, "local", "LLM de texto, 14 bilhões de parâmetros, quantizado (~9 GB na VRAM) no llama.cpp. Cada chamada tem 2 fases: PREFILL (lê o prompt inteiro de uma vez, em paralelo: milhares de tokens/s) e GERAÇÃO (um token por vez, cada um exige ler todos os pesos da VRAM: dezenas de tokens/s, o gargalo). contexto de 16384 tokens; o roteador descarrega o modelo após 10 min parado; respostas iguais vêm do cache da esteira sem gastar GPU."),
     ("qwen_vl", "qwen2.5vl-7b", _X, "local", "Modelo de visão + texto (7 B). A imagem é cortada em patches que viram tokens visuais e entram no prefill junto com o texto; depois gera a resposta token a token."),
-    ("whisper", "Whisper", _X, "gpu", "faster-whisper large-v3 (CTranslate2, CUDA). Antes dele a esteira descarrega o llama.cpp da VRAM (`liberar_gpu`)."),
+    ("whisper", "Whisper", _X, "gpu", "faster-whisper large-v3 (CTranslate2, CUDA). Antes dele a esteira descarrega o llama.cpp da VRAM (`free_gpu`)."),
     ("sdxl", "RealVisXL", _X, "gpu", "Modelo de difusão (SDXL) em .venv-img: parte de ruído e remove ruído em ~30 passos guiados pelo texto. Usa quase toda a VRAM."),
     ("claude", "Claude", _X, "claude", "`claude -p` pela assinatura, sem ferramentas, com resposta em JSON por esquema. Só é chamado quando o código e o LLM local não resolvem; cada chamada respeita os tetos de [claude]."),
     ("bancos", "Bancos de mídia", _X, "py", "APIs do Openverse, Pexels e Pixabay (se houver chave)."),

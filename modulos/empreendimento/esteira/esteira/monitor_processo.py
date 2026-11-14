@@ -128,9 +128,9 @@ def detalhe(pid_id, monitor_atual):
     fim = r.get("end") or time.time()
     recursos = next((p for p in (monitor_atual or {}).get("esteira", []) if p["pid"] == r["pid"]), None)
     chamadas = h["chamadas"]
-    tok = sum(c.get("tokens_saida") or 0 for c in chamadas)
+    tok = sum(c.get("output_tokens") or 0 for c in chamadas)
     resumo = {"chamadas": len(chamadas), "falhas": sum(not c.get("ok") for c in chamadas), "cache": h["caches"],
-              "tokens_saida": tok, "custo_usd": round(sum(c.get("custo_usd") or 0 for c in chamadas), 4),
+              "tokens_saida": tok, "custo_usd": round(sum(c.get("cost_usd") or 0 for c in chamadas), 4),
               "seg_llm": round(sum(c.get("seconds") or 0 for c in chamadas), 1)}
     return {"processo": r, "vivo": vivo, "recursos": recursos, "caminho": _caminho(h["nos"], fim),
             "chamadas": chamadas[-30:][::-1], "resumo": resumo, "eventos": _eventos(r)[::-1],

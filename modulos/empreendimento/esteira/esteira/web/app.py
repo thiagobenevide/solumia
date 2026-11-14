@@ -677,8 +677,8 @@ def fragmento_etapas(request: Request, ep: str):
     est = status.stages(pasta)
     linhas = [(e, est.get(e)) for e in PIPELINE] + [(e, v) for e, v in est.items() if e not in PIPELINE]
     evs = [e for e in status.events(pasta) if e["kind"] in ("output", "warning", "error", "claude", "start", "end")]
-    from esteira.ia import claude
-    gasto = claude.gasto(ep)[0]
+    from esteira.ai import claude
+    gasto = claude.spent(ep)[0]
     return tpl.TemplateResponse(request, "_etapas.html", {"ep": ep, "linhas": linhas, "eventos": evs[-40:][::-1],
                                                           "gasto": gasto})
 
@@ -703,23 +703,23 @@ _baixando = {}  # nome → {"estado", "feito", "total", "msg"}
 
 def _modelos_locais():
     """Modelos do llama.cpp (`~/agent-data/modelos`): [{nome, GB, visão}]."""
-    from esteira.ia import llama
-    if not llama.servidor():
+    from esteira.ai import llama
+    if not llama.server():
         return []
-    saida = [{"nome": m["id"], "gb": llama.gb(m["id"]), "visao": llama.visao(m)} for m in llama.modelos() or []]
+    saida = [{"nome": m["id"], "gb": llama.gb(m["id"]), "visao": llama.vision(m)} for m in llama.models() or []]
     return sorted(saida, key=lambda m: m["nome"])
 
 
 @app.get("/opcoes", response_class=HTMLResponse)
 def pagina_opcoes(request: Request, salvo: str = ""):
     from esteira.core import options
-    from esteira.ia import local
+    from esteira.ai import local
     cfg = _cfg().get("claude", {})
     o = options.read()
     ops = [(k, nome, desc, tipos, options.operation(k)) for k, (nome, desc, tipos) in options.OPERATIONS.items()]
     return tpl.TemplateResponse(request, "opcoes.html", {
         "o": o, "ops": ops, "modelos_claude": options.MODELS, "sugestoes": options.SUGGESTIONS, "locais": _modelos_locais(),
-        "padrao": {"text": local.TEXTO, "vision": local.VISAO}, "cfg_claude": options.claude(cfg), "salvo": salvo})
+        "padrao": {"text": local.TEXT, "vision": local.VISION}, "cfg_claude": options.claude(cfg), "salvo": salvo})
 
 
 @app.post("/opcoes")
@@ -741,10 +741,10 @@ async def salvar_opcoes(request: Request):
 
 def _baixar(nome):
     """Baixa `usuario/repo:QUANT` do Hugging Face para a pasta de modelos do llama.cpp."""
-    from esteira.ia import llama
+    from esteira.ai import llama
     st = _baixando[nome]
     try:
-        id_ = llama.baixar(nome, lambda feito, total, msg: st.update(feito=feito, total=total, msg=msg))
+        id_ = llama.download(nome, lambda feito, total, msg: st.update(feito=feito, total=total, msg=msg))
         st.update(estado="ok", msg=f"instalado como {id_}")
     except Exception as e:
         st.update(estado="erro", msg=str(e)[:200])
@@ -829,15 +829,15 @@ def trocar_midia(ep: str, cid: int, busca_en: str = Form("")):
 
 @app.get("/custos", response_class=HTMLResponse)
 def custos(request: Request):
-    from esteira.ia import claude
-    regs = list(reversed(claude._registros()))
+    from esteira.ai import claude
+    regs = list(reversed(claude._records()))
     por_ep = {}
     for r in regs:
-        por_ep[r["ep"]] = por_ep.get(r["ep"], 0) + r["custo"]
+        por_ep[r["ep"]] = por_ep.get(r["ep"], 0) + (r.get("cost") or 0)
     hoje = datetime.now().date().isoformat()
     return tpl.TemplateResponse(request, "custos.html", {
         "regs": regs[:200], "por_ep": sorted(por_ep.items(), key=lambda x: -x[1]), "total": sum(por_ep.values()),
-        "hoje": sum(r["custo"] for r in regs if r["t"].startswith(hoje)), "cfg": _cfg().get("claude", {})})
+        "hoje": sum((r.get("cost") or 0) for r in regs if r["t"].startswith(hoje)), "cfg": _cfg().get("claude", {})})
 
 
 @app.get("/arq/{ep}/{caminho:path}")

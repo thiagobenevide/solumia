@@ -4,7 +4,7 @@ Cada escolha e cada correção da pessoa já vira caso no gabarito da bancada (`
 `bloco_peca` (momento + 5 candidatas → a peça aprovada/trocada), `preencher` (momento + peça → encaixes que ficaram),
 `corte` (trecho em dúvida → fica/sai) e `legenda` (Whisper → texto certo). Aqui eles viram conversas de treino no
 formato de chat (o mesmo prompt que a IA local recebe na produção + a resposta certa), divididas em treino/validação
-(90/10, fixo por caso) em `$AGENT_DATA/.../treino/<data>/`. O treino LoRA em si (`ia/treinar_lora.py`, num
+(90/10, fixo por caso) em `$AGENT_DATA/.../treino/<data>/`. O treino LoRA em si (`ai/train_lora.py`, num
 `.venv-treino` com unsloth) parte desse diretório e entrega um GGUF para o roteador do llama.cpp.
 """
 import hashlib
@@ -107,12 +107,12 @@ def ambiente():
 
 
 def treinar(base="unsloth/gemma-4-12b-it", epocas=2.0, quant="q4_k_m"):
-    """Treina o LoRA com a última exportação (`ia/treinar_lora.py` no `.venv-treino`) e põe o GGUF na pasta de modelos
+    """Treina o LoRA com a última exportação (`ai/train_lora.py` no `.venv-treino`) e põe o GGUF na pasta de modelos
     do roteador como `agente-<data>.gguf` (escolha-o em Opções → modelo por operação). → nome do modelo."""
     import shutil
     import subprocess
 
-    from esteira.ia import llama, local
+    from esteira.ai import llama, local
     from esteira.projeto import RAIZ
     py = ambiente()
     if not py.exists():
@@ -125,12 +125,12 @@ def treinar(base="unsloth/gemma-4-12b-it", epocas=2.0, quant="q4_k_m"):
     nome = f"agente-{datetime.now():%Y%m%d-%H%M}"
     saida = PASTA / "modelos" / nome
     saida.mkdir(parents=True, exist_ok=True)
-    local.liberar_gpu()
-    subprocess.run([str(py), str(RAIZ / "esteira/ia/treinar_lora.py"), dados, str(saida), "--base", base,
-                    "--epocas", str(epocas), "--quant", quant], check=True)
+    local.free_gpu()
+    subprocess.run([str(py), str(RAIZ / "esteira/ai/train_lora.py"), dados, str(saida), "--base", base,
+                    "--epochs", str(epocas), "--quant", quant], check=True)
     gguf = next(iter(sorted((saida / "gguf").glob("*.gguf"))), None)
     if not gguf:
         raise SystemExit("o treino não gerou GGUF")
-    shutil.copy(gguf, llama.MODELOS / f"{nome}.gguf")
-    llama.servidor()
+    shutil.copy(gguf, llama.MODELS_DIR / f"{nome}.gguf")
+    llama.server()
     return nome
