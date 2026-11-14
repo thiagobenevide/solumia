@@ -1061,7 +1061,7 @@ abstract class AppText {
   /// No description provided for @watchSteps.
   ///
   /// In pt, this message translates to:
-  /// **'1. No relógio: Configurações › Sobre › Software, toque 7 vezes em \"Versão do software\" para liberar as Opções do desenvolvedor.\n2. Em Opções do desenvolvedor, ligue \"Depuração ADB\" e \"Depuração por Wi‑Fi\" (relógio e PC na mesma rede).\n3. Na primeira vez: em Depuração por Wi‑Fi › \"Parear novo dispositivo\", preencha o IP, a porta e o código mostrados e toque em Parear.\n4. Depois: preencha a porta mostrada na tela Depuração por Wi‑Fi (IP:porta) e toque em Instalar.'**
+  /// **'1. No relógio: Configurações › Sobre › Software, toque 7 vezes em \"Versão do software\" para liberar as Opções do desenvolvedor.\n2. Em Opções do desenvolvedor, ligue \"Depuração ADB\" e \"Depuração por Wi‑Fi\". Deixe o relógio no carregador, com a tela ligada, para o Wi‑Fi não dormir.\n3. Primeira vez: em Depuração por Wi‑Fi › \"Parear novo dispositivo\", preencha o IP, a porta e o código mostrados.\n4. Toque em Instalar. Das próximas vezes basta o IP: deixe a porta e o código em branco.'**
   String get watchSteps;
 
   /// No description provided for @watchIp.
@@ -1073,31 +1073,19 @@ abstract class AppText {
   /// No description provided for @watchPairPort.
   ///
   /// In pt, this message translates to:
-  /// **'Porta de pareamento'**
+  /// **'Porta de pareamento (só na 1ª vez)'**
   String get watchPairPort;
 
   /// No description provided for @watchPairCode.
   ///
   /// In pt, this message translates to:
-  /// **'Código de 6 dígitos'**
+  /// **'Código (só na 1ª vez)'**
   String get watchPairCode;
-
-  /// No description provided for @watchConnectPort.
-  ///
-  /// In pt, this message translates to:
-  /// **'Porta de conexão'**
-  String get watchConnectPort;
-
-  /// No description provided for @watchPair.
-  ///
-  /// In pt, this message translates to:
-  /// **'Parear'**
-  String get watchPair;
 
   /// No description provided for @watchPaired.
   ///
   /// In pt, this message translates to:
-  /// **'Relógio pareado. Agora preencha a porta de conexão e toque em Instalar.'**
+  /// **'Relógio pareado. Instalando…'**
   String get watchPaired;
 
   /// No description provided for @watchInstall.
@@ -1109,7 +1097,7 @@ abstract class AppText {
   /// No description provided for @watchFillFields.
   ///
   /// In pt, this message translates to:
-  /// **'Preencha o IP e as portas com números.'**
+  /// **'Preencha o IP do relógio; na primeira vez, também a porta de pareamento e o código.'**
   String get watchFillFields;
 }
 

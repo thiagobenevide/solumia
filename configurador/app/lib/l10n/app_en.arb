@@ -159,13 +159,11 @@
   "updateButton": "Update",
   "watchInstallButton": "Install on the watch (Wi‑Fi)",
   "watchInstallTitle": "Install on the watch over the network",
-  "watchSteps": "1. On the watch: Settings › About › Software, tap \"Software version\" 7 times to unlock Developer options.\n2. In Developer options, turn on \"ADB debugging\" and \"Debug over Wi‑Fi\" (watch and PC on the same network).\n3. The first time: in Debug over Wi‑Fi › \"Pair new device\", fill in the IP, port and code it shows and tap Pair.\n4. Then: fill in the port shown on the Debug over Wi‑Fi screen (IP:port) and tap Install.",
+  "watchSteps": "1. On the watch: Settings › About › Software, tap \"Software version\" 7 times to unlock Developer options.\n2. In Developer options, turn on \"ADB debugging\" and \"Debug over Wi‑Fi\". Keep the watch on the charger with the screen on so Wi‑Fi does not sleep.\n3. First time: in Debug over Wi‑Fi › \"Pair new device\", fill in the IP, port and code it shows.\n4. Tap Install. Next times only the IP is needed: leave the port and code empty.",
   "watchIp": "Watch IP",
-  "watchPairPort": "Pairing port",
-  "watchPairCode": "6-digit code",
-  "watchConnectPort": "Connection port",
-  "watchPair": "Pair",
-  "watchPaired": "Watch paired. Now fill in the connection port and tap Install.",
+  "watchPairPort": "Pairing port (first time only)",
+  "watchPairCode": "Code (first time only)",
+  "watchPaired": "Watch paired. Installing…",
   "watchInstall": "Install",
-  "watchFillFields": "Fill in the IP and the ports with numbers."
+  "watchFillFields": "Fill in the watch IP; the first time, also the pairing port and code."
 }

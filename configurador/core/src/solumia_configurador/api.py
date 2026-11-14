@@ -115,7 +115,7 @@ class WatchPairInput(BaseModel):
 
 class WatchInstallInput(BaseModel):
     host: str
-    porta: int
+    porta: int | None = None  # found by the configurator when empty
 
 
 class FingerprintInput(BaseModel):
@@ -346,7 +346,7 @@ def create_app(state: State, token: str, porta: int) -> FastAPI:
         if not domain:
             raise HTTPException(422, "configure a VPS (domínio) antes de instalar o relógio")
         try:
-            watch.check_address(dados.host, dados.porta)
+            watch.check_address(dados.host, dados.porta or 1)
         except watch.WatchError as error:
             raise HTTPException(422, str(error)) from error
         url = f"https://{domain}"
@@ -366,8 +366,8 @@ def create_app(state: State, token: str, porta: int) -> FastAPI:
             watch.install(ctx.recursos["relogio"], Path(ctx.recursos["apk_relogio"]), url, key, log=ctx.log)
 
         return s.store_plan(Plan("Instalar o Solumia no relógio", [
-            Step("conectar", f"Conectar ao relógio {dados.host}:{dados.porta}",
-                 "adb por Wi-Fi (depuração sem fio ligada no relógio)", conectar),
+            Step("conectar", f"Conectar ao relógio {dados.host}",
+                 "adb por Wi-Fi; a porta de conexão é encontrada sozinha", conectar),
             Step("chave", f"Conferir a chave do relógio em {url}",
                  "chave própria do relógio: só abre as rotas dele", conferir_chave),
             Step("baixar", "Baixar o app do relógio da release",

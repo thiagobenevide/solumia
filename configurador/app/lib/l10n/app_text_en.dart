@@ -541,30 +541,24 @@ class AppTextEn extends AppText {
 
   @override
   String get watchSteps =>
-      '1. On the watch: Settings › About › Software, tap \"Software version\" 7 times to unlock Developer options.\n2. In Developer options, turn on \"ADB debugging\" and \"Debug over Wi‑Fi\" (watch and PC on the same network).\n3. The first time: in Debug over Wi‑Fi › \"Pair new device\", fill in the IP, port and code it shows and tap Pair.\n4. Then: fill in the port shown on the Debug over Wi‑Fi screen (IP:port) and tap Install.';
+      '1. On the watch: Settings › About › Software, tap \"Software version\" 7 times to unlock Developer options.\n2. In Developer options, turn on \"ADB debugging\" and \"Debug over Wi‑Fi\". Keep the watch on the charger with the screen on so Wi‑Fi does not sleep.\n3. First time: in Debug over Wi‑Fi › \"Pair new device\", fill in the IP, port and code it shows.\n4. Tap Install. Next times only the IP is needed: leave the port and code empty.';
 
   @override
   String get watchIp => 'Watch IP';
 
   @override
-  String get watchPairPort => 'Pairing port';
+  String get watchPairPort => 'Pairing port (first time only)';
 
   @override
-  String get watchPairCode => '6-digit code';
+  String get watchPairCode => 'Code (first time only)';
 
   @override
-  String get watchConnectPort => 'Connection port';
-
-  @override
-  String get watchPair => 'Pair';
-
-  @override
-  String get watchPaired =>
-      'Watch paired. Now fill in the connection port and tap Install.';
+  String get watchPaired => 'Watch paired. Installing…';
 
   @override
   String get watchInstall => 'Install';
 
   @override
-  String get watchFillFields => 'Fill in the IP and the ports with numbers.';
+  String get watchFillFields =>
+      'Fill in the watch IP; the first time, also the pairing port and code.';
 }

@@ -542,30 +542,24 @@ class AppTextPt extends AppText {
 
   @override
   String get watchSteps =>
-      '1. No relógio: Configurações › Sobre › Software, toque 7 vezes em \"Versão do software\" para liberar as Opções do desenvolvedor.\n2. Em Opções do desenvolvedor, ligue \"Depuração ADB\" e \"Depuração por Wi‑Fi\" (relógio e PC na mesma rede).\n3. Na primeira vez: em Depuração por Wi‑Fi › \"Parear novo dispositivo\", preencha o IP, a porta e o código mostrados e toque em Parear.\n4. Depois: preencha a porta mostrada na tela Depuração por Wi‑Fi (IP:porta) e toque em Instalar.';
+      '1. No relógio: Configurações › Sobre › Software, toque 7 vezes em \"Versão do software\" para liberar as Opções do desenvolvedor.\n2. Em Opções do desenvolvedor, ligue \"Depuração ADB\" e \"Depuração por Wi‑Fi\". Deixe o relógio no carregador, com a tela ligada, para o Wi‑Fi não dormir.\n3. Primeira vez: em Depuração por Wi‑Fi › \"Parear novo dispositivo\", preencha o IP, a porta e o código mostrados.\n4. Toque em Instalar. Das próximas vezes basta o IP: deixe a porta e o código em branco.';
 
   @override
   String get watchIp => 'IP do relógio';
 
   @override
-  String get watchPairPort => 'Porta de pareamento';
+  String get watchPairPort => 'Porta de pareamento (só na 1ª vez)';
 
   @override
-  String get watchPairCode => 'Código de 6 dígitos';
+  String get watchPairCode => 'Código (só na 1ª vez)';
 
   @override
-  String get watchConnectPort => 'Porta de conexão';
-
-  @override
-  String get watchPair => 'Parear';
-
-  @override
-  String get watchPaired =>
-      'Relógio pareado. Agora preencha a porta de conexão e toque em Instalar.';
+  String get watchPaired => 'Relógio pareado. Instalando…';
 
   @override
   String get watchInstall => 'Instalar';
 
   @override
-  String get watchFillFields => 'Preencha o IP e as portas com números.';
+  String get watchFillFields =>
+      'Preencha o IP do relógio; na primeira vez, também a porta de pareamento e o código.';
 }

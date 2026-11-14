@@ -12,8 +12,11 @@ from __future__ import annotations
 import ipaddress
 import os
 import shutil
+import socket
 import subprocess
+import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import httpx
@@ -25,6 +28,8 @@ _ADB_CANDIDATES = (
     Path.home() / "development/android-sdk/platform-tools/adb",
     Path("/usr/bin/adb"),
 )
+# Android picks the wireless-debugging port among the high ephemeral ports.
+_SCAN_FIRST, _SCAN_LAST = 30000, 49999
 
 
 class WatchError(Exception):
@@ -77,12 +82,116 @@ def pair(host: str, port: int, code: str, log: Callable[[str], None] = print) ->
         raise WatchError("o relógio recusou o pareamento: confira a porta e o código (eles mudam a cada vez)")
 
 
-def connect(host: str, port: int, log: Callable[[str], None] = print) -> str:
-    target = check_address(host, port)
-    output = _adb(["connect", target], log)
-    if "connected to" not in output:
-        raise WatchError("não conectou: o relógio está com a depuração por Wi-Fi ligada e na mesma rede?")
-    return target
+def _device_states() -> dict[str, str]:
+    """`adb devices`: serial → state (device, offline, unauthorized)."""
+    result = subprocess.run([adb_path(), "devices"], capture_output=True, text=True, timeout=15, check=False)
+    states: dict[str, str] = {}
+    for line in result.stdout.splitlines()[1:]:
+        parts = line.split()
+        if len(parts) >= 2:
+            states[parts[0]] = parts[1]
+    return states
+
+
+def _drop_stale(host: str, log: Callable[[str], None]) -> None:
+    """Old entries of this watch (another port, or stuck `offline`) make adb pick the wrong one."""
+    prefix = check_address(host, 1).rsplit(":", 1)[0] + ":"
+    for serial in _device_states():
+        if serial.startswith(prefix):
+            subprocess.run([adb_path(), "disconnect", serial], capture_output=True, timeout=15, check=False)
+            log(f"Conexão antiga desfeita: {serial}")
+
+
+def discover_port(host: str, log: Callable[[str], None]) -> int | None:
+    """Current wireless-debugging port announced by the watch over mDNS (it changes every time
+    wireless debugging is turned on); None when the network does not carry mDNS."""
+    try:
+        result = subprocess.run([adb_path(), "mdns", "services"], capture_output=True, text=True,
+                                timeout=10, check=False)
+    except subprocess.TimeoutExpired:
+        return None
+    for line in result.stdout.splitlines():
+        if "_adb-tls-connect" not in line:
+            continue
+        address = line.split()[-1]
+        found_host, _, port = address.rpartition(":")
+        if found_host.strip("[]") == host.strip() and port.isdigit():
+            log(f"Porta atual anunciada pelo relógio: {port}")
+            return int(port)
+    return None
+
+
+def _wait_ready(target: str, log: Callable[[str], None], seconds: int = 20) -> None:
+    state = ""
+    for _ in range(seconds):
+        state = _device_states().get(target, "")
+        if state == "device":
+            log(f"Relógio pronto: {target}")
+            return
+        time.sleep(1)
+    if state == "unauthorized":
+        raise WatchError("o relógio não autorizou este PC: refaça o pareamento (Parear novo dispositivo)")
+    raise WatchError(f"o relógio conectou mas ficou '{state or 'sem resposta'}': deixe a tela dele ligada, "
+                     "confira se a depuração por Wi-Fi continua ativa e tente de novo")
+
+
+def _port_open(host: str, port: int) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=1.5):
+            return True
+    except OSError:
+        return False
+
+
+def scan_ports(host: str, log: Callable[[str], None]) -> list[int]:
+    """Open TCP ports of the watch in the range Android uses for wireless debugging. Used when mDNS
+    does not cross the network (e.g. PC on cable, watch on Wi-Fi): only the watch's own local IP."""
+    check_address(host, 1)
+    log(f"Procurando a porta da depuração por Wi-Fi em {host} ({_SCAN_FIRST}–{_SCAN_LAST})…")
+    found: list[int] = []
+    with ThreadPoolExecutor(max_workers=400) as pool:
+        ports = range(_SCAN_FIRST, _SCAN_LAST + 1)
+        for port, is_open in zip(ports, pool.map(lambda p: _port_open(host, p), ports), strict=True):
+            if is_open:
+                found.append(port)
+    log(f"Portas abertas: {', '.join(map(str, found)) or 'nenhuma'}")
+    return found
+
+
+def _try_connect(target: str, log: Callable[[str], None]) -> str:
+    """Output of `adb connect` (never raises: the caller decides with the next candidate)."""
+    result = subprocess.run([adb_path(), "connect", target], capture_output=True, text=True,
+                            timeout=20, check=False)
+    output = (result.stdout + result.stderr).strip()
+    log(output)
+    return output
+
+
+def connect(host: str, port: int | None = None, log: Callable[[str], None] = print) -> str:
+    """Connects to the watch without asking for the connection port: mDNS, the given port, or a scan."""
+    _drop_stale(host, log)
+    candidates: list[int] = []
+    announced = discover_port(host, log)
+    if announced:
+        candidates.append(announced)
+    if port and port not in candidates:
+        candidates.append(port)
+    if not candidates:
+        candidates = scan_ports(host, log)
+    if not candidates:
+        raise WatchError(
+            "não achei a depuração por Wi-Fi no relógio: abra Opções do desenvolvedor › Depuração por "
+            "Wi-Fi no relógio, deixe essa tela aberta com o relógio no carregador e tente de novo")
+    for candidate in candidates:
+        target = check_address(host, candidate)
+        if "connected to" in _try_connect(target, log):
+            _wait_ready(target, log)
+            return target
+        # a failed try (e.g. the pairing port) leaves an `offline` entry behind
+        subprocess.run([adb_path(), "disconnect", target], capture_output=True, timeout=15, check=False)
+    raise WatchError(
+        "o relógio não aceitou a conexão: deixe a tela Depuração por Wi-Fi aberta no relógio (de "
+        "preferência no carregador, para o Wi-Fi não dormir) e tente de novo; se continuar, pareie de novo")
 
 
 def check_key(url: str, key: str, log: Callable[[str], None] = print) -> None:

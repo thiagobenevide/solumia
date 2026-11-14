@@ -543,30 +543,24 @@ class AppTextEs extends AppText {
 
   @override
   String get watchSteps =>
-      '1. En el reloj: Ajustes › Acerca de › Software, toca 7 veces \"Versión de software\" para activar las Opciones de desarrollador.\n2. En Opciones de desarrollador, activa \"Depuración ADB\" y \"Depuración por Wi‑Fi\" (reloj y PC en la misma red).\n3. La primera vez: en Depuración por Wi‑Fi › \"Vincular nuevo dispositivo\", completa la IP, el puerto y el código que muestra y toca Vincular.\n4. Después: completa el puerto que aparece en la pantalla Depuración por Wi‑Fi (IP:puerto) y toca Instalar.';
+      '1. En el reloj: Ajustes › Acerca de › Software, toca 7 veces \"Versión de software\" para activar las Opciones de desarrollador.\n2. En Opciones de desarrollador, activa \"Depuración ADB\" y \"Depuración por Wi‑Fi\". Deja el reloj en el cargador con la pantalla encendida para que el Wi‑Fi no se duerma.\n3. La primera vez: en Depuración por Wi‑Fi › \"Vincular nuevo dispositivo\", completa la IP, el puerto y el código que muestra.\n4. Toca Instalar. Las próximas veces solo hace falta la IP: deja el puerto y el código vacíos.';
 
   @override
   String get watchIp => 'IP del reloj';
 
   @override
-  String get watchPairPort => 'Puerto de vinculación';
+  String get watchPairPort => 'Puerto de vinculación (solo la 1.ª vez)';
 
   @override
-  String get watchPairCode => 'Código de 6 dígitos';
+  String get watchPairCode => 'Código (solo la 1.ª vez)';
 
   @override
-  String get watchConnectPort => 'Puerto de conexión';
-
-  @override
-  String get watchPair => 'Vincular';
-
-  @override
-  String get watchPaired =>
-      'Reloj vinculado. Ahora completa el puerto de conexión y toca Instalar.';
+  String get watchPaired => 'Reloj vinculado. Instalando…';
 
   @override
   String get watchInstall => 'Instalar';
 
   @override
-  String get watchFillFields => 'Completa la IP y los puertos con números.';
+  String get watchFillFields =>
+      'Completa la IP del reloj; la primera vez, también el puerto de vinculación y el código.';
 }
