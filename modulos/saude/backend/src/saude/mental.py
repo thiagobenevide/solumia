@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from saude.treinos import Invalido, NaoEncontrado, _gravar, _ler
+from saude.workouts import Invalido, NaoEncontrado, _gravar, _ler
 
 CAMPOS_HABITO = {"nome", "tipo", "dias_semana", "descricao", "arquivado"}
 CAMPOS_DIARIO = {"humor", "ansiedade", "gatilhos", "o_que_fiz", "gratidao", "texto"}

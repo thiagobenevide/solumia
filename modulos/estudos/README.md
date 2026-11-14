@@ -21,7 +21,7 @@ Implementado:
   com a ficha da leitura de mesmo `arquivo_id` (T001, `[Autor Ano]`, `Autor (Ano)`), `PATCH …/itens/{id}`
   classifica no projeto (seção, tipo de citação/conteúdo, status de uso, paráfrase) e `…/exportar` gera o
   `.xlsx` (Trabalhos, Trechos, Painel, Referências) no molde de `docs/Mapeamento de Conteúdo.xlsx`.
-- Mapeamento reverso (`plataforma/backend/src/backend/arquivos/mapeamento.py`): `POST …/{id}/documento` guarda o
+- Mapeamento reverso (`plataforma/backend/src/backend/files/mapping.py`): `POST …/{id}/documento` guarda o
   `.docx` pronto nos Arquivos e o Claude (`claude_json` no worker) lista referências e citações, liga cada uma a
   um PDF da biblioteca e marca o trecho (destaque no projeto, já classificado); sem PDF → pendência + tarefa no
   Quadro. `POST …/{id}/mapeamento` refaz (só acrescenta). Painel em `app/lib/src/telas/mapeamento_painel.dart`.
@@ -39,7 +39,7 @@ Implementado:
   `responder` dá nota por critério, CEFR, texto corrigido e correções), `leituras-voz` (gravação × texto:
   `shared/linguagem.py` marca certas/trocadas/puladas, ppm e pausas; o worker soma a pronúncia por fonema),
   `atividades` (minutos entram na trilha do idioma) e `progresso`.
-  Worker: `falar_marcado` e `avaliar_leitura` em `worker/voz.py`; pronúncia em `worker/pronuncia.py` +
+  Worker: `falar_marcado` e `avaliar_leitura` em `worker/voice.py`; pronúncia em `worker/pronunciation.py` +
   `worker/pronuncia/servidor.py` (wav2vec2 `facebook/wav2vec2-lv-60-espeak-cv-ft` no venv do XTTS, que já tem torch;
   sem ele, avalia só as palavras). Fala em `.m4a` se houver `ffmpeg`.
 - `app/` (`agent_estudos`): abas Leituras (com a vista Projetos: matriz em cartões, filtros, cobertura), Trilhas (etapas por fase, estante, nota da etapa no cofre) (nota de síntese aberta no editor de Notas, com link

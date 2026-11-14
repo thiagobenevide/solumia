@@ -17,73 +17,73 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend import __version__
-from backend.api.atualizacoes import router as atualizacoes_router
+from backend.api.updates import router as atualizacoes_router
 from backend.api.deps import exigir_totp_recente, require_client_api_key
 from backend.api.health import router as health_router
 from backend.api.llm import router as llm_router
 from backend.api.v1.router import router as v1_router
 from backend.api.ws.worker import router as ws_router
-from backend.arquivos.api import router as arquivos_router
-from backend.arquivos.biblioteca import Biblioteca
-from backend.arquivos.mapeamento import router as mapeamento_router
-from backend.arquivos.reescrita import Reescrita, texto_do_documento
-from backend.arquivos.reescrita import router as reescrita_router
-from backend.arquivos.wopi import router as wopi_router
+from backend.files.api import router as arquivos_router
+from backend.files.library import Biblioteca
+from backend.files.mapping import router as mapeamento_router
+from backend.files.rewrite import Reescrita, texto_do_documento
+from backend.files.rewrite import router as reescrita_router
+from backend.files.wopi import router as wopi_router
 from backend.auth.api import Tentativas
 from backend.auth.api import router as auth_router
 from backend.core.config import Settings, get_settings
 from backend.core.logging import configure_logging
-from backend.core.modelo_llm import ModeloLLM
+from backend.core.llm_model import ModeloLLM
 from backend.core.worker_registry import (
     WorkerDisconnected,
     WorkerRegistry,
     WorkerRespondedWithError,
 )
 from backend.internet import Internet
-from backend.middleware.cabecalhos import CabecalhosSegurancaMiddleware
+from backend.middleware.headers import CabecalhosSegurancaMiddleware
 from backend.middleware.request_id import RequestIdMiddleware
-from backend.notas.api import router as notas_router
-from backend.notas.cofre import Cofre
+from backend.notes.api import router as notas_router
+from backend.notes.vault import Cofre
 from codigo.api import Executor as ExecutorCodigo
 from codigo.api import router as codigo_router
-from codigo.sessoes import SessaoNaoEncontrada, Sessoes
+from codigo.sessions import SessaoNaoEncontrada, Sessoes
 from concursos.api import IA as ConcursosIA
 from concursos.api import router as concursos_router
-from concursos.api_vagas import router as vagas_router
-from concursos.concursos import Concursos
+from concursos.api_jobs import router as vagas_router
+from concursos.exams import Concursos
 from concursos.radar import Radar
-from concursos.rumores import Rumores
-from concursos.vagas import Vagas
+from concursos.rumors import Rumores
+from concursos.jobs import Vagas
 from design.api import router as design_router
-from design.cadernos import router as cadernos_router
-from design.imagens import Imagens
-from design.quadros import Quadros
-from design.wireframe_ia import TIPOS as TIPOS_WIREFRAME
+from design.notebooks import router as cadernos_router
+from design.images import Imagens
+from design.boards import Quadros
+from design.ai_wireframe import TIPOS as TIPOS_WIREFRAME
 from eletronica.api import router as eletronica_router
-from eletronica.api_simulacao import router as eletronica_simulacao_router
-from eletronica.bibliotecas import Bibliotecas as BibliotecasEletronica
-from eletronica.projetos import Projetos
-from eletronica.simulacao import Simulacoes
+from eletronica.api_simulation import router as eletronica_simulacao_router
+from eletronica.libraries import Bibliotecas as BibliotecasEletronica
+from eletronica.projects import Projetos
+from eletronica.simulation import Simulacoes
 from estudos.api import router as estudos_router
-from estudos.estudos import Estudos, Invalido
-from estudos.linguagem import Linguagem, extrair_json
+from estudos.studies import Estudos, Invalido
+from estudos.language import Linguagem, extrair_json
 from financas.api import router as financas_router
-from financas.armazem import Armazem
+from financas.warehouse import Armazem
 from painel.api import Fontes, Voz
 from painel.api import LLMIndisponivel as PainelLLMIndisponivel
 from painel.api import router as painel_router
-from painel.cobrador import Cobrador
-from painel.medidor import Medidor
-from painel.notificador import Notificador
+from painel.nagger import Cobrador
+from painel.meter import Medidor
+from painel.notifier import Notificador
 from rotinas.api import LLMIndisponivel
 from rotinas.api import router as rotinas_router
-from rotinas.quadro import Quadro
+from rotinas.board import Quadro
 from saude.api import router as saude_router
-from saude.treinos import Treinos
+from saude.workouts import Treinos
 from shared.claude_code import claude_json, rewrite
 from shared.ngspice import run_ngspice
 from youtube.api import router as youtube_router
-from youtube.canais import Youtube
+from youtube.channels import Youtube
 
 logger = logging.getLogger("gateway")
 
@@ -385,8 +385,8 @@ def _buscar_no_pc(registry: WorkerRegistry) -> Any:
 
 
 def _acoes_modulos(estado: Any) -> dict[str, Any]:
-    """O que o Cobrador consegue criar nos outros módulos pelo chat (ver `painel.agente`)."""
-    from design import fluxos
+    """O que o Cobrador consegue criar nos outros módulos pelo chat (ver `painel.agent`)."""
+    from design import flows
 
     async def caderno(a: dict[str, Any], _llm: Any) -> str:
         c = estado.cadernos_design.criar({"titulo": str(a.get("titulo") or "Caderno")[:200]})
@@ -398,10 +398,10 @@ def _acoes_modulos(estado: Any) -> dict[str, Any]:
 
     async def fluxograma(a: dict[str, Any], llm: Any) -> str:
         pedido = str(a.get("descricao") or a.get("titulo") or "")
-        fluxo = await fluxos.gerar(llm, pedido)
+        fluxo = await flows.gerar(llm, pedido)
         titulo = str(a.get("titulo") or fluxo.get("titulo") or "Fluxograma")[:200]
         q = estado.quadros_design.criar(
-            {"titulo": titulo, "elementos": fluxos.elementos(fluxo, uuid4().hex[:8])}
+            {"titulo": titulo, "elementos": flows.elementos(fluxo, uuid4().hex[:8])}
         )
         return f"Fluxograma criado no Design: {q['titulo']} ({len(fluxo['nos'])} blocos)"
 

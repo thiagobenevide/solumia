@@ -7,11 +7,11 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from estudos.api_linguagem import router as linguagem_router
-from estudos.conhecimento import ItemInexistente
-from estudos.estudos import AREAS, STATUS_LEITURA, Estudos, Invalido, NaoEncontrado
-from estudos.idiomas import IDIOMAS, NIVEIS
-from estudos.projetos import STATUS_USO, TIPOS_CITACAO, TIPOS_CONTEUDO, exportar_xlsx
+from estudos.api_language import router as linguagem_router
+from estudos.knowledge import ItemInexistente
+from estudos.studies import AREAS, STATUS_LEITURA, Estudos, Invalido, NaoEncontrado
+from estudos.languages import IDIOMAS, NIVEIS
+from estudos.projects import STATUS_USO, TIPOS_CITACAO, TIPOS_CONTEUDO, exportar_xlsx
 
 router = APIRouter(tags=["estudos"])
 router.include_router(linguagem_router)

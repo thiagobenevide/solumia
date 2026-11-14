@@ -11,9 +11,9 @@ import re
 import struct
 from typing import Any
 
-from eletronica.biblioteca import POR_ID
+from eletronica.library import POR_ID
 from eletronica.netlist import netlist
-from eletronica.projetos import BuscaSimbolo
+from eletronica.projects import BuscaSimbolo
 
 ANALISES = ("op", "tran", "ac", "dc")
 

@@ -23,14 +23,14 @@ router do backend, despacha os jobs do worker e monta as telas do app.
 - `app/`: abas Hoje (placar, alertas, agenda editável), Cobrador (chat) e Metas.
 - Agente: o LLM pode terminar a resposta com um bloco ```acoes``` (criar tarefa/nota, mexer na
   agenda, registrar meta, concluir/mover tarefa); o servidor executa e devolve `executadas`
-  (`painel/agente.py`). Consultas (`pesquisar_web`, `pesquisar_notas`, `analisar_desempenho`) voltam
+  (`painel/agent.py`). Consultas (`pesquisar_web`, `pesquisar_notas`, `analisar_desempenho`) voltam
   ao LLM numa segunda rodada antes da resposta final.
 - Outros módulos: `Fontes.modulos` (registrado em `_acoes_modulos` no `main.py` da plataforma) dá
   ao agente `criar_caderno`, `criar_quadro`, `criar_fluxograma` (Design) e `criar_projeto_estudo`,
   `criar_leitura` (Estudos). Módulo novo = mais uma entrada ali.
 - Velocidade: o prompt de sistema só tem o que quase não muda (instruções, agenda, até 40 tarefas
   abertas); hora e alertas vão na última mensagem, para o llama-server reaproveitar o cache.
-- Desempenho: `GET /desempenho?dias=30` (`painel/desempenho.py`: concluídas, no prazo, atrasadas,
+- Desempenho: `GET /desempenho?dias=30` (`painel/performance.py`: concluídas, no prazo, atrasadas,
   aderência à agenda por dia da semana, metas); mensagens com “desempenho/produtividade” já levam a
   análise ao prompt.
 - Voz: `POST /voz` (WAV → transcrição no worker → conversa) e `POST /falar` (texto → WAV). No worker:

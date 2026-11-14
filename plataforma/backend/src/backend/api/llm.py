@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from backend.api.deps import require_client_api_key
-from backend.core.modelo_llm import ModeloLLM
+from backend.core.llm_model import ModeloLLM
 from backend.core.worker_registry import (
     WorkerDisconnected,
     WorkerRegistry,

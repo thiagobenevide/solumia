@@ -15,7 +15,7 @@ only when local inference cannot answer with confidence.
 | Structured-output LLM calls | `esteira/ia/local.py` | `perguntar(prompt, Modelo)` returns a pydantic instance or `None` after two attempts; cached in `cache/llm.jsonl` |
 | Embeddings | `esteira/ia/embeddings.py` | EmbeddingGemma 300M on a dedicated `llama-server --embeddings` on the CPU (port 8082) |
 | LoRA fine-tuning | `esteira/ia/treinar_lora.py` | trains adapters from approved outputs (unsloth + trl); one adapter per Craft App, loaded on top of the base model |
-| Speech-to-text | `plataforma/worker/src/worker/voz.py` | faster-whisper on the GPU, with a filter for typical Whisper hallucinations |
+| Speech-to-text | `plataforma/worker/src/worker/voice.py` | faster-whisper on the GPU, with a filter for typical Whisper hallucinations |
 | Text-to-speech | `plataforma/worker/xtts/servidor.py`, `voz.py` | XTTS-v2; fallbacks Kokoro (per-language voices), Piper and espeak-ng |
 | Image generation | pipeline (`thumbs.py`, `imagem/`) | RealVisXL / SDXL for thumbnails |
 | Circuit simulation | `plataforma/shared/src/shared/ngspice.py` | ngspice on the worker (not AI, but uses the same task queue) |
@@ -62,7 +62,7 @@ sequenceDiagram
 - `llama-server` is **shared** between the worker and the pipeline (whoever starts first launches it) and
   outlives the worker.
 - **Switching models is rejected with 409** while any client is using the LLM.
-- The worker reports CPU, RAM and GPU load with every heartbeat (`worker/recursos.py`, via `nvidia-smi`), shown
+- The worker reports CPU, RAM and GPU load with every heartbeat (`worker/resources.py`, via `nvidia-smi`), shown
   in the app.
 
 ## Escalation from local to cloud

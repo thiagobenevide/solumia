@@ -393,7 +393,7 @@ def test_noticias_do_rss() -> None:
 
     import httpx
 
-    from backend.internet.ferramentas import noticias
+    from backend.internet.tools import noticias
 
     rss = """<rss><channel>
     <item><title>Selic fica em 10% - Valor</title><link>https://a/1</link>
@@ -418,7 +418,7 @@ def test_moedas_cai_para_o_yahoo_quando_a_awesomeapi_recusa() -> None:
 
     import httpx
 
-    from backend.internet.ferramentas import moedas
+    from backend.internet.tools import moedas
 
     def responder(r: httpx.Request) -> httpx.Response:
         if "awesomeapi" in r.url.host:

@@ -7,7 +7,7 @@ import pytest
 from conftest import AUTH_HEADERS, CLIENT_API_KEY
 from fastapi.testclient import TestClient
 
-from backend.auth.seguranca import emitir_token
+from backend.auth.security import emitir_token
 from backend.core.config import Settings
 from backend.main import create_app
 from codigo.api import Executor

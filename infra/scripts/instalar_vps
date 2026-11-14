@@ -95,12 +95,12 @@ fi
 if [ -n "$senha" ]; then
     [ "${#senha}" -ge 12 ] || falha "ADMIN_SENHA precisa de ao menos 12 caracteres."
     hash_senha="$(SENHA="$senha" no_gateway -e SENHA gateway python -c \
-        'import os; from backend.auth.seguranca import gerar_hash_senha as g; print(g(os.environ["SENHA"]))')"
+        'import os; from backend.auth.security import gerar_hash_senha as g; print(g(os.environ["SENHA"]))')"
 fi
 totp="$(valor GATEWAY_ADMIN_TOTP_SEGREDO)"
 totp_novo=0
 if [ -z "$totp" ]; then
-    totp="$(no_gateway gateway python -c 'from backend.auth.seguranca import gerar_segredo_totp as g; print(g())')"
+    totp="$(no_gateway gateway python -c 'from backend.auth.security import gerar_segredo_totp as g; print(g())')"
     totp_novo=1
 fi
 usuario="$(valor GATEWAY_ADMIN_USUARIO admin)"
@@ -268,7 +268,7 @@ Apps (celular/tablet):
 EOF
 if [ "$totp_novo" = 1 ]; then
     uri="$(no_gateway gateway python -c \
-        "from backend.auth.seguranca import uri_totp; print(uri_totp('$totp', '$usuario'))")"
+        "from backend.auth.security import uri_totp; print(uri_totp('$totp', '$usuario'))")"
     echo
     echo "Google Authenticator: escaneie o QR ou use a chave $totp"
     command -v qrencode >/dev/null && qrencode -t ansiutf8 "$uri"

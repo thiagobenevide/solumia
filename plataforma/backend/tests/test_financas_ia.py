@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from financas import cenarios, extrato
+from financas import scenarios, statement
 
 NUBANK_CONTA = (
     "Data,Valor,Identificador,Descrição\n"
@@ -54,13 +54,13 @@ MERCADO_PAGO = (
     ],
 )
 def test_formatos_dos_bancos(texto: str, fatura: bool, esperado: list[tuple[float, str]]) -> None:
-    itens = extrato.ler_csv(texto, fatura=fatura)
+    itens = statement.ler_csv(texto, fatura=fatura)
     tipo = "cartao" if fatura else "corrente"
-    assert [(i["valor"], extrato.forma_pagamento(i["descricao"], tipo)) for i in itens] == esperado
+    assert [(i["valor"], statement.forma_pagamento(i["descricao"], tipo)) for i in itens] == esperado
 
 
 def test_inter_junta_historico_e_descricao() -> None:
-    assert extrato.ler_csv(INTER)[0]["descricao"] == "Pix enviado - Padaria Bom Pão"
+    assert statement.ler_csv(INTER)[0]["descricao"] == "Pix enviado - Padaria Bom Pão"
 
 
 def test_planilha_xlsx_do_itau() -> None:
@@ -74,7 +74,7 @@ def test_planilha_xlsx_do_itau() -> None:
     folha.append([date(2026, 9, 4), "SALARIO", "", 3000.0])
     buf = io.BytesIO()
     livro.save(buf)
-    itens = extrato.ler_arquivo("itau.xlsx", buf.getvalue(), "corrente")
+    itens = statement.ler_arquivo("itau.xlsx", buf.getvalue(), "corrente")
     assert [(i["data"], i["valor"]) for i in itens] == [
         ("2026-09-03", -50.0),
         ("2026-09-04", 3000.0),
@@ -82,21 +82,21 @@ def test_planilha_xlsx_do_itau() -> None:
 
 
 def test_formato_desconhecido_vai_para_a_ia() -> None:
-    with pytest.raises(extrato.PrecisaIA):
-        extrato.ler_arquivo("x.csv", b"coluna;outra\n1;2\n", "corrente")
+    with pytest.raises(statement.PrecisaIA):
+        statement.ler_arquivo("x.csv", b"coluna;outra\n1;2\n", "corrente")
 
 
 def test_financiamento_price_e_sac() -> None:
-    price = cenarios.financiamento(40000, 0.24, 48, "price")
+    price = scenarios.financiamento(40000, 0.24, 48, "price")
     assert price["primeira"] == price["ultima"] and 1250 < price["primeira"] < 1300
-    sac = cenarios.financiamento(40000, 0.24, 48, "sac")
+    sac = scenarios.financiamento(40000, 0.24, 48, "sac")
     assert sac["primeira"] > sac["ultima"] and sac["juros"] < price["juros"]
 
 
 def test_faixas_mcmv() -> None:
-    assert cenarios.faixa_mcmv(2500)["faixa"] == "Faixa 1"
-    assert cenarios.faixa_mcmv(9000)["faixa"] == "Faixa 4"
-    assert cenarios.faixa_mcmv(20000) is None
+    assert scenarios.faixa_mcmv(2500)["faixa"] == "Faixa 1"
+    assert scenarios.faixa_mcmv(9000)["faixa"] == "Faixa 4"
+    assert scenarios.faixa_mcmv(20000) is None
 
 
 async def _llm_falso(mensagens: list[dict[str, str]]) -> str:

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from estudos.idiomas import cronograma, marcos, nivel_de_horas
+from estudos.languages import cronograma, marcos, nivel_de_horas
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 """Geração dos segredos da instalação, feita no host: a senha em claro nunca sai desta máquina.
 
-O formato do hash e do TOTP é o mesmo de `plataforma/backend/src/backend/auth/seguranca.py`
+O formato do hash e do TOTP é o mesmo de `plataforma/backend/src/backend/auth/security.py`
 (scrypt N=2^14, r=8, p=1; TOTP SHA1/6 dígitos/30 s), para o gateway aceitar sem mudança.
 """
 

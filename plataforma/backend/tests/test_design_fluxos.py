@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from design import fluxos
+from design import flows
 
 FLUXO = {
     "titulo": "Venda a prazo",
@@ -34,13 +34,13 @@ def test_extrai_json_de_resposta_com_think_e_cerca() -> None:
     resposta = (
         "<think>pensando {não é json}</think>\nAqui está:\n```json\n" + json.dumps(FLUXO) + "\n```"
     )
-    assert fluxos.extrair_json(resposta)["titulo"] == "Venda a prazo"
-    with pytest.raises(fluxos.FluxoInvalido):
-        fluxos.extrair_json("sem fluxo")
+    assert flows.extrair_json(resposta)["titulo"] == "Venda a prazo"
+    with pytest.raises(flows.FluxoInvalido):
+        flows.extrair_json("sem fluxo")
 
 
 def test_valida_e_posiciona_em_camadas() -> None:
-    f = fluxos.posicionar(fluxos.validar(FLUXO))
+    f = flows.posicionar(flows.validar(FLUXO))
     nos = {n["id"]: n for n in f["nos"]}
     assert nos["d"]["tipo"] == "decisao"
     assert len(f["ligacoes"]) == 5
@@ -53,11 +53,11 @@ def test_valida_e_posiciona_em_camadas() -> None:
 
 
 def test_mensagens_levam_codigo_cortado_e_fluxo_atual() -> None:
-    m = fluxos.montar_mensagens(
+    m = flows.montar_mensagens(
         "detalhe",
-        codigo="x" * (fluxos.MAX_CODIGO + 10),
+        codigo="x" * (flows.MAX_CODIGO + 10),
         arquivo="a.py",
-        atual=fluxos.posicionar(fluxos.validar(FLUXO)),
+        atual=flows.posicionar(flows.validar(FLUXO)),
     )
     usuario = m[1]["content"]
     assert "código cortado" in usuario and "a.py" in usuario and '"Cliente tem crédito?"' in usuario

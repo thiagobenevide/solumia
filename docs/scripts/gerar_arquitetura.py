@@ -166,7 +166,7 @@ P.append(pagina("4 · Empreendimento · YouTube", "Empreendimento: canais do You
     [APP, VPS, DADOS],
     [("ca", APP, 0, "aba Canais (lib/src/youtube)", ["youtube_aba → canal_tela → item_tela", "formulário montado pelo esquema"], "app", 2),
      ("api", VPS, 0, "/api/youtube (youtube/api.py)", ["canais.py: um canal = pasta do cofre", "esquema.py: coleções e campos"], "api", 2),
-     ("imp", VPS, 2, "python -m youtube.importar", ["copia o vault para o cofre"], "api"),
+     ("imp", VPS, 2, "python -m youtube.importer", ["copia o vault para o cofre"], "api"),
      ("cof", DADOS, 0, "cofre: YouTube/<canal>/", ["nota do canal (tipo: canal)", "Temas · História · Roteiros · Método"], "dados", 2),
      ("vault", DADOS, 2, "vault Obsidian", ["Notas/Empreendimento/YouTube/**.md"], "ext")],
     [("ca", "api", "HTTPS + JWT"), ("api", "cof", "Markdown"), ("vault", "imp", ""), ("imp", "cof", "")],

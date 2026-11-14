@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
-from worker.codigo import Codigo, etapas, linhas_novas, mudancas
+from worker.coding import Codigo, etapas, linhas_novas, mudancas
 
 
 def test_linhas_novas_e_mudancas() -> None:

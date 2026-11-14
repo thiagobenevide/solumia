@@ -6,7 +6,7 @@ from conftest import AUTH_HEADERS, CLIENT_API_KEY
 from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
-from backend.core.modelo_llm import ModeloLLM
+from backend.core.llm_model import ModeloLLM
 from backend.core.worker_registry import WorkerRegistry
 from backend.main import create_app
 

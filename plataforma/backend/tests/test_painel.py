@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from backend.core.config import Settings
 from backend.main import create_app
 from painel.api import LLMIndisponivel
-from painel.cobrador import Cobrador
+from painel.nagger import Cobrador
 
 HOJE = "2026-10-28"
 
@@ -281,13 +281,13 @@ def test_dashboard_mede_os_pedidos(app, api: TestClient) -> None:  # type: ignor
     assert d["provedores"]["claude"]["tokens_saida"] == 7
     assert d["recentes"][0]["provedor"] == "claude" and d["workers"] == []
     # o arquivo persiste: um novo medidor relê os pedidos
-    from painel.medidor import Medidor
+    from painel.meter import Medidor
 
     assert Medidor(m.raiz).resumo()["provedores"]["local"]["pedidos"] == 2
 
 
 def test_notificador_envia_cada_alerta_uma_vez(tmp_path: Path) -> None:
-    from painel.notificador import Notificador
+    from painel.notifier import Notificador
 
     enviados: list[tuple[str, str, str]] = []
     c = Cobrador(tmp_path)

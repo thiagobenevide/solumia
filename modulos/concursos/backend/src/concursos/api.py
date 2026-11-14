@@ -28,11 +28,11 @@ from fastapi import (
 )
 from pydantic import BaseModel, Field
 
-from concursos import plano_ia
-from concursos.concursos import Concursos, Invalido, NaoEncontrado
-from concursos.estudo import Invalido as EstudoInvalido
+from concursos import ai_plan
+from concursos.exams import Concursos, Invalido, NaoEncontrado
+from concursos.study import Invalido as EstudoInvalido
 from concursos.radar import Radar
-from concursos.rumores import Rumores
+from concursos.rumors import Rumores
 
 logger = logging.getLogger("concursos")
 router = APIRouter(tags=["concursos"])
@@ -251,7 +251,7 @@ async def radar_acompanhar(
         logger.warning("Edital do radar %s: %s", item_id, e)
         return concursos.obter(c["id"])
     if ia.disponivel() is None:
-        prompt = plano_ia.montar_prompt(
+        prompt = ai_plan.montar_prompt(
             concursos.obter(c["id"]), concursos.texto_edital(c["id"]), concursos.hoje().isoformat()
         )
         concursos.marcar_geracao(c["id"], "gerando")
@@ -342,8 +342,8 @@ async def _gerar(concursos: Concursos, ia: IA, id_: str, prompt: str) -> None:
         estrutura = await ia.executar(
             {
                 "prompt": prompt,
-                "sistema": plano_ia.SISTEMA,
-                "esquema": plano_ia.ESQUEMA,
+                "sistema": ai_plan.SISTEMA,
+                "esquema": ai_plan.ESQUEMA,
                 "limite_s": 840,
             }
         )
@@ -366,7 +366,7 @@ def gerar_plano(id_: str, concursos: ConcursosDep, ia: IADep, tarefas: Backgroun
     motivo = ia.disponivel()
     if motivo:
         raise HTTPException(503, motivo)
-    prompt = plano_ia.montar_prompt(c, edital, concursos.hoje().isoformat())
+    prompt = ai_plan.montar_prompt(c, edital, concursos.hoje().isoformat())
     concursos.marcar_geracao(id_, "gerando")
     tarefas.add_task(_gerar, concursos, ia, id_, prompt)
     return _obter(concursos, id_)
@@ -430,8 +430,8 @@ async def _gerar_simulado(
         dados = await ia.executar(
             {
                 "prompt": prompt,
-                "sistema": plano_ia.SISTEMA_SIMULADO,
-                "esquema": plano_ia.ESQUEMA_SIMULADO,
+                "sistema": ai_plan.SISTEMA_SIMULADO,
+                "esquema": ai_plan.ESQUEMA_SIMULADO,
                 "limite_s": min(840, 120 + n * 12),
             }
         )

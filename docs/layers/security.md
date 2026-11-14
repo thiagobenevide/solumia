@@ -31,7 +31,7 @@ flowchart TB
 | Brute force | per-IP lockout after failures (`Tentativas`) plus nginx `limit_req` (10/min, burst 5) |
 | PC commands | `/api/codigo` requires a TOTP entered within the last `codigo_totp_horas` |
 
-Generate the password hash, TOTP secret and JWT key: `.venv/bin/python -m backend.auth.seguranca`.
+Generate the password hash, TOTP secret and JWT key: `.venv/bin/python -m backend.auth.security`.
 
 ```mermaid
 sequenceDiagram

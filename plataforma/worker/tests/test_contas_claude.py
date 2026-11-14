@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from worker.contas_claude import PRINCIPAL, Contas
+from worker.claude_accounts import PRINCIPAL, Contas
 
 # `claude` falso: `auth status` diz logado só se a pasta da conta tiver `.credentials.json`;
 # `auth login` mostra o link, lê o código e grava a credencial.

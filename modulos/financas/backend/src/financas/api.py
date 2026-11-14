@@ -8,8 +8,8 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
 
-from financas import analise, estudo, extrato, relatorios
-from financas.armazem import ESQUEMAS, Armazem, Invalido, NaoEncontrado, data_iso
+from financas import analysis, study, statement, reports
+from financas.warehouse import ESQUEMAS, Armazem, Invalido, NaoEncontrado, data_iso
 
 router = APIRouter(tags=["financas"])
 
@@ -35,7 +35,7 @@ def _erro(e: Exception) -> HTTPException:
 @router.get("/resumo")
 def resumo(arm: ArmDep, mes: str | None = None) -> Any:
     try:
-        return relatorios.resumo(arm, mes or date.today().isoformat()[:7])
+        return reports.resumo(arm, mes or date.today().isoformat()[:7])
     except Invalido as e:
         raise _erro(e) from e
 
@@ -43,7 +43,7 @@ def resumo(arm: ArmDep, mes: str | None = None) -> Any:
 @router.get("/fluxo")
 def fluxo(arm: ArmDep, meses: int = 12, ate: str | None = None) -> Any:
     try:
-        return relatorios.fluxo(arm, max(1, min(meses, 60)), ate)
+        return reports.fluxo(arm, max(1, min(meses, 60)), ate)
     except Invalido as e:
         raise _erro(e) from e
 
@@ -53,7 +53,7 @@ def contrapartes(
     arm: ArmDep, de: str | None = None, ate: str | None = None, limite: int = 15
 ) -> Any:
     try:
-        return relatorios.contrapartes(arm, de, ate, limite)
+        return reports.contrapartes(arm, de, ate, limite)
     except Invalido as e:
         raise _erro(e) from e
 
@@ -61,7 +61,7 @@ def contrapartes(
 @router.get("/faturas/{conta_id}")
 def faturas(arm: ArmDep, conta_id: str) -> Any:
     try:
-        return relatorios.faturas(arm, conta_id)
+        return reports.faturas(arm, conta_id)
     except (NaoEncontrado, Invalido) as e:
         raise _erro(e) from e
 
@@ -70,22 +70,22 @@ def faturas(arm: ArmDep, conta_id: str) -> Any:
 def projecao(arm: ArmDep, dias: int = 60) -> Any:
     dias = max(1, min(dias, 366))
     return {
-        "itens": relatorios.projecao(arm, dias=dias),
-        "saldo": relatorios.projecao_saldo(arm, dias),
+        "itens": reports.projecao(arm, dias=dias),
+        "saldo": reports.projecao_saldo(arm, dias),
     }
 
 
 @router.post("/programacoes/{id_}/lancar", status_code=201)
 def lancar(arm: ArmDep, id_: str, corpo: Corpo) -> Any:
     try:
-        return relatorios.lancar(arm, id_, data_iso(corpo.get("data", "")))
+        return reports.lancar(arm, id_, data_iso(corpo.get("data", "")))
     except (NaoEncontrado, Invalido) as e:
         raise _erro(e) from e
 
 
 @router.get("/metas/progresso")
 def metas(arm: ArmDep) -> Any:
-    return relatorios.metas(arm)
+    return reports.metas(arm)
 
 
 # --- extrato ---
@@ -106,7 +106,7 @@ def transacoes(
         de_, ate_ = (data_iso(de) if de else ""), (data_iso(ate) if ate else "9999")
     except Invalido as e:
         raise _erro(e) from e
-    alvo = extrato.normalizar(q)
+    alvo = statement.normalizar(q)
     itens = [
         t
         for t in arm.todos("transacoes")
@@ -116,7 +116,7 @@ def transacoes(
         and (not sem_categoria or not t["categoria_id"])
         and (
             not alvo
-            or alvo in extrato.normalizar(f"{t['descricao']} {t['contraparte']} {t['observacao']}")
+            or alvo in statement.normalizar(f"{t['descricao']} {t['contraparte']} {t['observacao']}")
         )
     ]
     itens.sort(key=lambda t: (t["data"] or "", t["id"]), reverse=True)
@@ -139,7 +139,7 @@ def lote(arm: ArmDep, corpo: Corpo) -> Any:
                     "contraparte": dados.get("contraparte", ""),
                 },
             )
-            extrato.aplicar_regras(arm)
+            statement.aplicar_regras(arm)
     except (NaoEncontrado, Invalido) as e:
         raise _erro(e) from e
     return {"alteradas": len(feitas)}
@@ -235,24 +235,24 @@ async def importar(
         conta = arm.obter("contas", conta_id)
         _guardar_original(request, conta, nome, conteudo)
         try:
-            r = extrato.gravar_lancamentos(
-                arm, extrato.ler_arquivo(nome, conteudo, conta["tipo"]), conta_id
+            r = statement.gravar_lancamentos(
+                arm, statement.ler_arquivo(nome, conteudo, conta["tipo"]), conta_id
             )
             return _categorizar_novas(arm, llms.get(provedor), r)
-        except extrato.PrecisaIA as e:
+        except statement.PrecisaIA as e:
             from fastapi.responses import JSONResponse
 
-            from financas import ia
+            from financas import ai
 
             llm, texto = _llm(llms, provedor), e.texto
 
             async def trabalho() -> Any:
-                itens = await ia.extrair_lancamentos(llm, texto, fatura=conta["tipo"] == "cartao")
-                r = extrato.gravar_lancamentos(arm, itens, conta_id)
+                itens = await ai.extrair_lancamentos(llm, texto, fatura=conta["tipo"] == "cartao")
+                r = statement.gravar_lancamentos(arm, itens, conta_id)
                 ids = r.pop("ids")
                 if r["sem_categoria"] and arm.todos("categorias"):
                     try:
-                        feito = await ia.categorizar(llm, arm, ids=ids)
+                        feito = await ai.categorizar(llm, arm, ids=ids)
                         r["sem_categoria"] -= feito["categorizadas"]
                     except Exception:  # noqa: BLE001 — os lançamentos já estão gravados
                         pass
@@ -269,14 +269,14 @@ def _categorizar_novas(arm: Armazem, llm: Any, r: dict[str, Any]) -> dict[str, A
     ids = r.pop("ids")
     if llm is None or not r["sem_categoria"] or not arm.todos("categorias"):
         return r
-    from financas import ia
+    from financas import ai
 
-    return {**r, "categorizando": _tarefa(lambda: ia.categorizar(llm, arm, ids=ids))["tarefa"]}
+    return {**r, "categorizando": _tarefa(lambda: ai.categorizar(llm, arm, ids=ids))["tarefa"]}
 
 
 @router.post("/regras/aplicar")
 def aplicar_regras(arm: ArmDep) -> Any:
-    return {"categorizadas": extrato.aplicar_regras(arm)}
+    return {"categorizadas": statement.aplicar_regras(arm)}
 
 
 @router.post("/corrigir", status_code=202)
@@ -285,7 +285,7 @@ async def corrigir(request: Request, arm: ArmDep, llms: LLMsDep, provedor: str =
     conta do cartão, regras) e passa na IA o que segue sem categoria ou sem forma, o que a IA
     categorizou antes e o que está na categoria do sentido errado."""
 
-    from financas import ia
+    from financas import ai
 
     biblioteca = getattr(request.app.state, "biblioteca", None)
     llm = llms.get(provedor)
@@ -304,11 +304,11 @@ async def corrigir(request: Request, arm: ArmDep, llms: LLMsDep, provedor: str =
         return por_conta
 
     async def trabalho() -> Any:
-        feito = extrato.corrigir(arm, originais())
+        feito = statement.corrigir(arm, originais())
         feito["categorizadas_ia"] = feito["trocadas_ia"] = 0
         if llm is not None and arm.todos("categorias"):
             try:
-                r = await ia.categorizar(llm, arm, limite=3000, revisar=True)
+                r = await ai.categorizar(llm, arm, limite=3000, revisar=True)
                 feito["categorizadas_ia"], feito["trocadas_ia"] = r["categorizadas"], r["trocadas"]
                 feito["formas"] += r["formas"]
             except Exception as e:  # noqa: BLE001 — o conserto do sinal e da forma já foi gravado
@@ -322,10 +322,10 @@ async def corrigir(request: Request, arm: ArmDep, llms: LLMsDep, provedor: str =
 @router.post("/categorizar-ia", status_code=202)
 async def categorizar_ia(arm: ArmDep, llms: LLMsDep, provedor: str = "local") -> Any:
     """Categoriza com a IA os lançamentos que as regras e o histórico não pegaram."""
-    from financas import ia
+    from financas import ai
 
     llm = _llm(llms, provedor)
-    return _tarefa(lambda: ia.categorizar(llm, arm))
+    return _tarefa(lambda: ai.categorizar(llm, arm))
 
 
 # --- parcelamentos e cenários (análise preditiva) ---
@@ -333,20 +333,20 @@ async def categorizar_ia(arm: ArmDep, llms: LLMsDep, provedor: str = "local") ->
 
 @router.get("/parcelamentos")
 def parcelamentos(arm: ArmDep) -> Any:
-    from financas import cenarios
+    from financas import scenarios
 
-    return cenarios.parcelamentos(arm)
+    return scenarios.parcelamentos(arm)
 
 
 @router.post("/cenarios/simular")
 def simular(arm: ArmDep, corpo: Corpo) -> Any:
     """Juntar × financiar um bem sobre a sua realidade do extrato (só contas, sem IA)."""
-    from financas import cenarios
+    from financas import scenarios
 
     if not corpo.get("valor"):
         raise HTTPException(422, "Informe o valor do bem.")
     try:
-        return cenarios.simular(arm, corpo)
+        return scenarios.simular(arm, corpo)
     except (TypeError, ValueError) as e:
         raise HTTPException(422, f"Parâmetro inválido: {e}") from e
 
@@ -356,7 +356,7 @@ async def perguntar(request: Request, arm: ArmDep, llms: LLMsDep, corpo: Corpo) 
     """Pergunta livre ("quero um EcoSport 2015 de 45 mil, quanto tempo para juntar?"): a IA tira os
     parâmetros, o Python simula e a IA explica o resultado. `ajustes` sobrescreve o que a IA
     tirou."""
-    from financas import cenarios, ia
+    from financas import scenarios, ai
 
     pergunta = str(corpo.get("pergunta") or "").strip()
     if not pergunta:
@@ -367,9 +367,9 @@ async def perguntar(request: Request, arm: ArmDep, llms: LLMsDep, corpo: Corpo) 
     internet = getattr(request.app.state, "internet", None)
 
     async def trabalho() -> Any:
-        parametros = {**await ia.interpretar(llm, pergunta), **ajustes}
+        parametros = {**await ai.interpretar(llm, pergunta), **ajustes}
         # Dados de hoje: preço FIPE (completa o valor que faltou) e CDI (rendimento da reserva).
-        atuais = await ia.dados_atuais(internet, parametros)
+        atuais = await ai.dados_atuais(internet, parametros)
         if not parametros.get("valor") and atuais.get("fipe"):
             parametros["valor"] = atuais["fipe"]["media"]
         if not parametros.get("valor"):
@@ -378,12 +378,12 @@ async def perguntar(request: Request, arm: ArmDep, llms: LLMsDep, corpo: Corpo) 
             )
         if atuais.get("rendimento_mensal"):
             parametros.setdefault("rendimento_mensal", atuais["rendimento_mensal"])
-        resultado = cenarios.simular(arm, parametros)
+        resultado = scenarios.simular(arm, parametros)
         return {
             "parametros": parametros,
             "dados_atuais": atuais,
             "resultado": resultado,
-            "analise": await ia.analisar(llm, pergunta, resultado, atuais),
+            "analise": await ai.analisar(llm, pergunta, resultado, atuais),
         }
 
     return _tarefa(trabalho)
@@ -394,7 +394,7 @@ async def conversar(arm: ArmDep, llms: LLMsDep, corpo: Corpo) -> Any:
     """Conversa curta (texto ou voz) sobre os seus dados e a simulação aberta. `mensagens`:
     [{role: user|assistant, content}], a última é a pergunta; `cenario`: {pergunta, analise}.
     No LLM local usa o modo rápido (sem raciocínio): a resposta sai em 1–3 s."""
-    from financas import ia
+    from financas import ai
 
     mensagens = [
         {"role": m["role"], "content": str(m["content"])[:4000]}
@@ -406,7 +406,7 @@ async def conversar(arm: ArmDep, llms: LLMsDep, corpo: Corpo) -> Any:
     provedor = str(corpo.get("provedor") or "local")
     llm = llms.get("local_rapido") if provedor == "local" else None
     llm = llm or _llm(llms, provedor)
-    resposta = await ia.conversar(llm, mensagens, ia.contexto_financeiro(arm), corpo.get("cenario"))
+    resposta = await ai.conversar(llm, mensagens, ai.contexto_financeiro(arm), corpo.get("cenario"))
     return {"resposta": resposta}
 
 
@@ -516,7 +516,7 @@ async def ativo(request: Request, arm: ArmDep, corpo: Corpo) -> Any:
         def resumir() -> None:
             """Indicadores e valuation com o que já chegou (refeito quando chega mais)."""
             preco = (parcial.get("cotacao") or {}).get("preco")
-            parcial.update(analise.resumo_ficha(parcial["demonstrativos"], preco, e["setor"]))
+            parcial.update(analysis.resumo_ficha(parcial["demonstrativos"], preco, e["setor"]))
 
         async def cotacao() -> None:
             cot, prov = await cotacoes
@@ -527,12 +527,12 @@ async def ativo(request: Request, arm: ArmDep, corpo: Corpo) -> Any:
             resumir()
 
         def ao_ano(anos: list[dict[str, Any]]) -> None:
-            parcial["demonstrativos"] = analise.limpar_demonstrativos(anos)
+            parcial["demonstrativos"] = analysis.limpar_demonstrativos(anos)
             resumir()
 
         async def demonstrativos() -> None:
             d = await asyncio.to_thread(base.demonstrativos, e["codigo_cvm"], ao_ano=ao_ano)
-            parcial["demonstrativos"] = analise.limpar_demonstrativos(d) if d else []
+            parcial["demonstrativos"] = analysis.limpar_demonstrativos(d) if d else []
             carregando.remove("demonstrativos")
             resumir()
 
@@ -595,7 +595,7 @@ async def importar_cvm(request: Request, arm: ArmDep, id_: str) -> Any:
         for d in anos:  # o que veio da CVM substitui o ano; o resto que você digitou fica
             antigos[d["ano"]] = {**antigos.get(d["ano"], {}), **d}
         dados = {
-            "demonstrativos": analise.limpar_demonstrativos(list(antigos.values())),
+            "demonstrativos": analysis.limpar_demonstrativos(list(antigos.values())),
             "cnpj": empresa["cnpj"] or e["cnpj"],
             "site": empresa["site"] or e["site"],
             "nome": empresa["nome"] or e["nome"],
@@ -687,13 +687,13 @@ def salvar_questionario(arm: ArmDep, corpo: Annotated[list[dict[str, Any]], Body
 
 @router.get("/empresas/ranking")
 def ranking(arm: ArmDep) -> Any:
-    return analise.ranking(arm)
+    return analysis.ranking(arm)
 
 
 @router.get("/empresas/{id_}/analise")
 def analisar(arm: ArmDep, id_: str) -> Any:
     try:
-        return analise.analisar(arm, arm.obter("empresas", id_))
+        return analysis.analisar(arm, arm.obter("empresas", id_))
     except (NaoEncontrado, Invalido) as e:
         raise _erro(e) from e
 
@@ -701,7 +701,7 @@ def analisar(arm: ArmDep, id_: str) -> Any:
 @router.get("/setores/{id_}/analise")
 def analisar_setor(arm: ArmDep, id_: str) -> Any:
     try:
-        return analise.setor_analise(arm, arm.obter("setores", id_))
+        return analysis.setor_analise(arm, arm.obter("setores", id_))
     except NaoEncontrado as e:
         raise _erro(e) from e
 
@@ -712,16 +712,16 @@ def analisar_setor(arm: ArmDep, id_: str) -> Any:
 @router.get("/estudo")
 def estudo_trilha(arm: ArmDep, objetivo: str = "") -> Any:
     """Trilha de finanças com o progresso, o guia de cada livro, artigos e relatórios."""
-    return estudo.montar(arm, objetivo)
+    return study.montar(arm, objetivo)
 
 
 @router.put("/estudo/objetivo")
 def estudo_objetivo(arm: ArmDep, corpo: Corpo) -> Any:
     objetivo = str(corpo.get("objetivo") or "")
-    if objetivo not in {o["id"] for o in estudo.OBJETIVOS}:
+    if objetivo not in {o["id"] for o in study.OBJETIVOS}:
         raise HTTPException(422, "Objetivo desconhecido.")
-    estudo.marcar(arm, "objetivo", {"nota": objetivo})
-    return estudo.montar(arm, objetivo)
+    study.marcar(arm, "objetivo", {"nota": objetivo})
+    return study.montar(arm, objetivo)
 
 
 @router.patch("/estudo/itens")
@@ -729,7 +729,7 @@ def estudo_marcar(arm: ArmDep, corpo: Corpo) -> Any:
     """`{item, status?, nota?}`: item = `etapa:<id>`, `livro:<id>`, `cap:<livro>:<n>`,
     `artigo:<id>` ou `relatorio:<id>`."""
     try:
-        return estudo.marcar(arm, str(corpo.get("item") or ""), corpo)
+        return study.marcar(arm, str(corpo.get("item") or ""), corpo)
     except Invalido as e:
         raise _erro(e) from e
 
@@ -737,7 +737,7 @@ def estudo_marcar(arm: ArmDep, corpo: Corpo) -> Any:
 @router.put("/estudo/livros/{id_}/tenho")
 def estudo_tenho(arm: ArmDep, id_: str, corpo: Corpo) -> Any:
     try:
-        return estudo.tenho(arm, id_, bool(corpo.get("tenho")))
+        return study.tenho(arm, id_, bool(corpo.get("tenho")))
     except (Invalido, NaoEncontrado) as e:
         raise _erro(e) from e
 
@@ -756,25 +756,25 @@ async def estudo_guia(request: Request, arm: ArmDep, id_: str) -> Any:
     """O Claude monta o guia de leitura não linear do livro (capítulos, ordem, por quê) e o guia
     fica gravado; nos livros do catálogo ele completa o que já está escrito."""
     claude = _reescrita(request)
-    livro = estudo.livros(arm).get(id_)
+    livro = study.livros(arm).get(id_)
     if livro is None:
         raise HTTPException(404, "Livro não encontrado.")
 
     async def trabalho() -> Any:
         guia = await claude.executar_json(
             {
-                "prompt": estudo.prompt_guia(livro),
-                "sistema": estudo.SISTEMA_GUIA,
-                "esquema": estudo.ESQUEMA_GUIA,
+                "prompt": study.prompt_guia(livro),
+                "sistema": study.SISTEMA_GUIA,
+                "esquema": study.ESQUEMA_GUIA,
                 "effort": "high",
                 "limite_s": 280,
             }
         )
         if not isinstance(guia, dict) or not guia.get("capitulos"):
             raise Invalido("O Claude não devolveu o guia.")
-        registro = livro["registro_id"] or estudo.tenho(arm, id_, livro["tenho"])["id"]
+        registro = livro["registro_id"] or study.tenho(arm, id_, livro["tenho"])["id"]
         arm.editar("estudo_livros", registro, {"guia": guia})
-        return estudo.livros(arm)[id_]
+        return study.livros(arm)[id_]
 
     return _tarefa(trabalho)
 
@@ -789,7 +789,7 @@ def estudo_novo_livro(arm: ArmDep, corpo: Corpo) -> Any:
         "estudo_livros",
         {"titulo": titulo, "autor": str(corpo.get("autor") or "").strip(), "tenho": "sim"},
     )
-    return estudo.livros(arm)[r["id"]]
+    return study.livros(arm)[r["id"]]
 
 
 @router.post("/estudo/ler", status_code=201)
@@ -801,10 +801,10 @@ def estudo_ler(request: Request, arm: ArmDep, corpo: Corpo) -> Any:
         raise HTTPException(503, "Módulo Estudos indisponível.")
     item = str(corpo.get("item") or "")
     tipo, _, chave = item.partition(":")
-    if tipo == "livro" and (livro := estudo.livros(arm).get(chave)):
+    if tipo == "livro" and (livro := study.livros(arm).get(chave)):
         dados = {"titulo": livro["titulo"], "autor": livro["autor"], "tipo": "livro"}
-    elif tipo == "artigo" and chave in estudo.ARTIGOS:
-        autores, titulo, revista, _n, _p = estudo.ARTIGOS[chave]
+    elif tipo == "artigo" and chave in study.ARTIGOS:
+        autores, titulo, revista, _n, _p = study.ARTIGOS[chave]
         dados = {
             "titulo": titulo,
             "autor": autores,
@@ -823,17 +823,17 @@ def estudo_ler(request: Request, arm: ArmDep, corpo: Corpo) -> Any:
             {**dados, "area": "Finanças", "status": "lendo", "tags": ["trilha-financas"]}
         )
         leitura_id = leitura["id"]
-    estudo.marcar(arm, item, {"leitura_id": leitura_id, "status": "lendo"})
-    projeto = next((p for p in estudos.listar_projetos() if p["nome"] == estudo.PROJETO), None)
+    study.marcar(arm, item, {"leitura_id": leitura_id, "status": "lendo"})
+    projeto = next((p for p in estudos.listar_projetos() if p["nome"] == study.PROJETO), None)
     if projeto is None:
         projeto = estudos.criar_projeto(
             {
-                "nome": estudo.PROJETO,
+                "nome": study.PROJETO,
                 "descricao": "Grifos e comentários das leituras da trilha de finanças.",
-                "secoes": [titulo for titulo, _ in estudo.NIVEIS.values()],
+                "secoes": [titulo for titulo, _ in study.NIVEIS.values()],
             }
         )
-    return {"leitura_id": leitura_id, "projeto_id": projeto["id"], "projeto": estudo.PROJETO}
+    return {"leitura_id": leitura_id, "projeto_id": projeto["id"], "projeto": study.PROJETO}
 
 
 @router.get("/estudo/citacoes")
@@ -842,7 +842,7 @@ def estudo_citacoes(request: Request) -> Any:
     estudos = getattr(request.app.state, "estudos", None)
     if estudos is None:
         return {"projeto_id": None, "obras": []}
-    projeto = next((p for p in estudos.listar_projetos() if p["nome"] == estudo.PROJETO), None)
+    projeto = next((p for p in estudos.listar_projetos() if p["nome"] == study.PROJETO), None)
     if projeto is None:
         return {"projeto_id": None, "obras": []}
     m = estudos.matriz(projeto["id"])
@@ -869,7 +869,7 @@ def estudo_citacoes(request: Request) -> Any:
 
 @router.get("/carteira")
 def carteira(arm: ArmDep) -> Any:
-    return analise.carteira(arm)
+    return analysis.carteira(arm)
 
 
 # --- CRUD genérico ---
@@ -877,7 +877,7 @@ def carteira(arm: ArmDep) -> Any:
 
 def _preparar(colecao: str, dados: dict[str, Any]) -> dict[str, Any]:
     if colecao == "empresas" and "demonstrativos" in dados:
-        dados = {**dados, "demonstrativos": analise.limpar_demonstrativos(dados["demonstrativos"])}
+        dados = {**dados, "demonstrativos": analysis.limpar_demonstrativos(dados["demonstrativos"])}
     if colecao == "transacoes" and "categoria_id" in dados and "categoria_ia" not in dados:
         dados = {**dados, "categoria_ia": False}  # escolha do usuário: a reconferência não troca
     return dados
@@ -909,7 +909,7 @@ def criar(arm: ArmDep, colecao: str, corpo: Corpo) -> Any:
         raise HTTPException(404, "Não encontrado")
     try:
         doc = arm.criar(colecao, _preparar(colecao, corpo))
-        if colecao == "transacoes" and extrato.categorizar(arm, doc):
+        if colecao == "transacoes" and statement.categorizar(arm, doc):
             arm.salvar("transacoes")
         return doc
     except Invalido as e:

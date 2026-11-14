@@ -20,14 +20,14 @@ router do backend, despacha os jobs do worker e monta as telas do app.
   (`GATEWAY_DESIGN_DIR`). Rotas: listar/criar/obter/editar (`titulo`, `fundo`, `pasta`), `PUT …/elementos`
   com `versao` (409 + quadro atual quando outro aparelho gravou antes), duplicar, excluir, miniatura PNG (`GET/POST …/miniatura`, gerada pelo app).
   Testes: `plataforma/backend/tests/test_design.py`.
-  Fluxogramas com IA (`design/fluxos.py`): `POST /fluxos/gerar` (descrição, código ou fluxo atual + `provedor`) cria
+  Fluxogramas com IA (`design/flows.py`): `POST /fluxos/gerar` (descrição, código ou fluxo atual + `provedor`) cria
   uma tarefa, `GET /fluxos/tarefas/{id}` devolve o fluxo já posicionado em camadas; LLMs em `app.state.design_llms`.
   Testes: `plataforma/backend/tests/test_design_fluxos.py`.
   draw.io (`design/drawio.py`): `POST /quadros/importar-drawio` (`.drawio`/`.xml`, páginas comprimidas ou não → abas
   `paginas`, raias/contêineres, cores, setas presas aos blocos, tracejadas, texto à esquerda) e `GET /quadros/{id}/drawio`
   (exporta de volta). Cada elemento leva `pagina`. Testes: `plataforma/backend/tests/test_design_drawio.py`
   (com `modulo-verbas-atual.drawio` da raiz, quando existe).
-- Wireframes (`design/wireframe_ia.py`, guarda `Quadros` em `wireframes/`): telas = `paginas` (código, breadcrumb,
+- Wireframes (`design/ai_wireframe.py`, guarda `Quadros` em `wireframes/`): telas = `paginas` (código, breadcrumb,
   tamanho, `notas` do painel lateral) e componentes = `elementos` (`x/y/w/h`, `estado` existe/proposto/divergencia,
   `props`), no estilo de `docs/wireframes-nd/`. Rotas `/wireframes` (CRUD, `PUT …/elementos` com `versao`, duplicar).
   Troca com outras IAs: `GET /wireframes/{id}/ia` (ZIP com `AGENTS.md` + `wireframe.schema.json` JSON Schema 2020-12
@@ -35,7 +35,7 @@ router do backend, despacha os jobs do worker e monta as telas do app.
   `POST /wireframes/{id}/telas/{tela}/png` antes de baixar, guardado em `<id>.anexos/`; `?formato=json` só o JSON), `POST /wireframes/importar-ia`
   (novo) e `POST /wireframes/{id}/importar-ia` (substitui; aceita ZIP, JSON ou texto com bloco ```json). O catálogo
   `COMPONENTES` gera schema, `AGENTS.md` e validação. Testes: `plataforma/backend/tests/test_design_wireframes.py`.
-- Cadernos (`design/cadernos.py`, guarda `Quadros` em `cadernos/`): as mesmas rotas dos quadros em `/cadernos`
+- Cadernos (`design/notebooks.py`, guarda `Quadros` em `cadernos/`): as mesmas rotas dos quadros em `/cadernos`
   (CRUD, `PUT …/elementos` com `versao`, miniatura, duplicar, draw.io); o papel de cada folha vai em `paginas[].papel`.
   Testes: `plataforma/backend/tests/test_design_cadernos.py`.
 - `app/` (`agent_design`): seções Cadernos, Fluxogramas e Wireframes no submenu lateral. Ver `app/CLAUDE.md`.

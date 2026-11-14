@@ -13,7 +13,7 @@ from test_concursos import ESTRUTURA, HOJE
 from backend.core.config import Settings
 from backend.main import create_app
 from concursos.api import IA
-from concursos.concursos import Concursos
+from concursos.exams import Concursos
 from concursos.radar import Radar, esfera_do_orgao, ler_listagem
 
 LISTA = """<div id="PB" class="ua"><div class="uf">PARAÍBA</div></div>
@@ -306,7 +306,7 @@ def test_acompanhar_do_radar(
     asyncio.run(radar.atualizar())
     api.app.state.concursos_radar = radar  # type: ignore[attr-defined]
     monkeypatch.setattr("concursos.api._baixar", lambda _: b"%PDF-1.4")
-    monkeypatch.setattr("concursos.concursos.texto_pdf", lambda _: "EDITAL TRE " * 100)
+    monkeypatch.setattr("concursos.exams.texto_pdf", lambda _: "EDITAL TRE " * 100)
     assert api.get("/api/concursos/radar").json()["itens"][0]["orgao"].startswith("TRE")
     iid = radar.listar()["itens"][0]["id"]
     c = api.post(

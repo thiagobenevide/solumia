@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from estudos.linguagem import Linguagem, extrair_json, nota_de, revisar
+from estudos.language import Linguagem, extrair_json, nota_de, revisar
 from shared.speech_text import align_word_times, compare_reading, split_words
 
 

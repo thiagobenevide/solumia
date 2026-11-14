@@ -3,7 +3,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from concursos.rumores import Rumores
+from concursos.rumors import Rumores
 
 RUMOR = {
     "orgao": "TRF 5ª Região",

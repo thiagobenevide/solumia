@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Any
 
-from concursos.vagas import Vagas
+from concursos.jobs import Vagas
 
 
 async def test_pesquisa_junta_vagas_e_mantem_estado(tmp_path):

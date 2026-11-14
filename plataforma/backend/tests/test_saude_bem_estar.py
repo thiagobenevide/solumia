@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from saude.espiritual import ANTIGO, NOVO, capitulos, leitura_do_dia
+from saude.spiritual import ANTIGO, NOVO, capitulos, leitura_do_dia
 from saude.mental import sequencia
 
 

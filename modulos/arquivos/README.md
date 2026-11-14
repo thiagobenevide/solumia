@@ -7,7 +7,7 @@ comentários, ortografia/reescrita pelo Claude como revisões), XLSX na planilha
 "Exportar…" gera ODT/PDF/ODS/ODP/CSV/Markdown ou nota de referência. CSV em grade e XML em texto; no desktop, "Abrir com…" LibreOffice/Craft Apps sobe
 sozinho o que for salvo lá (PUT `/original`). CSV abre em tabela e XML em árvore (o app lê o `/original`, ou a cópia baixada no aparelho; XML não vira PDF e já entra `pronto`).
 
-- Backend: `plataforma/backend/src/backend/arquivos/` em `/api/arquivos` (núcleo comum, como as notas,
+- Backend: `plataforma/backend/src/backend/files/` em `/api/arquivos` (núcleo comum, como as notas,
   porque outros módulos anexam arquivos). Dados em `$AGENT_DATA/arquivos/<id>/`.
 - App: `app/` (`agent_arquivos`), montado em `plataforma/app/lib/main.dart` com `API_URL`/`API_TOKEN`.
 

@@ -6,9 +6,9 @@ podem repetir a ref."""
 
 from typing import Any
 
-from eletronica.biblioteca import POR_ID
+from eletronica.library import POR_ID
 from eletronica.netlist import _no_segmento, _Uniao, netlist, posicao_pino
-from eletronica.projetos import BuscaSimbolo
+from eletronica.projects import BuscaSimbolo
 
 ORDEM = {"erro": 0, "aviso": 1}
 

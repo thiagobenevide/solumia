@@ -14,7 +14,7 @@ from typing import Any
 
 import httpx
 
-from backend.internet import ferramentas as f
+from backend.internet import tools as f
 
 ChatLLM = Callable[[list[dict[str, str]]], Awaitable[str]]
 # Busca feita no PC pelo worker (`shared.web_search`); None = sem worker ou falhou.

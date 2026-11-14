@@ -9,7 +9,7 @@
 |---|---|
 | JSON | per-module state (tasks, finances, studies, whiteboards) |
 | JSONL | append-only history (Código sessions, traces, LLM caches, datasets) |
-| Markdown + YAML front matter | **notes**, Obsidian-compatible (`/api/notas`, `backend/notas/cofre.py`) |
+| Markdown + YAML front matter | **notes**, Obsidian-compatible (`/api/notas`, `backend/notes/vault.py`) |
 | SQLite | **rebuildable indexes only**: media library (FTS5) and pipeline dataset |
 
 ```
@@ -24,7 +24,7 @@
 ## Obsidian vault
 
 The vault is a separate repository and the **source of truth** for knowledge and content modules: scripts,
-channels, themes and methods for Empreendimento (`python -m youtube.importar`), and notes for Estudos.
+channels, themes and methods for Empreendimento (`python -m youtube.importer`), and notes for Estudos.
 
 ## Backup (`infra/scripts/backup`)
 

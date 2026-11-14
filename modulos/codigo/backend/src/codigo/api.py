@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from codigo.sessoes import SessaoNaoEncontrada, Sessoes
+from codigo.sessions import SessaoNaoEncontrada, Sessoes
 
 
 @dataclass

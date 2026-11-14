@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from eletronica.biblioteca import POR_ID, SIMBOLOS, G
+from eletronica.library import POR_ID, SIMBOLOS, G
 from eletronica.netlist import bom, netlist, posicao_pino
 
 FOLHAS = [{"id": "f1", "nome": "Folha 1"}, {"id": "f2", "nome": "Fonte"}]

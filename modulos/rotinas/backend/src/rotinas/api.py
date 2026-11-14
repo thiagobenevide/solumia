@@ -8,7 +8,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from rotinas.quadro import NaoEncontrada, Quadro
+from rotinas.board import NaoEncontrada, Quadro
 
 router = APIRouter(tags=["rotinas"])
 

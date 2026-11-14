@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     horas: só o token de sessão não basta."""
 
     # --- Login do app (senha + Google Authenticator) ---
-    # Gerar tudo com: .venv/bin/python -m backend.auth.seguranca
+    # Gerar tudo com: .venv/bin/python -m backend.auth.security
     admin_usuario: str = "admin"
     admin_senha_hash: SecretStr = SecretStr("")
     """Hash scrypt da senha; vazio = login desligado (fail-secure)."""

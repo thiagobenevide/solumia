@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'modelos.dart';
 import 'offline.dart';
 
-/// Rotas de `/api/notas` do backend da plataforma (`backend/notas/api.py`). Sem conexão, lê e
+/// Rotas de `/api/notas` do backend da plataforma (`backend/notes/api.py`). Sem conexão, lê e
 /// grava no espelho do aparelho ([EspelhoNotas]); o que foi feito offline sobe na próxima chamada
 /// que alcançar o servidor.
 class ApiNotas {

@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from backend.notas.cofre import Cofre
+from backend.notes.vault import Cofre
 
 
 @pytest.fixture

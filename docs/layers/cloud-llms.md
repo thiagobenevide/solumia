@@ -13,8 +13,8 @@ ChatGPT, DeepSeek) can be added without changing any caller.
 |---|---|---|
 | Generic client | `plataforma/shared/src/shared/claude_code.py` | `claude_json`: prompt + schema to validated JSON; `reescrever`: academic rewriting by goal (advisor review, formal, translate, concise, expand, grammar) |
 | Worker tasks | `plataforma/worker/src/worker/ws_client.py` | `claude_json` and `reescrever` tasks arrive over the WebSocket and run on the PC |
-| Accounts | `plataforma/worker/src/worker/contas_claude.py` | several accounts (one `CLAUDE_CONFIG_DIR` each), switched from the app when one hits its usage window; login via `claude auth login` in a pseudo-terminal, authorized from any device |
-| Coding agent | `plataforma/worker/src/worker/codigo.py` + **Código** module | Claude Code with tools, inside this repository, in resumable tabs (`--resume`) |
+| Accounts | `plataforma/worker/src/worker/claude_accounts.py` | several accounts (one `CLAUDE_CONFIG_DIR` each), switched from the app when one hits its usage window; login via `claude auth login` in a pseudo-terminal, authorized from any device |
+| Coding agent | `plataforma/worker/src/worker/coding.py` + **Código** module | Claude Code with tools, inside this repository, in resumable tabs (`--resume`) |
 | Pipeline escalation | `modulos/empreendimento/esteira/esteira/ia/claude.py` | only for what code and the local LLM could not settle; compact dossier in, JSON out |
 
 **Isolation of headless calls:** no tools, no saved session, and no project `CLAUDE.md` or settings are read,

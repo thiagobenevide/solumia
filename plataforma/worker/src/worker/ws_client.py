@@ -19,14 +19,14 @@ from shared.protocol import (
     WorkerHelloAck,
     parse_gateway_message,
 )
-from worker import pc, recursos
-from worker.codigo import TAREFAS as TAREFAS_CODIGO
-from worker.codigo import Codigo
-from worker.contas_claude import TAREFAS as TAREFAS_CONTAS
-from worker.contas_claude import Contas
+from worker import pc, resources
+from worker.coding import TAREFAS as TAREFAS_CODIGO
+from worker.coding import Codigo
+from worker.claude_accounts import TAREFAS as TAREFAS_CONTAS
+from worker.claude_accounts import Contas
 from worker.core.config import WorkerSettings
 from worker.providers.base import Provider
-from worker.voz import TAREFAS, Voz
+from worker.voice import TAREFAS, Voz
 
 logger = logging.getLogger("worker.ws_client")
 
@@ -108,7 +108,7 @@ class WorkerClient:
         interval = self._settings.heartbeat_interval_seconds
         while True:
             await asyncio.sleep(interval)
-            uso = await asyncio.to_thread(recursos.coletar)
+            uso = await asyncio.to_thread(resources.coletar)
             await websocket.send(Heartbeat(recursos=uso).model_dump_json())
 
     async def _receive_loop(self, websocket: websockets.WebSocketClientProtocol) -> None:

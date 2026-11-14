@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from backend.core.config import Settings
 from backend.main import create_app
 from eletronica import spice
-from eletronica.biblioteca import POR_ID
+from eletronica.library import POR_ID
 from shared.ngspice import run_ngspice
 
 NGSPICE = shutil.which("ngspice") is not None

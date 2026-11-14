@@ -56,7 +56,7 @@ def test_health_connect_e_resumo(api: TestClient) -> None:
 
 
 def test_pontuacao_do_sono_pelos_estagios() -> None:
-    from saude.relogio import pontuar_sono
+    from saude.watch import pontuar_sono
 
     otima = {"sono_min": 480, "sono_acordado_min": 20, "sono_profundo_min": 96, "sono_rem_min": 106}
     assert pontuar_sono(otima) == 100

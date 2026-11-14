@@ -10,10 +10,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from eletronica import kicad
-from eletronica.biblioteca import SIMBOLOS
-from eletronica.bibliotecas import SUGERIDAS, Bibliotecas, NaoEncontrada, NomeInvalido
+from eletronica.library import SIMBOLOS
+from eletronica.libraries import SUGERIDAS, Bibliotecas, NaoEncontrada, NomeInvalido
 from eletronica.netlist import bom, bom_csv, netlist
-from eletronica.projetos import Conflito, NaoEncontrado, Projetos
+from eletronica.projects import Conflito, NaoEncontrado, Projetos
 
 router = APIRouter(tags=["eletronica"])
 

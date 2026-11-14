@@ -89,7 +89,7 @@ def test_cofre_com_frase(tmp_path: Path) -> None:
 
 def _seguranca_do_backend():
     raiz = Path(__file__).resolve().parents[3]
-    arquivo = raiz / "plataforma/backend/src/backend/auth/seguranca.py"
+    arquivo = raiz / "plataforma/backend/src/backend/auth/security.py"
     if not arquivo.exists():
         pytest.skip("backend não encontrado")
     spec = importlib.util.spec_from_file_location("seguranca_backend", arquivo)

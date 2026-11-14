@@ -8,12 +8,12 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from saude.api_bem_estar import router as bem_estar_router
-from saude.api_consumo import router as consumo_router
-from saude.api_relogio import router as relogio_router
-from saude.api_sessoes import router as sessoes_router
-from saude.catalogo import AREAS
-from saude.treinos import Invalido, NaoEncontrado, Treinos
+from saude.api_wellbeing import router as bem_estar_router
+from saude.api_consumption import router as consumo_router
+from saude.api_watch import router as relogio_router
+from saude.api_sessions import router as sessoes_router
+from saude.catalog import AREAS
+from saude.workouts import Invalido, NaoEncontrado, Treinos
 
 router = APIRouter(tags=["saude"])
 

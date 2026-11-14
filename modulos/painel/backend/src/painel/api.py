@@ -17,9 +17,9 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, 
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from painel import agente, desempenho
-from painel.cobrador import Cobrador, Invalido, NaoEncontrado
-from painel.medidor import Medidor
+from painel import agent, performance
+from painel.nagger import Cobrador, Invalido, NaoEncontrado
+from painel.meter import Medidor
 
 router = APIRouter(tags=["painel"])
 log = logging.getLogger(__name__)
@@ -255,7 +255,7 @@ def disciplina(cobrador: CobradorDep, fontes: FontesDep) -> Any:
 
 @router.get("/desempenho")
 def ver_desempenho(cobrador: CobradorDep, fontes: FontesDep, dias: int = 30) -> Any:
-    return desempenho.analisar(fontes.tarefas(), cobrador, dias)
+    return performance.analisar(fontes.tarefas(), cobrador, dias)
 
 
 @router.get("/provedores")
@@ -421,29 +421,29 @@ async def _conversar(
     # tarefas) vai no sistema e o que muda a cada minuto (hora, alertas) só na última mensagem;
     # assim cada mensagem processa só o texto novo em vez do prompt inteiro.
     tarefas = fontes.tarefas()
-    sistema = SISTEMA + agente.INSTRUCOES + agente.instrucoes_modulos(fontes.modulos)
+    sistema = SISTEMA + agent.INSTRUCOES + agent.instrucoes_modulos(fontes.modulos)
     if pc is not None:
-        sistema += agente.COMPUTADOR
+        sistema += agent.COMPUTADOR
     sistema += "\n# Retrato do dia\n" + cobrador.retrato(tarefas)
     analise = None
     if _DESEMPENHO.search(c.mensagem):
-        analise = desempenho.analisar(tarefas, cobrador)
-        sistema += "\n" + desempenho.texto(analise) + "\n" + agente.ANALISE
+        analise = performance.analisar(tarefas, cobrador)
+        sistema += "\n" + performance.texto(analise) + "\n" + agent.ANALISE
     agora = f"[{cobrador.momento(tarefas)}]\n\n"
     if c.falada:  # na última mensagem, não no sistema: não invalida o cache do prompt
         agora += _FALADA
 
     async def agir(acoes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        no_pc, acoes = agente.separar_pc(acoes)
-        nos_modulos, acoes = agente.separar_modulos(acoes, fontes.modulos)
-        feitas = agente.executar(acoes, cobrador, fontes, motivo=c.mensagem[:300])
-        feitas += await agente.executar_modulos(nos_modulos, fontes.modulos, llm)
-        return feitas + await agente.executar_pc(no_pc, pc)
+        no_pc, acoes = agent.separar_pc(acoes)
+        nos_modulos, acoes = agent.separar_modulos(acoes, fontes.modulos)
+        feitas = agent.executar(acoes, cobrador, fontes, motivo=c.mensagem[:300])
+        feitas += await agent.executar_modulos(nos_modulos, fontes.modulos, llm)
+        return feitas + await agent.executar_pc(no_pc, pc)
 
     try:
         bruta = await _responder(llm, sistema, c, agora + c.mensagem)
-        resposta, acoes = agente.extrair(bruta)
-        consultas, acoes = agente.separar(acoes)
+        resposta, acoes = agent.extrair(bruta)
+        consultas, acoes = agent.separar(acoes)
         executadas = await agir(acoes)
         links: list[dict[str, Any]] = []
         if consultas:
@@ -460,8 +460,8 @@ async def _conversar(
                 + "\n\n".join(resultados)
                 + "\n\nResponda agora com esses resultados; não peça as mesmas consultas."
             )
-            resposta, acoes = agente.extrair(await _responder(llm, sistema, c, pergunta))
-            _, acoes = agente.separar(acoes)
+            resposta, acoes = agent.extrair(await _responder(llm, sistema, c, pergunta))
+            _, acoes = agent.separar(acoes)
             executadas += await agir(acoes)
     except LLMIndisponivel as e:
         if c.imagem and c.provedor == "local":
@@ -501,7 +501,7 @@ async def _consultar(
     consulta = str(a.get("consulta", "")).strip()
     if tipo == "analisar_desempenho":
         dias = int(a.get("dias") or 30)
-        texto = desempenho.texto(desempenho.analisar(fontes.tarefas(), cobrador, dias))
+        texto = performance.texto(performance.analisar(fontes.tarefas(), cobrador, dias))
         return texto, {"tipo": tipo, "ok": True, "detalhe": f"Analisei {dias} dias"}, []
     if not consulta:
         return "", {"tipo": tipo, "ok": False, "detalhe": "Consulta vazia."}, []

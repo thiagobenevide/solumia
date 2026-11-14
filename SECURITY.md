@@ -31,7 +31,7 @@ Describe the affected component (backend, worker, app, infrastructure), the impa
 - `*.env.example` files are committed with variable names and formats only; `.env`, `.env.prd`, `.env.pc`,
   `google/` and service accounts are **never** committed (`.gitignore`).
 - Generate the login values (password hash, TOTP secret, JWT key):
-  `.venv/bin/python -m backend.auth.seguranca`. In production, `infra/scripts/instalar_vps` generates and
+  `.venv/bin/python -m backend.auth.security`. In production, `infra/scripts/instalar_vps` generates and
   reuses the remaining secrets.
 - Client key: `python -c "import secrets; print('sk_live_' + secrets.token_urlsafe(32))"`.
 

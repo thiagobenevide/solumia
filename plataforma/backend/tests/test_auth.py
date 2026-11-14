@@ -3,7 +3,7 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.auth.seguranca import (
+from backend.auth.security import (
     codigo_totp,
     emitir_token,
     gerar_hash_senha,

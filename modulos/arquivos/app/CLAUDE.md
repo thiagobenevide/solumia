@@ -38,7 +38,7 @@ Biblioteca + leitor PDF com anotação à tinta. Fala com `/api/arquivos` (ver `
   (`pptx.dart`). `exportar.dart`: menu de exportação (rota `/exportar`) e Delta → Markdown. Testes em `test/docx_test.dart`,
   `test/xlsx_test.dart`, `test/pptx_test.dart`.
 - `lib/src/editores/reescrita.dart`: `reescreverComClaude` (objetivos, comentários do orientador, antes/depois com motivo);
-  backend em `plataforma/backend/src/backend/arquivos/reescrita.py` + `shared/claude_code.py` (`claude -p`).
+  backend em `plataforma/backend/src/backend/files/rewrite.py` + `shared/claude_code.py` (`claude -p`).
 - `lib/src/editores/collabora_tela.dart`: Collabora (WOPI) em iframe (web), webview (Android/iOS/macOS) ou
   navegador (Linux/Windows).
 - Filtro por formato na grade: `Formato` (em `modelos.dart`) agrupa extensões; `abrirArquivo` escolhe o visualizador.

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 
 from backend.api.deps import SettingsDep, require_client_api_key, sessao_valida
-from backend.auth.seguranca import (
+from backend.auth.security import (
     HASH_FICTICIO,
     emitir_token,
     ler_geracao,

@@ -7,7 +7,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from youtube.canais import Youtube
+from youtube.channels import Youtube
 
 router = APIRouter(tags=["youtube"])
 

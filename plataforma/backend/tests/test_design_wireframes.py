@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from design import wireframe_ia
+from design import ai_wireframe
 
 BOTAO = {
     "id": "b1",
@@ -43,28 +43,28 @@ def _novo(api: TestClient) -> dict:
 def test_ida_e_volta_preserva_o_documento() -> None:
     doc = {
         "titulo": "ND",
-        "paginas": [{**wireframe_ia.tela_padrao(), "id": "t1"}],
+        "paginas": [{**ai_wireframe.tela_padrao(), "id": "t1"}],
         "elementos": [{**BOTAO, "pagina": "t1"}],
     }
-    troca = wireframe_ia.para_ia(doc)
+    troca = ai_wireframe.para_ia(doc)
     [comp] = troca["telas"][0]["componentes"]
     assert comp["largura"] == 118 and comp["texto"] == "Gerar ND" and "props" not in comp
-    volta = wireframe_ia.de_ia(json.loads(json.dumps(troca)))
+    volta = ai_wireframe.de_ia(json.loads(json.dumps(troca)))
     assert volta["elementos"] == doc["elementos"]
     assert volta["paginas"][0]["id"] == "t1"
 
 
 def test_rejeita_tipo_desconhecido_dizendo_onde() -> None:
-    troca = wireframe_ia.para_ia({"titulo": "x", "paginas": [], "elementos": []})
+    troca = ai_wireframe.para_ia({"titulo": "x", "paginas": [], "elementos": []})
     troca["telas"][0]["componentes"] = [{"id": "z", "tipo": "div", "x": 0, "y": 0}]
-    with pytest.raises(wireframe_ia.FormatoInvalido, match="componente z"):
-        wireframe_ia.de_ia(troca)
+    with pytest.raises(ai_wireframe.FormatoInvalido, match="componente z"):
+        ai_wireframe.de_ia(troca)
 
 
 def test_le_bloco_json_colado_de_chat() -> None:
-    troca = wireframe_ia.para_ia({"titulo": "Chat", "paginas": [], "elementos": []})
+    troca = ai_wireframe.para_ia({"titulo": "Chat", "paginas": [], "elementos": []})
     texto = f"Aqui está:\n```json\n{json.dumps(troca)}\n```\n"
-    assert wireframe_ia.ler(texto.encode())["titulo"] == "Chat"
+    assert ai_wireframe.ler(texto.encode())["titulo"] == "Chat"
 
 
 def test_exporta_pacote_e_reimporta(api: TestClient) -> None:

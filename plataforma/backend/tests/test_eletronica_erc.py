@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from eletronica.biblioteca import POR_ID, G, U
+from eletronica.library import POR_ID, G, U
 from eletronica.erc import erc
 
 FOLHAS = [{"id": "f1", "nome": "Folha 1"}]

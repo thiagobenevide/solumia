@@ -1,4 +1,4 @@
-from worker.voz import _ALUCINACOES, dividir_trechos, escolher_idioma, texto_para_fala
+from worker.voice import _ALUCINACOES, dividir_trechos, escolher_idioma, texto_para_fala
 
 
 def test_texto_para_fala_tira_markdown_links_e_emojis() -> None:
@@ -53,7 +53,7 @@ def test_idioma_so_entre_os_aceitos() -> None:
 
 def test_sem_arquivos_do_kokoro_cai_no_piper(tmp_path) -> None:
     from worker.core.config import WorkerSettings
-    from worker.voz import Voz
+    from worker.voice import Voz
 
     s = WorkerSettings(kokoro_modelo=str(tmp_path / "x.onnx"), kokoro_vozes=str(tmp_path / "v.bin"))
     assert Voz(s)._kokoro() is None
@@ -61,6 +61,6 @@ def test_sem_arquivos_do_kokoro_cai_no_piper(tmp_path) -> None:
 
 def test_sem_venv_do_xtts_cai_no_kokoro(tmp_path) -> None:
     from worker.core.config import WorkerSettings
-    from worker.voz import Voz
+    from worker.voice import Voz
 
     assert Voz(WorkerSettings(xtts_python=str(tmp_path / "python")))._xtts() is None

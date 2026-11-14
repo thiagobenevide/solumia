@@ -6,8 +6,8 @@ import pytest
 from conftest import AUTH_HEADERS, CLIENT_API_KEY
 from fastapi.testclient import TestClient
 
-from backend.arquivos import wopi
-from backend.arquivos.biblioteca import Biblioteca
+from backend.files import wopi
+from backend.files.library import Biblioteca
 from backend.core.config import Settings
 from backend.main import create_app
 

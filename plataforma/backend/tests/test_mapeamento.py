@@ -7,8 +7,8 @@ import pytest
 from conftest import AUTH_HEADERS, CLIENT_API_KEY
 from fastapi.testclient import TestClient
 
-from backend.arquivos.mapeamento import localizar, texto_docx
-from backend.arquivos.reescrita import Reescrita
+from backend.files.mapping import localizar, texto_docx
+from backend.files.rewrite import Reescrita
 from backend.core.config import Settings
 from backend.main import create_app
 
@@ -89,7 +89,7 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         return {"pdf": None, "url_pdf": "", "doi": "10.1/x" if "Leitura" in ref["titulo"] else "",
                 "link": "https://doi.org/10.1/x" if "Leitura" in ref["titulo"] else ""}
 
-    monkeypatch.setattr("backend.arquivos.mapeamento.buscar_pdf_aberto", sem_internet)
+    monkeypatch.setattr("backend.files.mapping.buscar_pdf_aberto", sem_internet)
 
     async def executar_json(pedido: dict) -> dict:
         pedidos.append(pedido)
@@ -179,7 +179,7 @@ def test_mapeamento_marca_citacoes_e_cria_pendencias(api: TestClient) -> None:
 
 
 def test_dividir_documento_corta_em_titulo_e_leva_a_secao() -> None:
-    from backend.arquivos.mapeamento import dividir_documento
+    from backend.files.mapping import dividir_documento
 
     texto = "\n".join(["# Introdução", *["frase " * 20] * 30, "# Método", *["linha " * 20] * 30])
     partes = dividir_documento(texto, limite=2000)
@@ -190,7 +190,7 @@ def test_dividir_documento_corta_em_titulo_e_leva_a_secao() -> None:
 
 
 def test_referencia_com_link_na_exportacao() -> None:
-    from estudos.projetos import link_do_trabalho, referencia_com_link
+    from estudos.projects import link_do_trabalho, referencia_com_link
 
     assert link_do_trabalho({"doi": "doi: 10.5/abc"}) == "https://doi.org/10.5/abc"
     link = "https://doi.org/10.5/abc"

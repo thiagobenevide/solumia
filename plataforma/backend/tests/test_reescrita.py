@@ -4,7 +4,7 @@ import pytest
 from conftest import AUTH_HEADERS, CLIENT_API_KEY
 from fastapi.testclient import TestClient
 
-from backend.arquivos.reescrita import Reescrita
+from backend.files.rewrite import Reescrita
 from backend.core.config import Settings
 from backend.main import create_app
 from shared.claude_code import InvalidRewriteRequest, build_rewrite_prompt

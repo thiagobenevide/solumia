@@ -10,7 +10,7 @@ detail.
 | Module | Backend | Frontend | Local models | Cloud LLM | Data | Specific security |
 |---|---|---|---|---|---|---|
 | [Empreendimento](../../modulos/empreendimento/README.md) (YouTube) | pipeline `/api/v1` (PC) + `/api/youtube` | production, scripts, queue, machine, episode | llama.cpp, Whisper, SDXL, embeddings, LoRA | escalation with quota guard | projects, FTS5 media library, dataset | pipeline reachable only through the tunnel + session |
-| [Arquivos](../../modulos/arquivos/README.md) (files) | `backend/arquivos` (platform) + WOPI | library, ink, reader | — | rewriting, citations | `arquivos/<id>/` | signed WOPI tokens |
+| [Arquivos](../../modulos/arquivos/README.md) (files) | `backend/files` (platform) + WOPI | library, ink, reader | — | rewriting, citations | `arquivos/<id>/` | signed WOPI tokens |
 | [Estudos](../../modulos/estudos/README.md) (studies) | `/api/estudos` | readings, languages, notes | TTS and reading assessment | — | `estudos/*.json` + notes | — |
 | [Saúde](../../modulos/saude/README.md) (health) | `/api/saude` | workouts, habits, focus, journal, screen time | — | — | `saude/` | scoped watch key; no VPN or accessibility service |
 | [Rotinas](../../modulos/rotinas/README.md) (routines) | `/api/rotinas` | Kanban + timer | — | — | `rotinas/tarefas.json` | — |

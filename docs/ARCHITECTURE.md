@@ -70,7 +70,7 @@ respostas rápidas (chat) só esperam se a vaga estiver ocupada por um job pesad
 
 | Módulo | Pasta | Dados | IA / GPU |
 |---|---|---|---|
-| Arquivos (biblioteca de estudo) | `modulos/arquivos` + `backend/arquivos` | PDF/DOCX/PPTX, traços, destaques com texto | — (LibreOffice converte) |
+| Arquivos (biblioteca de estudo) | `modulos/arquivos` + `backend/files` | PDF/DOCX/PPTX, traços, destaques com texto | — (LibreOffice converte) |
 | Empreendimento (YouTube ×5) | `modulos/empreendimento` (+ `youtube/` em `/api/youtube`) | episódios, acervo, perfis; canais/temas/histórias/roteiros/planos/métodos como notas do cofre | pipeline completo (`esteira/`) |
 | Estudos (conhecimento + idiomas) | `modulos/estudos` | índice do vault, backlinks, embeddings, trilhas A1–C2 | resumos, RAG, exercícios, cronogramas |
 | Saúde (espiritual, físico, mental) | `modulos/saude` | leituras, treinos, cargas, hábitos, diário | reflexões, ajustes de treino |

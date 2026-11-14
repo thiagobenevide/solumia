@@ -10,8 +10,8 @@ import io
 import re
 from typing import Any
 
-from eletronica.biblioteca import POR_ID
-from eletronica.projetos import BuscaSimbolo
+from eletronica.library import POR_ID
+from eletronica.projects import BuscaSimbolo
 
 Ponto = tuple[str, int, int]  # (folha, x, y)
 

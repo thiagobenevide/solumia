@@ -2,10 +2,10 @@ import json
 from typing import Any
 
 from shared.protocol import ChatRequest
-from worker import recursos
+from worker import resources
 from worker.core.config import WorkerSettings
 from worker.providers.base import Provider
-from worker.voz import Voz
+from worker.voice import Voz
 from worker.ws_client import WorkerClient
 
 
@@ -89,5 +89,5 @@ async def test_tarefa_de_voz_vai_para_a_voz_e_nao_ao_provider() -> None:
 
 
 def test_recursos_tem_cpu_ram_e_gpus() -> None:
-    uso = recursos.coletar()
+    uso = resources.coletar()
     assert set(uso) == {"cpu_pct", "ram_pct", "gpus"}

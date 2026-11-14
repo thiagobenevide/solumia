@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, 
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from design.imagens import Imagens, Invalida
-from design.quadros import Conflito, NaoEncontrado, Quadros
+from design.images import Imagens, Invalida
+from design.boards import Conflito, NaoEncontrado, Quadros
 
 router = APIRouter(tags=["design"])
 
@@ -189,21 +189,21 @@ def listar_wireframes(wireframes: WireframesDep) -> Any:
 
 @router.post("/wireframes", status_code=201)
 def criar_wireframe(entrada: WireframeEntrada, wireframes: WireframesDep) -> Any:
-    from design.wireframe_ia import tela_padrao
+    from design.ai_wireframe import tela_padrao
 
     titulo = entrada.titulo or "Wireframe sem título"
     return wireframes.criar({"titulo": titulo, "pasta": entrada.pasta, "paginas": [tela_padrao()]})
 
 
 async def _ler_pacote(arquivo: UploadFile) -> dict[str, Any]:
-    from design import wireframe_ia
+    from design import ai_wireframe
 
     bruto = await arquivo.read()
     if len(bruto) > 20 * 1024 * 1024:
         raise HTTPException(413, "Arquivo maior que 20 MB.")
     try:
-        return wireframe_ia.ler(bruto)
-    except wireframe_ia.FormatoInvalido as e:
+        return ai_wireframe.ler(bruto)
+    except ai_wireframe.FormatoInvalido as e:
         raise HTTPException(422, str(e)) from e
 
 
@@ -246,7 +246,7 @@ def exportar_wireframe(id_: str, wireframes: WireframesDep, formato: str = "zip"
     ou só o `json`. Os PNGs são os últimos que o app enviou em `…/telas/{tela}/png`."""
     from urllib.parse import quote
 
-    from design import wireframe_ia
+    from design import ai_wireframe
 
     try:
         q = wireframes.obter(id_)
@@ -254,10 +254,10 @@ def exportar_wireframe(id_: str, wireframes: WireframesDep, formato: str = "zip"
         raise _erro(e) from e
     nome = re.sub(r"[^\w\- ]+", "_", q["titulo"]).strip() or "wireframe"
     if formato == "json":
-        corpo = json.dumps(wireframe_ia.para_ia(q), ensure_ascii=False, indent=2).encode()
+        corpo = json.dumps(ai_wireframe.para_ia(q), ensure_ascii=False, indent=2).encode()
         tipo, nome = "application/json", f"{nome}.wireframe.json"
     else:
-        corpo = wireframe_ia.pacote(q, wireframes.pngs(id_))
+        corpo = ai_wireframe.pacote(q, wireframes.pngs(id_))
         tipo, nome = "application/zip", f"{nome}.wireframe.zip"
     disposicao = "attachment; filename*=UTF-8''" + quote(nome)
     return Response(corpo, media_type=tipo, headers={"Content-Disposition": disposicao})
@@ -389,7 +389,7 @@ async def gerar_fluxo(p: PedidoFluxo, llms: LLMsDep) -> dict[str, Any]:
     import asyncio
     import uuid
 
-    from design import fluxos
+    from design import flows
 
     if not (p.pedido.strip() or p.codigo.strip() or p.atual):
         raise HTTPException(422, "Descreva o fluxo, envie um código ou peça um ajuste.")
@@ -403,9 +403,9 @@ async def gerar_fluxo(p: PedidoFluxo, llms: LLMsDep) -> dict[str, Any]:
         try:
             tarefa.update(
                 estado="pronto",
-                fluxo=await fluxos.gerar(llm, p.pedido, p.codigo, p.arquivo, p.atual),
+                fluxo=await flows.gerar(llm, p.pedido, p.codigo, p.arquivo, p.atual),
             )
-        except fluxos.FluxoInvalido as e:
+        except flows.FluxoInvalido as e:
             tarefa.update(estado="erro", erro=str(e))
         except Exception as e:  # worker desligado, tempo esgotado, API fora
             tarefa.update(estado="erro", erro=f"A IA não respondeu: {e}")

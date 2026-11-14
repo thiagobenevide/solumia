@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from saude.sessoes import Sessoes, meta, sugestao
-from saude.treinos import Invalido, Treinos
+from saude.sessions import Sessoes, meta, sugestao
+from saude.workouts import Invalido, Treinos
 
 
 class Relogio:

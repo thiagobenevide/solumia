@@ -391,7 +391,7 @@ libraries, passwords with Argon2id. SSH stays as today: Ed25519, pinned host key
   (API keys; CLI login where the vendor offers one).
 - Keys and logins live in the vault and are delivered only to the node that runs the worker, never to clients.
 - **Accounts screen**: connect, test, see usage windows; the existing multi-account Claude Code login
-  (`plataforma/worker/src/worker/contas_claude.py`) moves here.
+  (`plataforma/worker/src/worker/claude_accounts.py`) moves here.
 - **Escalation policy** per installation: `local-first` (owner), `cloud-first`, `cloud-only`.
 - Sensitive modules (finances, health, notes) default to local models; sending them to the cloud is an explicit
   per-module opt-in.
@@ -585,7 +585,7 @@ current repository.
 | `conectar_vps` | `worker` and `tunnel` client on the host |
 | `backup` | backup step of the core, scheduled by the core |
 | `publicar_app` | CI `release` workflow |
-| `python -m backend.auth.seguranca` | Account screen |
+| `python -m backend.auth.security` | Account screen |
 
 The scripts can remain during the transition, called by the core, and are removed once each role is native.
 

@@ -8,9 +8,9 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from concursos import cronograma
+from concursos import schedule
 from concursos.api import IA
-from concursos.concursos import Concursos
+from concursos.exams import Concursos
 
 HOJE = date(2026, 11, 2)  # segunda-feira
 PROVA = date(2027, 1, 24)
@@ -93,7 +93,7 @@ def _pdf() -> bytes:
 
 
 def test_cronograma_distribui_ate_uma_semana_antes() -> None:
-    tarefas, resumo = cronograma.gerar(ESTRUTURA, HOJE, PROVA, 120, 240)
+    tarefas, resumo = schedule.gerar(ESTRUTURA, HOJE, PROVA, 120, 240)
     datas = {t["data"] for t in tarefas}
     conteudo = [t for t in tarefas if t["tipo"] == "conteudo"]
     assert resumo["fator"] == 1.0 and resumo["conteudo_pendente"] == 0
@@ -113,7 +113,7 @@ def test_cronograma_distribui_ate_uma_semana_antes() -> None:
 
 
 def test_cronograma_comprime_quando_falta_tempo() -> None:
-    _, resumo = cronograma.gerar(ESTRUTURA, PROVA - timedelta(21), PROVA, 60, 60)
+    _, resumo = schedule.gerar(ESTRUTURA, PROVA - timedelta(21), PROVA, 60, 60)
     assert resumo["fator"] < 1 and resumo["conteudo_pendente"] == 0
 
 
@@ -141,7 +141,7 @@ def test_fluxo_completo(
     app_concursos: tuple[TestClient, list[dict[str, Any]]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     api, pedidos = app_concursos
-    monkeypatch.setattr("concursos.concursos.texto_pdf", lambda _: "EDITAL TJPB " * 100)
+    monkeypatch.setattr("concursos.exams.texto_pdf", lambda _: "EDITAL TJPB " * 100)
     c = api.post(
         "/api/concursos",
         json={"nome": "TJPB 2026", "cargo": "TI – Desenvolvimento", "banca": "FGV"},
@@ -193,7 +193,7 @@ def test_erro_do_claude_fica_no_concurso(
     app_concursos: tuple[TestClient, list[dict[str, Any]]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     api, _ = app_concursos
-    monkeypatch.setattr("concursos.concursos.texto_pdf", lambda _: "EDITAL " * 200)
+    monkeypatch.setattr("concursos.exams.texto_pdf", lambda _: "EDITAL " * 200)
 
     async def falha(_: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("Claude Code falhou: limite da assinatura")

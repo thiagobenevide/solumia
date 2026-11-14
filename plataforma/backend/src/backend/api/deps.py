@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
-from backend.auth.seguranca import ler_geracao, validar_token
+from backend.auth.security import ler_geracao, validar_token
 from backend.core.config import Settings
 from backend.core.errors import openai_error
 from backend.core.worker_registry import WorkerRegistry

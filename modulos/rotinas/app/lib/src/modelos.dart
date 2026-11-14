@@ -1,4 +1,4 @@
-/// Colunas do Kanban, na ordem do quadro (`rotinas/quadro.py`).
+/// Colunas do Kanban, na ordem do quadro (`rotinas/board.py`).
 enum Coluna {
   pendente('Pendentes'),
   execucao('Em execução'),

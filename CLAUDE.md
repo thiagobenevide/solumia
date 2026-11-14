@@ -1,10 +1,10 @@
 # agent
 
 Monorepo local-first: `plataforma/` (backend FastAPI na VPS, worker no PC com GPU, `shared/`, app Flutter
-`app/` + `app_core/` + `app_notas/`; notas = `backend/notas/` em `/api/notas`, Markdown com frontmatter
+`app/` + `app_core/` + `app_notas/`; notas = `backend/notes/` em `/api/notas`, Markdown com frontmatter
 YAML compatível com o Obsidian) e `modulos/<m>/` (backend/worker/app de cada domínio). Só `empreendimento` tem código:
 `esteira/` (pipeline de vídeos, venv próprio, tem `CLAUDE.md` próprio), `youtube/` (canais como notas do cofre,
-`/api/youtube`; importa do vault com `python -m youtube.importar`) e `app/` (telas Flutter, `CLAUDE.md` próprio).
+`/api/youtube`; importa do vault com `python -m youtube.importer`) e `app/` (telas Flutter, `CLAUDE.md` próprio).
 Decisões em `docs/ARCHITECTURE.md` (ler só a seção pedida, por `grep -n '^## '`).
 
 ## Comandos
