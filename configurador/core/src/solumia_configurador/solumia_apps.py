@@ -18,9 +18,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import nomes
+from . import names
 from .craft_apps import CraftErro, Release, baixar_verificado, buscar_release_repo
-from .plataforma import Sistema, dir_apps, dir_downloads
+from .platform_setup import Sistema, dir_apps, dir_downloads
 
 # Impressão digital da chave que assina as releases do Solumia. Preencher quando o CI de release existir.
 IMPRESSOES_SOLUMIA: tuple[str, ...] = ()
@@ -49,11 +49,11 @@ CATALOGO: dict[str, AppSolumia] = {
 
 
 def url_releases() -> str:
-    return f"https://github.com/{nomes.REPOSITORIO}/releases"
+    return f"https://github.com/{names.REPOSITORIO}/releases"
 
 
 def buscar(versao: str = "ultima") -> Release:
-    return buscar_release_repo(nomes.REPOSITORIO, nomes.NOME_EXIBICAO, versao)
+    return buscar_release_repo(names.REPOSITORIO, names.NOME_EXIBICAO, versao)
 
 
 def _app(app_id: str) -> AppSolumia:
@@ -102,7 +102,7 @@ def _instalar(arquivo: Path, sistema: Sistema, log: Callable[[str], None]) -> Pa
     os.replace(tmp, destino)
     atalho = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "applications"
     atalho.mkdir(parents=True, exist_ok=True)
-    (atalho / f"{nomes.PREFIXO}-app.desktop").write_text(
+    (atalho / f"{names.PREFIXO}-app.desktop").write_text(
         "[Desktop Entry]\nType=Application\nName=Solumia\n"
         f"Exec=\"{destino}\"\nTerminal=false\nCategories=Office;\n"
     )

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from solumia_configurador.cofre import Cofre, FonteChave
+from solumia_configurador.vault import Cofre, FonteChave
 
 
 class ChaveFixa(FonteChave):

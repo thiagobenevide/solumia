@@ -14,7 +14,7 @@ from typing import Literal
 import tomli_w
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from . import nomes
+from . import names
 
 ESQUEMA = 1
 
@@ -229,9 +229,9 @@ class Manifesto(_Base):
 
 
 def caminho_padrao() -> Path:
-    from .plataforma import dir_config
+    from .platform_setup import dir_config
 
-    return dir_config() / nomes.ARQUIVO_MANIFESTO
+    return dir_config() / names.ARQUIVO_MANIFESTO
 
 
 def carregar(caminho: Path) -> Manifesto:

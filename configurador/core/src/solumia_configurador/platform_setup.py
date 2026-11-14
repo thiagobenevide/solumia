@@ -8,7 +8,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import nomes
+from . import names
 
 
 @dataclass(frozen=True)
@@ -36,8 +36,8 @@ def dir_config(sistema: Sistema | None = None) -> Path:
     """Onde ficam o manifesto e o cofre."""
     sistema = sistema or detectar()
     if sistema.windows:
-        return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / nomes.NOME_EXIBICAO
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / nomes.PREFIXO
+        return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / names.NOME_EXIBICAO
+    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / names.PREFIXO
 
 
 def dir_estado(sistema: Sistema | None = None) -> Path:
@@ -45,8 +45,8 @@ def dir_estado(sistema: Sistema | None = None) -> Path:
     sistema = sistema or detectar()
     if sistema.windows:
         base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-        return base / nomes.NOME_EXIBICAO / "estado"
-    return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / nomes.PREFIXO
+        return base / names.NOME_EXIBICAO / "estado"
+    return Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / names.PREFIXO
 
 
 def dir_apps(sistema: Sistema | None = None) -> Path:
@@ -54,8 +54,8 @@ def dir_apps(sistema: Sistema | None = None) -> Path:
     sistema = sistema or detectar()
     if sistema.windows:
         base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-        return base / nomes.NOME_EXIBICAO / "craft-apps"
-    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / nomes.PREFIXO / "craft-apps"
+        return base / names.NOME_EXIBICAO / "craft-apps"
+    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / names.PREFIXO / "craft-apps"
 
 
 def _pasta_xdg(chave: str, padrao: str) -> Path:
@@ -74,8 +74,8 @@ def dir_downloads(sistema: Sistema | None = None) -> Path:
     """Onde os instaladores dos apps do Solumia (APK, AppImage, setup) são guardados."""
     sistema = sistema or detectar()
     if sistema.windows:
-        return Path(os.environ.get("USERPROFILE", Path.home())) / "Downloads" / nomes.NOME_EXIBICAO
-    return _pasta_xdg("DOWNLOAD", "Downloads") / nomes.NOME_EXIBICAO
+        return Path(os.environ.get("USERPROFILE", Path.home())) / "Downloads" / names.NOME_EXIBICAO
+    return _pasta_xdg("DOWNLOAD", "Downloads") / names.NOME_EXIBICAO
 
 
 def pastas_midia_padrao(sistema: Sistema | None = None) -> dict[str, str]:
@@ -88,11 +88,11 @@ def pastas_midia_padrao(sistema: Sistema | None = None) -> dict[str, str]:
         imagens = _pasta_xdg("PICTURES", "Imagens")
         videos = _pasta_xdg("VIDEOS", "Vídeos")
         musica = _pasta_xdg("MUSIC", "Músicas")
-    raiz = videos / nomes.NOME_EXIBICAO
+    raiz = videos / names.NOME_EXIBICAO
     return {
-        "imagens": str(imagens / nomes.NOME_EXIBICAO),
+        "imagens": str(imagens / names.NOME_EXIBICAO),
         "videos": str(raiz / "acervo"),
-        "audio": str(musica / nomes.NOME_EXIBICAO),
+        "audio": str(musica / names.NOME_EXIBICAO),
         "producao": str(raiz / "em-producao"),
         "produzidos": str(raiz / "produzidos"),
     }

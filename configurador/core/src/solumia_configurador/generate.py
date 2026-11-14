@@ -11,9 +11,9 @@ import re
 import tarfile
 from pathlib import Path
 
-from . import nomes, segredos
-from .cofre import Cofre
-from .manifesto import Manifesto
+from . import names, secret_store
+from .manifest import Manifesto
+from .vault import Cofre
 
 # Arquivos do repositório que vão para a VPS para construir as imagens.
 _FONTES_GATEWAY = [
@@ -34,14 +34,14 @@ _PERMITIR = re.compile(r"(^|/)\.env\.example$")
 
 
 def raiz_repositorio() -> Path:
-    """configurador/core/src/solumia_configurador/gerar.py -> raiz do monorepo."""
+    """configurador/core/src/solumia_configurador/generate.py -> raiz do monorepo."""
     return Path(__file__).resolve().parents[4]
 
 
 def _substituir_nomes(texto: str) -> str:
-    return (texto.replace("agent_login", nomes.ZONA_LOGIN_NGINX)
-                 .replace("agent_sem_token", f"{nomes.PREFIXO}_sem_token")
-                 .replace("agent-seguranca.conf", nomes.CONF_SEGURANCA_NGINX))
+    return (texto.replace("agent_login", names.ZONA_LOGIN_NGINX)
+                 .replace("agent_sem_token", f"{names.PREFIXO}_sem_token")
+                 .replace("agent-seguranca.conf", names.CONF_SEGURANCA_NGINX))
 
 
 # --- pacote de código-fonte -----------------------------------------------------------------------
@@ -94,20 +94,20 @@ def compose(nginx_no_docker: bool) -> str:
     restart: unless-stopped
 """ if nginx_no_docker else ""
     return f"""# Gerado pelo configurador do Solumia. Não edite: altere no configurador e aplique.
-name: {nomes.PROJETO_COMPOSE}
+name: {names.PROJETO_COMPOSE}
 
 services:
   gateway:
     build:
       context: ./fonte
       dockerfile: infra/docker/backend/Dockerfile
-    image: {nomes.IMAGEM_GATEWAY}:local
+    image: {names.IMAGEM_GATEWAY}:local
     env_file: [./gateway.env]
     environment:
       GATEWAY_HOST: 0.0.0.0
-      GATEWAY_PORT: {nomes.PORTA_GATEWAY_CONTEINER}
-    ports: ["127.0.0.1:{nomes.PORTA_GATEWAY_HOST}:{nomes.PORTA_GATEWAY_CONTEINER}"]
-    volumes: ["{nomes.VOLUME_DADOS}:/home/gateway/agent-data"]
+      GATEWAY_PORT: {names.PORTA_GATEWAY_CONTEINER}
+    ports: ["127.0.0.1:{names.PORTA_GATEWAY_HOST}:{names.PORTA_GATEWAY_CONTEINER}"]
+    volumes: ["{names.VOLUME_DADOS}:/home/gateway/agent-data"]
     read_only: false
     security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
@@ -115,10 +115,10 @@ services:
 
   tunel:
     build: ./fonte/infra/docker/tunel
-    image: {nomes.IMAGEM_TUNEL}:local
+    image: {names.IMAGEM_TUNEL}:local
     ports:
-      - "{nomes.PORTA_TUNEL_SSH}:2222"
-      - "127.0.0.1:{nomes.PORTA_TUNEL_ESTEIRA_HOST}:8765"
+      - "{names.PORTA_TUNEL_SSH}:2222"
+      - "127.0.0.1:{names.PORTA_TUNEL_ESTEIRA_HOST}:8765"
     volumes:
       - ./tunel/authorized_keys:/config/authorized_keys:ro
       - tunel-chaves:/etc/ssh/chaves
@@ -129,17 +129,17 @@ services:
     image: ${{COLLABORA_IMAGEM:-collabora/code:latest}}
     cap_add: [MKNOD]
     environment:
-      aliasgroup1: http://gateway:{nomes.PORTA_GATEWAY_CONTEINER}
+      aliasgroup1: http://gateway:{names.PORTA_GATEWAY_CONTEINER}
       extra_params: --o:ssl.enable=false --o:ssl.termination=true
       server_name: ${{COLLABORA_DOMINIO:-}}
       dictionaries: pt_BR en_US
       username: admin
       password: ${{COLLABORA_ADMIN_SENHA:-}}
-    ports: ["127.0.0.1:{nomes.PORTA_COLLABORA_HOST}:9980"]
+    ports: ["127.0.0.1:{names.PORTA_COLLABORA_HOST}:9980"]
     restart: unless-stopped
 {nginx}
 volumes:
-  {nomes.VOLUME_DADOS}:
+  {names.VOLUME_DADOS}:
   tunel-chaves:
   certbot-www:
   certbot-etc:
@@ -151,29 +151,34 @@ def env_compose(m: Manifesto, cofre: Cofre, imagens: dict[str, str]) -> str:
     linhas = [f"{k}={v}" for k, v in sorted(imagens.items())]
     # Domínio já validado pelo manifesto; senha urlsafe (sem $ nem aspas) para não haver interpolação.
     linhas.append(f"COLLABORA_DOMINIO={m.topologia.dominio}")
-    linhas.append(f"COLLABORA_ADMIN_SENHA={cofre.obter_ou_gerar(segredos.COLLABORA_SENHA, lambda: segredos.token())}")
+    senha = cofre.obter_ou_gerar(secret_store.COLLABORA_SENHA, lambda: secret_store.token())
+    linhas.append(f"COLLABORA_ADMIN_SENHA={senha}")
     return "\n".join(linhas) + "\n"
 
 
 def env_gateway(m: Manifesto, cofre: Cofre) -> str:
     dominio = m.topologia.dominio
     v = {
-        "GATEWAY_APP_NAME": nomes.NOME_EXIBICAO,
+        "GATEWAY_APP_NAME": names.NOME_EXIBICAO,
         "GATEWAY_ENVIRONMENT": "production",
         "GATEWAY_DEBUG": "false",
         "GATEWAY_LOG_FORMAT": "json",
         "GATEWAY_LOG_LEVEL": "info",
         "GATEWAY_CORS_ORIGINS": f"https://{dominio}",
-        "GATEWAY_CLIENT_API_KEYS": cofre.obter_ou_gerar(segredos.CHAVE_CLIENTE, lambda: segredos.token("sk_live_")),
-        "GATEWAY_WORKER_API_KEYS": cofre.obter_ou_gerar(segredos.CHAVE_WORKER, lambda: segredos.token("worker_")),
+        "GATEWAY_CLIENT_API_KEYS": cofre.obter_ou_gerar(
+            secret_store.CHAVE_CLIENTE, lambda: secret_store.token("sk_live_")
+        ),
+        "GATEWAY_WORKER_API_KEYS": cofre.obter_ou_gerar(
+            secret_store.CHAVE_WORKER, lambda: secret_store.token("worker_")
+        ),
         "GATEWAY_ADMIN_USUARIO": m.conta.usuario,
-        "GATEWAY_ADMIN_SENHA_HASH": cofre.exigir(segredos.SENHA_HASH),
-        "GATEWAY_ADMIN_TOTP_SEGREDO": cofre.exigir(segredos.TOTP),
-        "GATEWAY_JWT_SECRET_KEY": cofre.obter_ou_gerar(segredos.JWT, lambda: segredos.token(tamanho=48)),
+        "GATEWAY_ADMIN_SENHA_HASH": cofre.exigir(secret_store.SENHA_HASH),
+        "GATEWAY_ADMIN_TOTP_SEGREDO": cofre.exigir(secret_store.TOTP),
+        "GATEWAY_JWT_SECRET_KEY": cofre.obter_ou_gerar(secret_store.JWT, lambda: secret_store.token(tamanho=48)),
         "GATEWAY_COLLABORA_URL": f"https://{dominio}",
         "GATEWAY_COLLABORA_INTERNO_URL": "http://collabora:9980",
-        "GATEWAY_WOPI_BASE_URL": f"http://gateway:{nomes.PORTA_GATEWAY_CONTEINER}",
-        "GATEWAY_WOPI_SECRET": cofre.obter_ou_gerar(segredos.WOPI, lambda: segredos.token(tamanho=48)),
+        "GATEWAY_WOPI_BASE_URL": f"http://gateway:{names.PORTA_GATEWAY_CONTEINER}",
+        "GATEWAY_WOPI_SECRET": cofre.obter_ou_gerar(secret_store.WOPI, lambda: secret_store.token(tamanho=48)),
     }
     linhas = ["# Gerado pelo configurador do Solumia. Contém segredos: modo 0600, não copiar."]
     for chave, valor in v.items():
@@ -200,9 +205,9 @@ def nginx_site_host(dominio: str, raiz: Path | None = None) -> str:
     raiz = raiz or raiz_repositorio()
     texto = (raiz / "infra/docker/nginx/host-nginx-site.conf.example").read_text()
     texto = (texto.replace("seu-dominio.exemplo.com", dominio)
-                  .replace("127.0.0.1:48080", f"127.0.0.1:{nomes.PORTA_GATEWAY_HOST}")
-                  .replace("127.0.0.1:18765", f"127.0.0.1:{nomes.PORTA_TUNEL_ESTEIRA_HOST}")
-                  .replace("127.0.0.1:9980", f"127.0.0.1:{nomes.PORTA_COLLABORA_HOST}"))
+                  .replace("127.0.0.1:48080", f"127.0.0.1:{names.PORTA_GATEWAY_HOST}")
+                  .replace("127.0.0.1:18765", f"127.0.0.1:{names.PORTA_TUNEL_ESTEIRA_HOST}")
+                  .replace("127.0.0.1:9980", f"127.0.0.1:{names.PORTA_COLLABORA_HOST}"))
     return _substituir_nomes(texto)
 
 
@@ -222,12 +227,12 @@ def authorized_keys_tunel(publica: str) -> str:
 def unidade_worker(dir_worker: Path, python: Path) -> str:
     return f"""# Gerado pelo configurador do Solumia.
 [Unit]
-Description={nomes.NOME_EXIBICAO}: worker (conecta ao gateway)
+Description={names.NOME_EXIBICAO}: worker (conecta ao gateway)
 After=network-online.target
 
 [Service]
 WorkingDirectory={dir_worker}
-EnvironmentFile=%h/.config/{nomes.PREFIXO}/worker.env
+EnvironmentFile=%h/.config/{names.PREFIXO}/worker.env
 ExecStart={python} -m worker
 Restart=always
 RestartSec=5
@@ -241,13 +246,13 @@ WantedBy=default.target
 def unidade_tunel(host: str, porta_ssh: int, chave: Path, known_hosts: Path) -> str:
     return f"""# Gerado pelo configurador do Solumia.
 [Unit]
-Description={nomes.NOME_EXIBICAO}: túnel reverso da esteira até a VPS
+Description={names.NOME_EXIBICAO}: túnel reverso da esteira até a VPS
 After=network-online.target
 
 [Service]
 ExecStart=/usr/bin/ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \\
   -o StrictHostKeyChecking=yes -o UserKnownHostsFile={known_hosts} -i {chave} -p {porta_ssh} \\
-  -R 0.0.0.0:8765:127.0.0.1:{nomes.PORTA_ESTEIRA_LOCAL} tunel@{host}
+  -R 0.0.0.0:8765:127.0.0.1:{names.PORTA_ESTEIRA_LOCAL} tunel@{host}
 Restart=always
 RestartSec=10
 
@@ -259,8 +264,8 @@ WantedBy=default.target
 def env_worker(m: Manifesto, cofre: Cofre) -> str:
     return (
         "# Gerado pelo configurador do Solumia. Contém a chave do worker.\n"
-        f"WORKER_NAME={nomes.PREFIXO}-worker\n"
+        f"WORKER_NAME={names.PREFIXO}-worker\n"
         f"WORKER_GATEWAY_URL=wss://{m.topologia.dominio}/ws/worker\n"
-        f"WORKER_API_KEY={cofre.exigir(segredos.CHAVE_WORKER)}\n"
-        f"WORKER_LLAMA_PORTA={nomes.PORTA_LLAMA_LOCAL}\n"
+        f"WORKER_API_KEY={cofre.exigir(secret_store.CHAVE_WORKER)}\n"
+        f"WORKER_LLAMA_PORTA={names.PORTA_LLAMA_LOCAL}\n"
     )

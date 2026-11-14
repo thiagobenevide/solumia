@@ -1,7 +1,7 @@
 """Instalação da VPS por SSH, sem terminal: gateway, túnel, Collabora, nginx, TLS e endurecimento.
 
 Substitui `infra/scripts/instalar_vps` + `endurecer_vps` e convive com a instalação atual:
-projeto compose `solumia`, portas e arquivos com prefixo `solumia` (ver `nomes.py`).
+projeto compose `solumia`, portas e arquivos com prefixo `solumia` (ver `names.py`).
 
 Proteções contra ficar trancado para fora (herdadas do endurecer_vps):
 1. a chave do configurador é instalada e TESTADA antes de qualquer mudança no SSH;
@@ -18,14 +18,14 @@ import shlex
 import time
 from dataclasses import dataclass
 
-from .. import gerar, nomes, segredos
-from ..cofre import Cofre
-from ..manifesto import Manifesto, No
-from ..motor import Contexto, Passo, Plano
+from .. import generate, names, secret_store
+from ..engine import Contexto, Passo, Plano
+from ..manifest import Manifesto, No
 from ..ssh import Credenciais, Sessao, SSHErro
+from ..vault import Cofre
 
 q = shlex.quote
-D = nomes.DIR_VPS
+D = names.DIR_VPS
 
 
 @dataclass
@@ -51,10 +51,10 @@ def plano(m: Manifesto, cofre: Cofre, opcoes: OpcoesVPS) -> Plano:
         raise ValueError("confirme a impressão digital da VPS na tela VPS antes de instalar")
     if not m.topologia.dominio or not m.topologia.email_tls:
         raise ValueError("defina domínio e e-mail para o certificado TLS")
-    for s in (segredos.SENHA_HASH, segredos.TOTP):
+    for s in (secret_store.SENHA_HASH, secret_store.TOTP):
         cofre.exigir(s)  # conta criada antes (tela Conta)
 
-    nome_chave = segredos.SSH_CHAVE_PRIVADA.format(no=nome_no)
+    nome_chave = secret_store.SSH_CHAVE_PRIVADA.format(no=nome_no)
     dominio = m.topologia.dominio
     alvo = f"{acesso.usuario}@{acesso.host}:{acesso.porta}"
 
@@ -112,10 +112,10 @@ def plano(m: Manifesto, cofre: Cofre, opcoes: OpcoesVPS) -> Plano:
     def chave(ctx: Contexto) -> None:
         privada = cofre.obter(nome_chave)
         if not privada:
-            privada, publica = segredos.gerar_chave_ssh()
+            privada, publica = secret_store.gerar_chave_ssh()
             cofre.definir(nome_chave, privada)
             ctx.log("Chave ed25519 do configurador gerada (privada só no cofre)")
-        publica = segredos.publica_de(privada)
+        publica = secret_store.publica_de(privada)
         s = sessao(ctx)
         # authorized_keys do usuário de login (não do root, se for outro).
         s.rodar(
@@ -163,10 +163,10 @@ def plano(m: Manifesto, cofre: Cofre, opcoes: OpcoesVPS) -> Plano:
             except (IndexError, ValueError):
                 continue
             ocupadas[porta] = linha
-        nossas = rodar(ctx, f"docker ps --filter label=com.docker.compose.project={nomes.PROJETO_COMPOSE} -q | wc -l")
+        nossas = rodar(ctx, f"docker ps --filter label=com.docker.compose.project={names.PROJETO_COMPOSE} -q | wc -l")
         ja_nosso = int((nossas.strip().splitlines() or ["0"])[-1]) > 0
-        for p in (nomes.PORTA_GATEWAY_HOST, nomes.PORTA_TUNEL_SSH, nomes.PORTA_TUNEL_ESTEIRA_HOST,
-                  nomes.PORTA_COLLABORA_HOST):
+        for p in (names.PORTA_GATEWAY_HOST, names.PORTA_TUNEL_SSH, names.PORTA_TUNEL_ESTEIRA_HOST,
+                  names.PORTA_COLLABORA_HOST):
             if p in ocupadas and not ja_nosso:
                 raise SSHErro(f"porta {p} já em uso na VPS: {ocupadas[p]}")
         nginx_host = sessao(ctx).rodar("systemctl is-active --quiet nginx", sudo=True, checar=False)[0] == 0
@@ -191,7 +191,7 @@ def plano(m: Manifesto, cofre: Cofre, opcoes: OpcoesVPS) -> Plano:
         s = sessao(ctx)
         modo = ctx.recursos["modo_nginx"]
         rodar(ctx, f"install -d -m 750 {D} {D}/nginx {D}/tunel")
-        pacote = gerar.pacote_fonte()
+        pacote = generate.pacote_fonte()
         soma = hashlib.sha256(pacote).hexdigest()
         s.enviar(pacote, f"{D}/fonte.tar.gz", 0o640)
         remota = rodar(ctx, f"sha256sum {D}/fonte.tar.gz | cut -d' ' -f1").strip().splitlines()[-1]
@@ -202,19 +202,19 @@ def plano(m: Manifesto, cofre: Cofre, opcoes: OpcoesVPS) -> Plano:
                    f"rm -rf {D}/fonte; mv {D}/fonte.novo {D}/fonte; rm -f {D}/fonte.tar.gz")
         ctx.log(f"Código enviado ({len(pacote) // 1024} KiB, SHA-256 {soma[:12]}… conferido)")
 
-        privada_tunel = cofre.obter(segredos.TUNEL_CHAVE_PRIVADA)
+        privada_tunel = cofre.obter(secret_store.TUNEL_CHAVE_PRIVADA)
         if not privada_tunel:
-            privada_tunel, _ = segredos.gerar_chave_ssh()
-            cofre.definir(segredos.TUNEL_CHAVE_PRIVADA, privada_tunel)
-        s.enviar(gerar.compose(modo == "docker").encode(), f"{D}/compose.yml", 0o640)
-        s.enviar(gerar.env_gateway(m, cofre).encode(), f"{D}/gateway.env", 0o600)
-        s.enviar(gerar.authorized_keys_tunel(segredos.publica_de(privada_tunel)).encode(),
+            privada_tunel, _ = secret_store.gerar_chave_ssh()
+            cofre.definir(secret_store.TUNEL_CHAVE_PRIVADA, privada_tunel)
+        s.enviar(generate.compose(modo == "docker").encode(), f"{D}/compose.yml", 0o640)
+        s.enviar(generate.env_gateway(m, cofre).encode(), f"{D}/gateway.env", 0o600)
+        s.enviar(generate.authorized_keys_tunel(secret_store.publica_de(privada_tunel)).encode(),
                  f"{D}/tunel/authorized_keys", 0o644)
-        s.enviar(gerar.nginx_seguranca().encode(), f"{D}/nginx/seguranca-http.conf", 0o644)
+        s.enviar(generate.nginx_seguranca().encode(), f"{D}/nginx/seguranca-http.conf", 0o644)
         ctx.log("compose.yml, gateway.env (0600), chave do túnel e nginx enviados")
 
     # --- 7. imagens e serviços ------------------------------------------------------------------
-    dc = f"docker compose -p {nomes.PROJETO_COMPOSE} --project-directory {D} -f {D}/compose.yml --env-file {D}/.env"
+    dc = f"docker compose -p {names.PROJETO_COMPOSE} --project-directory {D} -f {D}/compose.yml --env-file {D}/.env"
 
     def imagens(ctx: Contexto) -> None:
         # Versões fixas do Collabora e do certbot: o digest é gravado na 1ª vez (como o instalar_vps).
@@ -228,13 +228,13 @@ def plano(m: Manifesto, cofre: Cofre, opcoes: OpcoesVPS) -> Plano:
             atual = "\n".join(linhas) + "\n"
             sessao(ctx).enviar(atual.encode(), f"{D}/imagens.env", 0o644)
         imgs = dict(linha.split("=", 1) for linha in atual.strip().splitlines() if "=" in linha)
-        sessao(ctx).enviar(gerar.env_compose(m, cofre, imgs).encode(), f"{D}/.env", 0o600)
+        sessao(ctx).enviar(generate.env_compose(m, cofre, imgs).encode(), f"{D}/.env", 0o600)
         rodar(ctx, f"{dc} build -q gateway tunel", timeout=3600)
         ctx.log("Imagens construídas; Collabora e certbot fixados por digest")
 
     def servicos(ctx: Contexto) -> None:
         rodar(ctx, f"{dc} up -d --force-recreate --remove-orphans gateway tunel collabora")
-        url = f"http://127.0.0.1:{nomes.PORTA_GATEWAY_HOST}/health"
+        url = f"http://127.0.0.1:{names.PORTA_GATEWAY_HOST}/health"
         for _ in range(30):
             cod, _ = sessao(ctx).rodar(f"curl -fsS {url} >/dev/null", sudo=True, checar=False)
             if cod == 0:
@@ -265,27 +265,27 @@ def plano(m: Manifesto, cofre: Cofre, opcoes: OpcoesVPS) -> Plano:
             tem = s.rodar(f"{dc} run --rm --no-deps --entrypoint test certbot -f "
                           f"/etc/letsencrypt/live/{dominio}/fullchain.pem", sudo=True, checar=False)[0] == 0
             if not tem:
-                s.enviar(gerar.nginx_desafio(dominio).encode(), f"{D}/nginx/site.conf", 0o644)
+                s.enviar(generate.nginx_desafio(dominio).encode(), f"{D}/nginx/site.conf", 0o644)
                 rodar(ctx, f"{dc} up -d nginx && {dc} restart nginx")
                 rodar(ctx, f"{dc} run --rm --no-deps --entrypoint certbot certbot certonly --webroot "
                            f"-w /var/www/certbot -d {q(dominio)} --email {q(email)} --agree-tos "
                            "--non-interactive --no-eff-email", timeout=600)
             rodar(ctx, f"cp -f {D}/nginx/site.conf {D}/nginx/site.conf.anterior 2>/dev/null || true")
-            s.enviar(gerar.nginx_site_docker(dominio).encode(), f"{D}/nginx/site.conf", 0o644)
+            s.enviar(generate.nginx_site_docker(dominio).encode(), f"{D}/nginx/site.conf", 0o644)
             if s.rodar(f"{dc} run --rm --no-deps --entrypoint nginx nginx -t -q", sudo=True, log=ctx.log, checar=False)[0]:
                 rodar(ctx, f"mv -f {D}/nginx/site.conf.anterior {D}/nginx/site.conf")
                 raise SSHErro("configuração nova do nginx inválida: mantida a anterior")
             rodar(ctx, f"{dc} up -d nginx certbot && {dc} restart nginx")
         else:
-            site = f"/etc/nginx/sites-available/{nomes.SITE_NGINX.format(dominio=dominio)}"
-            ativo = f"/etc/nginx/sites-enabled/{nomes.SITE_NGINX.format(dominio=dominio)}"
-            seg = f"/etc/nginx/conf.d/{nomes.CONF_SEGURANCA_NGINX}"
+            site = f"/etc/nginx/sites-available/{names.SITE_NGINX.format(dominio=dominio)}"
+            ativo = f"/etc/nginx/sites-enabled/{names.SITE_NGINX.format(dominio=dominio)}"
+            seg = f"/etc/nginx/conf.d/{names.CONF_SEGURANCA_NGINX}"
             rodar(ctx, "dpkg -s python3-certbot-nginx >/dev/null 2>&1 || "
                        "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq certbot python3-certbot-nginx")
             existia = s.rodar(f"test -f {site}", sudo=True, checar=False)[0] == 0
             if not existia:  # depois do certbot o arquivo ganha as linhas do TLS: só escrito na 1ª vez
-                s.enviar(gerar.nginx_site_host(dominio).encode(), site, 0o644)
-            s.enviar(gerar.nginx_seguranca().encode(), seg, 0o644)
+                s.enviar(generate.nginx_site_host(dominio).encode(), site, 0o644)
+            s.enviar(generate.nginx_seguranca().encode(), seg, 0o644)
             rodar(ctx, f"ln -sf {site} {ativo}")
             if s.rodar("nginx -t -q", sudo=True, log=ctx.log, checar=False)[0]:
                 rodar(ctx, f"rm -f {seg} {ativo}" + ("" if existia else f" {site}"))
@@ -306,38 +306,38 @@ def plano(m: Manifesto, cofre: Cofre, opcoes: OpcoesVPS) -> Plano:
             raise SSHErro("não consegui ler a porta do SSH (sshd -T): nada foi alterado")
         meu_ip = rodar(ctx, "echo \"${SSH_CONNECTION%% *}\"").strip().splitlines()[-1]
         ufw_antes = "ativo" if s.rodar("ufw status | grep -q 'Status: active'", sudo=True, checar=False)[0] == 0 else "inativo"
-        dropin_existia = s.rodar(f"test -f {nomes.SSHD_DROPIN}", sudo=True, checar=False)[0] == 0
+        dropin_existia = s.rodar(f"test -f {names.SSHD_DROPIN}", sudo=True, checar=False)[0] == 0
 
         desfazer = "#!/bin/bash\n# Gerado pelo configurador do Solumia: volta SSH e firewall ao estado anterior.\n"
         if not dropin_existia:
-            desfazer += f"rm -f {nomes.SSHD_DROPIN}\n"
+            desfazer += f"rm -f {names.SSHD_DROPIN}\n"
         desfazer += "sshd -t && (systemctl reload ssh 2>/dev/null || systemctl reload sshd)\n"
         if ufw_antes == "inativo":
             desfazer += "ufw --force disable\n"
-        desfazer += f"rm -f {nomes.FAIL2BAN_JAIL}; systemctl restart fail2ban 2>/dev/null\n"
-        s.enviar(desfazer.encode(), nomes.SCRIPT_DESFAZER, 0o700)
-        u = nomes.UNIDADE_DESFAZER
+        desfazer += f"rm -f {names.FAIL2BAN_JAIL}; systemctl restart fail2ban 2>/dev/null\n"
+        s.enviar(desfazer.encode(), names.SCRIPT_DESFAZER, 0o700)
+        u = names.UNIDADE_DESFAZER
         rodar(ctx, f"systemctl stop {u}.timer 2>/dev/null; systemctl reset-failed {u}.service {u}.timer 2>/dev/null; "
-                   f"systemd-run --quiet --unit={u} --on-active=300 /bin/bash {nomes.SCRIPT_DESFAZER}")
+                   f"systemd-run --quiet --unit={u} --on-active=300 /bin/bash {names.SCRIPT_DESFAZER}")
         ctx.log("Desfazer automático agendado para daqui a 5 min (cancelado só se o acesso novo funcionar)")
 
         regras = " ".join(f"ufw allow {p}/tcp >/dev/null;" for p in portas_ssh.split())
         rodar(ctx, f"{regras} ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; "
-                   f"ufw allow {nomes.PORTA_TUNEL_SSH}/tcp >/dev/null; ufw default deny incoming >/dev/null; "
+                   f"ufw allow {names.PORTA_TUNEL_SSH}/tcp >/dev/null; ufw default deny incoming >/dev/null; "
                    "ufw default allow outgoing >/dev/null; ufw --force enable >/dev/null")
-        ctx.log(f"Firewall: SSH ({portas_ssh}), 80, 443 e {nomes.PORTA_TUNEL_SSH}; resto fechado")
+        ctx.log(f"Firewall: SSH ({portas_ssh}), 80, 443 e {names.PORTA_TUNEL_SSH}; resto fechado")
 
         jail = (f"[DEFAULT]\nignoreip = 127.0.0.1/8 ::1 {meu_ip}\nbantime = 1h\nfindtime = 10m\nmaxretry = 5\n\n"
                 f"[sshd]\nenabled = true\nport = {','.join(portas_ssh.split())}\nbackend = systemd\n")
-        s.enviar(jail.encode(), nomes.FAIL2BAN_JAIL, 0o644)
+        s.enviar(jail.encode(), names.FAIL2BAN_JAIL, 0o644)
         rodar(ctx, "systemctl enable -q --now fail2ban && systemctl restart fail2ban")
 
         if opcoes.desativar_login_por_senha:
             s.enviar(b"# Gerado pelo configurador do Solumia.\nPasswordAuthentication no\n"
                      b"KbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\nMaxAuthTries 4\n",
-                     nomes.SSHD_DROPIN, 0o644)
+                     names.SSHD_DROPIN, 0o644)
             if s.rodar("sshd -t", sudo=True, log=ctx.log, checar=False)[0]:
-                rodar(ctx, f"rm -f {nomes.SSHD_DROPIN}")
+                rodar(ctx, f"rm -f {names.SSHD_DROPIN}")
                 raise SSHErro("sshd -t recusou a configuração: SSH mantido como estava")
             rodar(ctx, "systemctl reload ssh 2>/dev/null || systemctl reload sshd")
             ctx.log("SSH: só por chave (sessões abertas continuam)")
@@ -372,11 +372,11 @@ def plano(m: Manifesto, cofre: Cofre, opcoes: OpcoesVPS) -> Plano:
         Passo("pacotes", "Instalar pacotes de base", pacotes_lista, pacotes, pacotes_ok),
         Passo("docker", "Instalar Docker", "repositório oficial da Docker", docker, docker_ok),
         Passo("portas", "Conferir portas e escolher o modo do nginx",
-              f"Solumia usa {nomes.PORTA_GATEWAY_HOST}, {nomes.PORTA_TUNEL_SSH}, {nomes.PORTA_TUNEL_ESTEIRA_HOST}, "
-              f"{nomes.PORTA_COLLABORA_HOST}", portas, sempre=True),
+              f"Solumia usa {names.PORTA_GATEWAY_HOST}, {names.PORTA_TUNEL_SSH}, {names.PORTA_TUNEL_ESTEIRA_HOST}, "
+              f"{names.PORTA_COLLABORA_HOST}", portas, sempre=True),
         Passo("arquivos", f"Enviar código e configuração para {D}", "pacote conferido por SHA-256; .env em 0600", arquivos),
-        Passo("imagens", "Construir imagens", f"{nomes.IMAGEM_GATEWAY}, {nomes.IMAGEM_TUNEL}; Collabora fixado por digest", imagens),
-        Passo("servicos", "Subir gateway, túnel e Collabora", f"projeto compose '{nomes.PROJETO_COMPOSE}'", servicos),
+        Passo("imagens", "Construir imagens", f"{names.IMAGEM_GATEWAY}, {names.IMAGEM_TUNEL}; Collabora fixado por digest", imagens),
+        Passo("servicos", "Subir gateway, túnel e Collabora", f"projeto compose '{names.PROJETO_COMPOSE}'", servicos),
         Passo("dns", f"Conferir DNS de {dominio}", "o domínio precisa apontar para a VPS", dns),
         Passo("tls", "nginx e certificado TLS", "Let's Encrypt; configuração validada antes de recarregar", tls),
         Passo("endurecer", "Firewall, fail2ban e SSH só por chave",

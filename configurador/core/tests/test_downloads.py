@@ -8,8 +8,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from solumia_configurador import craft_apps, verificacao
-from solumia_configurador.plataforma import Sistema
+from solumia_configurador import craft_apps, verification
+from solumia_configurador.platform_setup import Sistema
 
 LINUX = Sistema("linux", "x86_64")
 WIN = Sistema("windows", "x86_64")
@@ -54,16 +54,16 @@ def test_zip_slip_recusado(tmp_path: Path) -> None:
 def test_sha256sums(tmp_path: Path) -> None:
     arq = tmp_path / "a.bin"
     arq.write_bytes(b"conteudo")
-    soma = verificacao.sha256(arq)
-    somas = verificacao.ler_sums(f"{soma}  a.bin\n{'0' * 64}  b.bin\n")
-    assert verificacao.conferir_arquivo(arq, "a.bin", somas) == soma
+    soma = verification.sha256(arq)
+    somas = verification.ler_sums(f"{soma}  a.bin\n{'0' * 64}  b.bin\n")
+    assert verification.conferir_arquivo(arq, "a.bin", somas) == soma
     arq.write_bytes(b"adulterado")
-    with pytest.raises(verificacao.VerificacaoFalhou, match="não confere"):
-        verificacao.conferir_arquivo(arq, "a.bin", somas)
-    with pytest.raises(verificacao.VerificacaoFalhou):
-        verificacao.conferir_arquivo(arq, "c.bin", somas)
-    with pytest.raises(verificacao.VerificacaoFalhou):
-        verificacao.ler_sums("lixo")
+    with pytest.raises(verification.VerificacaoFalhou, match="não confere"):
+        verification.conferir_arquivo(arq, "a.bin", somas)
+    with pytest.raises(verification.VerificacaoFalhou):
+        verification.conferir_arquivo(arq, "c.bin", somas)
+    with pytest.raises(verification.VerificacaoFalhou):
+        verification.ler_sums("lixo")
 
 
 def _gpg_chave(casa: Path, nome: str) -> tuple[bytes, str]:
@@ -77,7 +77,7 @@ def _gpg_chave(casa: Path, nome: str) -> tuple[bytes, str]:
     return pub, fpr
 
 
-@pytest.mark.skipif(verificacao.gpg_disponivel() is None, reason="gpg ausente")
+@pytest.mark.skipif(verification.gpg_disponivel() is None, reason="gpg ausente")
 def test_assinatura_so_aceita_chave_fixada(tmp_path: Path) -> None:
     pub, fpr = _gpg_chave(tmp_path / "boa", "Teste Bom <b@t>")
     pub_mal, fpr_mal = _gpg_chave(tmp_path / "ma", "Atacante <a@t>")
@@ -87,32 +87,32 @@ def test_assinatura_so_aceita_chave_fixada(tmp_path: Path) -> None:
         subprocess.run(["gpg", "--homedir", str(casa), "--batch", "--pinentry-mode", "loopback", "--passphrase", "",
                         "--armor", "--detach-sign", "-o", str(tmp_path / saida), str(dados)], check=True,
                        capture_output=True)
-    assert verificacao.conferir_assinatura(pub, tmp_path / "boa.asc", dados, [fpr]) == fpr
+    assert verification.conferir_assinatura(pub, tmp_path / "boa.asc", dados, [fpr]) == fpr
     # Atacante publica a própria chave na release: recusado porque não é a fixada.
-    with pytest.raises(verificacao.VerificacaoFalhou, match="não fixada"):
-        verificacao.conferir_assinatura(pub_mal, tmp_path / "ma.asc", dados, [fpr])
+    with pytest.raises(verification.VerificacaoFalhou, match="não fixada"):
+        verification.conferir_assinatura(pub_mal, tmp_path / "ma.asc", dados, [fpr])
     dados.write_text("adulterado\n")
-    with pytest.raises(verificacao.VerificacaoFalhou, match="inválida"):
-        verificacao.conferir_assinatura(pub, tmp_path / "boa.asc", dados, [fpr])
+    with pytest.raises(verification.VerificacaoFalhou, match="inválida"):
+        verification.conferir_assinatura(pub, tmp_path / "boa.asc", dados, [fpr])
     assert fpr_mal != fpr
 
 
 def test_apps_solumia_bloqueado_sem_chave_fixada(monkeypatch):
-    from solumia_configurador import apps_solumia
+    from solumia_configurador import solumia_apps
     from solumia_configurador.craft_apps import CraftErro
-    from solumia_configurador.plataforma import Sistema
+    from solumia_configurador.platform_setup import Sistema
 
-    monkeypatch.setattr(apps_solumia, "IMPRESSOES_SOLUMIA", ())
+    monkeypatch.setattr(solumia_apps, "IMPRESSOES_SOLUMIA", ())
     with pytest.raises(CraftErro, match="bloqueado"):
-        apps_solumia.baixar("android", Sistema("linux", "x86_64"))
+        solumia_apps.baixar("android", Sistema("linux", "x86_64"))
 
 
 def test_apps_solumia_instalar_so_no_sistema_certo():
-    from solumia_configurador import apps_solumia
-    from solumia_configurador.plataforma import Sistema
+    from solumia_configurador import solumia_apps
+    from solumia_configurador.platform_setup import Sistema
 
     linux = Sistema("linux", "x86_64")
-    assert apps_solumia.instala_aqui(apps_solumia.CATALOGO["linux"], linux)
-    assert not apps_solumia.instala_aqui(apps_solumia.CATALOGO["windows"], linux)
-    assert not apps_solumia.instala_aqui(apps_solumia.CATALOGO["android"], linux)
-    assert apps_solumia.CATALOGO["wear"].arquivo("1.2.3") == "solumia-1.2.3-wear.apk"
+    assert solumia_apps.instala_aqui(solumia_apps.CATALOGO["linux"], linux)
+    assert not solumia_apps.instala_aqui(solumia_apps.CATALOGO["windows"], linux)
+    assert not solumia_apps.instala_aqui(solumia_apps.CATALOGO["android"], linux)
+    assert solumia_apps.CATALOGO["wear"].arquivo("1.2.3") == "solumia-1.2.3-wear.apk"

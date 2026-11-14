@@ -38,7 +38,7 @@ ignore = ["S101", "S603", "S607", "B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S"]
-"src/solumia_configurador/papeis/*" = ["E501"]  # comandos de shell longos ficam legíveis inteiros
+"src/solumia_configurador/roles/*" = ["E501"]  # comandos de shell longos ficam legíveis inteiros
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

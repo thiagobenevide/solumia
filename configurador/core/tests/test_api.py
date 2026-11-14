@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from solumia_configurador import segredos
+from solumia_configurador import secret_store
 from solumia_configurador.api import Estado, criar_app
-from solumia_configurador.cofre import Cofre
-from solumia_configurador.plataforma import Sistema
+from solumia_configurador.platform_setup import Sistema
+from solumia_configurador.vault import Cofre
 
 PORTA = 54321
 TOKEN = "t" * 43
@@ -44,7 +44,7 @@ def test_conta_nunca_devolve_hash_e_totp_so_uma_vez(cliente: TestClient) -> None
     assert "totp_uri" not in r2
     corpo = cliente.get("/cofre").text + cliente.get("/manifesto").text
     assert "scrypt$" not in corpo
-    assert set(cliente.get("/cofre").json()["segredos"]) == {segredos.SENHA_HASH, segredos.TOTP}
+    assert set(cliente.get("/cofre").json()["segredos"]) == {secret_store.SENHA_HASH, secret_store.TOTP}
 
 
 def test_aplicar_exige_hash_mostrado(cliente: TestClient) -> None:

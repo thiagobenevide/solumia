@@ -27,13 +27,13 @@ from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from . import VERSAO, VERSAO_PROTOCOLO, apps_solumia, craft_apps, manifesto, nomes, pastas, segredos
-from .cofre import Cofre, CofreErro
-from .manifesto import Manifesto, Pastas
-from .motor import Execucao, Mascara, Passo, Plano, listar_registro
-from .papeis import vps
-from .plataforma import Sistema, detectar, dir_downloads, dir_estado, pastas_midia_padrao
+from . import VERSAO, VERSAO_PROTOCOLO, craft_apps, folders, manifest, names, secret_store, solumia_apps
+from .engine import Execucao, Mascara, Passo, Plano, listar_registro
+from .manifest import Manifesto, Pastas
+from .platform_setup import Sistema, detectar, dir_downloads, dir_estado, pastas_midia_padrao
+from .roles import vps
 from .ssh import SSHErro, ler_impressao_servidor
+from .vault import Cofre, CofreErro
 
 _VALIDADE_PLANO = 15 * 60
 _CORPO_MAX = 1024 * 1024
@@ -60,7 +60,7 @@ class Estado:
     def manifesto(self) -> Manifesto:
         if not self.caminho_manifesto.exists():
             return Manifesto()
-        return manifesto.carregar(self.caminho_manifesto)
+        return manifest.carregar(self.caminho_manifesto)
 
     def guardar_plano(self, plano: Plano, recursos: dict[str, Any] | None = None) -> dict[str, Any]:
         with self.lock:
@@ -138,8 +138,8 @@ def criar_app(estado: Estado, token: str, porta: int) -> FastAPI:
     def saude(s: Estado = Depends(e)) -> dict[str, Any]:
         return {"versao": VERSAO, "protocolo": VERSAO_PROTOCOLO, "so": s.sistema.so,
                 "arquitetura": s.sistema.arquitetura, "manifesto": str(s.caminho_manifesto),
-                "nomes": {"prefixo": nomes.PREFIXO, "porta_gateway": nomes.PORTA_GATEWAY_HOST,
-                          "porta_tunel": nomes.PORTA_TUNEL_SSH}}
+                "nomes": {"prefixo": names.PREFIXO, "porta_gateway": names.PORTA_GATEWAY_HOST,
+                          "porta_tunel": names.PORTA_TUNEL_SSH}}
 
     @app.get("/manifesto")
     def ler_manifesto(s: Estado = Depends(e)) -> dict[str, Any]:
@@ -151,7 +151,7 @@ def criar_app(estado: Estado, token: str, porta: int) -> FastAPI:
             m = Manifesto.model_validate(dados)
         except ValueError as erro:
             raise HTTPException(422, str(erro)) from erro
-        manifesto.salvar(m, s.caminho_manifesto)
+        manifest.salvar(m, s.caminho_manifesto)
         return m.model_dump(mode="json")
 
     @app.get("/cofre")
@@ -161,35 +161,35 @@ def criar_app(estado: Estado, token: str, porta: int) -> FastAPI:
     # --- conta -----------------------------------------------------------------------------------
     @app.post("/conta")
     def conta(dados: ContaEntrada, s: Estado = Depends(e)) -> dict[str, Any]:
-        problemas = segredos.validar_senha(dados.senha)
+        problemas = secret_store.validar_senha(dados.senha)
         if problemas:
             raise HTTPException(422, "senha fraca: " + "; ".join(problemas))
         m = s.manifesto()
         m.conta.usuario = dados.usuario
-        manifesto.salvar(Manifesto.model_validate(m.model_dump()), s.caminho_manifesto)
-        s.cofre.definir(segredos.SENHA_HASH, segredos.hash_senha(dados.senha))
-        novo = not s.cofre.obter(segredos.TOTP)
+        manifest.salvar(Manifesto.model_validate(m.model_dump()), s.caminho_manifesto)
+        s.cofre.definir(secret_store.SENHA_HASH, secret_store.hash_senha(dados.senha))
+        novo = not s.cofre.obter(secret_store.TOTP)
         resposta: dict[str, Any] = {"usuario": dados.usuario, "totp_novo": novo}
         if novo:
-            segredo = segredos.segredo_totp()
-            s.cofre.definir(segredos.TOTP, segredo)
+            segredo = secret_store.segredo_totp()
+            s.cofre.definir(secret_store.TOTP, segredo)
             # Única vez em que o segredo TOTP sai do núcleo: para o QR do Google Authenticator.
-            resposta["totp_uri"] = segredos.uri_totp(segredo, dados.usuario)
+            resposta["totp_uri"] = secret_store.uri_totp(segredo, dados.usuario)
         return resposta
 
     @app.post("/conta/totp/conferir")
     def conferir_totp(codigo: str = Body(..., embed=True), s: Estado = Depends(e)) -> dict[str, bool]:
-        return {"ok": segredos.conferir_totp(s.cofre.obter(segredos.TOTP) or "", codigo)}
+        return {"ok": secret_store.conferir_totp(s.cofre.obter(secret_store.TOTP) or "", codigo)}
 
     # --- pastas de mídia ---------------------------------------------------------------------------
     @app.get("/pastas/padrao")
     def pastas_padrao(s: Estado = Depends(e)) -> dict[str, Any]:
-        return {"pastas": pastas_midia_padrao(s.sistema), "rotulos": pastas.ROTULOS}
+        return {"pastas": pastas_midia_padrao(s.sistema), "rotulos": folders.ROTULOS}
 
     @app.post("/pastas/validar")
     def validar_pastas(dados: PastasEntrada, s: Estado = Depends(e)) -> dict[str, Any]:
         windows = s.sistema.windows if dados.windows is None else dados.windows
-        r = pastas.validar(dados.pastas, windows=windows, local=dados.local)
+        r = folders.validar(dados.pastas, windows=windows, local=dados.local)
         return {"ok": r.ok, "erros": r.erros, "avisos": r.avisos, "resolvidas": r.resolvidas}
 
     @app.post("/pastas/{no}/plano")
@@ -200,13 +200,13 @@ def criar_app(estado: Estado, token: str, porta: int) -> FastAPI:
             raise HTTPException(404, "nó sem pastas definidas")
         if alvo.endereco != "local":
             raise HTTPException(422, "pastas de nó remoto são criadas pela instalação do nó")
-        r = pastas.validar(alvo.pastas, windows=s.sistema.windows)
+        r = folders.validar(alvo.pastas, windows=s.sistema.windows)
         if not r.ok:
             raise HTTPException(422, {"erros": r.erros})
         definidas = alvo.pastas
 
         def criar(ctx) -> None:  # noqa: ANN001
-            for c in pastas.criar(definidas):
+            for c in folders.criar(definidas):
                 ctx.log(f"Criada: {c}")
 
         return s.guardar_plano(Plano(f"Criar pastas de mídia do nó {no}", [
@@ -220,7 +220,7 @@ def criar_app(estado: Estado, token: str, porta: int) -> FastAPI:
         return {"apps": [
             {"id": a.id, "nome": a.nome, "descricao": a.descricao, "github": a.url_github,
              "releases": a.url_releases, "instalado": inst.get(a.id),
-             "config": (m.craft_apps.get(a.id) or manifesto.CraftApp()).model_dump()}
+             "config": (m.craft_apps.get(a.id) or manifest.CraftApp()).model_dump()}
             for a in craft_apps.CATALOGO.values()
         ]}
 
@@ -254,50 +254,50 @@ def criar_app(estado: Estado, token: str, porta: int) -> FastAPI:
     @app.get("/apps-solumia")
     def listar_apps_solumia(s: Estado = Depends(e)) -> dict[str, Any]:
         resp: dict[str, Any] = {
-            "releases": apps_solumia.url_releases(),
-            "assinatura_fixada": bool(apps_solumia.IMPRESSOES_SOLUMIA),
+            "releases": solumia_apps.url_releases(),
+            "assinatura_fixada": bool(solumia_apps.IMPRESSOES_SOLUMIA),
             "pasta": str(dir_downloads(s.sistema)),
             "versao": None, "erro": None,
         }
         release = None
         try:
-            release = apps_solumia.buscar()
+            release = solumia_apps.buscar()
             resp["versao"] = release.versao
         except (craft_apps.CraftErro, httpx.HTTPError) as erro:
             resp["erro"] = str(erro)
         apps = []
-        for a in apps_solumia.CATALOGO.values():
+        for a in solumia_apps.CATALOGO.values():
             arquivo = a.arquivo(release.versao) if release else None
             apps.append({"id": a.id, "dispositivo": a.dispositivo,
-                         "instala_aqui": apps_solumia.instala_aqui(a, s.sistema), "arquivo": arquivo,
+                         "instala_aqui": solumia_apps.instala_aqui(a, s.sistema), "arquivo": arquivo,
                          "url": release.arquivos.get(arquivo) if release and arquivo else None})
         resp["apps"] = apps
         return resp
 
     @app.post("/apps-solumia/{app_id}/plano")
     def plano_app_solumia(app_id: str, dados: AppSolumiaEntrada, s: Estado = Depends(e)) -> dict[str, Any]:
-        if app_id not in apps_solumia.CATALOGO:
+        if app_id not in solumia_apps.CATALOGO:
             raise HTTPException(404, "app fora do catálogo")
-        a = apps_solumia.CATALOGO[app_id]
-        if dados.instalar and not apps_solumia.instala_aqui(a, s.sistema):
+        a = solumia_apps.CATALOGO[app_id]
+        if dados.instalar and not solumia_apps.instala_aqui(a, s.sistema):
             raise HTTPException(422, "este app não é para este sistema")
 
         def baixar(ctx) -> None:  # noqa: ANN001
             def progresso(lido: int, total: int | None) -> None:
                 if total and lido == total or lido % (50 << 20) < (1 << 20):
                     ctx.log(f"  {lido >> 20} MiB" + (f" de {total >> 20} MiB" if total else ""))
-            apps_solumia.baixar(app_id, s.sistema, dados.versao, dados.instalar, log=ctx.log, progresso=progresso)
+            solumia_apps.baixar(app_id, s.sistema, dados.versao, dados.instalar, log=ctx.log, progresso=progresso)
 
         acao = "Baixar e instalar" if dados.instalar else "Baixar"
         return s.guardar_plano(Plano(f"{acao} Solumia ({app_id})", [
-            Passo("baixar", f"{acao} {a.modelo.format(v='X.Y.Z')} de {apps_solumia.url_releases()}",
+            Passo("baixar", f"{acao} {a.modelo.format(v='X.Y.Z')} de {solumia_apps.url_releases()}",
                   f"assinatura (chave fixada) e SHA-256 conferidos; salvo em {dir_downloads(s.sistema)}", baixar)]))
 
     # --- VPS -----------------------------------------------------------------------------------------
     @app.post("/vps/impressao")
     def impressao(dados: ImpressaoEntrada) -> dict[str, str]:
         try:
-            manifesto.AcessoSSH(host=dados.host, porta=dados.porta)
+            manifest.AcessoSSH(host=dados.host, porta=dados.porta)
             return ler_impressao_servidor(dados.host, dados.porta)
         except (ValueError, OSError, SSHErro) as erro:
             raise HTTPException(422, f"não consegui ler a chave do servidor: {erro}") from erro
@@ -322,7 +322,7 @@ def criar_app(estado: Estado, token: str, porta: int) -> FastAPI:
             raise HTTPException(404, "plano não encontrado ou expirado; gere de novo")
         if not hmac.compare_digest(guardado.plano.hash, dados.hash):
             raise HTTPException(409, "o plano mudou desde que foi mostrado")
-        if guardado.plano.destrutivo and not segredos.conferir_totp(s.cofre.obter(segredos.TOTP) or "",
+        if guardado.plano.destrutivo and not secret_store.conferir_totp(s.cofre.obter(secret_store.TOTP) or "",
                                                                     dados.totp or ""):
             raise HTTPException(403, "ação destrutiva: confirme com o código do autenticador")
         if any(x.estado == "rodando" for x in s.execucoes.values()):

@@ -40,7 +40,7 @@ ser repetida e retoma do passo que parou.
 
 ## Convivência com a instalação atual
 
-Tudo do Solumia tem nome, porta e caminho próprios (fonte única: `core/src/solumia_configurador/nomes.py`):
+Tudo do Solumia tem nome, porta e caminho próprios (fonte única: `core/src/solumia_configurador/names.py`):
 
 | | Atual | Solumia |
 |---|---|---|
@@ -77,5 +77,5 @@ ou o modo "nginx já instalado na VPS".
 ## Ainda não implementado (próximas fases do roadmap)
 
 Entrega da VPS por pacote isolado (`agent-node`), adopt da instalação atual, worker/esteira/túnel
-como serviços `solumia-*` no host (geradores prontos em `gerar.py`), pareamento por QR, IA local e
+como serviços `solumia-*` no host (geradores prontos em `generate.py`), pareamento por QR, IA local e
 nuvem, módulos, backup, empacotamento (AppImage/instalador Windows) e CI.

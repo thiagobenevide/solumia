@@ -29,8 +29,8 @@ from urllib.parse import urlparse
 
 import httpx
 
-from . import nomes, verificacao
-from .plataforma import Sistema, dir_apps, dir_estado
+from . import names, verification
+from .platform_setup import Sistema, dir_apps, dir_estado
 
 # Chave "ArtCraft Linux Release Signing Key" (a mesma nas quatro releases, conferida em 2026-11-12).
 IMPRESSAO_ARTCRAFT = "2B76741B414AAD6CD33E631213A005C0B9D7C3ED"
@@ -93,7 +93,7 @@ class Release:
 
 def _cliente() -> httpx.Client:
     return httpx.Client(
-        headers={"User-Agent": nomes.USER_AGENT, "Accept": "application/vnd.github+json"},
+        headers={"User-Agent": names.USER_AGENT, "Accept": "application/vnd.github+json"},
         timeout=httpx.Timeout(30.0, read=120.0),
         follow_redirects=True,
         event_hooks={"request": [_conferir_host]},
@@ -194,17 +194,17 @@ def baixar_verificado(release: Release, nome: str, pasta: Path, impressoes: tupl
             sums_asc, chave = t / "SHA256SUMS.txt.asc", t / "chave.asc"
             _baixar(c, release.arquivos["SHA256SUMS.txt.asc"], sums_asc, _TAMANHO_MAX_TEXTO)
             _baixar(c, release.arquivos["release-signing-key.asc"], chave, _TAMANHO_MAX_TEXTO)
-            impressao = verificacao.conferir_assinatura(chave.read_bytes(), sums_asc, sums, list(impressoes))
+            impressao = verification.conferir_assinatura(chave.read_bytes(), sums_asc, sums, list(impressoes))
             log(f"Assinatura do SHA256SUMS válida (chave …{impressao[-16:]})")
         else:
             log("ATENÇÃO: assinatura desligada; só o SHA-256 será conferido")
-        somas = verificacao.ler_sums(sums.read_text())
+        somas = verification.ler_sums(sums.read_text())
 
         parcial = pasta / (nome + ".parcial")
         log(f"Baixando {nome}")
         try:
             _baixar(c, release.arquivos[nome], parcial, _TAMANHO_MAX, progresso)
-            soma = verificacao.conferir_arquivo(parcial, nome, somas)
+            soma = verification.conferir_arquivo(parcial, nome, somas)
         except BaseException:
             parcial.unlink(missing_ok=True)
             raise
@@ -318,7 +318,7 @@ def _instalar_arquivo(app: AppCatalogo, baixado: Path, destino: Path, sistema: S
 def _atalho_linux(app: AppCatalogo, executavel: Path) -> None:
     pasta = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "applications"
     pasta.mkdir(parents=True, exist_ok=True)
-    (pasta / f"{nomes.PREFIXO}-{app.id}.desktop").write_text(
+    (pasta / f"{names.PREFIXO}-{app.id}.desktop").write_text(
         "[Desktop Entry]\nType=Application\n"
         f"Name={app.nome}\nComment={app.descricao}\nExec=\"{executavel}\" %F\n"
         f"Categories=AudioVideo;Graphics;\nX-Solumia-App={app.id}\n"
@@ -329,7 +329,7 @@ def remover(app_id: str, sistema: Sistema) -> None:
     _app(app_id)
     shutil.rmtree(dir_apps(sistema) / app_id, ignore_errors=True)
     atalho = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "applications" / (
-        f"{nomes.PREFIXO}-{app_id}.desktop"
+        f"{names.PREFIXO}-{app_id}.desktop"
     )
     atalho.unlink(missing_ok=True)
     dados = instalados()

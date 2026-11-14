@@ -163,6 +163,13 @@ relogio → watch, treinos → workouts, catalogo → catalog, canais → channe
 (`python -m youtube.importer`). `infra/scripts/instalar_vps` chama `backend.auth.security.generate_hash_password`
 e `generate_secret_totp`.
 
+## Configurador — módulos (`configurador/core/src/solumia_configurador/`)
+
+motor → engine, pastas → folders, gerar → generate, manifesto → manifest, nomes → names, plataforma →
+platform_setup, papeis → roles, segredos → secret_store, apps_solumia → solumia_apps, cofre → vault, verificacao →
+verification. Testes: test_pastas → test_folders, test_motor_gerar → test_engine_generate, test_manifesto_cofre →
+test_manifest_vault. Funções, classes e variáveis internas ainda em português.
+
 Pendente em todo o repositório: métodos e campos de classes, parâmetros que são contrato (rotas, nomes passados por
 palavra-chave), chaves JSON/frontmatter/WebSocket, rotas, comentários, docstrings, mensagens, prompts, testes
-(nomes dos arquivos e das funções da plataforma), o configurador, `capture`, e os apps Flutter.
+(nomes dos arquivos e das funções da plataforma), nomes internos do configurador, `capture`, e os apps Flutter.

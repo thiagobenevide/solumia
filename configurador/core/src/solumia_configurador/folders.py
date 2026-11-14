@@ -15,7 +15,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath, PurePosixPath, PureWindowsPath
 
-from .manifesto import Pastas
+from .manifest import Pastas
 
 ROTULOS = {
     "imagens": "Imagens",

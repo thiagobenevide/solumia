@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from solumia_configurador import gerar, nomes, segredos
-from solumia_configurador.cofre import Cofre
-from solumia_configurador.manifesto import Manifesto
-from solumia_configurador.motor import Execucao, Mascara, Passo, Plano, listar_registro
+from solumia_configurador import generate, names, secret_store
+from solumia_configurador.engine import Execucao, Mascara, Passo, Plano, listar_registro
+from solumia_configurador.manifest import Manifesto
+from solumia_configurador.vault import Cofre
 
 
 def test_plano_executa_pula_e_mascara(tmp_path: Path) -> None:
@@ -58,10 +58,10 @@ def test_hash_do_plano_muda_com_os_passos() -> None:
 
 
 def test_pacote_fonte_sem_segredos() -> None:
-    raiz = gerar.raiz_repositorio()
+    raiz = generate.raiz_repositorio()
     if not (raiz / "plataforma/backend").exists():
         pytest.skip("repositório incompleto")
-    with tarfile.open(fileobj=io.BytesIO(gerar.pacote_fonte(raiz))) as t:
+    with tarfile.open(fileobj=io.BytesIO(generate.pacote_fonte(raiz))) as t:
         nomes_tar = t.getnames()
     assert "infra/docker/backend/Dockerfile" in nomes_tar
     assert any(n.startswith("plataforma/backend/src/") for n in nomes_tar)
@@ -78,33 +78,33 @@ def _m() -> Manifesto:
 
 
 def test_env_gateway_aspas_simples_e_segredos(cofre: Cofre) -> None:
-    cofre.definir(segredos.SENHA_HASH, segredos.hash_senha("SenhaForte123"))
-    cofre.definir(segredos.TOTP, segredos.segredo_totp())
-    env = gerar.env_gateway(_m(), cofre)
+    cofre.definir(secret_store.SENHA_HASH, secret_store.hash_senha("SenhaForte123"))
+    cofre.definir(secret_store.TOTP, secret_store.segredo_totp())
+    env = generate.env_gateway(_m(), cofre)
     linha_hash = next(linha for linha in env.splitlines() if linha.startswith("GATEWAY_ADMIN_SENHA_HASH="))
     assert linha_hash.startswith("GATEWAY_ADMIN_SENHA_HASH='scrypt$")  # aspas simples: compose não interpola $
     assert "GATEWAY_DEBUG='false'" in env
-    assert gerar.env_gateway(_m(), cofre) == env  # idempotente: segredos reaproveitados
+    assert generate.env_gateway(_m(), cofre) == env  # idempotente: segredos reaproveitados
 
 
 def test_compose_e_nginx_com_nomes_do_solumia() -> None:
-    c = gerar.compose(nginx_no_docker=True)
-    assert f"name: {nomes.PROJETO_COMPOSE}" in c
-    assert f"127.0.0.1:{nomes.PORTA_GATEWAY_HOST}:48080" in c
+    c = generate.compose(nginx_no_docker=True)
+    assert f"name: {names.PROJETO_COMPOSE}" in c
+    assert f"127.0.0.1:{names.PORTA_GATEWAY_HOST}:48080" in c
     assert "48080:48080" not in c and '"2222:2222"' not in c and "agent" not in c.replace("agent-data", "")
-    raiz = gerar.raiz_repositorio()
+    raiz = generate.raiz_repositorio()
     if not (raiz / "infra/docker/nginx/host-nginx-site.conf.example").exists():
         pytest.skip("modelos nginx ausentes")
-    host = gerar.nginx_site_host("solumia.exemplo.com", raiz)
-    assert "127.0.0.1:48080" not in host and f"127.0.0.1:{nomes.PORTA_GATEWAY_HOST}" in host
-    assert "agent_login" not in host and nomes.ZONA_LOGIN_NGINX in host
-    assert "seu-dominio" not in gerar.nginx_site_docker("solumia.exemplo.com", raiz)
-    assert "zone=agent_login" not in gerar.nginx_seguranca(raiz)
+    host = generate.nginx_site_host("solumia.exemplo.com", raiz)
+    assert "127.0.0.1:48080" not in host and f"127.0.0.1:{names.PORTA_GATEWAY_HOST}" in host
+    assert "agent_login" not in host and names.ZONA_LOGIN_NGINX in host
+    assert "seu-dominio" not in generate.nginx_site_docker("solumia.exemplo.com", raiz)
+    assert "zone=agent_login" not in generate.nginx_seguranca(raiz)
 
 
 def test_authorized_keys_do_tunel_restrito() -> None:
-    _, pub = segredos.gerar_chave_ssh()
-    linha = gerar.authorized_keys_tunel(pub)
+    _, pub = secret_store.gerar_chave_ssh()
+    linha = generate.authorized_keys_tunel(pub)
     assert linha.startswith('restrict,port-forwarding,permitlisten="0.0.0.0:8765" ssh-ed25519 ')
     with pytest.raises(ValueError):
-        gerar.authorized_keys_tunel('ssh-ed25519 AAAA\ncommand="sh" ssh-rsa X')
+        generate.authorized_keys_tunel('ssh-ed25519 AAAA\ncommand="sh" ssh-rsa X')

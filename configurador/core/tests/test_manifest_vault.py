@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from solumia_configurador import manifesto, segredos
-from solumia_configurador.cofre import Cofre, CofreErro
-from solumia_configurador.manifesto import Manifesto
+from solumia_configurador import manifest, secret_store
+from solumia_configurador.manifest import Manifesto
+from solumia_configurador.vault import Cofre, CofreErro
 
 from .conftest import ChaveFixa
 
@@ -28,8 +28,8 @@ def _hibrido(**extra) -> dict:
 def test_manifesto_hibrido_valido_e_ida_e_volta(tmp_path: Path) -> None:
     m = Manifesto.model_validate(_hibrido())
     caminho = tmp_path / "solumia.toml"
-    manifesto.salvar(m, caminho)
-    assert manifesto.carregar(caminho) == m
+    manifest.salvar(m, caminho)
+    assert manifest.carregar(caminho) == m
     assert "senha" not in caminho.read_text().lower()
 
 
@@ -51,11 +51,11 @@ def test_manifesto_recusa_combinacoes_invalidas(mudanca: dict, erro: str) -> Non
 
 def test_dominio_e_host_maliciosos_recusados() -> None:
     with pytest.raises(ValueError):
-        manifesto.Topologia(tipo="nuvem", dominio="x.com; rm -rf /")
+        manifest.Topologia(tipo="nuvem", dominio="x.com; rm -rf /")
     with pytest.raises(ValueError):
-        manifesto.AcessoSSH(host="1.2.3.4 -oProxyCommand=evil")
+        manifest.AcessoSSH(host="1.2.3.4 -oProxyCommand=evil")
     with pytest.raises(ValueError):
-        manifesto.AcessoSSH(host="x", usuario="root;id")
+        manifest.AcessoSSH(host="x", usuario="root;id")
 
 
 def test_cofre_cifrado_em_disco_e_permissao(tmp_path: Path, cofre: Cofre) -> None:
@@ -100,19 +100,19 @@ def _seguranca_do_backend():
 
 def test_hash_e_totp_compativeis_com_o_gateway() -> None:
     backend = _seguranca_do_backend()
-    h = segredos.hash_senha("SenhaForte123")
+    h = secret_store.hash_senha("SenhaForte123")
     assert backend.verify_password("SenhaForte123", h)
     assert not backend.verify_password("errada", h)
-    s = segredos.segredo_totp()
-    assert segredos.codigo_totp(s, 1000) == backend.code_totp(s, 1000)
+    s = secret_store.segredo_totp()
+    assert secret_store.codigo_totp(s, 1000) == backend.code_totp(s, 1000)
 
 
 def test_senha_fraca() -> None:
-    assert segredos.validar_senha("curta")
-    assert not segredos.validar_senha("SenhaForte123")
+    assert secret_store.validar_senha("curta")
+    assert not secret_store.validar_senha("SenhaForte123")
 
 
 def test_chave_ssh_gerada() -> None:
-    privada, publica = segredos.gerar_chave_ssh()
+    privada, publica = secret_store.gerar_chave_ssh()
     assert publica.startswith("ssh-ed25519 ")
-    assert segredos.publica_de(privada) == publica
+    assert secret_store.publica_de(privada) == publica

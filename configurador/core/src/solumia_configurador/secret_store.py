@@ -13,7 +13,7 @@ import secrets
 import time
 from urllib.parse import quote
 
-from . import nomes
+from . import names
 
 # Nomes dos segredos no cofre.
 SENHA_HASH = "conta.senha_hash"
@@ -55,7 +55,7 @@ def segredo_totp() -> str:
 
 
 def uri_totp(segredo: str, usuario: str) -> str:
-    emissor = nomes.NOME_EXIBICAO
+    emissor = names.NOME_EXIBICAO
     return (
         f"otpauth://totp/{quote(emissor)}:{quote(usuario)}"
         f"?secret={segredo}&issuer={quote(emissor)}&algorithm=SHA1&digits=6&period=30"
@@ -94,7 +94,7 @@ def gerar_chave_ssh() -> tuple[str, str]:
     publica = chave.public_key().public_bytes(
         serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH
     ).decode()
-    return privada, f"{publica} {nomes.COMENTARIO_CHAVE_SSH}"
+    return privada, f"{publica} {names.COMENTARIO_CHAVE_SSH}"
 
 
 def publica_de(privada_pem: str) -> str:
@@ -104,4 +104,4 @@ def publica_de(privada_pem: str) -> str:
     publica = chave.public_key().public_bytes(
         serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH
     ).decode()
-    return f"{publica} {nomes.COMENTARIO_CHAVE_SSH}"
+    return f"{publica} {names.COMENTARIO_CHAVE_SSH}"

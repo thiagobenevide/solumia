@@ -19,13 +19,13 @@ import sys
 import threading
 from pathlib import Path
 
-from . import VERSAO, manifesto, nomes
-from .cofre import Cofre, CofreErro
-from .plataforma import dir_config
+from . import VERSAO, manifest, names
+from .platform_setup import dir_config
+from .vault import Cofre, CofreErro
 
 
 def _abrir_cofre(frase: bool) -> Cofre:
-    caminho = dir_config() / nomes.ARQUIVO_COFRE
+    caminho = dir_config() / names.ARQUIVO_COFRE
     if frase:
         return Cofre.com_frase(caminho, getpass.getpass("Frase-senha do cofre: ")).abrir()
     return Cofre(caminho).abrir()
@@ -63,7 +63,7 @@ def servir(args: argparse.Namespace) -> int:
 
 def verificar(args: argparse.Namespace) -> int:
     try:
-        m = manifesto.carregar(Path(args.manifesto))
+        m = manifest.carregar(Path(args.manifesto))
     except (OSError, ValueError) as e:
         print(f"✗ manifesto inválido: {e}", file=sys.stderr)
         return 1
@@ -78,13 +78,13 @@ def main() -> int:
     p = argparse.ArgumentParser(prog="solumia-configurador", description=f"Configurador do Solumia {VERSAO}")
     sub = p.add_subparsers(dest="comando", required=True)
     s = sub.add_parser("servir", help="API local para a interface")
-    s.add_argument("--manifesto", default=str(manifesto.caminho_padrao()))
-    s.add_argument("--porta", type=int, default=nomes.PORTA_CORE_PADRAO)
+    s.add_argument("--manifesto", default=str(manifest.caminho_padrao()))
+    s.add_argument("--porta", type=int, default=names.PORTA_CORE_PADRAO)
     s.add_argument("--sair-com-stdin", action="store_true", help="encerrar quando o stdin fechar (uso da interface)")
     s.add_argument("--cofre-frase", action="store_true", help="sem chaveiro do sistema: pede frase-senha")
     s.set_defaults(func=servir)
     v = sub.add_parser("verificar", help="valida o manifesto")
-    v.add_argument("--manifesto", default=str(manifesto.caminho_padrao()))
+    v.add_argument("--manifesto", default=str(manifest.caminho_padrao()))
     v.set_defaults(func=verificar)
     args = p.parse_args()
     return args.func(args)

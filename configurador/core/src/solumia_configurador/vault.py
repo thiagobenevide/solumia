@@ -20,7 +20,7 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 
-from . import nomes
+from . import names
 
 _VERSAO = 1
 _AAD = b"solumia-cofre-v1"
@@ -60,7 +60,7 @@ class ChaveDoChaveiro(FonteChave):
         except ImportError as e:  # pragma: no cover
             raise ChaveiroIndisponivel("pacote keyring ausente") from e
         try:
-            salva = keyring.get_password(nomes.SERVICO_CHAVEIRO, nomes.CONTA_CHAVEIRO)
+            salva = keyring.get_password(names.SERVICO_CHAVEIRO, names.CONTA_CHAVEIRO)
             if salva:
                 chave = _d64(salva)
                 if len(chave) != 32:
@@ -69,7 +69,7 @@ class ChaveDoChaveiro(FonteChave):
             if not criar:
                 raise CofreErro("o cofre existe mas a chave não está no chaveiro deste usuário")
             chave = AESGCM.generate_key(bit_length=256)
-            keyring.set_password(nomes.SERVICO_CHAVEIRO, nomes.CONTA_CHAVEIRO, _b64(chave))
+            keyring.set_password(names.SERVICO_CHAVEIRO, names.CONTA_CHAVEIRO, _b64(chave))
             return chave
         except KeyringError as e:
             raise ChaveiroIndisponivel(str(e)) from e
