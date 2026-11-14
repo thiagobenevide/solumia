@@ -288,32 +288,32 @@ def loosens(antiga: dict[str, Any], new: dict[str, Any]) -> bool:
 
 class Consumption:
     def __init__(self, root: str | Path, agora: Callable[[], datetime] | None = None) -> None:
-        self.raiz = Path(root).expanduser()
-        (self.raiz / "uso").mkdir(parents=True, exist_ok=True)
-        self._agora = agora or (lambda: datetime.now(UTC))
-        self._trava = threading.RLock()
-        self._config = self.raiz / "config.json"
-        self._pendencias = self.raiz / "pendencias.json"
-        self._dispositivos = self.raiz / "dispositivos.json"
-        self._analises = self.raiz / "analises.json"
+        self.root = Path(root).expanduser()
+        (self.root / "uso").mkdir(parents=True, exist_ok=True)
+        self._now = agora or (lambda: datetime.now(UTC))
+        self._lock = threading.RLock()
+        self._config = self.root / "config.json"
+        self._pendencias = self.root / "pendencias.json"
+        self._devices = self.root / "dispositivos.json"
+        self._analyses = self.root / "analises.json"
 
     # --- configuração e trava de 24 h ---
 
-    def _ler_config(self) -> dict[str, Any]:
+    def _read_config(self) -> dict[str, Any]:
         """Config com as pendências vencidas já aplicadas."""
         cfg = _read(self._config, None) or _config_default()
         pend = _read(self._pendencias, [])
-        now = self._agora().isoformat()
+        now = self._now().isoformat()
         vencidas = [p for p in pend if p["libera_em"] <= now]
         if vencidas or not self._config.exists():
             for p in vencidas:
-                self._aplicar(cfg, p["tipo"], p["alvo"], p["valor"])
+                self._apply(cfg, p["tipo"], p["alvo"], p["valor"])
             _write(self._config, cfg)
             _write(self._pendencias, [p for p in pend if p["libera_em"] > now])
         return cfg
 
     @staticmethod
-    def _aplicar(cfg: dict[str, Any], tipo: str, target: str, valor: Any) -> None:
+    def _apply(cfg: dict[str, Any], tipo: str, target: str, valor: Any) -> None:
         if tipo == "regra":
             cfg["regras"][target] = valor
         elif tipo == "app":
@@ -331,17 +331,17 @@ class Consumption:
         elif tipo == "protecao":
             cfg["protecao"] = bool(valor)
 
-    def _mudar(
+    def _change(
         self, tipo: str, target: str, valor: Any, frouxo: bool, description: str
     ) -> dict[str, Any]:
         """Aplica já (apertar) ou agenda para daqui a 24 h (afrouxar)."""
-        with self._trava:
-            cfg = self._ler_config()
+        with self._lock:
+            cfg = self._read_config()
             if not frouxo:
-                self._aplicar(cfg, tipo, target, valor)
+                self._apply(cfg, tipo, target, valor)
                 _write(self._config, cfg)
                 return {"aplicado": True, "pendencia": None}
-            now = self._agora()
+            now = self._now()
             pend = [
                 p
                 for p in _read(self._pendencias, [])
@@ -360,8 +360,8 @@ class Consumption:
             return {"aplicado": False, "pendencia": new}
 
     def config(self) -> dict[str, Any]:
-        with self._trava:
-            cfg = self._ler_config()
+        with self._lock:
+            cfg = self._read_config()
             pend = _read(self._pendencias, [])
         return {
             **cfg,
@@ -371,12 +371,12 @@ class Consumption:
             "pendencias": pend,
         }
 
-    def definir_regra(self, categoria: str, dados: dict[str, Any]) -> dict[str, Any]:
+    def definir_rule(self, categoria: str, dados: dict[str, Any]) -> dict[str, Any]:
         cat = _category(categoria)
         new = validate_rule(dados)
-        with self._trava:
-            old = self._ler_config()["regras"][cat]
-            return self._mudar(
+        with self._lock:
+            old = self._read_config()["regras"][cat]
+            return self._change(
                 "regra", cat, new, loosens(old, new), f"Afrouxar {CATEGORIES[cat]}"
             )
 
@@ -387,48 +387,48 @@ class Consumption:
         if package in APPS_EXEMPT:
             raise Invalid("WhatsApp é isento: é o seu trabalho")
         cat = _category(categoria)
-        with self._trava:
-            current = self._ler_config()["apps"].get(package)
+        with self._lock:
+            current = self._read_config()["apps"].get(package)
             value = {"nome": nome.strip() or package, "categoria": cat}
             # trocar a categoria de um app já vigiado pode tirá-lo de um bloqueio
             frouxo = current is not None and current["categoria"] != cat
-            return self._mudar("app", package, value, frouxo, f"Mudar {value['nome']} de categoria")
+            return self._change("app", package, value, frouxo, f"Mudar {value['nome']} de categoria")
 
-    def remover_app(self, package: str) -> dict[str, Any]:
-        with self._trava:
-            current = self._ler_config()["apps"].get(package)
+    def remove_app(self, package: str) -> dict[str, Any]:
+        with self._lock:
+            current = self._read_config()["apps"].get(package)
             if current is None:
                 raise NotFound(package)
-            return self._mudar("app", package, None, True, f"Deixar de vigiar {current['nome']}")
+            return self._change("app", package, None, True, f"Deixar de vigiar {current['nome']}")
 
-    def incluir_dominio(self, categoria: str, domain: str) -> dict[str, Any]:
+    def include_domain(self, categoria: str, domain: str) -> dict[str, Any]:
         cat, dom = _category(categoria), _domain(domain)
         value = {"categoria": cat, "dominio": dom, "acao": "incluir"}
-        return self._mudar("dominio", f"{cat}:{dom}", value, False, "")
+        return self._change("dominio", f"{cat}:{dom}", value, False, "")
 
-    def remover_dominio(self, categoria: str, domain: str) -> dict[str, Any]:
+    def remove_domain(self, categoria: str, domain: str) -> dict[str, Any]:
         cat = _category(categoria)
-        with self._trava:
-            if domain not in self._ler_config()["dominios"][cat]:
+        with self._lock:
+            if domain not in self._read_config()["dominios"][cat]:
                 raise NotFound(domain)
         value = {"categoria": cat, "dominio": domain, "acao": "remover"}
-        return self._mudar("dominio", f"{cat}:{domain}", value, True, f"Liberar {domain}")
+        return self._change("dominio", f"{cat}:{domain}", value, True, f"Liberar {domain}")
 
-    def definir_protecao(self, active: bool) -> dict[str, Any]:
-        return self._mudar("protecao", "protecao", active, not active, "Desligar a proteção")
+    def definir_protection(self, active: bool) -> dict[str, Any]:
+        return self._change("protecao", "protecao", active, not active, "Desligar a proteção")
 
-    def cancelar_pendencia(self, id_: str) -> None:
-        with self._trava:
+    def cancel_pendencia(self, id_: str) -> None:
+        with self._lock:
             pend = _read(self._pendencias, [])
             restantes = [p for p in pend if p["id"] != id_]
             if len(restantes) == len(pend):
                 raise NotFound(id_)
             _write(self._pendencias, restantes)
 
-    def para_dispositivo(self) -> dict[str, Any]:
+    def for_dispositivo(self) -> dict[str, Any]:
         """Regras já montadas para o app Android aplicar sem precisar pensar."""
-        with self._trava:
-            cfg = self._ler_config()
+        with self._lock:
+            cfg = self._read_config()
         return {
             "regras": cfg["regras"],
             "apps": {p: a["categoria"] for p, a in cfg["apps"].items() if p not in APPS_EXEMPT},
@@ -445,21 +445,21 @@ class Consumption:
 
     # --- sincronização dos aparelhos ---
 
-    def sincronizar(self, dados: dict[str, Any]) -> dict[str, Any]:
+    def sync(self, dados: dict[str, Any]) -> dict[str, Any]:
         disp = dados["dispositivo"]
         id_ = str(disp["id"])[:64]
-        now = self._agora().isoformat(timespec="seconds")
-        with self._trava:
-            everything = _read(self._dispositivos, {})
+        now = self._now().isoformat(timespec="seconds")
+        with self._lock:
+            everything = _read(self._devices, {})
             everything[id_] = {
                 "nome": str(disp.get("nome") or id_)[:80],
                 "visto_em": now,
                 "estado": {k: bool(v) for k, v in (disp.get("estado") or {}).items()},
             }
-            _write(self._dispositivos, everything)
+            _write(self._devices, everything)
             for day in dados.get("dias") or []:
                 d = date.fromisoformat(day["data"]).isoformat()
-                file = self.raiz / "uso" / f"{d}.json"
+                file = self.root / "uso" / f"{d}.json"
                 current = _read(file, {"dispositivos": {}, "eventos": []})
                 current["dispositivos"][id_] = {
                     "apps": [
@@ -484,7 +484,7 @@ class Consumption:
                 if e.get("tipo") not in KINDS_EVENT:
                     continue
                 when = datetime.fromisoformat(e["quando"])
-                file = self.raiz / "uso" / f"{when.date().isoformat()}.json"
+                file = self.root / "uso" / f"{when.date().isoformat()}.json"
                 current = _read(file, {"dispositivos": {}, "eventos": []})
                 if any(x["id"] == e["id"] for x in current["eventos"]):
                     continue
@@ -499,11 +499,11 @@ class Consumption:
                     }
                 )
                 _write(file, current)
-        return self.para_dispositivo()
+        return self.for_dispositivo()
 
-    def dispositivos(self) -> list[dict[str, Any]]:
-        with self._trava:
-            everything = _read(self._dispositivos, {})
+    def devices(self) -> list[dict[str, Any]]:
+        with self._lock:
+            everything = _read(self._devices, {})
         return [{"id": k, **v} for k, v in sorted(everything.items())]
 
     # --- resumo e análise ---
@@ -519,7 +519,7 @@ class Consumption:
         d = d1
         while d <= d2:
             day = d.isoformat()
-            data = _read(self.raiz / "uso" / f"{day}.json", {"dispositivos": {}, "eventos": []})
+            data = _read(self.root / "uso" / f"{day}.json", {"dispositivos": {}, "eventos": []})
             cats: dict[str, float] = {}
             for u in data["dispositivos"].values():
                 for a in u["apps"]:
@@ -560,11 +560,11 @@ class Consumption:
             "eventos": events,
         }
 
-    def analises(self) -> list[dict[str, Any]]:
-        with self._trava:
-            return list(_read(self._analises, []))
+    def analyses(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return list(_read(self._analyses, []))
 
-    def guardar_analise(self, analise: dict[str, Any]) -> dict[str, Any]:
-        with self._trava:
-            _write(self._analises, [analise, *_read(self._analises, [])][:20])
+    def store_analysis(self, analise: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            _write(self._analyses, [analise, *_read(self._analyses, [])][:20])
         return analise

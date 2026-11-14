@@ -37,14 +37,14 @@ async def _on_worker(registry: WorkerRegistry) -> dict[str, Any]:
         r = await registry.send_chat_request(worker, str(uuid4()), {"task": "listar_modelos"}, 15)
     except (TimeoutError, WorkerDisconnected, WorkerRespondedWithError):
         return {}
-    registry.atualizar_modelos(worker.worker_id, list(r.get("modelos") or []))
+    registry.update_models(worker.worker_id, list(r.get("modelos") or []))
     return r
 
 
 def _in_use(registry: WorkerRegistry, ocupados: list[str]) -> list[dict[str, Any]]:
     """Pedidos deste backend + modelos processando no llama-server sem pedido daqui: uso direto
     (a esteira fala com o llama-server sem passar pelo backend)."""
-    nossos = registry.em_uso()
+    nossos = registry.in_usage()
     models_nossos = {u["modelo"] for u in nossos}
     diretos = [
         {"origem": "Esteira (empreendimento)", "tarefa": "chat", "modelo": m, "ha_s": None}
@@ -63,7 +63,7 @@ async def state(request: Request) -> dict[str, Any]:
         "modelo": model.atual,
         "carregados": w.get("carregados") or [],
         "disponiveis": registry.all_models(),
-        "workers": len(registry.descrever()),
+        "workers": len(registry.describe()),
         "em_uso": _in_use(registry, w.get("ocupados") or []),
     }
 
@@ -99,5 +99,5 @@ async def swap(t: Swap, request: Request) -> dict[str, Any]:
         raise HTTPException(504, "O worker não terminou de carregar o modelo a tempo.") from e
     except (WorkerDisconnected, WorkerRespondedWithError) as e:
         raise HTTPException(502, str(e)) from e
-    model.trocar(t.modelo)
+    model.swap(t.modelo)
     return await state(request)

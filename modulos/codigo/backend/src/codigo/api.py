@@ -104,7 +104,7 @@ async def _send(
         raw = [(i.nome, base64.b64decode(i.b64, validate=True)) for i in images]
     except binascii.Error as e:
         raise HTTPException(422, "Imagem inválida") from e
-    names = [sessions.guardar_imagem(id_, name, data) for name, data in raw]
+    names = [sessions.store_image(id_, name, data) for name, data in raw]
     meta = sessions.adicionar(id_, {"tipo": "pedido", "texto": text, "imagens": names, **extra})
     try:
         await executor.pedir(
@@ -130,7 +130,7 @@ def state(executor: ExecutorDep) -> Any:
 
 @router.get("/sessoes")
 def list_all(sessoes: SessionsDep) -> Any:
-    return sessoes.listar()
+    return sessoes.list_all()
 
 
 @router.post("/sessoes", status_code=201)
@@ -147,7 +147,7 @@ def get(id_: str, sessoes: SessionsDep, desde: int = 0) -> Any:
 @router.patch("/sessoes/{id_}")
 def edit(id_: str, pedido: NewSession, sessoes: SessionsDep) -> Any:
     _get(sessoes, id_)
-    return sessoes.editar(id_, pedido.titulo)
+    return sessoes.edit(id_, pedido.titulo)
 
 
 @router.delete("/sessoes/{id_}", status_code=204)
@@ -186,7 +186,7 @@ async def stop(id_: str, sessoes: SessionsDep, executor: ExecutorDep) -> Any:
 @router.get("/sessoes/{id_}/imagens/{nome}")
 def image(id_: str, nome: str, sessoes: SessionsDep) -> FileResponse:
     try:
-        return FileResponse(sessoes.caminho_imagem(id_, nome))
+        return FileResponse(sessoes.path_image(id_, nome))
     except SessionNotFound as e:
         raise HTTPException(404, "Imagem não encontrada") from e
 

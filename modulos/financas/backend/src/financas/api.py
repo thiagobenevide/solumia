@@ -129,7 +129,7 @@ def batch(arm: ArmDep, corpo: Payload) -> Any:
     ids = set(corpo.get("ids") or [])
     data = corpo.get("dados") or {}
     try:
-        done = [arm.editar("transacoes", i, _prepare("transacoes", data)) for i in ids]
+        done = [arm.edit("transacoes", i, _prepare("transacoes", data)) for i in ids]
         if corpo.get("regra") and done and data.get("categoria_id"):
             arm.criar(
                 "regras",
@@ -206,7 +206,7 @@ def providers(llms: LLMsDep) -> Any:
 
 def _store_original(request: Request, account: dict[str, Any], nome: str, content: bytes) -> None:
     """O arquivo bruto do extrato vai para o módulo Arquivos (`Finanças/Extratos/<conta>`)."""
-    collection = getattr(request.app.state, "biblioteca", None)
+    collection = getattr(request.app.state, "collection", None)
     if collection is None:
         return
     import threading
@@ -214,7 +214,7 @@ def _store_original(request: Request, account: dict[str, Any], nome: str, conten
     try:
         meta = collection.adicionar(nome, content, pasta=f"Finanças/Extratos/{account['nome']}")
         if meta.get("status") == "convertendo":
-            threading.Thread(target=collection.converter, args=(meta["id"],), daemon=True).start()
+            threading.Thread(target=collection.convert, args=(meta["id"],), daemon=True).start()
     except Exception:  # noqa: BLE001 — guardar a cópia não pode impedir a importação
         pass
 
@@ -287,7 +287,7 @@ async def fix(request: Request, arm: ArmDep, llms: LLMsDep, provedor: str = "loc
 
     from financas import ai
 
-    collection = getattr(request.app.state, "biblioteca", None)
+    collection = getattr(request.app.state, "collection", None)
     llm = llms.get(provedor)
 
     def originais() -> dict[str, list[tuple[str, bytes]]]:
@@ -295,9 +295,9 @@ async def fix(request: Request, arm: ArmDep, llms: LLMsDep, provedor: str = "loc
             return {}
         by_account: dict[str, list[tuple[str, bytes]]] = {}
         for c in arm.todos("contas"):
-            for meta in collection.listar(pasta=f"Finanças/Extratos/{c['nome']}"):
+            for meta in collection.list_all(pasta=f"Finanças/Extratos/{c['nome']}"):
                 try:
-                    path, name = collection.caminho_original(meta["id"])
+                    path, name = collection.path_original(meta["id"])
                     by_account.setdefault(c["id"], []).append((name, path.read_bytes()))
                 except Exception:  # noqa: BLE001 — arquivo sumido não impede o resto
                     continue
@@ -423,7 +423,7 @@ def _internet(request: Request) -> Any:
 def _cvm(arm: Warehouse) -> Any:
     from financas.cvm import CVM
 
-    return CVM(arm.raiz)
+    return CVM(arm.root)
 
 
 _WARM = [0.0]
@@ -440,7 +440,7 @@ async def highlights(request: Request, arm: ArmDep, tipo: str = "stock") -> Any:
         _WARM[0] = time.time()
         _SECOND_PLAN.add(t := asyncio.create_task(asyncio.to_thread(_cvm(arm).aquecer)))
         t.add_done_callback(_SECOND_PLAN.discard)
-    r = await _internet(request).usar("mercado", {"tipo": "fund" if tipo == "fund" else "stock"})
+    r = await _internet(request).use("mercado", {"tipo": "fund" if tipo == "fund" else "stock"})
     if "erro" in r:
         raise HTTPException(503, r["erro"])
     return r
@@ -449,7 +449,7 @@ async def highlights(request: Request, arm: ArmDep, tipo: str = "stock") -> Any:
 @router.get("/mercado/noticias")
 async def news(request: Request, tema: str = "economia") -> Any:
     """Manchetes do dia por tema: economia, acoes, fiis, impostos ou juros."""
-    r = await _internet(request).usar("noticias", {"tema": tema})
+    r = await _internet(request).use("noticias", {"tema": tema})
     if "erro" in r:
         raise HTTPException(503, r["erro"])
     return r
@@ -475,14 +475,14 @@ async def active(request: Request, arm: ArmDep, corpo: Payload) -> Any:
         if not ticker:
             return {}, {}
         return await asyncio.gather(
-            internet.usar("acoes", {"tickers": [ticker]}),
-            internet.usar("proventos", {"ticker": ticker}),
+            internet.use("acoes", {"tickers": [ticker]}),
+            internet.use("proventos", {"ticker": ticker}),
         )
 
     async def trabalho() -> Any:
         ticker = q.upper() if re.fullmatch(r"[A-Za-z0-9]{4}\d{1,2}", q) else ""
         if not ticker:  # nome ou apelido: o mais provável da busca (ação ou FII)
-            suggestions = await asyncio.to_thread(base.sugerir, q, 1)
+            suggestions = await asyncio.to_thread(base.suggest, q, 1)
             if suggestions and suggestions[0]["tipo"] == "fii":
                 ticker = suggestions[0]["tickers"][0]
         # cotação e proventos já saem junto com a leitura da CVM
@@ -499,7 +499,7 @@ async def active(request: Request, arm: ArmDep, corpo: Payload) -> Any:
                 "proventos": prov,
                 "p_vp": round(preco["preco"] / vp, 2) if preco.get("preco") and vp else None,
             }
-        found = await asyncio.to_thread(base.buscar, ticker or q)
+        found = await asyncio.to_thread(base.fetch, ticker or q)
         if not found:
             cotacoes.cancel()
             raise Invalid(f"Não achei '{q}' na CVM (empresa ou FII listado).")
@@ -531,7 +531,7 @@ async def active(request: Request, arm: ArmDep, corpo: Payload) -> Any:
             resumir()
 
         async def demonstrativos() -> None:
-            d = await asyncio.to_thread(base.demonstrativos, e["codigo_cvm"], ao_ano=ao_ano)
+            d = await asyncio.to_thread(base.statements, e["codigo_cvm"], ao_ano=ao_ano)
             parcial["demonstrativos"] = analysis.clean_statements(d) if d else []
             carregando.remove("demonstrativos")
             resumir()
@@ -556,7 +556,7 @@ async def suggest(arm: ArmDep, q: str = "", limite: int = 12) -> Any:
     if len(q.strip()) < 2:
         return []
     try:
-        return await asyncio.to_thread(_cvm(arm).sugerir, q, min(max(limite, 1), 30))
+        return await asyncio.to_thread(_cvm(arm).suggest, q, min(max(limite, 1), 30))
     except Exception as e:  # sem rede na primeira vez: a CVM ainda não foi baixada
         raise HTTPException(503, f"Busca indisponível: {e}") from e
 
@@ -579,15 +579,15 @@ async def import_cvm(request: Request, arm: ArmDep, id_: str) -> Any:
     base = _cvm(arm)
 
     async def trabalho() -> Any:
-        found = await asyncio.to_thread(base.buscar, company["ticker"] or company["nome"])
+        found = await asyncio.to_thread(base.fetch, company["ticker"] or company["nome"])
         if not found:
             raise Invalid(f"{company['ticker']} não está na CVM.")
         e = found[0]
         ticker = company["ticker"].upper() if company["ticker"] in e["tickers"] else ""
         ticker = ticker or (e["tickers"][0] if e["tickers"] else "")
         years, cot = await asyncio.gather(
-            asyncio.to_thread(base.demonstrativos, e["codigo_cvm"]),
-            _internet(request).usar("acoes", {"tickers": [ticker]}) if ticker else _empty(),
+            asyncio.to_thread(base.statements, e["codigo_cvm"]),
+            _internet(request).use("acoes", {"tickers": [ticker]}) if ticker else _empty(),
         )
         preco = ((cot or {}).get("cotacoes", {}).get(ticker) or {}).get("preco")
         actions = next((d["acoes"] for d in reversed(years) if d.get("acoes")), None)
@@ -605,7 +605,7 @@ async def import_cvm(request: Request, arm: ArmDep, id_: str) -> Any:
             **({"cotacao": preco} if preco else {}),
             **({"acoes": actions} if actions else {}),
         }
-        return {"empresa": arm.editar("empresas", id_, data), "anos": [d["ano"] for d in years]}
+        return {"empresa": arm.edit("empresas", id_, data), "anos": [d["ano"] for d in years]}
 
     return _task(trabalho)
 
@@ -645,7 +645,7 @@ async def store_document(request: Request, corpo: Payload) -> Any:
     ticker = str(corpo.get("ticker") or "Mercado").upper()
     if not url.startswith("https://www.rad.cvm.gov.br/"):
         raise HTTPException(422, "Só documentos do RAD da CVM.")
-    collection = getattr(request.app.state, "biblioteca", None)
+    collection = getattr(request.app.state, "collection", None)
     if collection is None:
         raise HTTPException(503, "Módulo Arquivos indisponível.")
     title = (
@@ -674,13 +674,13 @@ async def store_document(request: Request, corpo: Payload) -> Any:
 
 @router.get("/questionario")
 def questionnaire(arm: ArmDep) -> Any:
-    return arm.questionario()
+    return arm.questionnaire()
 
 
 @router.put("/questionario")
 def save_questionnaire(arm: ArmDep, corpo: Annotated[list[dict[str, Any]], Body()]) -> Any:
     try:
-        return arm.salvar_questionario(corpo)
+        return arm.save_questionnaire(corpo)
     except Invalid as e:
         raise _error(e) from e
 
@@ -773,7 +773,7 @@ async def study_guide(request: Request, arm: ArmDep, id_: str) -> Any:
         if not isinstance(guide, dict) or not guide.get("capitulos"):
             raise Invalid("O Claude não devolveu o guia.")
         record = book["registro_id"] or study.have(arm, id_, book["tenho"])["id"]
-        arm.editar("estudo_livros", record, {"guia": guide})
+        arm.edit("estudo_livros", record, {"guia": guide})
         return study.books(arm)[id_]
 
     return _task(trabalho)
@@ -796,7 +796,7 @@ def study_new_book(arm: ArmDep, corpo: Payload) -> Any:
 def study_read(request: Request, arm: ArmDep, corpo: Payload) -> Any:
     """Põe o livro ou artigo em Estudos › Leituras (área Finanças) e garante o projeto de leitura
     "Trilha de Finanças": com ele ativo no leitor, grifos e comentários viram citações da trilha."""
-    studies = getattr(request.app.state, "estudos", None)
+    studies = getattr(request.app.state, "studies", None)
     if studies is None:
         raise HTTPException(503, "Módulo Estudos indisponível.")
     item = str(corpo.get("item") or "")
@@ -816,17 +816,17 @@ def study_read(request: Request, arm: ArmDep, corpo: Payload) -> Any:
     reading_id = next(
         (p["leitura_id"] for p in arm.todos("estudo_progresso") if p["item"] == item), ""
     )
-    readings = {x["id"]: x for x in studies.listar_leituras(area="Finanças")}
+    readings = {x["id"]: x for x in studies.list_readings(area="Finanças")}
     if reading_id not in readings:
         mesma = next((x for x in readings.values() if x["titulo"] == data["titulo"]), None)
-        reading = mesma or studies.criar_leitura(
+        reading = mesma or studies.create_reading(
             {**data, "area": "Finanças", "status": "lendo", "tags": ["trilha-financas"]}
         )
         reading_id = reading["id"]
     study.mark(arm, item, {"leitura_id": reading_id, "status": "lendo"})
-    project = next((p for p in studies.listar_projetos() if p["nome"] == study.PROJECT), None)
+    project = next((p for p in studies.list_projects() if p["nome"] == study.PROJECT), None)
     if project is None:
-        project = studies.criar_projeto(
+        project = studies.create_project(
             {
                 "nome": study.PROJECT,
                 "descricao": "Grifos e comentários das leituras da trilha de finanças.",
@@ -839,13 +839,13 @@ def study_read(request: Request, arm: ArmDep, corpo: Payload) -> Any:
 @router.get("/estudo/citacoes")
 def study_quotes(request: Request) -> Any:
     """Grifos, comentários e citações (ABNT) do projeto "Trilha de Finanças", por obra."""
-    studies = getattr(request.app.state, "estudos", None)
+    studies = getattr(request.app.state, "studies", None)
     if studies is None:
         return {"projeto_id": None, "obras": []}
-    project = next((p for p in studies.listar_projetos() if p["nome"] == study.PROJECT), None)
+    project = next((p for p in studies.list_projects() if p["nome"] == study.PROJECT), None)
     if project is None:
         return {"projeto_id": None, "obras": []}
-    m = studies.matriz(project["id"])
+    m = studies.matrix(project["id"])
     works: dict[str, dict[str, Any]] = {}
     for i in m["itens"]:
         if i["tipo"] == "manuscrito":
@@ -898,7 +898,7 @@ def delete_batch(arm: ArmDep, colecao: str, corpo: Payload) -> Any:
     if len(ids) > 500:
         raise HTTPException(422, "No máximo 500 ids por lote")
     try:
-        return {"excluidas": arm.excluir_varios(colecao, ids)}
+        return {"excluidas": arm.delete_varios(colecao, ids)}
     except NotFound as e:
         raise _error(e) from e
 
@@ -927,7 +927,7 @@ def get(arm: ArmDep, colecao: str, id_: str) -> Any:
 @router.patch("/{colecao}/{id_}")
 def edit(arm: ArmDep, colecao: str, id_: str, corpo: Payload) -> Any:
     try:
-        return arm.editar(colecao, id_, _prepare(colecao, corpo))
+        return arm.edit(colecao, id_, _prepare(colecao, corpo))
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 

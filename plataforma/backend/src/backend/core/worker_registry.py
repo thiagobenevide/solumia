@@ -41,9 +41,9 @@ class WorkerRegistry:
     def __init__(self) -> None:
         self._workers: dict[str, ConnectedWorker] = {}
         self._pending: dict[str, tuple[str, asyncio.Future[dict[str, Any]]]] = {}
-        self._em_uso: dict[str, dict[str, Any]] = {}
+        self._in_use: dict[str, dict[str, Any]] = {}
         """Pedidos com origem (módulo) em andamento: enquanto houver, não se troca o modelo."""
-        self.ao_medir: Callable[[dict[str, Any]], None] | None = None
+        self.to_measure: Callable[[dict[str, Any]], None] | None = None
         """Chamado ao fim de cada pedido ao worker (dashboard das LLMs): latência, erro, tokens."""
         self.ouvintes: dict[str, Callable[[dict[str, Any]], None]] = {}
         """Canal → quem recebe os `evento` do worker (ex.: `codigo`, etapas do Claude Code)."""
@@ -80,7 +80,7 @@ class WorkerRegistry:
             if recursos is not None:
                 worker.recursos = recursos
 
-    def descrever(self) -> list[dict[str, Any]]:
+    def describe(self) -> list[dict[str, Any]]:
         """Workers conectados, para o dashboard: modelos, último sinal e uso da máquina."""
         now = time.monotonic()
         return [
@@ -103,7 +103,7 @@ class WorkerRegistry:
                     return worker
         return next(iter(self._workers.values()))
 
-    def em_uso(self) -> list[dict[str, Any]]:
+    def in_usage(self) -> list[dict[str, Any]]:
         """Quem está usando o LLM agora (módulo, tarefa, modelo, há quantos segundos)."""
         now = time.monotonic()
         return [
@@ -113,10 +113,10 @@ class WorkerRegistry:
                 "modelo": u["modelo"],
                 "ha_s": round(now - u["inicio"], 1),
             }
-            for u in self._em_uso.values()
+            for u in self._in_use.values()
         ]
 
-    def atualizar_modelos(self, worker_id: str, models: list[str]) -> None:
+    def update_models(self, worker_id: str, models: list[str]) -> None:
         worker = self._workers.get(worker_id)
         if worker is not None:
             worker.available_models = models
@@ -148,7 +148,7 @@ class WorkerRegistry:
         self._pending[request_id] = (worker.worker_id, future)
         start = time.monotonic()
         if origem:
-            self._em_uso[request_id] = {
+            self._in_use[request_id] = {
                 "origem": origem,
                 "tarefa": payload.get("task") or "chat",
                 "modelo": payload.get("model") or payload.get("modelo") or "",
@@ -167,10 +167,10 @@ class WorkerRegistry:
             raise
         finally:
             self._pending.pop(request_id, None)
-            self._em_uso.pop(request_id, None)
-            if self.ao_medir is not None:
+            self._in_use.pop(request_id, None)
+            if self.to_measure is not None:
                 usage = answer.get("usage") or {}
-                self.ao_medir(
+                self.to_measure(
                     {
                         "provedor": "local",
                         "worker": worker.worker_id,

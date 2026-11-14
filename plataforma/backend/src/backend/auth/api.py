@@ -30,26 +30,26 @@ class Attempts:
     """Falhas de login por IP numa janela; passou do limite, o IP fica bloqueado até ela fechar."""
 
     def __init__(self) -> None:
-        self._falhas: dict[str, list[float]] = {}
-        self._trava = threading.Lock()
+        self._failures: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
         # Último passo TOTP aceito: o mesmo código não serve para um segundo login (replay).
-        self.ultimo_passo_totp = -1
+        self.last_step_totp = -1
 
-    def bloqueado_por(self, ip: str, maximum: int, window: float) -> float:
+    def blocked_by(self, ip: str, maximum: int, window: float) -> float:
         """Segundos restantes de bloqueio (0 = liberado)."""
-        with self._trava:
+        with self._lock:
             now = time.monotonic()
-            failures = [t for t in self._falhas.get(ip, []) if now - t < window]
-            self._falhas[ip] = failures
+            failures = [t for t in self._failures.get(ip, []) if now - t < window]
+            self._failures[ip] = failures
             return window - (now - failures[0]) if len(failures) >= maximum else 0
 
-    def falhou(self, ip: str) -> None:
-        with self._trava:
-            self._falhas.setdefault(ip, []).append(time.monotonic())
+    def failed(self, ip: str) -> None:
+        with self._lock:
+            self._failures.setdefault(ip, []).append(time.monotonic())
 
-    def limpar(self, ip: str) -> None:
-        with self._trava:
-            self._falhas.pop(ip, None)
+    def clean(self, ip: str) -> None:
+        with self._lock:
+            self._failures.pop(ip, None)
 
 
 def get_attempts(request: Request) -> Attempts:
@@ -86,7 +86,7 @@ def login(
 
     ip = request.client.host if request.client else "?"
     window = settings.login_bloqueio_minutos * 60
-    restante = tentativas.bloqueado_por(ip, settings.login_max_tentativas, window)
+    restante = tentativas.blocked_by(ip, settings.login_max_tentativas, window)
     if restante:
         raise openai_error(
             429,
@@ -99,14 +99,14 @@ def login(
     # Verifica a senha mesmo com usuário errado para não revelar, pelo tempo, se o usuário existe.
     password_ok = verify_password(credenciais.senha, hash_password if user_ok else HASH_FICTITIOUS)
     step = verify_totp(settings.admin_totp_segredo.get_secret_value(), credenciais.codigo)
-    totp_ok = step is not None and step > tentativas.ultimo_passo_totp
+    totp_ok = step is not None and step > tentativas.last_step_totp
     if not (user_ok and password_ok and totp_ok):
-        tentativas.falhou(ip)
+        tentativas.failed(ip)
         logger.warning("Login recusado (ip=%s)", ip)
         raise openai_error(401, "Usuário, senha ou código inválidos.", "invalid_credentials")
 
-    tentativas.ultimo_passo_totp = step or 0
-    tentativas.limpar(ip)
+    tentativas.last_step_totp = step or 0
+    tentativas.clean(ip)
     logger.info("Login aceito (ip=%s)", ip)
     return _session(settings, credenciais.lembrar, int(time.time()))
 
@@ -127,7 +127,7 @@ def _session(settings: Settings, lembrar: bool, totp: int) -> Session:
 
 
 def _session_of_request(request: Request) -> dict[str, object]:
-    session = getattr(request.state, "sessao", None)
+    session = getattr(request.state, "session", None)
     if not isinstance(session, dict):
         raise openai_error(403, "Só com o login do app (não com chave).", "session_required")
     return session
@@ -162,13 +162,13 @@ def confirm(
     session = _session_of_request(request)
     ip = request.client.host if request.client else "?"
     window = settings.login_bloqueio_minutos * 60
-    if tentativas.bloqueado_por(ip, settings.login_max_tentativas, window):
+    if tentativas.blocked_by(ip, settings.login_max_tentativas, window):
         raise openai_error(429, "Muitas tentativas. Tente mais tarde.", "too_many_attempts")
     step = verify_totp(settings.admin_totp_segredo.get_secret_value(), corpo.codigo)
-    if step is None or step <= tentativas.ultimo_passo_totp:
-        tentativas.falhou(ip)
+    if step is None or step <= tentativas.last_step_totp:
+        tentativas.failed(ip)
         raise openai_error(401, "Código inválido.", "invalid_code")
-    tentativas.ultimo_passo_totp = step
+    tentativas.last_step_totp = step
     confirmacoes: dict[str, float] = request.app.state.totp_confirmacoes
     now = time.time()
     validity = settings.codigo_totp_horas * 3600

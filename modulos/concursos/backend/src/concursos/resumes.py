@@ -26,32 +26,32 @@ def _slug(text: str) -> str:
 class Resumes:
     def __init__(self, root: Path | str) -> None:
         self.pasta = Path(root).expanduser() / "vagas" / "curriculos"
-        self._indice = self.pasta / "curriculos.json"
+        self._index = self.pasta / "curriculos.json"
 
-    def _ler(self) -> dict[str, Any]:
-        if not self._indice.exists():
+    def _read(self) -> dict[str, Any]:
+        if not self._index.exists():
             return {"padrao": "", "itens": {}}
-        data: dict[str, Any] = json.loads(self._indice.read_text())
+        data: dict[str, Any] = json.loads(self._index.read_text())
         data.setdefault("padrao", "")
         data.setdefault("itens", {})
         return data
 
-    def _gravar(self, dados: dict[str, Any]) -> None:
+    def _write(self, dados: dict[str, Any]) -> None:
         self.pasta.mkdir(parents=True, exist_ok=True)
-        tmp = self._indice.with_suffix(".tmp")
+        tmp = self._index.with_suffix(".tmp")
         tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=1))
-        tmp.replace(self._indice)
+        tmp.replace(self._index)
 
     def _arquivo(self, id_: str) -> Path | None:
         return self.pasta / f"{id_}.md" if _ID.match(id_) else None
 
-    def _semear(self) -> None:
+    def _seed(self) -> None:
         self.pasta.mkdir(parents=True, exist_ok=True)
         if any(self.pasta.glob("*.md")) or not MODEL.exists():
             return
         self.salvar(None, "Meu currículo (modelo)", MODEL.read_text())
 
-    def _padrao(self, dados: dict[str, Any]) -> str:
+    def _default(self, dados: dict[str, Any]) -> str:
         """O marcado, se o arquivo ainda existe; senão o primeiro que não foi gerado para vaga."""
         ids = sorted(a.stem for a in self.pasta.glob("*.md"))
         if dados["padrao"] in ids:
@@ -59,10 +59,10 @@ class Resumes:
         bases = [i for i in ids if not dados["itens"].get(i, {}).get("vaga")]
         return (bases or ids or [""])[0]
 
-    def listar(self) -> dict[str, Any]:
-        self._semear()
-        data = self._ler()
-        default = self._padrao(data)
+    def list_all(self) -> dict[str, Any]:
+        self._seed()
+        data = self._read()
+        default = self._default(data)
         items = []
         for file in self.pasta.glob("*.md"):
             meta = data["itens"].get(file.stem, {})
@@ -90,12 +90,12 @@ class Resumes:
         file = self._arquivo(id_)
         if file is None or not file.exists():
             return None
-        item = next(c for c in self.listar()["curriculos"] if c["id"] == id_)
+        item = next(c for c in self.list_all()["curriculos"] if c["id"] == id_)
         return {**item, "conteudo": file.read_text()}
 
     def salvar(self, id_: str | None, nome: str, content: str, vaga: str = "") -> dict[str, Any]:
         """Cria (sem `id_`, a partir do nome) ou regrava o currículo. O primeiro vira o padrão."""
-        data = self._ler()
+        data = self._read()
         if id_ is None:
             base = _slug(nome)
             id_, n = base, 2
@@ -114,15 +114,15 @@ class Resumes:
         }
         if not data["padrao"]:
             data["padrao"] = id_
-        self._gravar(data)
+        self._write(data)
         return {"id": id_, **data["itens"][id_], "padrao": data["padrao"] == id_}
 
-    def definir_padrao(self, id_: str) -> bool:
+    def definir_default(self, id_: str) -> bool:
         if not self.existe(id_):
             return False
-        data = self._ler()
+        data = self._read()
         data["padrao"] = id_
-        self._gravar(data)
+        self._write(data)
         return True
 
     def remover(self, id_: str) -> bool:
@@ -130,14 +130,14 @@ class Resumes:
         if file is None or not file.exists():
             return False
         file.unlink()
-        data = self._ler()
+        data = self._read()
         data["itens"].pop(id_, None)
         if data["padrao"] == id_:
             data["padrao"] = ""
-        self._gravar(data)
+        self._write(data)
         return True
 
-    def padrao(self) -> dict[str, Any] | None:
-        self._semear()
-        id_ = self._padrao(self._ler())
+    def default(self) -> dict[str, Any] | None:
+        self._seed()
+        id_ = self._default(self._read())
         return self.ler(id_) if id_ else None

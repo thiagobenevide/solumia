@@ -42,14 +42,14 @@ def ipa(items: list[str], language: str) -> list[str]:
 class Pronunciation:
     def __init__(self, python: str = "") -> None:
         self._python = Path(python).expanduser() if python else _XTTS_PYTHON
-        self._proc: subprocess.Popen[str] | None = None
-        self._falhou = False
-        self._trava = threading.Lock()
+        self._process: subprocess.Popen[str] | None = None
+        self._failed = False
+        self._lock = threading.Lock()
 
     def _processo(self) -> subprocess.Popen[str] | None:
-        if self._proc is not None and self._proc.poll() is None:
-            return self._proc
-        if self._falhou or not self._python.is_file():
+        if self._process is not None and self._process.poll() is None:
+            return self._process
+        if self._failed or not self._python.is_file():
             return None
         process = subprocess.Popen(
             [str(self._python), str(_DIR / "servidor.py")],
@@ -61,13 +61,13 @@ class Pronunciation:
         assert process.stdout is not None
         if '"pronto"' not in process.stdout.readline():
             process.kill()
-            self._falhou = True
+            self._failed = True
             logger.warning("Modelo de pronúncia não subiu; leitura avaliada só por palavras")
             return None
-        self._proc = process
+        self._process = process
         return process
 
-    def avaliar(self, audio_16k: Any, reference: str, language: str) -> list[dict[str, Any]] | None:
+    def evaluate(self, audio_16k: Any, reference: str, language: str) -> list[dict[str, Any]] | None:
         """Acerto de cada palavra da [referencia] (na ordem de `palavras`), ou None sem o modelo."""
         import numpy as np
 
@@ -79,7 +79,7 @@ class Pronunciation:
         except Exception as e:  # espeak ausente
             logger.warning("Sem IPA de referência (%s)", e)
             return None
-        with self._trava, tempfile.TemporaryDirectory() as tmp:
+        with self._lock, tempfile.TemporaryDirectory() as tmp:
             process = self._processo()
             if process is None:
                 return None

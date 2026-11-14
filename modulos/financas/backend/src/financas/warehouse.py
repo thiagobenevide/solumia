@@ -217,19 +217,19 @@ def _convert(field: str, tipo: str, valor: Any) -> Any:
 
 class Warehouse:
     def __init__(self, root: str | Path) -> None:
-        self.raiz = Path(root).expanduser()
-        self.raiz.mkdir(parents=True, exist_ok=True)
-        self.trava = threading.RLock()
+        self.root = Path(root).expanduser()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.lock = threading.RLock()
         self._cache: dict[str, list[dict[str, Any]]] = {}
 
     def _arquivo(self, collection: str) -> Path:
-        return self.raiz / f"{collection}.json"
+        return self.root / f"{collection}.json"
 
     def todos(self, collection: str) -> list[dict[str, Any]]:
         """Lista viva da coleção (não alterar fora de `salvar`)."""
         if collection not in SCHEMAS:
             raise NotFound(collection)
-        with self.trava:
+        with self.lock:
             if collection not in self._cache:
                 file = self._arquivo(collection)
                 if file.exists():
@@ -244,15 +244,15 @@ class Warehouse:
         if collection != "categorias":
             return []
         return [
-            self._completar("categorias", {"id": f"cat-{i}", **c})
+            self._complete("categorias", {"id": f"cat-{i}", **c})
             for i, c in enumerate(CATEGORIES_BASE)
         ]
 
     def salvar(self, collection: str) -> None:
-        with self.trava:
+        with self.lock:
             _write(self._arquivo(collection), self._cache[collection])
 
-    def _completar(self, collection: str, dados: dict[str, Any]) -> dict[str, Any]:
+    def _complete(self, collection: str, dados: dict[str, Any]) -> dict[str, Any]:
         doc = {"id": dados.get("id") or uuid.uuid4().hex[:12]}
         for field, (kind, default) in SCHEMAS[collection].items():
             value = dados.get(field, default)
@@ -266,12 +266,12 @@ class Warehouse:
         raise NotFound(id_)
 
     def criar(self, collection: str, dados: dict[str, Any], gravar: bool = True) -> dict[str, Any]:
-        with self.trava:
+        with self.lock:
             dados = {k: v for k, v in dados.items() if k != "id"}
             for field in REQUIRED.get(collection, []):
                 if dados.get(field) in (None, ""):
                     raise Invalid(f"{field} é obrigatório")
-            doc = self._completar(collection, dados)
+            doc = self._complete(collection, dados)
             if collection == "empresas":
                 doc["ticker"] = doc["ticker"].upper()
                 if any(e["ticker"] == doc["ticker"] for e in self.todos(collection)):
@@ -281,8 +281,8 @@ class Warehouse:
                 self.salvar(collection)
             return doc
 
-    def editar(self, collection: str, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
-        with self.trava:
+    def edit(self, collection: str, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
+        with self.lock:
             doc = self.obter(collection, id_)
             schema = SCHEMAS[collection]
             new = dict(doc)
@@ -299,7 +299,7 @@ class Warehouse:
             return doc
 
     def excluir(self, collection: str, id_: str) -> None:
-        with self.trava:
+        with self.lock:
             items = self.todos(collection)
             doc = self.obter(collection, id_)
             items.remove(doc)
@@ -313,10 +313,10 @@ class Warehouse:
                 if mudou:
                     self.salvar(other)
 
-    def excluir_varios(self, collection: str, ids: list[str]) -> int:
+    def delete_varios(self, collection: str, ids: list[str]) -> int:
         """Exclusão em lote: grava cada arquivo uma vez só; ids que não existem são ignorados."""
         target = set(ids)
-        with self.trava:
+        with self.lock:
             items = self.todos(collection)
             before = len(items)
             items[:] = [d for d in items if d.get("id") not in target]
@@ -336,15 +336,15 @@ class Warehouse:
 
     # --- questionário (modelo editável) ---
 
-    def questionario(self) -> list[dict[str, Any]]:
-        file = self.raiz / "questionario.json"
-        with self.trava:
+    def questionnaire(self) -> list[dict[str, Any]]:
+        file = self.root / "questionario.json"
+        with self.lock:
             if not file.exists():
                 return [dict(p) for p in QUESTIONNAIRE_BASE]
             items: list[dict[str, Any]] = json.loads(file.read_text("utf-8"))
             return items
 
-    def salvar_questionario(self, perguntas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def save_questionnaire(self, perguntas: list[dict[str, Any]]) -> list[dict[str, Any]]:
         limpas = []
         ids = set()
         for p in perguntas:
@@ -368,6 +368,6 @@ class Warehouse:
                     "peso": max(0, int(p.get("peso", 1))),
                 }
             )
-        with self.trava:
-            _write(self.raiz / "questionario.json", limpas)
+        with self.lock:
+            _write(self.root / "questionario.json", limpas)
         return limpas

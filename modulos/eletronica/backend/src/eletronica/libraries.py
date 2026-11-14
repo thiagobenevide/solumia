@@ -98,30 +98,30 @@ def _input_index(s: dict[str, Any]) -> dict[str, Any]:
 
 class Libraries:
     def __init__(self, root: str | Path) -> None:
-        self.raiz = Path(root).expanduser() / "bibliotecas"
-        self.raiz.mkdir(parents=True, exist_ok=True)
-        self._trava = threading.RLock()
-        self._indices: dict[str, dict[str, Any]] = {}
+        self.root = Path(root).expanduser() / "bibliotecas"
+        self.root.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
+        self._indexes: dict[str, dict[str, Any]] = {}
         self._cheias: OrderedDict[str, dict[str, dict[str, Any]]] = OrderedDict()
-        for file in self.raiz.glob("*.indice.json"):
-            self._indices[file.name.removesuffix(".indice.json")] = json.loads(
+        for file in self.root.glob("*.indice.json"):
+            self._indexes[file.name.removesuffix(".indice.json")] = json.loads(
                 file.read_text("utf-8")
             )
 
     @staticmethod
-    def validar_nome(nome: str) -> str:
+    def validate_name(nome: str) -> str:
         if not _NAME.match(nome):
             raise NameInvalid(f"Nome de biblioteca inválido: {nome!r}")
         return nome
 
-    def _gravar(self, caminho: Path, dados: Any) -> None:
+    def _write(self, caminho: Path, dados: Any) -> None:
         tmp = caminho.with_suffix(".tmp")
         tmp.write_text(json.dumps(dados, ensure_ascii=False, separators=(",", ":")), "utf-8")
         os.replace(tmp, caminho)
 
-    def guardar(self, nome: str, symbols: list[dict[str, Any]], origem: str) -> dict[str, Any]:
+    def store(self, nome: str, symbols: list[dict[str, Any]], origem: str) -> dict[str, Any]:
         """Cria ou troca a biblioteca [nome] (reimportar atualiza)."""
-        self.validar_nome(nome)
+        self.validate_name(nome)
         index = {
             "nome": nome,
             "origem": origem,
@@ -129,38 +129,38 @@ class Libraries:
             "total": len(symbols),
             "simbolos": [_input_index(s) for s in symbols],
         }
-        with self._trava:
-            self._gravar(self.raiz / f"{nome}.json", symbols)
-            self._gravar(self.raiz / f"{nome}.indice.json", index)
-            self._indices[nome] = index
+        with self._lock:
+            self._write(self.root / f"{nome}.json", symbols)
+            self._write(self.root / f"{nome}.indice.json", index)
+            self._indexes[nome] = index
             self._cheias.pop(nome, None)
-        return self._resumo(index)
+        return self._summary(index)
 
     @staticmethod
-    def _resumo(indice: dict[str, Any]) -> dict[str, Any]:
+    def _summary(indice: dict[str, Any]) -> dict[str, Any]:
         return {k: indice[k] for k in ("nome", "origem", "importado", "total")}
 
-    def listar(self) -> list[dict[str, Any]]:
-        with self._trava:
+    def list_all(self) -> list[dict[str, Any]]:
+        with self._lock:
             return sorted(
-                (self._resumo(i) for i in self._indices.values()), key=lambda r: r["nome"]
+                (self._summary(i) for i in self._indexes.values()), key=lambda r: r["nome"]
             )
 
     def remover(self, nome: str) -> None:
-        with self._trava:
-            if nome not in self._indices:
+        with self._lock:
+            if nome not in self._indexes:
                 raise LibraryNotFound(nome)
-            del self._indices[nome]
+            del self._indexes[nome]
             self._cheias.pop(nome, None)
-            (self.raiz / f"{nome}.json").unlink(missing_ok=True)
-            (self.raiz / f"{nome}.indice.json").unlink(missing_ok=True)
+            (self.root / f"{nome}.json").unlink(missing_ok=True)
+            (self.root / f"{nome}.indice.json").unlink(missing_ok=True)
 
     def _cheia(self, nome: str) -> dict[str, dict[str, Any]]:
-        with self._trava:
+        with self._lock:
             if nome in self._cheias:
                 self._cheias.move_to_end(nome)
                 return self._cheias[nome]
-            symbols = json.loads((self.raiz / f"{nome}.json").read_text("utf-8"))
+            symbols = json.loads((self.root / f"{nome}.json").read_text("utf-8"))
             cheia = {s["id"]: s for s in symbols}
             self._cheias[nome] = cheia
             while len(self._cheias) > _CACHE:
@@ -172,14 +172,14 @@ class Libraries:
         if id_ in POR_ID:
             return POR_ID[id_]
         lib = id_.split(":", 1)[0]
-        if ":" not in id_ or lib not in self._indices:
+        if ":" not in id_ or lib not in self._indexes:
             return None
         return self._cheia(lib).get(id_)
 
     def varios(self, ids: list[str]) -> list[dict[str, Any]]:
         return [s for s in map(self.obter, dict.fromkeys(ids)) if s is not None]
 
-    def buscar(
+    def fetch(
         self, text: str, collection: str | None = None, limite: int = 60
     ) -> list[dict[str, Any]]:
         """Símbolos importados com todas as palavras de [texto]; nome exato e começo do nome vêm
@@ -187,10 +187,10 @@ class Libraries:
         terms = text.lower().split()
         target = text.strip().lower()
         found: list[tuple[int, str, str]] = []
-        with self._trava:
-            indexes = [self._indices[collection]] if collection in self._indices else []
+        with self._lock:
+            indexes = [self._indexes[collection]] if collection in self._indexes else []
             if collection is None:
-                indexes = list(self._indices.values())
+                indexes = list(self._indexes.values())
             for index in indexes:
                 for e in index["simbolos"]:
                     if all(t in e["busca"] for t in terms):

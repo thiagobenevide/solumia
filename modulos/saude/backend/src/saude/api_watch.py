@@ -21,8 +21,8 @@ router = APIRouter(prefix="/relogio")
 def get_clock(request: Request) -> Clock:
     state = request.app.state
     if getattr(state, "relogio", None) is None:
-        workouts: Workouts = state.treinos
-        state.relogio = Clock(workouts.raiz / "relogio")
+        workouts: Workouts = state.workouts
+        state.relogio = Clock(workouts.root / "relogio")
     clock: Clock = state.relogio
     return clock
 
@@ -74,14 +74,14 @@ def state(relogio: ClockDep) -> Any:
 def run_import(relogio: ClockDep, arquivo: Annotated[UploadFile, File()]) -> Any:
     """Zip de Samsung Health › Configurações › Baixar dados pessoais."""
     try:
-        return relogio.importar_samsung(arquivo.file)
+        return relogio.import_samsung(arquivo.file)
     except Invalid as e:
         raise HTTPException(422, str(e)) from e
 
 
 @router.get("/analises")
 def analyses(relogio: ClockDep) -> Any:
-    return relogio.analises()
+    return relogio.analyses()
 
 
 @router.post("/analises")
@@ -96,7 +96,7 @@ async def analyze(
             llm,
             relogio,
             mental,
-            request.app.state.treinos,
+            request.app.state.workouts,
             dias=pedido.dias,
             pergunta=pedido.pergunta,
             extra=getattr(request.app.state, "saude_contexto", None),

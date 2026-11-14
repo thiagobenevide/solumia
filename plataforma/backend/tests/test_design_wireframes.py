@@ -97,4 +97,4 @@ def test_exporta_pacote_e_reimporta(api: TestClient) -> None:
     assert len(api.get("/api/design/wireframes").json()) == 2
     assert api.get("/api/design/quadros").json() == []
     assert api.delete(f"/api/design/wireframes/{w['id']}").status_code == 204
-    assert not list(Path(api.app.state.wireframes_design.raiz).glob("*.anexos"))
+    assert not list(Path(api.app.state.wireframes_design.root).glob("*.anexos"))

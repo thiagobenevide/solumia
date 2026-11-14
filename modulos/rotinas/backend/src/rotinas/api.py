@@ -80,7 +80,7 @@ def _error(e: Exception) -> HTTPException:
 
 @router.get("/tarefas")
 def list_all(quadro: FrameDep) -> Any:
-    return quadro.listar()
+    return quadro.list_all()
 
 
 @router.get("/resumo")
@@ -114,7 +114,7 @@ def move(id_: str, mov: Motion, quadro: FrameDep) -> Any:
 
 @router.post("/tarefas/{id_}/{acao}")
 def stopwatch(id_: str, acao: str, quadro: FrameDep) -> Any:
-    actions = {"iniciar": quadro.iniciar, "pausar": quadro.pausar, "zerar": quadro.zerar}
+    actions = {"iniciar": quadro.iniciar, "pausar": quadro.pause, "zerar": quadro.zerar}
     if acao not in actions:
         raise HTTPException(404, "Ação desconhecida")
     try:

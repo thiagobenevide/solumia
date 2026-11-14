@@ -44,16 +44,16 @@ def require_client_api_key(request: Request, settings: SettingsDep) -> None:
     payload = session_validates(token, settings)
     if payload is not None:
         request.state.usuario = payload["sub"]
-        request.state.sessao = payload
+        request.state.session = payload
         return
     # Compara com todas as chaves em tempo constante (sem `in`, que para no primeiro acerto).
     scope = None
-    for key, esc in settings.client_api_key_escopos.items():
+    for key, esc in settings.client_api_key_scopes.items():
         if token and hmac.compare_digest(token.encode(), key.encode()):
             scope = esc
     if scope is not None and _scope_allows(scope, request.url.path):
         request.state.usuario = "api-key"
-        request.state.sessao = None
+        request.state.session = None
         return
     raise openai_error(401, "Token inválido ou expirado.", "invalid_api_key")
 
@@ -92,7 +92,7 @@ def session_validates(token: str, settings: Settings) -> dict[str, object] | Non
 def require_totp_recent(request: Request, settings: SettingsDep) -> None:
     """Para rotas que executam comandos no PC (módulo Código): além do token, um código do
     Authenticator digitado nas últimas `codigo_totp_horas` (claim `totp` do token de sessão)."""
-    session = getattr(request.state, "sessao", None)
+    session = getattr(request.state, "session", None)
     if not isinstance(session, dict):
         raise openai_error(403, "O Código só abre com o login do app.", "totp_required")
     totp = session.get("totp")

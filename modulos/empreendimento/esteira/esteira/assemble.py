@@ -62,20 +62,20 @@ class _Transitions:
         self.padrao = cfg["edicao"]["transicao"]
         self.intervalo = ef.get("intervalo_forte", 20)
         self.capitulos = sorted(chapters)
-        self.ultimo_forte, self.giro = -1e9, {}
+        self.last_strong, self.spin = -1e9, {}
 
     def escolher(self, cena):
         t = cena["inicio"]
         if any(abs(t - c) <= 1.5 for c in self.capitulos):
             return "dip_to_black"
         options = self.mapa.get(cena.get("clima"), [self.padrao]) or [self.padrao]
-        k = self.giro.get(cena.get("clima"), 0)
-        self.giro[cena.get("clima")] = k + 1
+        k = self.spin.get(cena.get("clima"), 0)
+        self.spin[cena.get("clima")] = k + 1
         effect = options[k % len(options)]
         if effect in STRONG:
-            if t - self.ultimo_forte < self.intervalo:
+            if t - self.last_strong < self.intervalo:
                 return next((o for o in options if o not in STRONG), self.padrao)
-            self.ultimo_forte = t
+            self.last_strong = t
         return effect
 
 
@@ -84,9 +84,9 @@ PUNCH, PUNCH_DURATION, PUNCHES_MAX = 6, 0.12, 2  # % de zoom de impacto, s que e
 
 def _captions_srt(project, destino, max_words=7, max_seg=3.0):
     if project.caminho("alinhamento.json").exists():
-        words = project.carregar_json("alinhamento.json")
+        words = project.load_json("alinhamento.json")
     else:
-        words = project.carregar_json("transcricao.json")["palavras"]
+        words = project.load_json("transcricao.json")["palavras"]
     blocks, current = [], []
     for w in words:
         end_of_sentence = w["p"].endswith((".", "!", "?"))
@@ -137,7 +137,7 @@ def assemble(project, exportar=True):
     _store_edit_manual(project)
     cfg = project.cfg
     e = cfg["edicao"]
-    plan = project.carregar_json("plano.json")
+    plan = project.load_json("plano.json")
     from esteira import production
     cam = production.camera(project) if production.mode(project) == "apresentador" else None
     if cam:  # apresentador: câmera na V1 o tempo todo; mídia de banco só nas cenas de B-roll (V2)
@@ -168,7 +168,7 @@ def assemble(project, exportar=True):
         _sign(project)
         print(f"  projeto salvo: {fcproj} (`./dark open {project.ep}` para editar à mão)")
 
-        _dataset(project, plan, doc, ex.rastro, cam, medias)
+        _dataset(project, plan, doc, ex.trace, cam, medias)
         if exportar:
             _export(fc, project, duration)
     finally:
@@ -214,9 +214,9 @@ def assembly(project, plan, cenas, cam):
         print(f"  câmera: {len(spans)} trechos na V1; {len(cenas)} cenas de B-roll na V2")
         lane = "apoio"
 
-    graphics = [g for g in (project.carregar_json("graficos.json") if project.caminho("graficos.json").exists()
+    graphics = [g for g in (project.load_json("graficos.json") if project.caminho("graficos.json").exists()
                             else []) if g.get("arquivo") and (project.pasta / g["arquivo"]).exists()]
-    keys = project.carregar_json("chaves.json") if project.caminho("chaves.json").exists() else []
+    keys = project.load_json("chaves.json") if project.caminho("chaves.json").exists() else []
     trans = _Transitions(cfg, [g["inicio"] for g in graphics if g.get("origem") == "capitulo"])
     # socos de zoom: cada palavra-chave e cada número no instante em que é dito
     punches = [k["inicio"] + 0.08 for k in keys] + [g["ancora"] for g in graphics if g.get("ancora")]
@@ -301,9 +301,9 @@ def _dataset(project, plan, doc, trace, cam, medias=None):
                "cenas": [{k: c.get(k) for k in ("id", "inicio", "fim", "clima", "midia_tipo", "movimento")}
                          for c in plan["cenas"] if c.get("midia")],
                "graficos": [{k: g.get(k) for k in ("inicio", "modelo", "origem", "ancora")}
-                            for g in (project.carregar_json("graficos.json")
+                            for g in (project.load_json("graficos.json")
                                       if project.caminho("graficos.json").exists() else [])],
-               "chaves": project.carregar_json("chaves.json") if project.caminho("chaves.json").exists() else [],
+               "chaves": project.load_json("chaves.json") if project.caminho("chaves.json").exists() else [],
                "receita": {"edicao": {k: cfg["edicao"].get(k) for k in ("zoom", "transicao_frames", "legendas",
                                                                           "grade_cor", "titulo_inicio")},
                            "efeitos": cfg.get("efeitos", {}), "musica_db": cfg["audio"].get("musica_db")}}
@@ -374,7 +374,7 @@ def export_manual(project):
     fc = FilmCraft()
     try:
         _open_reconnected(fc, project)
-        _export(fc, project, project.carregar_json("plano.json")["duracao"])
+        _export(fc, project, project.load_json("plano.json")["duracao"])
     finally:
         fc.fechar()
 

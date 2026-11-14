@@ -28,13 +28,13 @@ class Notifier:
         extras: Callable[[], list[dict[str, Any]]] | None = None,
     ) -> None:
         """[extras]: alertas de outros módulos (`{nivel, texto, concurso?}`), ex. Concursos."""
-        self.cobrador = nagger
+        self.nagger = nagger
         self.tarefas = tarefas
         self.url = url
         self.token = token
         self._enviar = enviar or self._ntfy
         self.extras = extras
-        self._arquivo = nagger.raiz / "enviados.json"
+        self._arquivo = nagger.root / "enviados.json"
 
     def _ntfy(self, titulo: str, text: str, prioridade: str) -> None:
         # publicação em JSON na raiz do servidor: título e texto em UTF-8 sem passar por cabeçalho
@@ -63,9 +63,9 @@ class Notifier:
         data: dict[str, list[str]] = json.loads(self._arquivo.read_text("utf-8"))
         return set(data.get(day, []))
 
-    def verificar(self) -> list[dict[str, str]]:
+    def verify(self) -> list[dict[str, str]]:
         """Envia os alertas de hoje ainda não enviados e devolve-os."""
-        d = self.cobrador.disciplina(self.tarefas())
+        d = self.nagger.disciplina(self.tarefas())
         ja = self._enviados(d["data"])
         alerts = d["alertas"]
         if self.extras:
@@ -90,7 +90,7 @@ class Notifier:
     async def rodar(self, interval_s: float) -> None:
         while True:
             try:
-                await asyncio.to_thread(self.verificar)
+                await asyncio.to_thread(self.verify)
             except Exception:
                 logger.exception("Falha ao enviar a cobrança")
             await asyncio.sleep(interval_s)

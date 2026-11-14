@@ -225,11 +225,11 @@ def _one(
         return f"Tarefa {t['titulo']} → {coluna}"
     if tipo == "criar_meta":
         data = {k: a[k] for k in ("frequencia", "alvo", "unidade") if a.get(k)}
-        meta = nagger.criar_meta({"titulo": str(a["titulo"]), **data})
+        meta = nagger.create_meta({"titulo": str(a["titulo"]), **data})
         return f"Meta criada: {meta['titulo']}"
     if tipo == "registrar_meta":
         meta = _find(nagger.metas(), a["meta"])
-        nagger.registrar_acao(meta["id"], float(a.get("quantidade", 1)))
+        nagger.register_action(meta["id"], float(a.get("quantidade", 1)))
         return f"Registrado em {meta['titulo']}"
 
     blocks = nagger.agenda(day)["blocos"]

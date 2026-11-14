@@ -31,7 +31,7 @@ def test_arvore_e_arquivo_do_commit(tmp_path: Path) -> None:
     git("commit", "-qm", "segundo")
 
     code = Code(SimpleNamespace(codigo_dir=str(tmp_path)), None)  # type: ignore[arg-type]
-    tree = asyncio.run(code.arvore(""))
+    tree = asyncio.run(code.tree(""))
     assert tree["arquivos"] == ["a.py", "b.bin"]
     assert [c["assunto"] for c in tree["commits"]] == ["segundo", "primeiro"]
     assert tree["mudancas"] == [
@@ -40,13 +40,13 @@ def test_arvore_e_arquivo_do_commit(tmp_path: Path) -> None:
     ]
     file = asyncio.run(code.arquivo("a.py", ""))
     assert file["texto"].startswith("um\nnovo") and file["novas"] == [2]
-    found = asyncio.run(code.buscar("dois", ""))["resultados"]
+    found = asyncio.run(code.fetch("dois", ""))["resultados"]
     assert [(r["caminho"], r["linha"]) for r in found] == [("a.py", 2), ("a.py", 3)]
-    obs = asyncio.run(code.buscar("dois", "", observacoes=True))["resultados"]
+    obs = asyncio.run(code.fetch("dois", "", observacoes=True))["resultados"]
     assert [r["linha"] for r in obs] == [2]
-    marks = asyncio.run(code.buscar("", "", observacoes=True))["resultados"]
+    marks = asyncio.run(code.fetch("", "", observacoes=True))["resultados"]
     assert [r["linha"] for r in marks] == [2]
-    assert asyncio.run(code.buscar("nada-disso", ""))["resultados"] == []
+    assert asyncio.run(code.fetch("nada-disso", ""))["resultados"] == []
     assert asyncio.run(code.arquivo("b.bin", ""))["binario"]
     primeiro = tree["commits"][1]["curto"]
     assert asyncio.run(code.arquivo("a.py", primeiro))["novas"] == [1, 2]

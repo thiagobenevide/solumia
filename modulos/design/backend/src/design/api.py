@@ -50,7 +50,7 @@ def _error(e: Exception) -> HTTPException:
 
 @router.get("/quadros")
 def list_all(quadros: FramesDep, pasta: str | None = None) -> Any:
-    return quadros.listar(pasta)
+    return quadros.list_all(pasta)
 
 
 @router.post("/quadros", status_code=201)
@@ -112,7 +112,7 @@ def get(id_: str, quadros: FramesDep) -> Any:
 @router.patch("/quadros/{id_}")
 def edit(id_: str, edicao: FrameEdit, quadros: FramesDep) -> Any:
     try:
-        return quadros.editar(id_, edicao.model_dump(exclude_unset=True))
+        return quadros.edit(id_, edicao.model_dump(exclude_unset=True))
     except Exception as e:
         raise _error(e) from e
 
@@ -132,7 +132,7 @@ def save(id_: str, g: Recording, quadros: FramesDep) -> Any:
 @router.get("/quadros/{id_}/miniatura")
 def thumbnail(id_: str, quadros: FramesDep) -> FileResponse:
     try:
-        return FileResponse(quadros.miniatura(id_), media_type="image/png")
+        return FileResponse(quadros.thumbnail(id_), media_type="image/png")
     except Exception as e:
         raise _error(e) from e
 
@@ -142,7 +142,7 @@ async def store_thumbnail(
     id_: str, quadros: FramesDep, arquivo: Annotated[UploadFile, File()]
 ) -> Response:
     try:
-        quadros.guardar_miniatura(id_, await arquivo.read())
+        quadros.store_thumbnail(id_, await arquivo.read())
     except Exception as e:
         raise _error(e) from e
     return Response(status_code=204)
@@ -151,7 +151,7 @@ async def store_thumbnail(
 @router.post("/quadros/{id_}/duplicar", status_code=201)
 def duplicate(id_: str, quadros: FramesDep) -> Any:
     try:
-        return quadros.duplicar(id_)
+        return quadros.duplicate(id_)
     except Exception as e:
         raise _error(e) from e
 
@@ -184,7 +184,7 @@ class WireframeInput(BaseModel):
 
 @router.get("/wireframes")
 def list_wireframes(wireframes: WireframesDep) -> Any:
-    return wireframes.listar()
+    return wireframes.list_all()
 
 
 @router.post("/wireframes", status_code=201)
@@ -224,7 +224,7 @@ def get_wireframe(id_: str, wireframes: WireframesDep) -> Any:
 @router.patch("/wireframes/{id_}")
 def edit_wireframe(id_: str, edicao: FrameEdit, wireframes: WireframesDep) -> Any:
     try:
-        return wireframes.editar(id_, edicao.model_dump(exclude_unset=True))
+        return wireframes.edit(id_, edicao.model_dump(exclude_unset=True))
     except Exception as e:
         raise _error(e) from e
 
@@ -269,7 +269,7 @@ async def store_png_screen(
 ) -> Response:
     """Render da tela feito pelo app (mesmo pintor do editor), para ir no pacote da IA."""
     try:
-        wireframes.guardar_png(id_, tela, await arquivo.read())
+        wireframes.store_png(id_, tela, await arquivo.read())
     except Exception as e:
         raise _error(e) from e
     return Response(status_code=204)
@@ -290,7 +290,7 @@ async def reimport_wireframe(
 @router.post("/wireframes/{id_}/duplicar", status_code=201)
 def duplicate_wireframe(id_: str, wireframes: WireframesDep) -> Any:
     try:
-        return wireframes.duplicar(id_)
+        return wireframes.duplicate(id_)
     except Exception as e:
         raise _error(e) from e
 
@@ -327,7 +327,7 @@ async def fetch_images(
     if not q.strip():
         return []
     try:
-        return await imagens.buscar(q.strip(), tipo, max(pagina, 0))
+        return await imagens.fetch(q.strip(), tipo, max(pagina, 0))
     except (Invalid, OSError, httpx.HTTPError) as e:
         raise HTTPException(503, str(e)) from e
 
@@ -336,7 +336,7 @@ async def fetch_images(
 async def store_image(p: RequestImage, imagens: ImagesDep) -> dict[str, Any]:
     """Copia a imagem escolhida para o servidor; o elemento `imagem` do quadro guarda o `id`."""
     try:
-        return await imagens.baixar(p.url)
+        return await imagens.download(p.url)
     except Invalid as e:
         raise HTTPException(422, str(e)) from e
     except (OSError, httpx.HTTPError) as e:

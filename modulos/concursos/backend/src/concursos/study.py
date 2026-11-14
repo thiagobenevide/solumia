@@ -34,24 +34,24 @@ def _slug(text: str) -> str:
 
 class Study:
     def __init__(self, root: Path) -> None:
-        self.raiz = root
-        self._trava = threading.RLock()
+        self.root = root
+        self._lock = threading.RLock()
 
-    def _arq(self, id_: str, nome: str) -> Path:
-        return self.raiz / id_ / nome
+    def _file(self, id_: str, nome: str) -> Path:
+        return self.root / id_ / nome
 
-    def _ler(self, id_: str, nome: str, default: Any) -> Any:
-        file = self._arq(id_, nome)
+    def _read(self, id_: str, nome: str, default: Any) -> Any:
+        file = self._file(id_, nome)
         return json.loads(file.read_text("utf-8")) if file.exists() else default
 
-    def _gravar(self, id_: str, nome: str, dados: Any) -> None:
-        file = self._arq(id_, nome)
+    def _write(self, id_: str, nome: str, dados: Any) -> None:
+        file = self._file(id_, nome)
         tmp = file.with_suffix(".tmp")
         tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=1), "utf-8")
         tmp.replace(file)
 
     # ---------- simulados ----------
-    def pedido_simulado(
+    def request_mock_exam(
         self, exam: dict[str, Any], n: int, subject: str = ""
     ) -> tuple[dict[str, Any], str]:
         """Registra um simulado `gerando` e devolve (registro, prompt para o Claude)."""
@@ -82,25 +82,25 @@ class Study:
             "respostas": None,
             "resultado": None,
         }
-        with self._trava:
-            self._gravar(
+        with self._lock:
+            self._write(
                 exam["id"],
                 "simulados.json",
-                [*self._ler(exam["id"], "simulados.json", []), record],
+                [*self._read(exam["id"], "simulados.json", []), record],
             )
         return record, ai_plan.prompt_mock_exam(exam, cotas, sorted(done))
 
     def _alterar(self, id_: str, sid: str, f: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
-        with self._trava:
-            items = self._ler(id_, "simulados.json", [])
+        with self._lock:
+            items = self._read(id_, "simulados.json", [])
             for s in items:
                 if s["id"] == sid:
                     f(s)
-                    self._gravar(id_, "simulados.json", items)
+                    self._write(id_, "simulados.json", items)
                     return dict(s)
         raise KeyError(sid)
 
-    def concluir_simulado(self, id_: str, sid: str, dados: dict[str, Any]) -> None:
+    def finish_mock_exam(self, id_: str, sid: str, dados: dict[str, Any]) -> None:
         questoes = [
             {**q, "n": i + 1}
             for i, q in enumerate(dados.get("questoes") or [])
@@ -114,7 +114,7 @@ class Study:
 
         self._alterar(id_, sid, f)
 
-    def falha_simulado(self, id_: str, sid: str, erro: str) -> None:
+    def failure_mock_exam(self, id_: str, sid: str, erro: str) -> None:
         self._alterar(id_, sid, lambda s: s.update(estado="erro", erro=erro))
 
     @staticmethod
@@ -130,15 +130,15 @@ class Study:
             ],
         }
 
-    def simulados(self, id_: str) -> list[dict[str, Any]]:
-        return [self._publico(s) for s in reversed(self._ler(id_, "simulados.json", []))]
+    def mock_exams(self, id_: str) -> list[dict[str, Any]]:
+        return [self._publico(s) for s in reversed(self._read(id_, "simulados.json", []))]
 
-    def excluir_simulado(self, id_: str, sid: str) -> None:
-        with self._trava:
-            items = self._ler(id_, "simulados.json", [])
-            self._gravar(id_, "simulados.json", [s for s in items if s["id"] != sid])
+    def delete_mock_exam(self, id_: str, sid: str) -> None:
+        with self._lock:
+            items = self._read(id_, "simulados.json", [])
+            self._write(id_, "simulados.json", [s for s in items if s["id"] != sid])
 
-    def responder(
+    def answer(
         self, id_: str, sid: str, respostas: list[int | None], seconds: int
     ) -> dict[str, Any]:
         def f(s: dict[str, Any]) -> None:
@@ -171,11 +171,11 @@ class Study:
 
         return self._alterar(id_, sid, f)
 
-    def desempenho(self, id_: str) -> dict[str, Any]:
+    def performance(self, id_: str) -> dict[str, Any]:
         """Acertos por disciplina somando todos os simulados respondidos, do pior para o melhor."""
         total: dict[str, dict[str, int]] = {}
         evolucao = []
-        for s in self._ler(id_, "simulados.json", []):
+        for s in self._read(id_, "simulados.json", []):
             r = s.get("resultado")
             if not r:
                 continue
@@ -194,19 +194,19 @@ class Study:
         return {"disciplinas": disciplinas, "evolucao": evolucao}
 
     # ---------- materiais ----------
-    def materiais(self, id_: str) -> dict[str, Any]:
-        data: dict[str, Any] = self._ler(
+    def materials(self, id_: str) -> dict[str, Any]:
+        data: dict[str, Any] = self._read(
             id_, "materiais.json", {"estado": "vazio", "atualizado": None, "itens": []}
         )
         return data
 
-    def marcar_materiais(self, id_: str, estado: str, erro: str = "") -> None:
-        with self._trava:
-            m = self.materiais(id_)
+    def mark_materials(self, id_: str, estado: str, erro: str = "") -> None:
+        with self._lock:
+            m = self.materials(id_)
             m.update(estado=estado, erro=erro)
-            self._gravar(id_, "materiais.json", m)
+            self._write(id_, "materiais.json", m)
 
-    async def buscar_materiais(
+    async def fetch_materials(
         self, exam: dict[str, Any], fetch: Search, llm: ChatLLM | None
     ) -> None:
         """Pesquisa na web (DuckDuckGo) e a LLM local classifica; só links que a busca trouxe."""
@@ -287,8 +287,8 @@ class Study:
                     "descricao": (c or {}).get("descricao") or x.get("trecho", "")[:200],
                 }
             )
-        with self._trava:
-            self._gravar(
+        with self._lock:
+            self._write(
                 exam["id"],
                 "materiais.json",
                 {

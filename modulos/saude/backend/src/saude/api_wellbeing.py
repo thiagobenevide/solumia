@@ -16,8 +16,8 @@ router = APIRouter()
 def get_mental(request: Request) -> Mental:
     state = request.app.state
     if getattr(state, "mental", None) is None:
-        workouts: Workouts = state.treinos
-        state.mental = Mental(workouts.raiz / "mental")
+        workouts: Workouts = state.workouts
+        state.mental = Mental(workouts.root / "mental")
     mental: Mental = state.mental
     return mental
 
@@ -25,8 +25,8 @@ def get_mental(request: Request) -> Mental:
 def get_espiritual(request: Request) -> Espiritual:
     state = request.app.state
     if getattr(state, "espiritual", None) is None:
-        workouts: Workouts = state.treinos
-        state.espiritual = Espiritual(workouts.raiz / "espiritual")
+        workouts: Workouts = state.workouts
+        state.espiritual = Espiritual(workouts.root / "espiritual")
     espiritual: Espiritual = state.espiritual
     return espiritual
 
@@ -84,7 +84,7 @@ class DayInput(BaseModel):
 @router.get("/mental/habitos")
 def habits(mental: MentalDep, de: str, ate: str) -> Any:
     try:
-        return mental.habitos(de, ate)
+        return mental.habits(de, ate)
     except Invalid as e:
         raise _error(e) from e
 
@@ -92,7 +92,7 @@ def habits(mental: MentalDep, de: str, ate: str) -> Any:
 @router.post("/mental/habitos", status_code=201)
 def create_habit(mental: MentalDep, corpo: HabitInput) -> Any:
     try:
-        return mental.criar_habito(corpo.model_dump())
+        return mental.create_habit(corpo.model_dump())
     except Invalid as e:
         raise _error(e) from e
 
@@ -100,7 +100,7 @@ def create_habit(mental: MentalDep, corpo: HabitInput) -> Any:
 @router.patch("/mental/habitos/{id_}")
 def edit_habit(mental: MentalDep, id_: str, corpo: HabitEdit) -> Any:
     try:
-        return mental.editar_habito(id_, corpo.model_dump(exclude_none=True))
+        return mental.edit_habit(id_, corpo.model_dump(exclude_none=True))
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 
@@ -108,7 +108,7 @@ def edit_habit(mental: MentalDep, id_: str, corpo: HabitEdit) -> Any:
 @router.post("/mental/habitos/{id_}/marcar")
 def mark_habit(mental: MentalDep, id_: str, corpo: Mark) -> Any:
     try:
-        return mental.marcar_habito(id_, corpo.data, corpo.feito)
+        return mental.mark_habit(id_, corpo.data, corpo.feito)
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 
@@ -116,7 +116,7 @@ def mark_habit(mental: MentalDep, id_: str, corpo: Mark) -> Any:
 @router.delete("/mental/habitos/{id_}", status_code=204)
 def delete_habit(mental: MentalDep, id_: str) -> None:
     try:
-        mental.excluir_habito(id_)
+        mental.delete_habit(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -124,7 +124,7 @@ def delete_habit(mental: MentalDep, id_: str) -> None:
 @router.get("/mental/foco")
 def focus(mental: MentalDep, de: str, ate: str) -> Any:
     try:
-        return mental.foco(de, ate)
+        return mental.focus(de, ate)
     except Invalid as e:
         raise _error(e) from e
 
@@ -132,7 +132,7 @@ def focus(mental: MentalDep, de: str, ate: str) -> Any:
 @router.post("/mental/foco", status_code=201)
 def register_focus(mental: MentalDep, corpo: FocusInput) -> Any:
     try:
-        return mental.registrar_foco(corpo.model_dump())
+        return mental.register_focus(corpo.model_dump())
     except Invalid as e:
         raise _error(e) from e
 
@@ -140,7 +140,7 @@ def register_focus(mental: MentalDep, corpo: FocusInput) -> Any:
 @router.get("/mental/diario")
 def daily(mental: MentalDep, de: str, ate: str) -> Any:
     try:
-        return mental.diario(de, ate)
+        return mental.daily(de, ate)
     except Invalid as e:
         raise _error(e) from e
 
@@ -148,7 +148,7 @@ def daily(mental: MentalDep, de: str, ate: str) -> Any:
 @router.put("/mental/diario/{dia}")
 def save_day(mental: MentalDep, dia: str, corpo: DayInput) -> Any:
     try:
-        return mental.salvar_dia(dia, corpo.model_dump(exclude_none=True))
+        return mental.save_day(dia, corpo.model_dump(exclude_none=True))
     except Invalid as e:
         raise _error(e) from e
 
@@ -170,13 +170,13 @@ def scopes() -> Any:
 
 @router.get("/espiritual/planos")
 def plans(espiritual: EspiritualDep) -> Any:
-    return espiritual.planos()
+    return espiritual.plans()
 
 
 @router.post("/espiritual/planos", status_code=201)
 def create_plan(espiritual: EspiritualDep, corpo: PlanInput) -> Any:
     try:
-        return espiritual.criar_plano(corpo.model_dump(exclude_none=True))
+        return espiritual.create_plan(corpo.model_dump(exclude_none=True))
     except Invalid as e:
         raise _error(e) from e
 
@@ -184,7 +184,7 @@ def create_plan(espiritual: EspiritualDep, corpo: PlanInput) -> Any:
 @router.delete("/espiritual/planos/{id_}", status_code=204)
 def delete_plan(espiritual: EspiritualDep, id_: str) -> None:
     try:
-        espiritual.excluir_plano(id_)
+        espiritual.delete_plan(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -192,7 +192,7 @@ def delete_plan(espiritual: EspiritualDep, id_: str) -> None:
 @router.get("/espiritual/planos/{id_}/leituras")
 def readings(espiritual: EspiritualDep, id_: str, de: str, ate: str | None = None) -> Any:
     try:
-        return espiritual.leituras(id_, de, ate or de)
+        return espiritual.readings(id_, de, ate or de)
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 

@@ -108,11 +108,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     tasks = [sweeper_task]
     if settings.painel_ntfy_url:
         notifier = Notifier(
-            app.state.cobrador,
-            app.state.quadro.listar,
+            app.state.nagger,
+            app.state.quadro.list_all,
             settings.painel_ntfy_url,
             settings.painel_ntfy_token.get_secret_value(),
-            extras=lambda: app.state.concursos.alertas() + app.state.concursos_rumores.alertas(),
+            extras=lambda: app.state.concursos.alerts() + app.state.concursos_rumores.alerts(),
         )
         interval = 60 * settings.painel_cobranca_minutos
         tasks.append(asyncio.create_task(notifier.rodar(interval)))
@@ -191,7 +191,7 @@ def _context_health(estado: Any) -> Callable[[date, date], str]:
         with contextlib.suppress(Exception):
             parts += ["## Rotinas (quadro de tarefas agora)", estado.quadro.contexto()[:2500]]
         with contextlib.suppress(Exception):
-            lendo = estado.estudos.listar_leituras(status="lendo")
+            lendo = estado.studies.list_readings(status="lendo")
             if lendo:
                 parts.append("## Estudos: lendo agora")
                 parts += [f"- {x['titulo']}" for x in lendo[:10]]
@@ -407,7 +407,7 @@ def _actions_modules(estado: Any) -> dict[str, Any]:
 
     async def projeto(a: dict[str, Any], _llm: Any) -> str:
         secoes = [str(x)[:200] for x in a.get("secoes") or []][:30]
-        p = estado.estudos.criar_projeto(
+        p = estado.studies.create_project(
             {
                 "nome": str(a.get("nome") or a.get("titulo") or "Projeto")[:200],
                 "descricao": str(a.get("descricao") or "")[:4000],
@@ -424,7 +424,7 @@ def _actions_modules(estado: Any) -> dict[str, Any]:
             # `tipo` é o da ação; o do texto vem em `tipo_texto`
             "tipo": a.get("tipo_texto") if a.get("tipo_texto") in ("livro", "artigo") else "livro",
         }
-        x = estado.estudos.criar_leitura(data)
+        x = estado.studies.create_reading(data)
         return f"Leitura adicionada em Estudos: {x['titulo']}"
 
     return {
@@ -548,8 +548,8 @@ def _language(app: FastAPI, settings: Settings) -> Language:
         settings.estudos_dir,
         chat=chat,
         worker=tarefa,
-        texto_do_arquivo=lambda id_: text_of_document(app.state.biblioteca, id_),
-        somar_minutos=app.state.estudos.somar_minutos,
+        texto_do_arquivo=lambda id_: text_of_document(app.state.collection, id_),
+        somar_minutos=app.state.studies.add_up_minutes,
     )
 
 
@@ -616,7 +616,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # jti da sessão → hora do último código do Authenticator confirmado (módulo Código).
     app.state.totp_confirmacoes = {}
     app.state.cofre = Vault(settings.notas_dir)
-    app.state.biblioteca = Collection(
+    app.state.collection = Collection(
         settings.arquivos_dir, settings.soffice_bin, settings.pdftoppm_bin
     )
     app.state.concursos = Exams(settings.concursos_dir)
@@ -654,22 +654,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.executor_codigo = _executor_code(
         app.state.worker_registry, app.state.sessoes_codigo
     )
-    app.state.treinos = Workouts(settings.saude_dir, settings.saude_baixar_imagens)
+    app.state.workouts = Workouts(settings.saude_dir, settings.saude_baixar_imagens)
     # dados de saúde são pessoais: só a LLM local, nunca o Claude
     app.state.saude_llm = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Saúde", timeout=600
     )
     app.state.saude_contexto = _context_health(app.state)
     app.state.financas = Warehouse(settings.financas_dir)
-    app.state.estudos = Studies(
-        settings.estudos_dir, marcacoes=app.state.biblioteca.marcacoes_do_projeto
+    app.state.studies = Studies(
+        settings.estudos_dir, marcacoes=app.state.collection.markings_of_project
     )
     app.state.linguagem = _language(app, settings)
     app.state.youtube = Youtube(app.state.cofre, settings.youtube_vault)
-    app.state.cobrador = Nagger(settings.painel_dir, settings.painel_fuso)
+    app.state.nagger = Nagger(settings.painel_dir, settings.painel_fuso)
     app.state.painel_fontes = Sources(
-        tarefas=app.state.quadro.listar,
-        buscar_notas=lambda q: app.state.cofre.listar(q),
+        tarefas=app.state.quadro.list_all,
+        buscar_notas=lambda q: app.state.cofre.list_all(q),
         ler_nota=app.state.cofre.obter,
         criar_nota=app.state.cofre.criar,
         criar_tarefa=app.state.quadro.criar,
@@ -677,8 +677,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.painel_fontes.modulos = _actions_modules(app.state)
     app.state.medidor = Meter(settings.painel_dir)
-    app.state.worker_registry.ao_medir = app.state.medidor.registrar
-    app.state.painel_workers = app.state.worker_registry.descrever
+    app.state.worker_registry.to_measure = app.state.medidor.registrar
+    app.state.painel_workers = app.state.worker_registry.describe
     # Cobrador (texto e voz): sem raciocínio e com teto de tokens, para responder em segundos.
     panel_local = _chat_llm(
         app.state.worker_registry,
@@ -714,7 +714,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     internet = app.state.internet
 
     async def concursos_busca(query: str) -> dict[str, Any]:
-        return await internet.usar("buscar_web", {"consulta": query})
+        return await internet.use("buscar_web", {"consulta": query})
 
     app.state.concursos_busca = concursos_busca
     app.state.concursos_radar = Radar(

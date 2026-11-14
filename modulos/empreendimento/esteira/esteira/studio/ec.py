@@ -301,7 +301,7 @@ def _small(doc, ficha, N1) -> list[str]:
             c.compilar()
         except Exception:  # noqa: BLE001 — erro de compilação é do portão técnico, com a mensagem dele
             continue
-        for n in dict.fromkeys(c.miudos):
+        for n in dict.fromkeys(c.small):
             found.setdefault(n, []).append(fmt)
     return [f"texto {n!r} fica minúsculo no {'/'.join(f)} com o texto máximo: a célula dele é baixa ou estreita "
             "demais. Dê mais peso a essa célula nos `pesos` da caixa-mãe (ou tire peso das vizinhas)"

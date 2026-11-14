@@ -72,7 +72,7 @@ class Collection:
 
     def __init__(self, arquivo: Path, lock: threading.RLock) -> None:
         self.arquivo = arquivo
-        self.trava = lock
+        self.lock = lock
 
     def ler(self) -> list[dict[str, Any]]:
         if not self.arquivo.exists():
@@ -92,7 +92,7 @@ class Collection:
         raise NotFound(id_)
 
     def criar(self, dados: dict[str, Any]) -> dict[str, Any]:
-        with self.trava:
+        with self.lock:
             items = self.ler()
             new = {
                 "id": uuid.uuid4().hex[:12],
@@ -104,8 +104,8 @@ class Collection:
             self.gravar(items)
             return new
 
-    def editar(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
-        with self.trava:
+    def edit(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
+        with self.lock:
             items = self.ler()
             for x in items:
                 if x["id"] == id_:
@@ -115,7 +115,7 @@ class Collection:
         raise NotFound(id_)
 
     def excluir(self, id_: str) -> None:
-        with self.trava:
+        with self.lock:
             items = self.ler()
             restantes = [x for x in items if x["id"] != id_]
             if len(restantes) == len(items):
@@ -125,23 +125,23 @@ class Collection:
 
 class Studies:
     def __init__(self, root: str | Path, marcacoes: Markings | None = None) -> None:
-        self.raiz = Path(root).expanduser()
-        self.raiz.mkdir(parents=True, exist_ok=True)
+        self.root = Path(root).expanduser()
+        self.root.mkdir(parents=True, exist_ok=True)
         lock = threading.RLock()
-        self.leituras = Collection(self.raiz / "leituras.json", lock)
-        self.trilhas = Collection(self.raiz / "idiomas.json", lock)
-        self.projetos = Collection(self.raiz / "projetos.json", lock)
-        self._marcacoes = marcacoes or (lambda _id: [])
-        self.conhecimento = Knowledge(
-            self.raiz / "conhecimento.json", lock, self.leituras.ler, self.criar_leitura
+        self.readings = Collection(self.root / "leituras.json", lock)
+        self.tracks = Collection(self.root / "idiomas.json", lock)
+        self.projects = Collection(self.root / "projetos.json", lock)
+        self._markings = marcacoes or (lambda _id: [])
+        self.knowledge = Knowledge(
+            self.root / "conhecimento.json", lock, self.readings.ler, self.create_reading
         )
 
     # --- projetos de leitura ---
 
-    def listar_projetos(self) -> list[dict[str, Any]]:
+    def list_projects(self) -> list[dict[str, Any]]:
         items = []
-        for p in self.projetos.ler():
-            marc = self._marcacoes(p["id"])
+        for p in self.projects.ler():
+            marc = self._markings(p["id"])
             items.append({
                 **{k: v for k, v in p.items() if k not in ("classificacao", "codigos")},
                 "trechos": sum(m["tipo"] == "destaque" for m in marc),
@@ -154,51 +154,51 @@ class Studies:
             })
         return sorted(items, key=lambda p: p["atualizado"], reverse=True)
 
-    def criar_projeto(self, dados: dict[str, Any]) -> dict[str, Any]:
+    def create_project(self, dados: dict[str, Any]) -> dict[str, Any]:
         dados = {k: v for k, v in dados.items() if k in FIELDS_PROJECT}
         default = {"descricao": "", "cor": 0xFF3F51B5, "secoes": []}
-        return self.projetos.criar({**default, **dados, "classificacao": {}, "codigos": {}})
+        return self.projects.criar({**default, **dados, "classificacao": {}, "codigos": {}})
 
-    def editar_projeto(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
-        return self.projetos.editar(id_, {k: v for k, v in dados.items() if k in FIELDS_PROJECT})
+    def edit_project(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
+        return self.projects.edit(id_, {k: v for k, v in dados.items() if k in FIELDS_PROJECT})
 
-    def matriz(self, id_: str) -> dict[str, Any]:
-        with self.projetos.trava:
-            project = self.projetos.obter(id_)
-            m = assemble_matrix(project, self._marcacoes(id_), self.leituras.ler())
+    def matrix(self, id_: str) -> dict[str, Any]:
+        with self.projects.lock:
+            project = self.projects.obter(id_)
+            m = assemble_matrix(project, self._markings(id_), self.readings.ler())
             if m["codigos"] != (project.get("codigos") or {}):
-                self.projetos.editar(id_, {"codigos": m["codigos"]})
+                self.projects.edit(id_, {"codigos": m["codigos"]})
         del m["codigos"]
         return m
 
-    def classificar(self, id_: str, item_id: str, dados: dict[str, Any]) -> dict[str, Any]:
-        with self.projetos.trava:
-            project = self.projetos.obter(id_)
+    def classify(self, id_: str, item_id: str, dados: dict[str, Any]) -> dict[str, Any]:
+        with self.projects.lock:
+            project = self.projects.obter(id_)
             classif = dict(project.get("classificacao") or {})
             current = {**(classif.get(item_id) or {}),
                      **{k: v for k, v in dados.items() if k in FIELDS_CLASSIFICATION}}
             classif[item_id] = current
-            self.projetos.editar(id_, {"classificacao": classif})
+            self.projects.edit(id_, {"classificacao": classif})
             return current
 
     # --- leituras ---
 
-    def listar_leituras(self, area: str | None = None, status: str | None = None) -> list[dict]:
+    def list_readings(self, area: str | None = None, status: str | None = None) -> list[dict]:
         items = [
             x
-            for x in self.leituras.ler()
+            for x in self.readings.ler()
             if (area is None or x["area"] == area) and (status is None or x["status"] == status)
         ]
         order = {s: i for i, s in enumerate(["lendo", "quero ler", "lido"])}
         return sorted(items, key=lambda x: (order.get(x["status"], 9), x["titulo"].lower()))
 
-    def _validar_leitura(self, dados: dict[str, Any]) -> dict[str, Any]:
+    def _validate_reading(self, dados: dict[str, Any]) -> dict[str, Any]:
         dados = {k: v for k, v in dados.items() if k in FIELDS_READING}
         if "status" in dados and dados["status"] not in STATUS_READING:
             raise Invalid(f"Status deve ser um de {STATUS_READING}")
         return dados
 
-    def criar_leitura(self, dados: dict[str, Any]) -> dict[str, Any]:
+    def create_reading(self, dados: dict[str, Any]) -> dict[str, Any]:
         default = {
             "autor": "",
             "tipo": "livro",
@@ -210,14 +210,14 @@ class Studies:
             "tags": [],
             "url": "",
         }
-        return self.leituras.criar({**default, **self._validar_leitura(dados)})
+        return self.readings.criar({**default, **self._validate_reading(dados)})
 
-    def editar_leitura(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
-        return self.leituras.editar(id_, self._validar_leitura(dados))
+    def edit_reading(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
+        return self.readings.edit(id_, self._validate_reading(dados))
 
     # --- idiomas ---
 
-    def _validar_trilha(self, dados: dict[str, Any]) -> dict[str, Any]:
+    def _validate_track(self, dados: dict[str, Any]) -> dict[str, Any]:
         dados = {k: v for k, v in dados.items() if k in FIELDS_TRACK}
         for field in ("nivel_inicial", "nivel_alvo"):
             if field in dados and dados[field] not in LEVELS:
@@ -233,7 +233,7 @@ class Studies:
             dados["inicio"] = _data(dados["inicio"]).isoformat()
         return dados
 
-    def _com_progresso(self, t: dict[str, Any], hoje: date | None = None) -> dict[str, Any]:
+    def _with_progress(self, t: dict[str, Any], hoje: date | None = None) -> dict[str, Any]:
         hoje = hoje or date.today()
         hours = hours_studied(t)
         return {
@@ -245,13 +245,13 @@ class Studies:
             "sessoes_feitas": len(t.get("sessoes", {})),
         }
 
-    def listar_trilhas(self) -> list[dict[str, Any]]:
-        return [self._com_progresso(t) for t in self.trilhas.ler()]
+    def list_tracks(self) -> list[dict[str, Any]]:
+        return [self._with_progress(t) for t in self.tracks.ler()]
 
     def trilha(self, id_: str) -> dict[str, Any]:
-        return self._com_progresso(self.trilhas.obter(id_))
+        return self._with_progress(self.tracks.obter(id_))
 
-    def criar_trilha(self, dados: dict[str, Any]) -> dict[str, Any]:
+    def create_track(self, dados: dict[str, Any]) -> dict[str, Any]:
         default = {
             "nivel_inicial": "A1",
             "nivel_alvo": "C2",
@@ -259,31 +259,31 @@ class Studies:
             "dias_semana": [1, 2, 3, 4, 5, 6],
             "inicio": date.today().isoformat(),
         }
-        t = self.trilhas.criar({**default, **self._validar_trilha(dados), "sessoes": {}})
-        return self._com_progresso(t)
+        t = self.tracks.criar({**default, **self._validate_track(dados), "sessoes": {}})
+        return self._with_progress(t)
 
-    def editar_trilha(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
-        return self._com_progresso(self.trilhas.editar(id_, self._validar_trilha(dados)))
+    def edit_track(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
+        return self._with_progress(self.tracks.edit(id_, self._validate_track(dados)))
 
-    def cronograma(self, id_: str, de: str, ate: str) -> list[dict[str, Any]]:
-        return schedule(self.trilhas.obter(id_), _data(de), _data(ate))
+    def schedule(self, id_: str, de: str, ate: str) -> list[dict[str, Any]]:
+        return schedule(self.tracks.obter(id_), _data(de), _data(ate))
 
-    def registrar_sessao(self, id_: str, day: str, minutos: int) -> dict[str, Any]:
+    def register_session(self, id_: str, day: str, minutos: int) -> dict[str, Any]:
         """Grava os minutos estudados no dia (0 apaga o registro)."""
         key = _data(day).isoformat()
-        with self.trilhas.trava:
-            t = self.trilhas.obter(id_)
+        with self.tracks.lock:
+            t = self.tracks.obter(id_)
             sessions = dict(t.get("sessoes", {}))
             if minutos > 0:
                 sessions[key] = minutos
             else:
                 sessions.pop(key, None)
-            return self._com_progresso(self.trilhas.editar(id_, {"sessoes": sessions}))
+            return self._with_progress(self.tracks.edit(id_, {"sessoes": sessions}))
 
-    def somar_minutos(self, language: str, day: str, minutos: int) -> None:
+    def add_up_minutes(self, language: str, day: str, minutos: int) -> None:
         """Soma minutos ao dia da trilha do [idioma] (atividades da Linguagem); sem trilha, nada."""
-        with self.trilhas.trava:
-            track = next((t for t in self.trilhas.ler() if t["idioma"] == language), None)
+        with self.tracks.lock:
+            track = next((t for t in self.tracks.ler() if t["idioma"] == language), None)
             if track is not None:
                 current = int(track.get("sessoes", {}).get(_data(day).isoformat(), 0))
-                self.registrar_sessao(track["id"], day, min(current + minutos, 1440))
+                self.register_session(track["id"], day, min(current + minutos, 1440))

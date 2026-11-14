@@ -69,10 +69,10 @@ def _find(chave, palavras, t0, t1):
 def plan(project, graphics, refazer=False):
     file = project.caminho("chaves.json")
     if file.exists() and not refazer:
-        return project.carregar_json("chaves.json")
-    sentences = project.carregar_json("frases.json")
-    words = (project.carregar_json("alinhamento.json") if project.caminho("alinhamento.json").exists()
-                else project.carregar_json("transcricao.json")["palavras"])
+        return project.load_json("chaves.json")
+    sentences = project.load_json("frases.json")
+    words = (project.load_json("alinhamento.json") if project.caminho("alinhamento.json").exists()
+                else project.load_json("transcricao.json")["palavras"])
     choices = choose(sentences)
     busy = [(g["inicio"] - SLACK_GRAPHIC, g["inicio"] + g["dur"] + SLACK_GRAPHIC) for g in graphics]
     found = []
@@ -96,6 +96,6 @@ def plan(project, graphics, refazer=False):
         output.append({"texto": c["texto"], "inicio": c["inicio"], "dur": round(duration, 2),
                       "pos": ("baixo", "centro", "baixo", "alto")[n % 4], "cor": "destaque" if n % 3 == 0 else "branco"})
         free = c["inicio"] + duration + SLACK
-    project.salvar_json("chaves.json", output)
+    project.save_json("chaves.json", output)
     print(f"  {len(output)} palavras-chave animadas ({len(found)} escolhidas e achadas na fala)")
     return output

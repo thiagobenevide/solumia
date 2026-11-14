@@ -47,7 +47,7 @@ def treat(project, cenas):
                 events.warning(f"fotos: cena {c['id']} sem tratamento ({e})")
                 output.append(c)
                 continue
-            _dataset(project, c, r, decision, fmt, ex.rastro)
+            _dataset(project, c, r, decision, fmt, ex.trace)
         output.append({**c, "midia": str(png.relative_to(project.pasta))})
     return output
 

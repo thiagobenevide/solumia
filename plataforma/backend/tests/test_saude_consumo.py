@@ -42,9 +42,9 @@ def test_afrouxa() -> None:
 
 
 def test_apertar_na_hora_afrouxar_em_24h(c: Consumption, rel: Relogio) -> None:
-    r = c.definir_regra("redes_sociais", {"modo": "limite", "limite_min": 10, "horarios": []})
+    r = c.definir_rule("redes_sociais", {"modo": "limite", "limite_min": 10, "horarios": []})
     assert r["pendencia"] is not None  # tirou o horário noturno: afrouxa
-    r = c.definir_regra("compras", {"modo": "bloqueado"})
+    r = c.definir_rule("compras", {"modo": "bloqueado"})
     assert r["aplicado"]
     assert c.config()["regras"]["compras"]["modo"] == "bloqueado"
     assert c.config()["regras"]["redes_sociais"]["limite_min"] == 30
@@ -57,21 +57,21 @@ def test_apertar_na_hora_afrouxar_em_24h(c: Consumption, rel: Relogio) -> None:
 
 
 def test_cancelar_e_protecao(c: Consumption, rel: Relogio) -> None:
-    p = c.definir_protecao(False)["pendencia"]
-    c.cancelar_pendencia(p["id"])
+    p = c.definir_protection(False)["pendencia"]
+    c.cancel_pendencia(p["id"])
     rel.t += timedelta(days=2)
     assert c.config()["protecao"] is True
-    assert c.remover_app("com.instagram.android")["pendencia"]
-    assert c.incluir_dominio("redes_sociais", "https://www.bsky.app/x")["aplicado"]
-    assert "bsky.app" in c.para_dispositivo()["dominios"]["redes_sociais"]
+    assert c.remove_app("com.instagram.android")["pendencia"]
+    assert c.include_domain("redes_sociais", "https://www.bsky.app/x")["aplicado"]
+    assert "bsky.app" in c.for_dispositivo()["dominios"]["redes_sociais"]
 
 
 def test_whatsapp_isento(c: Consumption) -> None:
     with pytest.raises(Invalid):
         c.definir_app("com.whatsapp", "WhatsApp", "redes_sociais")
     with pytest.raises(Invalid):
-        c.incluir_dominio("redes_sociais", "web.whatsapp.com")
-    assert "com.whatsapp" not in c.para_dispositivo()["apps"]
+        c.include_domain("redes_sociais", "web.whatsapp.com")
+    assert "com.whatsapp" not in c.for_dispositivo()["apps"]
 
 
 def test_sincronizar_e_resumo(c: Consumption) -> None:
@@ -100,8 +100,8 @@ def test_sincronizar_e_resumo(c: Consumption) -> None:
             {"id": "e1", "quando": "2026-11-09T23:10:00", "tipo": "busca", "categoria": "adulto"}
         ],
     }
-    rules = c.sincronizar(body)
-    c.sincronizar(body)  # repetir não duplica
+    rules = c.sync(body)
+    c.sync(body)  # repetir não duplica
     assert rules["protecao"] and "instagram.com" in rules["dominios"]["redes_sociais"]
     r = c.resumo("2026-11-09", "2026-11-09")
     assert r["por_dia"]["2026-11-09"] == {"redes_sociais": 50, "outros": 20}

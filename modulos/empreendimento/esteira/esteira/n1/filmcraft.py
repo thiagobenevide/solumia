@@ -207,21 +207,21 @@ class Executor:
     fonte_estilo e cores por papel. `rastro` guarda os comandos N0 enviados (o dataset grava)."""
 
     def __init__(self, fc, medias: dict, estilo: dict):
-        self.fc, self.midias, self.estilo = fc, medias, estilo
+        self.fc, self.medias, self.estilo = fc, medias, estilo
         self.itens: dict[str, str] = {}   # ref → item importado
-        self.clipes: dict[str, list] = {}  # nome → ids de clipe
+        self.clips: dict[str, list] = {}  # nome → ids de clipe
         self.inicio: dict[str, tuple[float, float]] = {}  # nome → (em, dur), para animações relativas
         self.w, self.h = 1920, 1080
-        self.rastro: list[dict] = []
+        self.trace: list[dict] = []
 
     def run(self, cmd, **params):
-        self.rastro.append({"command": cmd, "params": params})
+        self.trace.append({"command": cmd, "params": params})
         return self.fc.run(cmd, **params)
 
     def _clipes(self, nome):
-        if nome not in self.clipes:
+        if nome not in self.clips:
             raise ErrorN1(f"clipe desconhecido: {nome}")
-        return self.clipes[nome]
+        return self.clips[nome]
 
     def importar(self, doc: Assembly):
         refs = []
@@ -229,11 +229,11 @@ class Executor:
             ref = getattr(o, "midia", None)
             if ref and ref not in refs and ref not in self.itens:
                 refs.append(ref)
-        missing = [r for r in refs if r not in self.midias]
+        missing = [r for r in refs if r not in self.medias]
         if missing:
             raise ErrorN1(f"mídia sem caminho: {missing}")
         if refs:
-            imp = self.run("file.import", paths=[str(self.midias[r]["caminho"]) for r in refs])
+            imp = self.run("file.import", paths=[str(self.medias[r]["caminho"]) for r in refs])
             if imp.get("errors"):
                 raise ErrorN1(f"erro ao importar: {imp['errors']}")
             self.itens.update(zip(refs, imp["items"]))
@@ -244,7 +244,7 @@ class Executor:
         self.importar(doc)
         for o in doc.ops:
             getattr(self, f"_{o.op}")(o)
-        return self.rastro
+        return self.trace
 
     # ---------- operações ----------
 
@@ -266,8 +266,8 @@ class Executor:
             p["audio"] = False
         if track.startswith("A") and o.trilha != "narracao":
             p["video"] = False
-        self.clipes[o.id] = self.run("timeline.place", **p)["clips"]
-        self.inicio[o.id] = (o.em, o.dur or float(self.midias[o.midia].get("dur") or 0))
+        self.clips[o.id] = self.run("timeline.place", **p)["clips"]
+        self.inicio[o.id] = (o.em, o.dur or float(self.medias[o.midia].get("dur") or 0))
 
     def _enquadrar(self, o: Frame):
         for c in self._clipes(o.alvo):
@@ -324,7 +324,7 @@ class Executor:
         color = e["cores"][o.cor]
         clip = self.run("graphics.newText", text=o.conteudo, size=size, seconds=o.dur, time=ticks(o.em),
                         track=3)["clip"]
-        self.clipes[o.id] = [clip]
+        self.clips[o.id] = [clip]
         self.inicio[o.id] = (o.em, o.dur)
         pop = o.estilo == "pop"
         self.run("graphics.set", clip=clip, layer=0, props={
@@ -350,7 +350,7 @@ class Executor:
             self.run("effects.setParam", clip=clip, effect="opacity", param="opacity", value=v, time=t, keyframe=True)
 
     def _musica(self, o: Music):
-        duration_m = float(self.midias[o.midia].get("dur") or 0)
+        duration_m = float(self.medias[o.midia].get("dur") or 0)
         if duration_m <= 0:
             raise ErrorN1("música sem duração conhecida")
         t, track = o.de, []
@@ -359,7 +359,7 @@ class Executor:
             track += self.run("timeline.place", item=self.itens[o.midia], track="A2", seconds=t, duration=ticks(d),
                                insert=False, video=False)["clips"]
             t += d
-        self.clipes[o.midia] = track
+        self.clips[o.midia] = track
         self.run("clip.audioGain", clips=track, mode="set", db=o.ganho_db)
         self.run("essentialSound.setType", clips=track, type="music")
         if o.ducking:
@@ -370,7 +370,7 @@ class Executor:
 
     def _legendas(self, o: Captions):
         e = self.estilo
-        self.run("captions.import", path=str(self.midias[o.arquivo]["caminho"]))
+        self.run("captions.import", path=str(self.medias[o.arquivo]["caminho"]))
         size = round(o.tamanho * self.h)
         self.run("captions.setStyle", track="C1", font=e["fonte"], size=size, color=e["cores"]["texto"],
                  background=o.fundo, backgroundColor="#000000aa", anchor="bottom", margin=o.margem)

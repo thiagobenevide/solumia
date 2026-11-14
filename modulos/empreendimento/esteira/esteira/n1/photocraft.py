@@ -176,8 +176,8 @@ class Executor:
     `cores`: papel → hex; `tamanho_imagem(caminho)` → (w, h). `rastro` guarda as duas passagens."""
 
     def __init__(self, run, medias: dict, colors: dict, size_image):
-        self.rodar, self.midias, self.cores, self.tamanho_imagem = run, medias, colors, size_image
-        self.rastro: list[list] = []
+        self.rodar, self.medias, self.cores, self.size_image = run, medias, colors, size_image
+        self.trace: list[list] = []
 
     def cor(self, c):
         return c if c.startswith("#") else self.cores[c]
@@ -191,8 +191,8 @@ class Executor:
         steps, layers, x_tit = [], {}, 56
         for e in els:
             if isinstance(e, Image):
-                path = str(self.midias[e.midia]).replace("file://", "")
-                iw, ih = self.tamanho_imagem(path)
+                path = str(self.medias[e.midia]).replace("file://", "")
+                iw, ih = self.size_image(path)
                 f = max(w / iw, h / ih) if e.ajuste == "cobrir" else min(w / iw, h / ih)
                 steps += [("file.placeEmbedded", {"path": path, "fit": False, "scale": round(f * 100, 3),
                                                    "center": [w / 2, h / 2]}),
@@ -285,10 +285,10 @@ class Executor:
                 steps += [("type.info", {})]
                 layers[f"caixa{k}"] = (len(steps) - 1, e)
             else:
-                steps += self._tratamento(e, w, h)
+                steps += self._treatment(e, w, h)
         if doc.variantes:
             steps += [("layerComp.new", {"name": "A"})]
-        self.rastro.append(steps)
+        self.trace.append(steps)
         res = self.rodar({"width": w, "height": h, "name": Path(destino).stem}, steps, destino)
 
         # segunda passagem: centraliza o título, põe o selo acima dele e os fundos atrás das caixas
@@ -326,7 +326,7 @@ class Executor:
                                              "fill": self.cor("destaque"), "stroke": None, "name": "Tarja"})]
         adjustment += self._variantes(doc, res, layers)
         if adjustment:
-            self.rastro.append(adjustment)
+            self.trace.append(adjustment)
             self.rodar(destino, adjustment, destino)
         return Path(destino)
 
@@ -344,7 +344,7 @@ class Executor:
             steps += [("layerComp.new", {"name": v.nome})]
         return steps + [("layerComp.apply", {"comp": "A"})]
 
-    def _tratamento(self, e, w, h):
+    def _treatment(self, e, w, h):
         if isinstance(e, CropSubject):
             return [("layer.removeBackground", {"refine": True})]
         if isinstance(e, Reframe):

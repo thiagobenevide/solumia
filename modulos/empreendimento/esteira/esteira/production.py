@@ -88,7 +88,7 @@ def _instants_of_part(project):
     if not file.exists() or not project.caminho("frases.json").exists():
         return []
     from esteira.graphics.plan import _speech_to_sentence
-    rot, sentences = json.loads(file.read_text()), project.carregar_json("frases.json")
+    rot, sentences = json.loads(file.read_text()), project.load_json("frases.json")
     mapping = _speech_to_sentence(project.roteiro().read_text())
     output = []
     for cap in rot.get("capitulos", []):
@@ -125,7 +125,7 @@ def mark_presenter(project, plan, save=True):
         time += duration
         broll += 0 if c["camera"] else duration
     if save:
-        project.salvar_json("plano.json", plan)
+        project.save_json("plano.json", plan)
     n = sum(c["camera"] for c in plan["cenas"])
     print(f"  modo apresentador: {n} cenas na câmera, {len(plan['cenas']) - n} com B-roll "
           f"({broll / max(time, 1e-9):.0%} do tempo)")
@@ -133,11 +133,11 @@ def mark_presenter(project, plan, save=True):
 
 def spans_camera(project):
     """[(início na timeline, início na câmera, duração)] a partir dos intervalos mantidos pelos cortes."""
-    cuts = project.carregar_json("cortes.json") if project.caminho("cortes.json").exists() else {}
+    cuts = project.load_json("cortes.json") if project.caminho("cortes.json").exists() else {}
     intervals = cuts.get("intervalos")
     if not intervals and cuts.get("trechos") and project.caminho("transcricao_bruta.json").exists():
         from esteira.cuts import _intervals  # cortes.json de antes dos intervalos: recalcula das decisões
-        words = project.carregar_json("transcricao_bruta.json")["palavras"]
+        words = project.load_json("transcricao_bruta.json")["palavras"]
         intervals = _intervals(cuts["trechos"], words, cuts.get("excluir", []))
     off = info_camera(project).get("offset", 0.0)
     if not intervals:  # sem cortes: a gravação inteira

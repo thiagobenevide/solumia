@@ -294,7 +294,7 @@ def analyze(arm: Warehouse, company: dict[str, Any]) -> dict[str, Any]:
         round(100 * sum(1 for c in avaliadas if c["ok"]) / len(avaliadas), 1) if avaliadas else None
     )
 
-    perguntas = arm.questionario()
+    perguntas = arm.questionnaire()
     quest = note_questionnaire(perguntas, company["respostas"], "empresa")
     sector = next(
         (s for s in arm.todos("setores") if s["nome"].lower() == company["setor"].lower()), None
@@ -373,7 +373,7 @@ def ranking(arm: Warehouse) -> list[dict[str, Any]]:
 
 
 def sector_analysis(arm: Warehouse, sector: dict[str, Any]) -> dict[str, Any]:
-    q = note_questionnaire(arm.questionario(), sector["respostas"], "setor")
+    q = note_questionnaire(arm.questionnaire(), sector["respostas"], "setor")
     empresas = [r for r in ranking(arm) if r["setor"].lower() == sector["nome"].lower()]
     return {
         "setor": sector,

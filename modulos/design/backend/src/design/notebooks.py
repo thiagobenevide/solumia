@@ -29,7 +29,7 @@ def _error(e: Exception) -> HTTPException:
 
 @router.get("/cadernos")
 def list_all(cadernos: NotebooksDep) -> Any:
-    return cadernos.listar()
+    return cadernos.list_all()
 
 
 @router.post("/cadernos", status_code=201)
@@ -69,7 +69,7 @@ def export_drawio(id_: str, cadernos: NotebooksDep) -> Response:
 @router.patch("/cadernos/{id_}")
 def edit(id_: str, edicao: FrameEdit, cadernos: NotebooksDep) -> Any:
     try:
-        return cadernos.editar(id_, edicao.model_dump(exclude_unset=True))
+        return cadernos.edit(id_, edicao.model_dump(exclude_unset=True))
     except Exception as e:
         raise _error(e) from e
 
@@ -88,7 +88,7 @@ def save(id_: str, g: Recording, cadernos: NotebooksDep) -> Any:
 @router.get("/cadernos/{id_}/miniatura")
 def thumbnail(id_: str, cadernos: NotebooksDep) -> FileResponse:
     try:
-        return FileResponse(cadernos.miniatura(id_), media_type="image/png")
+        return FileResponse(cadernos.thumbnail(id_), media_type="image/png")
     except Exception as e:
         raise _error(e) from e
 
@@ -98,7 +98,7 @@ async def store_thumbnail(
     id_: str, cadernos: NotebooksDep, arquivo: Annotated[UploadFile, File()]
 ) -> Response:
     try:
-        cadernos.guardar_miniatura(id_, await arquivo.read())
+        cadernos.store_thumbnail(id_, await arquivo.read())
     except Exception as e:
         raise _error(e) from e
     return Response(status_code=204)
@@ -107,7 +107,7 @@ async def store_thumbnail(
 @router.post("/cadernos/{id_}/duplicar", status_code=201)
 def duplicate(id_: str, cadernos: NotebooksDep) -> Any:
     try:
-        return cadernos.duplicar(id_)
+        return cadernos.duplicate(id_)
     except Exception as e:
         raise _error(e) from e
 

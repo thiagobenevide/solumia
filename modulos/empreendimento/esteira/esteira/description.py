@@ -25,7 +25,7 @@ def _line(f):
 def generate(project):
     rot = json.loads(project.caminho("roteiro.json").read_text()) if project.caminho("roteiro.json").exists() else {}
     sources = rot.get("fontes", [])
-    graphics = project.carregar_json("graficos.json") if project.caminho("graficos.json").exists() else []
+    graphics = project.load_json("graficos.json") if project.caminho("graficos.json").exists() else []
     surname = lambda f: re.split(r"[ ,]", f.get("autores", "") or "?")[0].lower()
     in_screen = []
     for g in graphics:

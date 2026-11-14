@@ -47,7 +47,7 @@ def _error(e: Exception) -> HTTPException:
 
 @router.get("")
 def list_all(cofre: VaultDep, q: str = "", tipo: str | None = None, tag: str | None = None) -> Any:
-    return cofre.listar(q, tipo, tag)
+    return cofre.list_all(q, tipo, tag)
 
 
 @router.get("/tipos")
@@ -57,23 +57,23 @@ def kinds() -> Any:
 
 @router.get("/sugestoes")
 def suggestions(cofre: VaultDep, q: str = "", limite: int = 10) -> Any:
-    return cofre.sugerir(q, limite)
+    return cofre.suggest(q, limite)
 
 
 @router.get("/analise")
 def analysis(cofre: VaultDep) -> Any:
-    return cofre.analise()
+    return cofre.analysis()
 
 
 @router.get("/grafo")
 def graph(cofre: VaultDep) -> Any:
-    return cofre.grafo()
+    return cofre.graph()
 
 
 @router.get("/espelho")
 def mirror(cofre: VaultDep) -> Any:
     """Todas as notas completas numa chamada: o app guarda para ler e editar sem conexão."""
-    return [cofre.obter(r["id"]) for r in cofre.listar()]
+    return [cofre.obter(r["id"]) for r in cofre.list_all()]
 
 
 @router.get("/{id_}")

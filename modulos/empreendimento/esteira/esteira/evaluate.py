@@ -89,17 +89,17 @@ def _claude(project, plan, weak):
         if t.id in by_id:
             by_id[t.id].update(busca_en=t.busca_en, tipo=t.tipo)
             by_id[t.id].pop("nota_midia", None)
-    project.salvar_json("plano.json", plan)
+    project.save_json("plano.json", plan)
     return True
 
 
 def evaluate(project, rodadas=2, minimum=3):
     from esteira.media import fetch
-    plan = project.carregar_json("plano.json")
+    plan = project.load_json("plano.json")
     target = [c for c in plan["cenas"] if c.get("midia") and "nota_midia" not in c]
     for rounded in range(1, rodadas + 2):
         notes = _evaluate(project, target)
-        project.salvar_json("plano.json", plan)
+        project.save_json("plano.json", plan)
         weak = [c for c in target if c["id"] in notes and notes[c["id"]].nota < minimum]
         print(f"  rodada {rounded}: {len(notes)} avaliadas, {len(weak)} fracas"
               + (f" ({', '.join(str(c['id']) for c in weak[:20])})" if weak else ""))
@@ -110,19 +110,19 @@ def evaluate(project, rodadas=2, minimum=3):
             if s and s.lower() != (c.get("busca_en") or "").lower():
                 c["busca_en"] = s
             c.pop("nota_midia", None)
-        project.salvar_json("plano.json", plan)
+        project.save_json("plano.json", plan)
         local.free_gpu()
         fetch(project, refazer=True, cenas=[c["id"] for c in weak])
-        plan = project.carregar_json("plano.json")
+        plan = project.load_json("plano.json")
         ids = {c["id"] for c in weak}
         target = [c for c in plan["cenas"] if c["id"] in ids and c.get("midia")]
     weak = [c for c in plan["cenas"] if c.get("nota_midia", 5) < minimum]
     if weak and _claude(project, plan, weak):
         fetch(project, refazer=True, cenas=[c["id"] for c in weak])
-        plan = project.carregar_json("plano.json")
+        plan = project.load_json("plano.json")
         ids = {c["id"] for c in weak}
         _evaluate(project, [c for c in plan["cenas"] if c["id"] in ids and c.get("midia")])
-        project.salvar_json("plano.json", plan)
+        project.save_json("plano.json", plan)
     everything = [c.get("nota_midia") for c in plan["cenas"] if c.get("nota_midia")]
     if everything:
         print(f"  nota média da mídia {sum(everything) / len(everything):.1f}; "

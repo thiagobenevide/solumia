@@ -51,26 +51,26 @@ def test_fluxo_com_descanso_pausa_e_conclusao(base: tuple[Workouts, Sessions, Re
     t, ss, r = base
     s = ss.iniciar("2026-11-10")
     assert ss.iniciar("2026-11-10")["id"] == s["id"]  # só uma em andamento
-    c = ss.comando(s["id"], "concluir_serie", {"repeticoes": 12})["controle"]
+    c = ss.command(s["id"], "concluir_serie", {"repeticoes": 12})["controle"]
     assert c["fase"] == "descanso" and c["indice"] == 0
     r.andar(20)
-    c = ss.comando(s["id"], "pausar", {})["controle"]
+    c = ss.command(s["id"], "pausar", {})["controle"]
     assert c["descanso_restante_s"] == 40 and c["descanso_ate"] is None
     r.andar(300)  # pausado não corre
-    c = ss.comando(s["id"], "continuar", {})["controle"]
+    c = ss.command(s["id"], "continuar", {})["controle"]
     assert c["descanso_ate"] == "2026-11-10T18:06:00Z" and c["pausa_total_s"] == 300
     r.andar(41)
-    assert ss.sessao(s["id"])["controle"]["fase"] == "exercicio"  # descanso venceu
-    c = ss.comando(s["id"], "concluir_serie", {"repeticoes": 11})["controle"]
+    assert ss.session(s["id"])["controle"]["fase"] == "exercicio"  # descanso venceu
+    c = ss.command(s["id"], "concluir_serie", {"repeticoes": 11})["controle"]
     assert c["indice"] == 1 and c["fase"] == "descanso"
-    ss.comando(s["id"], "pular_descanso", {})
-    c = ss.comando(s["id"], "concluir_serie", {})["controle"]
+    ss.command(s["id"], "pular_descanso", {})
+    c = ss.command(s["id"], "concluir_serie", {})["controle"]
     assert c["fase"] == "fim"
-    end = ss.concluir(s["id"], {"esforco": 8})
+    end = ss.finish(s["id"], {"esforco": 8})
     assert end["resumo"]["series_feitas"] == 3 and end["resumo"]["volume_kg"] == 400
     assert all(i["feito"] for i in t.agenda("2026-11-10", "2026-11-10"))
     with pytest.raises(Invalid):
-        ss.comando(s["id"], "pausar", {})
+        ss.command(s["id"], "pausar", {})
 
     # próxima vez: anterior e sugestão vêm da sessão concluída
     t.marcar({"data": "2026-11-12", "exercicio_id": "supino-barra", "series": 1, "carga_kg": 40})
@@ -82,10 +82,10 @@ def test_fluxo_com_descanso_pausa_e_conclusao(base: tuple[Workouts, Sessions, Re
 def test_desfazer_e_pular(base: tuple[Workouts, Sessions, Relogio]) -> None:
     _, ss, _ = base
     s = ss.iniciar("2026-11-10")
-    ss.comando(s["id"], "concluir_serie", {"repeticoes": 9})
-    x = ss.comando(s["id"], "desfazer_serie", {})
+    ss.command(s["id"], "concluir_serie", {"repeticoes": 9})
+    x = ss.command(s["id"], "desfazer_serie", {})
     assert x["exercicios"][0]["series"] == [] and x["controle"]["fase"] == "exercicio"
-    x = ss.comando(s["id"], "pular_exercicio", {})
+    x = ss.command(s["id"], "pular_exercicio", {})
     assert x["controle"]["indice"] == 1 and x["exercicios"][0]["pulado"]
 
 
@@ -114,13 +114,13 @@ def test_frequencia_ao_vivo(base: tuple[Workouts, Sessions, Relogio]) -> None:
     s = ss.iniciar("2026-11-10")
     batch = [{"em": f"2026-11-10T18:00:{n:02d}Z", "bpm": 100 + n} for n in range(0, 30, 2)]
     batch.append({"em": "2026-11-10T17:59:00Z", "bpm": 90})  # antes da sessão: fora
-    x = ss.registrar_fc(s["id"], batch)
+    x = ss.register_fc(s["id"], batch)
     assert x["fc_atual"] == {"bpm": 128, "em": "2026-11-10T18:00:28Z"}
     assert x["frequencia"]["origem"] == "relogio" and x["frequencia"]["amostras"] == 6
     assert x["atual"] == "Flexão de braço 1/2" and x["controle"]["fase"] == "exercicio"
-    assert ss.registrar_fc(s["id"], [])["estado"] == "andamento"  # lote vazio = sinal de vida
+    assert ss.register_fc(s["id"], [])["estado"] == "andamento"  # lote vazio = sinal de vida
     r.andar(40)
-    ss.comando(s["id"], "concluir_serie", {"repeticoes": 10})
-    end = ss.concluir(s["id"], {"frequencia": {"media": 70, "maxima": 80}})
+    ss.command(s["id"], "concluir_serie", {"repeticoes": 10})
+    end = ss.finish(s["id"], {"frequencia": {"media": 70, "maxima": 80}})
     assert end["frequencia"]["origem"] == "relogio"  # Health Connect não sobrescreve
     assert end["exercicios"][0]["series"][0]["fc_max"] == 128

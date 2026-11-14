@@ -804,9 +804,9 @@ def aplicar(project, refazer=False):
         raise SystemExit("limpar precisa do roteiro.txt")
     tb = project.caminho("transcricao_bruta.json")
     # transcrição anterior à retranscrição das palavras esticadas (retakes escondidos): refaz com --refazer
-    if not tb.exists() or (refazer and not project.carregar_json("transcricao_bruta.json").get("refinada")):
+    if not tb.exists() or (refazer and not project.load_json("transcricao_bruta.json").get("refinada")):
         transcribe(project, project.cfg, audio=raw, saida_json="transcricao_bruta.json")
-    transc = project.carregar_json("transcricao_bruta.json")
+    transc = project.load_json("transcricao_bruta.json")
     from esteira import clapper
     sentences = sentences_of_script(project.roteiro().read_text())
     parts = clapper.of_project(project)

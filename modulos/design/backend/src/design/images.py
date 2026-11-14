@@ -63,15 +63,15 @@ async def _only_internet(requisicao: httpx.Request) -> None:
 
 class Images:
     def __init__(self, root: str | Path, chave: str = "", cx: str = "") -> None:
-        self.raiz = Path(root).expanduser() / "imagens"
-        self.raiz.mkdir(parents=True, exist_ok=True)
-        self.chave, self.cx = chave, cx
+        self.root = Path(root).expanduser() / "imagens"
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.key, self.cx = chave, cx
 
-    async def buscar(self, q: str, tipo: str = "foto", page: int = 0) -> list[dict[str, Any]]:
+    async def fetch(self, q: str, tipo: str = "foto", page: int = 0) -> list[dict[str, Any]]:
         """Até 10 resultados por [pagina] (até a 10ª): Google com chave; senão Bing e Openverse."""
         page = min(page, 9)
         providers = [self._bing, self._commons, self._openverse]
-        if self.chave and self.cx:
+        if self.key and self.cx:
             providers.insert(0, self._google)
         errors = []
         for provider in providers:
@@ -83,7 +83,7 @@ class Images:
 
     async def _google(self, q: str, tipo: str, page: int) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
-            "key": self.chave,
+            "key": self.key,
             "cx": self.cx,
             "q": q,
             "searchType": "image",
@@ -216,7 +216,7 @@ class Images:
             if i.get("url")
         ]
 
-    async def baixar(self, url: str) -> dict[str, Any]:
+    async def download(self, url: str) -> dict[str, Any]:
         """Copia a imagem de [url] para a pasta; devolve `{id}` (o mesmo para a mesma imagem)."""
         if not url.startswith(("http://", "https://")):
             raise Invalid("Endereço inválido")
@@ -236,13 +236,13 @@ class Images:
                 if len(data) > MAX_BYTES:
                     raise Invalid("Imagem maior que 8 MB")
         id_ = f"{hashlib.sha256(data).hexdigest()}.{EXTENSIONS[kind]}"
-        destination = self.raiz / id_
+        destination = self.root / id_
         if not destination.exists():
             destination.write_bytes(data)
         return {"id": id_}
 
     def caminho(self, id_: str) -> Path:
-        p = self.raiz / id_
+        p = self.root / id_
         if not _ID.match(id_) or not p.exists():
             raise FileNotFoundError(id_)
         return p

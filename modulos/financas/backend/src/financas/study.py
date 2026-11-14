@@ -1228,7 +1228,7 @@ def mark(arm: Warehouse, item: str, dados: dict[str, Any]) -> dict[str, Any]:
     fields = {k: dados[k] for k in ("status", "nota", "leitura_id") if k in dados}
     current = next((p for p in arm.todos("estudo_progresso") if p["item"] == item), None)
     if current:
-        return arm.editar("estudo_progresso", current["id"], fields)
+        return arm.edit("estudo_progresso", current["id"], fields)
     return arm.criar("estudo_progresso", {"item": item, **fields})
 
 
@@ -1238,7 +1238,7 @@ def have(arm: Warehouse, book_id: str, valor: bool) -> dict[str, Any]:
         (r for r in arm.todos("estudo_livros") if book_id in (r["id"], r["catalogo"])), None
     )
     if record:
-        return arm.editar("estudo_livros", record["id"], {"tenho": "sim" if valor else "nao"})
+        return arm.edit("estudo_livros", record["id"], {"tenho": "sim" if valor else "nao"})
     if book_id not in BOOKS:
         raise Invalid("Livro não encontrado.")
     return arm.criar(

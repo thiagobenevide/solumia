@@ -24,8 +24,8 @@ class Simulations:
     ) -> None:
         self.executar = execute
         self.disponivel = available
-        self.limite = limite
-        self._tarefas: dict[str, dict[str, Any]] = {}
+        self.limit = limite
+        self._tasks: dict[str, dict[str, Any]] = {}
         self._internos: dict[str, dict[str, Any]] = {}  # netlist, nós e eixo de cada tarefa
 
     def criar(self, project: str, analise: str, gerado: dict[str, Any]) -> dict[str, Any]:
@@ -33,7 +33,7 @@ class Simulations:
         if (reason := self.disponivel()) is not None:
             raise Unavailable(reason)
         id_ = uuid4().hex[:12]
-        self._tarefas[id_] = {
+        self._tasks[id_] = {
             "id": id_,
             "projeto": project,
             "analise": analise,
@@ -43,16 +43,16 @@ class Simulations:
             "avisos": gerado["avisos"],
         }
         self._internos[id_] = gerado
-        for velha in list(self._tarefas)[: -self.limite]:
-            self._tarefas.pop(velha, None)
+        for velha in list(self._tasks)[: -self.limit]:
+            self._tasks.pop(velha, None)
             self._internos.pop(velha, None)
-        return self._tarefas[id_]
+        return self._tasks[id_]
 
     def obter(self, id_: str) -> dict[str, Any] | None:
-        return self._tarefas.get(id_)
+        return self._tasks.get(id_)
 
     async def rodar(self, id_: str) -> None:
-        t, g = self._tarefas.get(id_), self._internos.get(id_)
+        t, g = self._tasks.get(id_), self._internos.get(id_)
         if t is None or g is None:
             return
         t["estado"] = "rodando"

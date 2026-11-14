@@ -18,7 +18,7 @@ router.include_router(linguagem_router)
 
 
 def get_studies(request: Request) -> Studies:
-    studies: Studies = request.app.state.estudos
+    studies: Studies = request.app.state.studies
     return studies
 
 
@@ -108,13 +108,13 @@ def read_options() -> Any:
 
 @router.get("/leituras")
 def list_readings(estudos: StudiesDep, area: str | None = None, status: str | None = None) -> Any:
-    return estudos.listar_leituras(area, status)
+    return estudos.list_readings(area, status)
 
 
 @router.post("/leituras", status_code=201)
 def create_reading(estudos: StudiesDep, corpo: ReadingInput) -> Any:
     try:
-        return estudos.criar_leitura(corpo.model_dump())
+        return estudos.create_reading(corpo.model_dump())
     except Invalid as e:
         raise _error(e) from e
 
@@ -122,7 +122,7 @@ def create_reading(estudos: StudiesDep, corpo: ReadingInput) -> Any:
 @router.patch("/leituras/{id_}")
 def edit_reading(estudos: StudiesDep, id_: str, corpo: ReadingEdit) -> Any:
     try:
-        return estudos.editar_leitura(id_, corpo.model_dump(exclude_unset=True))
+        return estudos.edit_reading(id_, corpo.model_dump(exclude_unset=True))
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 
@@ -130,20 +130,20 @@ def edit_reading(estudos: StudiesDep, id_: str, corpo: ReadingEdit) -> Any:
 @router.delete("/leituras/{id_}", status_code=204)
 def delete_reading(estudos: StudiesDep, id_: str) -> None:
     try:
-        estudos.leituras.excluir(id_)
+        estudos.readings.excluir(id_)
     except NotFound as e:
         raise _error(e) from e
 
 
 @router.get("/idiomas")
 def list_tracks(estudos: StudiesDep) -> Any:
-    return estudos.listar_trilhas()
+    return estudos.list_tracks()
 
 
 @router.post("/idiomas", status_code=201)
 def create_track(estudos: StudiesDep, corpo: TrackInput) -> Any:
     try:
-        return estudos.criar_trilha(corpo.model_dump(exclude_none=True))
+        return estudos.create_track(corpo.model_dump(exclude_none=True))
     except Invalid as e:
         raise _error(e) from e
 
@@ -159,7 +159,7 @@ def track(estudos: StudiesDep, id_: str) -> Any:
 @router.patch("/idiomas/{id_}")
 def edit_track(estudos: StudiesDep, id_: str, corpo: TrackEdit) -> Any:
     try:
-        return estudos.editar_trilha(id_, corpo.model_dump(exclude_none=True))
+        return estudos.edit_track(id_, corpo.model_dump(exclude_none=True))
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 
@@ -167,7 +167,7 @@ def edit_track(estudos: StudiesDep, id_: str, corpo: TrackEdit) -> Any:
 @router.delete("/idiomas/{id_}", status_code=204)
 def delete_track(estudos: StudiesDep, id_: str) -> None:
     try:
-        estudos.trilhas.excluir(id_)
+        estudos.tracks.excluir(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -175,7 +175,7 @@ def delete_track(estudos: StudiesDep, id_: str) -> None:
 @router.get("/idiomas/{id_}/cronograma")
 def schedule(estudos: StudiesDep, id_: str, de: str, ate: str) -> Any:
     try:
-        return estudos.cronograma(id_, de, ate)
+        return estudos.schedule(id_, de, ate)
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 
@@ -183,7 +183,7 @@ def schedule(estudos: StudiesDep, id_: str, de: str, ate: str) -> Any:
 @router.post("/idiomas/{id_}/sessoes")
 def register_session(estudos: StudiesDep, id_: str, corpo: Session) -> Any:
     try:
-        return estudos.registrar_sessao(id_, corpo.data, corpo.minutos)
+        return estudos.register_session(id_, corpo.data, corpo.minutos)
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 
@@ -201,13 +201,13 @@ class MarkStage(BaseModel):
 
 @router.get("/conhecimento/trilhas")
 def tracks_knowledge(estudos: StudiesDep) -> Any:
-    return estudos.conhecimento.listar_trilhas()
+    return estudos.knowledge.list_tracks()
 
 
 @router.get("/conhecimento/trilhas/{id_}")
 def track_knowledge(estudos: StudiesDep, id_: str, frente: str | None = None) -> Any:
     try:
-        return estudos.conhecimento.trilha(id_, frente)
+        return estudos.knowledge.trilha(id_, frente)
     except ItemNonexistent as e:
         raise _error(e) from e
 
@@ -215,20 +215,20 @@ def track_knowledge(estudos: StudiesDep, id_: str, frente: str | None = None) ->
 @router.post("/conhecimento/trilhas/{id_}/etapas/{etapa}")
 def mark_stage(estudos: StudiesDep, id_: str, etapa: str, corpo: MarkStage) -> Any:
     try:
-        return estudos.conhecimento.marcar(id_, etapa, corpo.model_dump())
+        return estudos.knowledge.marcar(id_, etapa, corpo.model_dump())
     except ItemNonexistent as e:
         raise _error(e) from e
 
 
 @router.get("/conhecimento/livros")
 def books_knowledge(estudos: StudiesDep) -> Any:
-    return estudos.conhecimento.livros()
+    return estudos.knowledge.livros()
 
 
 @router.patch("/conhecimento/livros/{id_}")
 def edit_book(estudos: StudiesDep, id_: str, corpo: BookEdit) -> Any:
     try:
-        return estudos.conhecimento.editar_livro(id_, corpo.tenho)
+        return estudos.knowledge.edit_book(id_, corpo.tenho)
     except ItemNonexistent as e:
         raise _error(e) from e
 
@@ -237,7 +237,7 @@ def edit_book(estudos: StudiesDep, id_: str, corpo: BookEdit) -> Any:
 def link_reading(estudos: StudiesDep, id_: str) -> Any:
     """Liga o livro a uma leitura (cria se não houver) para ler e grifar na aba Leituras."""
     try:
-        return estudos.conhecimento.vincular_leitura(id_)
+        return estudos.knowledge.link_reading(id_)
     except ItemNonexistent as e:
         raise _error(e) from e
 
@@ -268,18 +268,18 @@ class Classification(BaseModel):
 
 @router.get("/projetos")
 def list_projects(estudos: StudiesDep) -> Any:
-    return estudos.listar_projetos()
+    return estudos.list_projects()
 
 
 @router.post("/projetos", status_code=201)
 def create_project(estudos: StudiesDep, corpo: ProjectInput) -> Any:
-    return estudos.criar_projeto(corpo.model_dump(exclude_none=True))
+    return estudos.create_project(corpo.model_dump(exclude_none=True))
 
 
 @router.patch("/projetos/{id_}")
 def edit_project(estudos: StudiesDep, id_: str, corpo: ProjectEdit) -> Any:
     try:
-        return estudos.editar_projeto(id_, corpo.model_dump(exclude_none=True))
+        return estudos.edit_project(id_, corpo.model_dump(exclude_none=True))
     except NotFound as e:
         raise _error(e) from e
 
@@ -287,7 +287,7 @@ def edit_project(estudos: StudiesDep, id_: str, corpo: ProjectEdit) -> Any:
 @router.delete("/projetos/{id_}", status_code=204)
 def delete_project(estudos: StudiesDep, id_: str) -> None:
     try:
-        estudos.projetos.excluir(id_)
+        estudos.projects.excluir(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -295,7 +295,7 @@ def delete_project(estudos: StudiesDep, id_: str) -> None:
 @router.get("/projetos/{id_}/matriz")
 def matrix(estudos: StudiesDep, id_: str) -> Any:
     try:
-        return estudos.matriz(id_)
+        return estudos.matrix(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -303,7 +303,7 @@ def matrix(estudos: StudiesDep, id_: str) -> Any:
 @router.patch("/projetos/{id_}/itens/{item_id}")
 def classify(estudos: StudiesDep, id_: str, item_id: str, corpo: Classification) -> Any:
     try:
-        return estudos.classificar(id_, item_id, corpo.model_dump(exclude_none=True))
+        return estudos.classify(id_, item_id, corpo.model_dump(exclude_none=True))
     except NotFound as e:
         raise _error(e) from e
 
@@ -311,7 +311,7 @@ def classify(estudos: StudiesDep, id_: str, item_id: str, corpo: Classification)
 @router.get("/projetos/{id_}/exportar")
 def export(estudos: StudiesDep, id_: str) -> Response:
     try:
-        m = estudos.matriz(id_)
+        m = estudos.matrix(id_)
     except NotFound as e:
         raise _error(e) from e
     plain_ = unicodedata.normalize("NFKD", m["projeto"]["nome"]).encode("ascii", "ignore").decode()

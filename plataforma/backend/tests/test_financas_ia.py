@@ -132,7 +132,7 @@ async def _llm_falso(mensagens: list[dict[str, str]]) -> str:
 class _InternetFalsa:
     """Sem rede nos testes: CDI fixo de 12% a.a. e FIPE do EcoSport."""
 
-    async def usar(self, nome: str, args: dict) -> dict:
+    async def use(self, nome: str, args: dict) -> dict:
         if nome == "indicadores":
             return {"indicadores": {"cdi_aa": {"valor": 12.0, "data": "hoje"}}}
         return {"marca": "Ford", "menor": 50000.0, "maior": 56000.0, "media": 53000.0,

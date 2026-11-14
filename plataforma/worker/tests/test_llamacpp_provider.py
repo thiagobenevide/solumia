@@ -40,19 +40,19 @@ async def test_estado_lista_carregados_e_ocupados() -> None:
 async def test_recusa_troca_com_modelo_processando() -> None:
     p = _provider([_m("b"), _m("a", "loaded")], ocupado=True)
     with pytest.raises(RuntimeError, match="em andamento"):
-        await p.carregar("b")
+        await p.load("b")
 
 
 async def test_carrega_pelo_roteador() -> None:
     calls: list[str] = []
     p = _provider([_m("b"), _m("a", "loaded")], registro=calls)
-    assert await p.carregar("b") == {"modelo": "b"}
+    assert await p.load("b") == {"modelo": "b"}
     assert "POST /models/load" in calls
 
 
 async def test_modelo_desconhecido() -> None:
     with pytest.raises(RuntimeError, match="não encontrado"):
-        await _provider([_m("a")]).carregar("x")
+        await _provider([_m("a")]).load("x")
 
 
 async def test_chat_sem_modelo_usa_o_carregado() -> None:

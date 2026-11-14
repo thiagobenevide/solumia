@@ -54,7 +54,7 @@ class RequestSpeech(BaseModel):
 async def speech(linguagem: LanguageDep, corpo: RequestSpeech) -> Any:
     """Fala da frase (base64) com o tempo de cada palavra, para a leitura guiada."""
     try:
-        return await linguagem.fala(corpo.texto, corpo.idioma, round(corpo.velocidade, 2))
+        return await linguagem.speech(corpo.texto, corpo.idioma, round(corpo.velocidade, 2))
     except ERRORS as e:
         raise _error(e) from e
 
@@ -69,14 +69,14 @@ class RequestTranslation(BaseModel):
 @router.post("/traduzir")
 async def translate(linguagem: LanguageDep, corpo: RequestTranslation) -> Any:
     try:
-        return await linguagem.traduzir(corpo.termo, corpo.frase, corpo.idioma, corpo.destino)
+        return await linguagem.translate(corpo.termo, corpo.frase, corpo.idioma, corpo.destino)
     except ERRORS as e:
         raise _error(e) from e
 
 
 @router.get("/vocabulario")
 def vocabulary(linguagem: LanguageDep, idioma: str | None = None, devidas: bool = False) -> Any:
-    return linguagem.listar_vocabulario(idioma, devidas)
+    return linguagem.list_vocabulary(idioma, devidas)
 
 
 class NewWord(BaseModel):
@@ -95,7 +95,7 @@ class NewWord(BaseModel):
 
 async def _generate_in_background(language: Language, id_: str) -> None:
     try:
-        await language.gerar_pratica(id_)
+        await language.generate_practice(id_)
     except ERRORS as e:  # o erro fica no item (`erro`) e o app oferece gerar de novo
         logger.info("Prática de %s não gerada: %s", id_, e)
 
@@ -103,11 +103,11 @@ async def _generate_in_background(language: Language, id_: str) -> None:
 @router.post("/vocabulario", status_code=201)
 def create_word(linguagem: LanguageDep, corpo: NewWord, tarefas: BackgroundTasks) -> Any:
     try:
-        item = linguagem.criar_vocabulario(corpo.model_dump())
+        item = linguagem.create_vocabulary(corpo.model_dump())
     except ERRORS as e:
         raise _error(e) from e
     if corpo.gerar and not item.get("exercicios"):
-        item = linguagem.vocabulario.editar(item["id"], {"gerando": True})
+        item = linguagem.vocabulary.edit(item["id"], {"gerando": True})
         tarefas.add_task(_generate_in_background, linguagem, item["id"])
     return item
 
@@ -115,7 +115,7 @@ def create_word(linguagem: LanguageDep, corpo: NewWord, tarefas: BackgroundTasks
 @router.post("/vocabulario/{id_}/gerar")
 async def generate(linguagem: LanguageDep, id_: str) -> Any:
     try:
-        return await linguagem.gerar_pratica(id_)
+        return await linguagem.generate_practice(id_)
     except ERRORS as e:
         raise _error(e) from e
 
@@ -127,7 +127,7 @@ class Review(BaseModel):
 @router.post("/vocabulario/{id_}/revisar")
 def review(linguagem: LanguageDep, id_: str, corpo: Review) -> Any:
     try:
-        return linguagem.revisar_vocabulario(id_, corpo.nota)
+        return linguagem.review_vocabulary(id_, corpo.nota)
     except ERRORS as e:
         raise _error(e) from e
 
@@ -140,7 +140,7 @@ class Answer(BaseModel):
 @router.post("/vocabulario/{id_}/responder")
 async def answer_exercise(linguagem: LanguageDep, id_: str, corpo: Answer) -> Any:
     try:
-        return await linguagem.responder_exercicio(id_, corpo.indice, corpo.resposta)
+        return await linguagem.answer_exercise(id_, corpo.indice, corpo.resposta)
     except ERRORS as e:
         raise _error(e) from e
 
@@ -148,14 +148,14 @@ async def answer_exercise(linguagem: LanguageDep, id_: str, corpo: Answer) -> An
 @router.delete("/vocabulario/{id_}", status_code=204)
 def delete_word(linguagem: LanguageDep, id_: str) -> None:
     try:
-        linguagem.vocabulario.excluir(id_)
+        linguagem.vocabulary.excluir(id_)
     except ERRORS as e:
         raise _error(e) from e
 
 
 @router.get("/escritas")
 def writes(linguagem: LanguageDep, idioma: str | None = None) -> Any:
-    return linguagem.listar_escritas(idioma)
+    return linguagem.list_writes(idioma)
 
 
 class NewWriting(BaseModel):
@@ -169,7 +169,7 @@ class NewWriting(BaseModel):
 @router.post("/escritas", status_code=201)
 async def create_writing(linguagem: LanguageDep, corpo: NewWriting) -> Any:
     try:
-        return await linguagem.criar_escrita(corpo.model_dump())
+        return await linguagem.create_writing(corpo.model_dump())
     except ERRORS as e:
         raise _error(e) from e
 
@@ -182,7 +182,7 @@ class AnswerWriting(BaseModel):
 @router.post("/escritas/{id_}/responder")
 async def answer_writing(linguagem: LanguageDep, id_: str, corpo: AnswerWriting) -> Any:
     try:
-        return await linguagem.responder_escrita(id_, corpo.indice, corpo.resposta)
+        return await linguagem.answer_writing(id_, corpo.indice, corpo.resposta)
     except ERRORS as e:
         raise _error(e) from e
 
@@ -190,14 +190,14 @@ async def answer_writing(linguagem: LanguageDep, id_: str, corpo: AnswerWriting)
 @router.delete("/escritas/{id_}", status_code=204)
 def delete_writing(linguagem: LanguageDep, id_: str) -> None:
     try:
-        linguagem.escritas.excluir(id_)
+        linguagem.writes.excluir(id_)
     except ERRORS as e:
         raise _error(e) from e
 
 
 @router.get("/leituras-voz")
 def readings_voice(linguagem: LanguageDep, idioma: str | None = None) -> Any:
-    return linguagem.listar_leituras_voz(idioma)
+    return linguagem.list_readings_voice(idioma)
 
 
 @router.post("/leituras-voz", status_code=201)
@@ -215,7 +215,7 @@ async def evaluate_reading(
     if len(data) > 50 * 1024 * 1024:
         raise HTTPException(413, "Gravação grande demais (máx. 50 MB).")
     try:
-        return await linguagem.avaliar_leitura(
+        return await linguagem.evaluate_reading(
             data,
             audio.content_type or "audio/wav",
             idioma,
@@ -229,7 +229,7 @@ async def evaluate_reading(
 @router.delete("/leituras-voz/{id_}", status_code=204)
 def delete_reading_voice(linguagem: LanguageDep, id_: str) -> None:
     try:
-        linguagem.leituras_voz.excluir(id_)
+        linguagem.readings_voice.excluir(id_)
     except ERRORS as e:
         raise _error(e) from e
 
@@ -244,7 +244,7 @@ class Activity(BaseModel):
 @router.post("/atividades", status_code=201)
 def register_activity(linguagem: LanguageDep, corpo: Activity) -> Any:
     try:
-        return linguagem.registrar_atividade(corpo.model_dump())
+        return linguagem.register_activity(corpo.model_dump())
     except ERRORS as e:
         raise _error(e) from e
 
@@ -252,6 +252,6 @@ def register_activity(linguagem: LanguageDep, corpo: Activity) -> Any:
 @router.get("/progresso")
 def progress(linguagem: LanguageDep, idioma: str = "en") -> Any:
     try:
-        return linguagem.progresso(idioma)
+        return linguagem.progress(idioma)
     except ERRORS as e:
         raise _error(e) from e

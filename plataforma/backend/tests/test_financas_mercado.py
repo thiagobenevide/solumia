@@ -285,9 +285,9 @@ def test_isin_do_fii() -> None:
 
 def test_empresa_demonstrativos_e_links(pasta: Path) -> None:
     c = CVM(pasta)
-    [e] = c.buscar("EMPX4")
+    [e] = c.fetch("EMPX4")
     assert (e["codigo_cvm"], e["tickers"]) == (9999, ["EMPX3", "EMPX4"])
-    years = c.demonstrativos(9999)
+    years = c.statements(9999)
     last = years[-1]
     assert last["receita_liquida"] == 1000.0 + last["ano"]
     assert (last["divida_bruta"], last["capex"], last["dividendos"]) == (200.0, 80.0, 40.0)
@@ -301,11 +301,11 @@ def test_empresa_demonstrativos_e_links(pasta: Path) -> None:
 def test_sugerir_enquanto_digita(pasta: Path) -> None:
     c = CVM(pasta)
     # ticker pelo começo, palavra do nome, nome parecido e FII juntos
-    assert c.sugerir("EMP")[0]["tickers"] == ["EMPX3", "EMPX4"]
-    assert c.sugerir("empresa")[0]["nome"] == "EMPRESA X S.A."
-    assert c.sugerir("emprsa x")[0]["tickers"] == ["EMPX3", "EMPX4"]
-    assert c.sugerir("FUND")[0] | {"tipo": "fii"} == c.sugerir("FUND")[0]
-    assert c.sugerir("zzzz") == []
+    assert c.suggest("EMP")[0]["tickers"] == ["EMPX3", "EMPX4"]
+    assert c.suggest("empresa")[0]["nome"] == "EMPRESA X S.A."
+    assert c.suggest("emprsa x")[0]["tickers"] == ["EMPX3", "EMPX4"]
+    assert c.suggest("FUND")[0] | {"tipo": "fii"} == c.suggest("FUND")[0]
+    assert c.suggest("zzzz") == []
 
 
 def test_fii(pasta: Path) -> None:
@@ -317,7 +317,7 @@ def test_fii(pasta: Path) -> None:
 
 
 class _InternetFalsa:
-    async def usar(self, nome: str, args: dict) -> dict:
+    async def use(self, nome: str, args: dict) -> dict:
         if nome == "mercado":
             return {"altas": [{"ticker": "EMPX4", "variacao_pct": 3.2}], "baixas": []}
         if nome == "noticias":

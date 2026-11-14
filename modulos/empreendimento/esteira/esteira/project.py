@@ -96,11 +96,11 @@ class Project:
     def caminho(self, nome):
         return self.pasta / nome
 
-    def carregar_json(self, nome):
+    def load_json(self, nome):
         p = self.pasta / nome
         if not p.exists():
             raise SystemExit(f"{nome} ainda não existe; rode a etapa anterior")
         return json.loads(p.read_text())
 
-    def salvar_json(self, nome, dados):
+    def save_json(self, nome, dados):
         (self.pasta / nome).write_text(json.dumps(dados, ensure_ascii=False, indent=2))

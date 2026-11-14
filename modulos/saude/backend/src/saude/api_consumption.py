@@ -34,8 +34,8 @@ Se uma regra afrouxada ou um aparelho sem proteção aparecer, diga claramente."
 def get_consumption(request: Request) -> Consumption:
     state = request.app.state
     if getattr(state, "consumo", None) is None:
-        workouts: Workouts = state.treinos
-        state.consumo = Consumption(workouts.raiz / "consumo")
+        workouts: Workouts = state.workouts
+        state.consumo = Consumption(workouts.root / "consumo")
     consumption: Consumption = state.consumo
     return consumption
 
@@ -93,7 +93,7 @@ def config(consumo: ConsumptionDep) -> Any:
 @router.put("/regras/{categoria}")
 def rule(consumo: ConsumptionDep, categoria: str, corpo: Rule) -> Any:
     try:
-        return consumo.definir_regra(categoria, corpo.model_dump())
+        return consumo.definir_rule(categoria, corpo.model_dump())
     except Invalid as e:
         raise _error(e) from e
 
@@ -109,7 +109,7 @@ def app(consumo: ConsumptionDep, corpo: App) -> Any:
 @router.delete("/apps/{pacote}")
 def remove_app(consumo: ConsumptionDep, pacote: str) -> Any:
     try:
-        return consumo.remover_app(pacote)
+        return consumo.remove_app(pacote)
     except NotFound as e:
         raise _error(e) from e
 
@@ -117,7 +117,7 @@ def remove_app(consumo: ConsumptionDep, pacote: str) -> Any:
 @router.post("/dominios/{categoria}")
 def include_domain(consumo: ConsumptionDep, categoria: str, corpo: Domain) -> Any:
     try:
-        return consumo.incluir_dominio(categoria, corpo.dominio)
+        return consumo.include_domain(categoria, corpo.dominio)
     except Invalid as e:
         raise _error(e) from e
 
@@ -125,20 +125,20 @@ def include_domain(consumo: ConsumptionDep, categoria: str, corpo: Domain) -> An
 @router.delete("/dominios/{categoria}/{dominio}")
 def remove_domain(consumo: ConsumptionDep, categoria: str, dominio: str) -> Any:
     try:
-        return consumo.remover_dominio(categoria, dominio)
+        return consumo.remove_domain(categoria, dominio)
     except (Invalid, NotFound) as e:
         raise _error(e) from e
 
 
 @router.put("/protecao")
 def protection(consumo: ConsumptionDep, corpo: Protection) -> Any:
-    return consumo.definir_protecao(corpo.ativa)
+    return consumo.definir_protection(corpo.ativa)
 
 
 @router.delete("/pendencias/{id_}", status_code=204)
 def cancel(consumo: ConsumptionDep, id_: str) -> None:
     try:
-        consumo.cancelar_pendencia(id_)
+        consumo.cancel_pendencia(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -146,14 +146,14 @@ def cancel(consumo: ConsumptionDep, id_: str) -> None:
 @router.post("/sincronizar")
 def sync(consumo: ConsumptionDep, corpo: Sync) -> Any:
     try:
-        return consumo.sincronizar(corpo.model_dump())
+        return consumo.sync(corpo.model_dump())
     except (KeyError, ValueError, TypeError) as e:
         raise HTTPException(422, f"Dados inválidos: {e}") from e
 
 
 @router.get("/dispositivos")
 def devices(consumo: ConsumptionDep) -> Any:
-    return consumo.dispositivos()
+    return consumo.devices()
 
 
 @router.get("/resumo")
@@ -212,7 +212,7 @@ def assemble_context(consumption: Consumption, de: date, ate: date) -> str:
         lines += ["", "# Pedidos para afrouxar (esperando 24 h)"]
         lines += [f"- {p['descricao']} (libera {p['libera_em']})" for p in cfg["pendencias"]]
     lines += ["", "# Aparelhos"]
-    for d in consumption.dispositivos():
+    for d in consumption.devices():
         desligado = [k for k, v in d["estado"].items() if not v]
         lines.append(
             f"- {d['nome']}: visto {d['visto_em']}"
@@ -223,7 +223,7 @@ def assemble_context(consumption: Consumption, de: date, ate: date) -> str:
 
 @router.get("/analises")
 def analyses(consumo: ConsumptionDep) -> Any:
-    return consumo.analises()
+    return consumo.analyses()
 
 
 @router.post("/analises")
@@ -242,7 +242,7 @@ async def analyze(pedido: RequestAnalysis, request: Request, consumo: Consumptio
         )
     except Exception as e:  # LLMIndisponivel da plataforma (sem worker, timeout)
         raise HTTPException(503, str(e)) from e
-    return consumo.guardar_analise(
+    return consumo.store_analysis(
         {
             "criada_em": datetime.now(UTC).isoformat(timespec="seconds"),
             "de": de.isoformat(),

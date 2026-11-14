@@ -261,6 +261,6 @@ def thumbs(project, n=8):
     for k, e in enumerate(chosen, 1):
         shutil.copy2(e["arquivo"], project.caminho(f"thumb_{k}.png"))
     shutil.copy2(chosen[0]["arquivo"], project.caminho("thumb.png"))
-    project.salvar_json("thumbs/ranking.json", [dict(x, arquivo=str(x["arquivo"].name)) for x in ranking])
+    project.save_json("thumbs/ranking.json", [dict(x, arquivo=str(x["arquivo"].name)) for x in ranking])
     _dataset(project, ctx, ranking, chosen)
     print(f"  thumb_1..{len(chosen)}.png para o teste A/B: " + " | ".join(e["conceito"]["texto"] for e in chosen))

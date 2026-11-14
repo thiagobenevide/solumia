@@ -278,9 +278,9 @@ class Compiler:
         self.x_px: dict[str, float] = {}
         self.numeros: set[str] = set()
         self.nomes: set[str] = set()
-        self.textos: list[str] = []
+        self.texts: list[str] = []
         self.limites: dict[str, tuple[float, float, float, float]] = {}  # célula (px) de cada texto de caixa
-        self.miudos: list[str] = []  # textos de caixa que a célula espremeu a menos de 60% do nível
+        self.small: list[str] = []  # textos de caixa que a célula espremeu a menos de 60% do nível
         self.m = (d.get("area") or 0.03) * self.U * 1.15  # margem da área segura (a mesma do portão, com folga)
 
     def ativo(self, se: Condition) -> bool:
@@ -382,7 +382,7 @@ class Compiler:
                 size *= 0.92
                 n = self._linhas(e, size, w)
             if size < 0.6 * (e.tam or LEVELS[e.nivel or "corpo"]) * self.U and size < 0.026 * self.U:  # < 28 px no 1080
-                self.miudos.append(e.nome)
+                self.small.append(e.nome)
             ty = y + max(0.0, (h - n * size * 1.25) / 2)
             self.limites[e.nome] = (x, y, x + w, y + h)
             return e.model_copy(update={
@@ -608,8 +608,8 @@ class Compiler:
             if name in self.vars:
                 lines.append(f"if ({self.vars[name]}) LIMITE[{self.vars[name]}.id] = "
                               f"[{_num(x0)}, {_num(y0)}, {_num(x1)}, {_num(y1)}];")
-        if self.textos:  # texto máximo encolhe para caber na área segura (depois das animações, nos instantes medidos)
-            lines.append(f"caber([{', '.join(self.textos)}]);")
+        if self.texts:  # texto máximo encolhe para caber na área segura (depois das animações, nos instantes medidos)
+            lines.append(f"caber([{', '.join(self.texts)}]);")
         return "// peça gerada do N1 (esteira/n1/effectcraft.py)\n" + "\n".join(lines) + "\n"
 
     # ---------- elementos ----------
@@ -626,7 +626,7 @@ class Compiler:
             x = min(max(x, m), self.W - m - 4 * size)
             width = min(e.largura * self.W, self.W - m - x)
             e = e.model_copy(update={"largura": width / self.W})
-        self.textos.append(v)
+        self.texts.append(v)
         out = []
         if e.apos and e.apos.nome == e.nome:  # autorreferência: sem `apos`
             e = e.model_copy(update={"apos": None})

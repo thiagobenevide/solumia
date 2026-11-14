@@ -114,17 +114,17 @@ def _clean(dados: dict[str, Any]) -> dict[str, Any]:
 
 class Clock:
     def __init__(self, root: str | Path) -> None:
-        self.raiz = Path(root).expanduser()
-        self.raiz.mkdir(parents=True, exist_ok=True)
-        self._trava = threading.RLock()
-        self._dias = self.raiz / "dias.json"
-        self._analises = self.raiz / "analises.json"
-        self._estado = self.raiz / "estado.json"
+        self.root = Path(root).expanduser()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
+        self._days = self.root / "dias.json"
+        self._analyses = self.root / "analises.json"
+        self._state = self.root / "estado.json"
 
     def dias(self, de: str, ate: str) -> list[dict[str, Any]]:
         d1, d2 = _day(de), _day(ate)
-        with self._trava:
-            everything: dict[str, Any] = _read(self._dias, {})
+        with self._lock:
+            everything: dict[str, Any] = _read(self._days, {})
         output = [{"data": k, **everything[k]} for k in sorted(everything) if d1 <= k <= d2]
         for d in output:  # sem a nota do Samsung (só vem na exportação), calcula a nossa
             if "sono_pontuacao" not in d and (note := score_sleep(d)) is not None:
@@ -137,8 +137,8 @@ class Clock:
     ) -> int:
         """Grava os dias; com [sobrescrever]=False só preenche campos vazios (menos os exclusivos
         da exportação, que sempre entram)."""
-        with self._trava:
-            everything: dict[str, Any] = _read(self._dias, {})
+        with self._lock:
+            everything: dict[str, Any] = _read(self._days, {})
             n = 0
             for d in dias:
                 key = _day(d.get("data", ""))
@@ -150,17 +150,17 @@ class Clock:
                     if sobrescrever or k in SO_DA_EXPORT or k not in current:
                         current[k] = v
                 n += 1
-            _write(self._dias, everything)
+            _write(self._days, everything)
             if origem:
-                state = _read(self._estado, {})
+                state = _read(self._state, {})
                 state[origem] = datetime.now(UTC).isoformat(timespec="seconds")
-                _write(self._estado, state)
+                _write(self._state, state)
             return n
 
     def estado(self) -> dict[str, Any]:
         """Última sincronização de cada origem (`health_connect`, `exportacao`)."""
-        with self._trava:
-            return dict(_read(self._estado, {}))
+        with self._lock:
+            return dict(_read(self._state, {}))
 
     def resumo(self, de: str, ate: str) -> dict[str, Any]:
         """Média de cada métrica nos dias que a têm e quantos dias bateram cada meta."""
@@ -188,19 +188,19 @@ class Clock:
 
     # --- análises da LLM local ---
 
-    def analises(self) -> list[dict[str, Any]]:
-        with self._trava:
-            return list(_read(self._analises, []))
+    def analyses(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return list(_read(self._analyses, []))
 
-    def guardar_analise(self, analise: dict[str, Any]) -> dict[str, Any]:
-        with self._trava:
-            items = [analise, *_read(self._analises, [])][:20]
-            _write(self._analises, items)
+    def store_analysis(self, analise: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            items = [analise, *_read(self._analyses, [])][:20]
+            _write(self._analyses, items)
         return analise
 
     # --- exportação do Samsung Health ---
 
-    def importar_samsung(self, arquivo: IO[bytes]) -> dict[str, Any]:
+    def import_samsung(self, arquivo: IO[bytes]) -> dict[str, Any]:
         try:
             with zipfile.ZipFile(arquivo) as z:
                 days, read = read_export(z)

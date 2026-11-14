@@ -233,36 +233,36 @@ def compress(wav: bytes) -> tuple[bytes, str]:
 class Voice:
     def __init__(self, settings: WorkerSettings) -> None:
         self._s = settings
-        self._modelo: Any = None
+        self._model: Any = None
         self._tts: Any = None
-        self._xtts_proc: subprocess.Popen[str] | None = None
-        self._xtts_falhou = False
-        self._xtts_trava = threading.Lock()
-        self._pronuncia = Pronunciation(settings.pronuncia_python)
+        self._xtts_process: subprocess.Popen[str] | None = None
+        self._xtts_failed = False
+        self._xtts_lock = threading.Lock()
+        self._pronunciation = Pronunciation(settings.pronuncia_python)
 
     async def executar(self, task: str, payload: dict[str, Any]) -> dict[str, Any]:
         if task == "transcrever":
             audio = base64.b64decode(payload["audio_b64"])
             text, language = await asyncio.to_thread(
-                self._transcrever, audio, payload.get("mime", ""), str(payload.get("idioma") or "")
+                self._transcribe, audio, payload.get("mime", ""), str(payload.get("idioma") or "")
             )
             return {"texto": text, "idioma": language}
         if task == "falar":
             span = payload.get("trecho")
             wav = await asyncio.to_thread(
-                self._falar, str(payload["texto"]), None if span is None else int(span)
+                self._speak, str(payload["texto"]), None if span is None else int(span)
             )
             return {"audio_b64": base64.b64encode(wav).decode(), "mime": "audio/wav"}
         if task == "falar_marcado":
             return await asyncio.to_thread(
-                self._falar_marcado,
+                self._speak_marcado,
                 str(payload["texto"]),
                 str(payload.get("idioma") or "en"),
                 float(payload.get("velocidade") or 1.0),
             )
         if task == "avaliar_leitura":
             return await asyncio.to_thread(
-                self._avaliar_leitura,
+                self._evaluate_reading,
                 base64.b64decode(payload["audio_b64"]),
                 str(payload.get("mime") or ""),
                 str(payload.get("idioma") or "en"),
@@ -270,7 +270,7 @@ class Voice:
             )
         raise ValueError(f"Tarefa desconhecida: {task}")
 
-    def _palavras_whisper(
+    def _words_whisper(
         self, caminho: str, language: str, dica: str | None = None, vad: bool = False
     ) -> list[dict[str, Any]]:
         """Palavras ouvidas com o tempo de cada uma (s) e a confiança do Whisper."""
@@ -289,7 +289,7 @@ class Voice:
             for w in s.words or []
         ]
 
-    def _falar_marcado(self, text: str, language: str, speed: float) -> dict[str, Any]:
+    def _speak_marcado(self, text: str, language: str, speed: float) -> dict[str, Any]:
         """Leitura guiada: a fala do texto no idioma dele e o tempo de cada palavra. O Whisper
         ouve a própria fala (com o texto de dica) e `align_word_times` casa com as palavras do
         texto; sem Whisper, o tempo sai proporcional ao tamanho das palavras."""
@@ -297,7 +297,7 @@ class Voice:
         if tts is None:
             raise RuntimeError("Leitura guiada indisponível: o Kokoro não carregou no worker.")
         voice, lang = VOICES_KOKORO.get(language, VOICES_KOKORO["en"])
-        wav = self._falar_kokoro(tts, text, voice, lang, min(max(speed, 0.5), 2.0))
+        wav = self._speak_kokoro(tts, text, voice, lang, min(max(speed, 0.5), 2.0))
         with tempfile.NamedTemporaryFile(suffix=".wav") as f:
             f.write(wav)
             f.flush()
@@ -305,7 +305,7 @@ class Voice:
                 duration = w.getnframes() / w.getframerate()
             spoken: list[dict[str, Any]] = []
             try:
-                spoken = self._palavras_whisper(f.name, language, dica=text)
+                spoken = self._words_whisper(f.name, language, dica=text)
             except (RuntimeError, ValueError) as e:
                 logger.info("Leitura guiada sem Whisper (%s): tempo proporcional", e)
         audio, mime = compress(wav)
@@ -316,7 +316,7 @@ class Voice:
             "palavras": align_word_times(text, spoken, duration),
         }
 
-    def _avaliar_leitura(
+    def _evaluate_reading(
         self, audio: bytes, mime: str, language: str, reference: str
     ) -> dict[str, Any]:
         """Leitura em voz alta: o que o Whisper ouviu (palavra, tempo, confiança) e, com o modelo
@@ -327,13 +327,13 @@ class Voice:
         with tempfile.NamedTemporaryFile(suffix=suffix) as f:
             f.write(audio)
             f.flush()
-            spoken = self._palavras_whisper(f.name, language, vad=True)
-            pronunciation = self._pronuncia.avaliar(decode_audio(f.name), reference, language)
+            spoken = self._words_whisper(f.name, language, vad=True)
+            pronunciation = self._pronunciation.evaluate(decode_audio(f.name), reference, language)
         warning = "" if pronunciation is not None else "Pronúncia por fonema indisponível no worker."
         return {"palavras": spoken, "pronuncia": pronunciation, "aviso": warning}
 
     def _whisper(self) -> Any:
-        if self._modelo is None:
+        if self._model is None:
             try:
                 from faster_whisper import WhisperModel
             except ImportError as e:
@@ -346,17 +346,17 @@ class Voice:
                 _load_libs_cuda()
                 try:
                     model = self._s.whisper_modelo or "large-v3-turbo"
-                    self._modelo = WhisperModel(model, device="cuda", compute_type="int8_float16")
+                    self._model = WhisperModel(model, device="cuda", compute_type="int8_float16")
                     logger.info("Whisper %s na GPU", model)
-                    return self._modelo
+                    return self._model
                 except (RuntimeError, ValueError) as e:
                     if dispositivo == "cuda":
                         raise
                     logger.warning("Whisper sem GPU (%s); usando a CPU", e)
             model = self._s.whisper_modelo or "small"
-            self._modelo = WhisperModel(model, device="cpu", compute_type="int8")
+            self._model = WhisperModel(model, device="cpu", compute_type="int8")
             logger.info("Whisper %s na CPU", model)
-        return self._modelo
+        return self._model
 
     async def aquecer(self) -> None:
         """Carrega o modelo ao ligar o worker: a primeira fala não espera o load (10–30 s)."""
@@ -367,10 +367,10 @@ class Voice:
         await asyncio.to_thread(self._aquecer_xtts)
 
     def _aquecer_xtts(self) -> None:
-        with self._xtts_trava:
+        with self._xtts_lock:
             self._xtts()
 
-    def _idioma(self, modelo: Any, caminho: str, request: str) -> str:
+    def _language(self, modelo: Any, caminho: str, request: str) -> str:
         aceitos = [i.strip() for i in self._s.voz_idiomas.split(",") if i.strip()]
         if request in aceitos:
             return request
@@ -387,13 +387,13 @@ class Voice:
             return self._s.voz_idioma
         return choose_language(probabilidades, aceitos, self._s.voz_idioma)
 
-    def _transcrever(self, audio: bytes, mime: str, language: str = "") -> tuple[str, str]:
+    def _transcribe(self, audio: bytes, mime: str, language: str = "") -> tuple[str, str]:
         suffix = {"audio/wav": ".wav", "audio/mp4": ".m4a", "audio/ogg": ".ogg"}.get(mime, ".audio")
         with tempfile.NamedTemporaryFile(suffix=suffix) as f:
             f.write(audio)
             f.flush()
             model = self._whisper()
-            language = self._idioma(model, f.name, language)
+            language = self._language(model, f.name, language)
             prompt = {"pt": self._s.whisper_prompt, "en": _PROMPT_EN}.get(language, "")
             segments, _ = model.transcribe(
                 f.name,
@@ -432,7 +432,7 @@ class Voice:
                     logger.warning("Kokoro indisponível (%s); usando o Piper", e)
         return self._tts or None
 
-    def _falar_kokoro(
+    def _speak_kokoro(
         self,
         tts: Any,
         text: str,
@@ -461,13 +461,13 @@ class Voice:
 
     def _xtts(self) -> subprocess.Popen[str] | None:
         """Processo do XTTS com o modelo carregado; None sem o venv ou se não subir."""
-        if self._xtts_proc is not None and self._xtts_proc.poll() is None:
-            return self._xtts_proc
-        if self._xtts_falhou:
+        if self._xtts_process is not None and self._xtts_process.poll() is None:
+            return self._xtts_process
+        if self._xtts_failed:
             return None
         python = Path(self._s.xtts_python).expanduser() if self._s.xtts_python else _XTTS_PYTHON
         if not python.is_file():
-            self._xtts_falhou = True
+            self._xtts_failed = True
             return None
         process = subprocess.Popen(
             [
@@ -485,14 +485,14 @@ class Voice:
         assert process.stdout is not None
         if '"pronto"' not in process.stdout.readline():  # linha vazia = morreu ao carregar
             process.kill()
-            self._xtts_falhou = True
+            self._xtts_failed = True
             logger.warning("XTTS não subiu; usando o Kokoro")
             return None
         logger.info("Fala com XTTS-v2 (%s)", self._s.xtts_voz)
-        self._xtts_proc = process
+        self._xtts_process = process
         return process
 
-    def _falar_xtts(self, process: subprocess.Popen[str], text: str) -> bytes | None:
+    def _speak_xtts(self, process: subprocess.Popen[str], text: str) -> bytes | None:
         assert process.stdin is not None and process.stdout is not None
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "fala.wav"
@@ -504,7 +504,7 @@ class Voice:
                 return None
             return output.read_bytes()
 
-    def _falar(self, text: str, span: int | None = None) -> bytes:
+    def _speak(self, text: str, span: int | None = None) -> bytes:
         """WAV do texto inteiro ou só do [trecho] n (`dividir_trechos`); trecho além do fim = vazio,
         o app toca um enquanto pede o próximo."""
         text = text_to_speech(text, self._s.fala_max_caracteres) or "Pronto."
@@ -513,14 +513,14 @@ class Voice:
             if span >= len(spans):
                 return b""
             text = spans[span]
-        with self._xtts_trava:  # um pedido por vez no mesmo processo
+        with self._xtts_lock:  # um pedido por vez no mesmo processo
             process = self._xtts()
-            wav = self._falar_xtts(process, text) if process else None
+            wav = self._speak_xtts(process, text) if process else None
         if wav:
             return wav
         tts = self._kokoro()
         if tts is not None:
-            return self._falar_kokoro(tts, text)
+            return self._speak_kokoro(tts, text)
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "fala.wav"
             if self._s.piper_modelo and shutil.which(self._s.piper_bin):

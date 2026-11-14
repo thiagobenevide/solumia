@@ -119,7 +119,7 @@ class Rules(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _cardapio_antigo(cls, d):
+    def _cardapio_old(cls, d):
         """Estilo salvo com `cenas` (cardápio permitido) vira `filtro` (o que fica de fora)."""
         if isinstance(d, dict) and "cenas" in d:
             d = dict(d)

@@ -60,26 +60,26 @@ def text_pdf(pdf: Path) -> str:
 
 class Exams:
     def __init__(self, root: str | Path, hoje: Callable[[], date] = date.today) -> None:
-        self.raiz = Path(root).expanduser()
-        self.raiz.mkdir(parents=True, exist_ok=True)
+        self.root = Path(root).expanduser()
+        self.root.mkdir(parents=True, exist_ok=True)
         self.hoje = hoje
-        self._trava = threading.RLock()
-        self.estudo = Study(self.raiz)
+        self._lock = threading.RLock()
+        self.study = Study(self.root)
 
     # --- arquivos ---
-    def _pasta(self, id_: str) -> Path:
-        folder = self.raiz / id_
+    def _folder(self, id_: str) -> Path:
+        folder = self.root / id_
         if not id_.isalnum() or not (folder / "concurso.json").exists():
             raise NotFound(id_)
         return folder
 
-    def _ler(self, id_: str) -> dict[str, Any]:
-        data: dict[str, Any] = json.loads((self._pasta(id_) / "concurso.json").read_text("utf-8"))
+    def _read(self, id_: str) -> dict[str, Any]:
+        data: dict[str, Any] = json.loads((self._folder(id_) / "concurso.json").read_text("utf-8"))
         return data
 
-    def _gravar(self, c: dict[str, Any]) -> None:
+    def _write(self, c: dict[str, Any]) -> None:
         c["atualizado"] = _now()
-        file = self.raiz / c["id"] / "concurso.json"
+        file = self.root / c["id"] / "concurso.json"
         tmp = file.with_suffix(".tmp")
         tmp.write_text(json.dumps(c, ensure_ascii=False, indent=1), "utf-8")
         os.replace(tmp, file)
@@ -106,14 +106,14 @@ class Exams:
             "prazos": [],
             "tarefas": [],
         }
-        with self._trava:
-            (self.raiz / id_).mkdir()
-            self._gravar(c)
+        with self._lock:
+            (self.root / id_).mkdir()
+            self._write(c)
         return c
 
-    def listar(self) -> list[dict[str, Any]]:
+    def list_all(self) -> list[dict[str, Any]]:
         output = []
-        for file in sorted(self.raiz.glob("*/concurso.json")):
+        for file in sorted(self.root.glob("*/concurso.json")):
             c = json.loads(file.read_text("utf-8"))
             output.append(self.resumo(c))
         return sorted(output, key=lambda c: (c["data_prova"] or "9999", c["nome"]))
@@ -143,67 +143,67 @@ class Exams:
         }
 
     def obter(self, id_: str) -> dict[str, Any]:
-        c = self._ler(id_)
+        c = self._read(id_)
         c["situacao"] = self.resumo(c)
         return c
 
     def atualizar(self, id_: str, fields: dict[str, Any]) -> dict[str, Any]:
-        with self._trava:
-            c = self._ler(id_)
+        with self._lock:
+            c = self._read(id_)
             for k, v in fields.items():
                 if k in FIELDS_EDITABLE:
                     c[k] = v
-            self._gravar(c)
+            self._write(c)
         return self.obter(id_)
 
     def excluir(self, id_: str) -> None:
-        with self._trava:
-            shutil.rmtree(self._pasta(id_))
+        with self._lock:
+            shutil.rmtree(self._folder(id_))
 
     # --- edital ---
-    def salvar_edital(self, id_: str, nome: str, content: bytes) -> dict[str, Any]:
+    def save_notice(self, id_: str, nome: str, content: bytes) -> dict[str, Any]:
         if not content.startswith(b"%PDF"):
             raise Invalid("O edital precisa ser um PDF.")
-        folder = self._pasta(id_)
+        folder = self._folder(id_)
         (folder / "edital.pdf").write_bytes(content)
         text = text_pdf(folder / "edital.pdf")
         if len(text.strip()) < 500:
             raise Invalid("O PDF não tem texto legível (edital escaneado?).")
         (folder / "edital.txt").write_text(text, "utf-8")
-        with self._trava:
-            c = self._ler(id_)
+        with self._lock:
+            c = self._read(id_)
             c["edital"] = {
                 "nome": nome,
                 "bytes": len(content),
                 "caracteres": len(text),
                 "enviado": _now(),
             }
-            self._gravar(c)
+            self._write(c)
         return self.obter(id_)
 
-    def texto_edital(self, id_: str) -> str:
-        file = self._pasta(id_) / "edital.txt"
+    def text_notice(self, id_: str) -> str:
+        file = self._folder(id_) / "edital.txt"
         if not file.exists():
             raise Invalid("Envie o edital (PDF) antes de gerar o plano.")
         return file.read_text("utf-8")
 
     # --- plano ---
-    def marcar_geracao(self, id_: str, estado: str, erro: str = "") -> None:
-        with self._trava:
-            c = self._ler(id_)
+    def mark_generation(self, id_: str, estado: str, erro: str = "") -> None:
+        with self._lock:
+            c = self._read(id_)
             g = c["geracao"]
             g.update(estado=estado, erro=erro)
             if estado == "gerando":
                 g.update(inicio=_now(), fim=None)
             else:
                 g["fim"] = _now()
-            self._gravar(c)
+            self._write(c)
 
-    def aplicar_estrutura(self, id_: str, structure: dict[str, Any]) -> dict[str, Any]:
+    def apply_structure(self, id_: str, structure: dict[str, Any]) -> dict[str, Any]:
         """Guarda a estrutura do Claude, troca os prazos vindos do edital (os manuais ficam) e
         gera o calendário de hoje até a prova."""
-        with self._trava:
-            c = self._ler(id_)
+        with self._lock:
+            c = self._read(id_)
             c["estrutura"] = structure
             if not _data(c["data_prova"]) and _data(structure.get("data_prova")):
                 c["data_prova"] = structure["data_prova"][:10]
@@ -215,12 +215,12 @@ class Exams:
             ]
             c["prazos"] = sorted(manuais + of_notice, key=lambda p: (p["data"], p.get("hora", "")))
             c["tarefas"] = []
-            self._replanejar(c)
+            self._replan(c)
             c["geracao"].update(estado="pronto", erro="", fim=_now())
-            self._gravar(c)
+            self._write(c)
         return self.obter(id_)
 
-    def _replanejar(self, c: dict[str, Any]) -> None:
+    def _replan(self, c: dict[str, Any]) -> None:
         proof = _data(c["data_prova"])
         if not proof or not c["estrutura"]:
             raise Invalid("Sem data da prova ou sem plano gerado.")
@@ -234,26 +234,26 @@ class Exams:
         c["tarefas"] = sorted(kept + new, key=lambda t: t["data"])
         c["resumo_plano"] = {**summary, "gerado_em": today.isoformat()}
 
-    def replanejar(self, id_: str) -> dict[str, Any]:
-        with self._trava:
-            c = self._ler(id_)
-            self._replanejar(c)
-            self._gravar(c)
+    def replan(self, id_: str) -> dict[str, Any]:
+        with self._lock:
+            c = self._read(id_)
+            self._replan(c)
+            self._write(c)
         return self.obter(id_)
 
-    def marcar_tarefa(self, id_: str, task_id: str, done: bool) -> dict[str, Any]:
-        with self._trava:
-            c = self._ler(id_)
+    def mark_task(self, id_: str, task_id: str, done: bool) -> dict[str, Any]:
+        with self._lock:
+            c = self._read(id_)
             for t in c["tarefas"]:
                 if t["id"] == task_id:
                     t["feito"] = done
                     t["feito_em"] = self.hoje().isoformat() if done else None
-                    self._gravar(c)
+                    self._write(c)
                     return t
         raise NotFound(task_id)
 
     # --- prazos manuais ---
-    def adicionar_prazo(self, id_: str, deadline: dict[str, Any]) -> dict[str, Any]:
+    def add_deadline(self, id_: str, deadline: dict[str, Any]) -> dict[str, Any]:
         if not _data(deadline.get("data")):
             raise Invalid("Data inválida (use AAAA-MM-DD).")
         new = {
@@ -264,28 +264,28 @@ class Exams:
             "id": uuid.uuid4().hex[:10],
             "origem": "manual",
         }
-        with self._trava:
-            c = self._ler(id_)
+        with self._lock:
+            c = self._read(id_)
             c["prazos"] = sorted(c["prazos"] + [new], key=lambda p: (p["data"], p.get("hora", "")))
-            self._gravar(c)
+            self._write(c)
         return new
 
-    def remover_prazo(self, id_: str, deadline_id: str) -> None:
-        with self._trava:
-            c = self._ler(id_)
+    def remove_deadline(self, id_: str, deadline_id: str) -> None:
+        with self._lock:
+            c = self._read(id_)
             before = len(c["prazos"])
             c["prazos"] = [p for p in c["prazos"] if p["id"] != deadline_id]
             if len(c["prazos"]) == before:
                 raise NotFound(deadline_id)
-            self._gravar(c)
+            self._write(c)
 
     # --- alertas ---
-    def alertas(self) -> list[dict[str, Any]]:
+    def alerts(self) -> list[dict[str, Any]]:
         """Alertas de todos os concursos para hoje: prazos dos próximos 15 dias, contagem até a
         prova, tarefas de hoje e atrasadas. `nivel`: critico | aviso | info."""
         today = self.hoje()
         output: list[dict[str, Any]] = []
-        for file in sorted(self.raiz.glob("*/concurso.json")):
+        for file in sorted(self.root.glob("*/concurso.json")):
             c = json.loads(file.read_text("utf-8"))
 
             def alerta(nivel: str, text: str, c: dict[str, Any] = c) -> None:

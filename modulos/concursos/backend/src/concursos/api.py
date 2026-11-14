@@ -120,12 +120,12 @@ def _get(exams: Exams, id_: str) -> dict[str, Any]:
 
 @router.get("")
 def list_all(concursos: ExamsDep) -> Any:
-    return concursos.listar()
+    return concursos.list_all()
 
 
 @router.get("/alertas")
 def alerts(concursos: ExamsDep) -> Any:
-    return concursos.alertas()
+    return concursos.alerts()
 
 
 # ---------- radar de concursos de TI ----------
@@ -133,7 +133,7 @@ def alerts(concursos: ExamsDep) -> Any:
 
 @router.get("/radar")
 def radar_list(radar: RadarDep) -> Any:
-    return radar.listar()
+    return radar.list_all()
 
 
 @router.post("/radar/atualizar", status_code=202)
@@ -152,13 +152,13 @@ def radar_claude(radar: RadarDep, ia: AiDep, tarefas: BackgroundTasks) -> Any:
     if reason:
         raise HTTPException(503, reason)
     if not radar.pesquisando_claude:
-        tarefas.add_task(radar.pesquisar_claude, ia.executar)
+        tarefas.add_task(radar.search_claude, ia.executar)
     return {"pesquisando_claude": True}
 
 
 @router.get("/rumores")
 def rumors_list(rumores: RumorsDep) -> Any:
-    return rumores.listar()
+    return rumores.list_all()
 
 
 @router.post("/rumores/pesquisar", status_code=202)
@@ -177,7 +177,7 @@ def rumors_search(
 
 @router.put("/rumores/{rumor_id}/acompanhar")
 def rumors_track(rumor_id: str, dados: dict[str, Any], rumores: RumorsDep) -> Any:
-    item = rumores.acompanhar(rumor_id, bool(dados.get("acompanhar", True)))
+    item = rumores.track(rumor_id, bool(dados.get("acompanhar", True)))
     if item is None:
         raise HTTPException(404, "Rumor não encontrado.")
     return item
@@ -185,7 +185,7 @@ def rumors_track(rumor_id: str, dados: dict[str, Any], rumores: RumorsDep) -> An
 
 @router.get("/radar/{item_id}/rota")
 async def radar_route(item_id: str, radar: RadarDep) -> Any:
-    route = await radar.rota(item_id)
+    route = await radar.route(item_id)
     if route is None:
         raise HTTPException(404, "Sem local de prova conhecido para este concurso.")
     return route
@@ -237,14 +237,14 @@ async def radar_track(
     )
     end = item.get("inscricoes_fim")
     if end:
-        concursos.adicionar_prazo(
+        concursos.add_deadline(
             c["id"], {"titulo": "Fim das inscrições (radar)", "data": end, "tipo": "inscricao"}
         )
     if not item.get("edital_url"):
         return concursos.obter(c["id"])
     try:
         content = await asyncio.to_thread(_download, item["edital_url"])
-        concursos.salvar_edital(
+        concursos.save_notice(
             c["id"], item["edital_url"].rsplit("/", 1)[-1][:120] or "edital.pdf", content
         )
     except (OSError, Invalid) as e:
@@ -252,9 +252,9 @@ async def radar_track(
         return concursos.obter(c["id"])
     if ia.disponivel() is None:
         prompt = ai_plan.assemble_prompt(
-            concursos.obter(c["id"]), concursos.texto_edital(c["id"]), concursos.hoje().isoformat()
+            concursos.obter(c["id"]), concursos.text_notice(c["id"]), concursos.hoje().isoformat()
         )
-        concursos.marcar_geracao(c["id"], "gerando")
+        concursos.mark_generation(c["id"], "gerando")
         tarefas.add_task(_generate, concursos, ia, c["id"], prompt)
     return concursos.obter(c["id"])
 
@@ -287,7 +287,7 @@ def _save_notice(exams: Exams, id_: str, nome: str, content: bytes) -> Any:
     if len(content) > LIMIT_PDF:
         raise HTTPException(413, "PDF maior que 40 MB.")
     try:
-        return exams.salvar_edital(id_, nome, content)
+        return exams.save_notice(id_, nome, content)
     except Invalid as e:
         raise HTTPException(422, str(e)) from e
 
@@ -347,10 +347,10 @@ async def _generate(exams: Exams, ia: IA, id_: str, prompt: str) -> None:
                 "limite_s": 840,
             }
         )
-        exams.aplicar_estrutura(id_, structure)
+        exams.apply_structure(id_, structure)
     except Exception as e:  # o erro fica no concurso para o app mostrar
         logger.exception("Falha ao gerar o plano do concurso %s", id_)
-        exams.marcar_geracao(id_, "erro", str(e) or type(e).__name__)
+        exams.mark_generation(id_, "erro", str(e) or type(e).__name__)
 
 
 @router.post("/{id_}/plano", status_code=202)
@@ -360,14 +360,14 @@ def generate_plan(id_: str, concursos: ExamsDep, ia: AiDep, tarefas: BackgroundT
     if c["geracao"]["estado"] == "gerando":
         raise HTTPException(409, "O plano já está sendo gerado.")
     try:
-        notice = concursos.texto_edital(id_)
+        notice = concursos.text_notice(id_)
     except Invalid as e:
         raise HTTPException(422, str(e)) from e
     reason = ia.disponivel()
     if reason:
         raise HTTPException(503, reason)
     prompt = ai_plan.assemble_prompt(c, notice, concursos.hoje().isoformat())
-    concursos.marcar_geracao(id_, "gerando")
+    concursos.mark_generation(id_, "gerando")
     tarefas.add_task(_generate, concursos, ia, id_, prompt)
     return _get(concursos, id_)
 
@@ -377,7 +377,7 @@ def replan(id_: str, concursos: ExamsDep) -> Any:
     """Redistribui o que não foi feito (e o atrasado) de hoje até a prova, sem chamar o Claude."""
     _get(concursos, id_)
     try:
-        return concursos.replanejar(id_)
+        return concursos.replan(id_)
     except Invalid as e:
         raise HTTPException(422, str(e)) from e
 
@@ -386,7 +386,7 @@ def replan(id_: str, concursos: ExamsDep) -> Any:
 def mark(id_: str, tarefa_id: str, marcacao: Marking, concursos: ExamsDep) -> Any:
     _get(concursos, id_)
     try:
-        return concursos.marcar_tarefa(id_, tarefa_id, marcacao.feito)
+        return concursos.mark_task(id_, tarefa_id, marcacao.feito)
     except NotFound as e:
         raise HTTPException(404, "Tarefa não encontrada") from e
 
@@ -395,7 +395,7 @@ def mark(id_: str, tarefa_id: str, marcacao: Marking, concursos: ExamsDep) -> An
 def add_deadline(id_: str, prazo: DeadlineInput, concursos: ExamsDep) -> Any:
     _get(concursos, id_)
     try:
-        return concursos.adicionar_prazo(id_, prazo.model_dump())
+        return concursos.add_deadline(id_, prazo.model_dump())
     except Invalid as e:
         raise HTTPException(422, str(e)) from e
 
@@ -404,7 +404,7 @@ def add_deadline(id_: str, prazo: DeadlineInput, concursos: ExamsDep) -> Any:
 def remove_deadline(id_: str, prazo_id: str, concursos: ExamsDep) -> Response:
     _get(concursos, id_)
     try:
-        concursos.remover_prazo(id_, prazo_id)
+        concursos.remove_deadline(id_, prazo_id)
     except NotFound as e:
         raise HTTPException(404, "Prazo não encontrado") from e
     return Response(status_code=204)
@@ -435,18 +435,18 @@ async def _generate_mock_exam(
                 "limite_s": min(840, 120 + n * 12),
             }
         )
-        exams.estudo.concluir_simulado(id_, sid, data)
+        exams.study.finish_mock_exam(id_, sid, data)
     except Exception as e:
         logger.exception("Falha ao gerar simulado %s", sid)
-        exams.estudo.falha_simulado(id_, sid, str(e) or type(e).__name__)
+        exams.study.failure_mock_exam(id_, sid, str(e) or type(e).__name__)
 
 
 @router.get("/{id_}/simulados")
 def mock_exams(id_: str, concursos: ExamsDep) -> Any:
     _get(concursos, id_)
     return {
-        "simulados": concursos.estudo.simulados(id_),
-        "desempenho": concursos.estudo.desempenho(id_),
+        "simulados": concursos.study.mock_exams(id_),
+        "desempenho": concursos.study.performance(id_),
     }
 
 
@@ -460,7 +460,7 @@ def new_mock_exam(
     if reason:
         raise HTTPException(503, reason)
     try:
-        record, prompt = concursos.estudo.pedido_simulado(c, pedido.questoes, pedido.disciplina)
+        record, prompt = concursos.study.request_mock_exam(c, pedido.questoes, pedido.disciplina)
     except EstudoInvalido as e:
         raise HTTPException(422, str(e)) from e
     tarefas.add_task(_generate_mock_exam, concursos, ia, id_, record["id"], prompt, pedido.questoes)
@@ -471,7 +471,7 @@ def new_mock_exam(
 def answer(id_: str, sid: str, r: Answers, concursos: ExamsDep) -> Any:
     _get(concursos, id_)
     try:
-        return concursos.estudo.responder(id_, sid, r.respostas, r.segundos)
+        return concursos.study.answer(id_, sid, r.respostas, r.segundos)
     except KeyError as e:
         raise HTTPException(404, "Simulado não encontrado") from e
     except EstudoInvalido as e:
@@ -481,7 +481,7 @@ def answer(id_: str, sid: str, r: Answers, concursos: ExamsDep) -> Any:
 @router.delete("/{id_}/simulados/{sid}", status_code=204)
 def delete_mock_exam(id_: str, sid: str, concursos: ExamsDep) -> Response:
     _get(concursos, id_)
-    concursos.estudo.excluir_simulado(id_, sid)
+    concursos.study.delete_mock_exam(id_, sid)
     return Response(status_code=204)
 
 
@@ -490,20 +490,20 @@ def delete_mock_exam(id_: str, sid: str, concursos: ExamsDep) -> Response:
 
 async def _fetch_materials(exams: Exams, request_state: Any, id_: str) -> None:
     try:
-        await exams.estudo.buscar_materiais(
+        await exams.study.fetch_materials(
             exams.obter(id_),
             request_state.concursos_busca,
             getattr(request_state, "concursos_llm", None),
         )
     except Exception as e:
         logger.exception("Falha ao buscar materiais %s", id_)
-        exams.estudo.marcar_materiais(id_, "erro", str(e) or type(e).__name__)
+        exams.study.mark_materials(id_, "erro", str(e) or type(e).__name__)
 
 
 @router.get("/{id_}/materiais")
 def materials(id_: str, concursos: ExamsDep) -> Any:
     _get(concursos, id_)
-    return concursos.estudo.materiais(id_)
+    return concursos.study.materials(id_)
 
 
 @router.post("/{id_}/materiais/buscar", status_code=202)
@@ -512,6 +512,6 @@ def fetch_materials(
 ) -> Any:
     """Provas anteriores da banca, questões, apostilas e vídeos (busca na web + LLM local)."""
     _get(concursos, id_)
-    concursos.estudo.marcar_materiais(id_, "buscando")
+    concursos.study.mark_materials(id_, "buscando")
     tarefas.add_task(_fetch_materials, concursos, request.app.state, id_)
-    return concursos.estudo.materiais(id_)
+    return concursos.study.materials(id_)

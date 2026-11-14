@@ -618,7 +618,7 @@ def ensure_ecproj(ep: str, i: int):
     """.ecproj da peça (cria agora se a peça é de antes do EffectCraft); None se a citação não achou o trecho."""
     from esteira.graphics import effectcraft, plan
     p = _project(ep)
-    items = p.carregar_json("graficos.json")
+    items = p.load_json("graficos.json")
     if not 0 <= i < len(items):
         raise HTTPException(404, "peça não encontrada")
     c = items[i]
@@ -633,7 +633,7 @@ def ensure_ecproj(ep: str, i: int):
         ecp = effectcraft.build(*pc, c["dur"], folder / f"{base}.ecproj", w, h,
                                     p.cfg.get("graficos", {}).get("cor", "#ffd400"), p.cfg["video"]["fps"])
         c.update(ecproj=str(ecp.relative_to(p.pasta)), ec_gerado=ecp.stat().st_mtime)
-        p.salvar_json("graficos.json", items)
+        p.save_json("graficos.json", items)
     return ecp
 
 

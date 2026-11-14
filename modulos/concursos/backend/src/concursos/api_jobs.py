@@ -42,24 +42,24 @@ class Resume(BaseModel):
 
 @router.get("")
 async def list_all(vagas: SlotsDep) -> Any:
-    await vagas.localizar()
-    return vagas.listar()
+    await vagas.locate()
+    return vagas.list_all()
 
 
 @router.get("/curriculos")
 def resumes(vagas: SlotsDep) -> Any:
     """`{pasta, curriculos: [{id, nome, vaga, em, padrao}]}` (o padrão vem primeiro)."""
-    return vagas.curriculos.listar()
+    return vagas.resumes.list_all()
 
 
 @router.post("/curriculos", status_code=201)
 def create_resume(corpo: Resume, vagas: SlotsDep) -> Any:
-    return vagas.curriculos.salvar(None, corpo.nome, corpo.conteudo)
+    return vagas.resumes.salvar(None, corpo.nome, corpo.conteudo)
 
 
 @router.get("/curriculos/{cid}")
 def read_resume(cid: str, vagas: SlotsDep) -> Any:
-    c = vagas.curriculos.ler(cid)
+    c = vagas.resumes.ler(cid)
     if c is None:
         raise HTTPException(404, "currículo não encontrado")
     return c
@@ -67,27 +67,27 @@ def read_resume(cid: str, vagas: SlotsDep) -> Any:
 
 @router.put("/curriculos/{cid}")
 def save_resume(cid: str, corpo: Resume, vagas: SlotsDep) -> Any:
-    if not vagas.curriculos.existe(cid):
+    if not vagas.resumes.existe(cid):
         raise HTTPException(404, "currículo não encontrado")
-    return vagas.curriculos.salvar(cid, corpo.nome, corpo.conteudo)
+    return vagas.resumes.salvar(cid, corpo.nome, corpo.conteudo)
 
 
 @router.post("/curriculos/{cid}/padrao")
 def resume_default(cid: str, vagas: SlotsDep) -> Any:
-    if not vagas.curriculos.definir_padrao(cid):
+    if not vagas.resumes.definir_default(cid):
         raise HTTPException(404, "currículo não encontrado")
-    return vagas.curriculos.listar()
+    return vagas.resumes.list_all()
 
 
 @router.delete("/curriculos/{cid}", status_code=204)
 def remove_resume(cid: str, vagas: SlotsDep) -> None:
-    if not vagas.curriculos.remover(cid):
+    if not vagas.resumes.remover(cid):
         raise HTTPException(404, "currículo não encontrado")
 
 
 @router.put("/perfil")
 def save_profile(corpo: Profile, vagas: SlotsDep) -> Any:
-    return vagas.salvar_perfil(corpo.model_dump())
+    return vagas.save_profile(corpo.model_dump())
 
 
 @router.post("/pesquisar", status_code=202)
@@ -97,7 +97,7 @@ def search(vagas: SlotsDep, ia: AiDep, tarefas: BackgroundTasks) -> Any:
     if reason:
         raise HTTPException(503, reason)
     if not vagas.pesquisando:
-        tarefas.add_task(vagas.pesquisar_claude, ia.executar)
+        tarefas.add_task(vagas.search_claude, ia.executar)
     return {"pesquisando": True}
 
 
@@ -108,9 +108,9 @@ def generate_resume(vaga_id: str, vagas: SlotsDep, ia: AiDep, tarefas: Backgroun
     reason = ia.disponivel()
     if reason:
         raise HTTPException(503, reason)
-    if vaga_id not in vagas.gerando:
-        vagas.gerando.add(vaga_id)  # já aqui, para dois toques não gerarem duas vezes
-        tarefas.add_task(vagas.gerar_curriculo, vaga_id, ia.executar)
+    if vaga_id not in vagas.generating:
+        vagas.generating.add(vaga_id)  # já aqui, para dois toques não gerarem duas vezes
+        tarefas.add_task(vagas.generate_resume, vaga_id, ia.executar)
     return {"gerando": True}
 
 

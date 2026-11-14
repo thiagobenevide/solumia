@@ -134,7 +134,7 @@ async def url_action(settings: Settings, extension: str, id_: str) -> str:
 async def session(request: Request, id_: str) -> dict[str, Any]:
     """Usado por `POST /api/arquivos/{id}/collabora` (rota protegida pela chave do app)."""
     settings: Settings = request.app.state.settings
-    collection: Collection = request.app.state.biblioteca
+    collection: Collection = request.app.state.collection
     try:
         meta = collection.obter(id_)
     except FileNotFound as e:
@@ -150,21 +150,21 @@ async def session(request: Request, id_: str) -> dict[str, Any]:
 
 class Locks:
     def __init__(self) -> None:
-        self._travas: dict[str, tuple[str, float]] = {}
+        self._locks: dict[str, tuple[str, float]] = {}
         self.mutex = threading.Lock()
 
     def atual(self, id_: str) -> str:
-        lock = self._travas.get(id_)
+        lock = self._locks.get(id_)
         if lock is None or lock[1] < time.time():
-            self._travas.pop(id_, None)
+            self._locks.pop(id_, None)
             return ""
         return lock[0]
 
     def travar(self, id_: str, valor: str) -> None:
-        self._travas[id_] = (valor, time.time() + LOCK_SECONDS)
+        self._locks[id_] = (valor, time.time() + LOCK_SECONDS)
 
     def soltar(self, id_: str) -> None:
-        self._travas.pop(id_, None)
+        self._locks.pop(id_, None)
 
 
 def _locks(request: Request) -> Locks:
@@ -187,7 +187,7 @@ def _conflict(atual: str, motivo: str) -> Response:
 def _meta(request: Request, id_: str, token: str) -> tuple[dict[str, Any], dict[str, Any]]:
     data = validate_token(_secret(request), token, id_)
     try:
-        return request.app.state.biblioteca.obter(id_), data
+        return request.app.state.collection.obter(id_), data
     except FileNotFound as e:
         raise HTTPException(404, "Arquivo não encontrado") from e
 
@@ -218,7 +218,7 @@ def check_file_info(id_: str, request: Request, access_token: str = "") -> Any:
 @router.get("/files/{id_}/contents")
 def get_file(id_: str, request: Request, access_token: str = "") -> Response:
     meta, _ = _meta(request, id_, access_token)
-    path, _ = request.app.state.biblioteca.caminho_original(id_)
+    path, _ = request.app.state.collection.path_original(id_)
     return Response(
         path.read_bytes(),
         media_type="application/octet-stream",
@@ -244,13 +244,13 @@ async def put_file(
         return JSONResponse(
             status_code=409, content={"COOLStatusCode": 1010, "LOOLStatusCode": 1010}
         )
-    collection: Collection = request.app.state.biblioteca
+    collection: Collection = request.app.state.collection
     try:
         new = collection.substituir(id_, await request.body())
     except FileInvalid as e:
         raise HTTPException(400, str(e)) from e
     if new["status"] == "convertendo":
-        tarefas.add_task(collection.converter, id_)
+        tarefas.add_task(collection.convert, id_)
     return JSONResponse(
         {"LastModifiedTime": new["atualizado"]},
         headers={"X-WOPI-ItemVersion": new["sha256"]},

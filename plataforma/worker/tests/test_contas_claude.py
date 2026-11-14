@@ -42,14 +42,14 @@ def contas(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Accounts:
 
 def test_entrar_ativar_e_remover(contas: Accounts, tmp_path: Path) -> None:
     async def fluxo() -> None:
-        assert (await contas.listar())["contas"][0]["logado"] is True
-        url = (await contas.entrar("trabalho"))["url"]
+        assert (await contas.list_all())["contas"][0]["logado"] is True
+        url = (await contas.enter("trabalho"))["url"]
         assert url == "https://claude.com/cai/oauth/authorize?code=true&x=1"
         assert (tmp_path / "contas/trabalho/projects").is_symlink()
         with pytest.raises(RuntimeError, match="não está logada"):
-            await contas.ativar("trabalho")
+            await contas.activate("trabalho")
         await contas.codigo("trabalho", "certo")
-        items = await contas.ativar("trabalho")
+        items = await contas.activate("trabalho")
         assert items["ativa"] == "trabalho"
         assert os.environ["CLAUDE_CONFIG_DIR"] == str(tmp_path / "contas/trabalho")
         items = await contas.remover("trabalho")
@@ -61,11 +61,11 @@ def test_entrar_ativar_e_remover(contas: Accounts, tmp_path: Path) -> None:
 
 def test_codigo_errado_e_nome_invalido(contas: Accounts) -> None:
     async def fluxo() -> None:
-        await contas.entrar("outra")
+        await contas.enter("outra")
         with pytest.raises(RuntimeError, match="não foi concluído"):
             await contas.codigo("outra", "errado")
         with pytest.raises(RuntimeError, match="inválido"):
-            await contas.entrar("../fora")
+            await contas.enter("../fora")
         with pytest.raises(RuntimeError, match="principal"):
             await contas.remover(MAIN)
 

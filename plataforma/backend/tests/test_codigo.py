@@ -29,7 +29,7 @@ def api(tmp_path: Path) -> TestClient:
         return {"ok": tarefa != "codigo.parar", "status": "## master"}
 
     app.state.executor_codigo = Executor(pedir, lambda: None)
-    app.state.pedidos = requests
+    app.state.requests = requests
     # O Código exige sessão do login com código do Authenticator recente (não basta a chave).
     token, _ = issue_token("eu", SEGREDO, 60, {"totp": int(time.time())})
     return TestClient(app, headers={"Authorization": f"Bearer {token}"})
@@ -54,7 +54,7 @@ def test_aba_recebe_pedido_etapas_e_continua_a_sessao(api: TestClient) -> None:
         json={"texto": "crie a tela", "imagens": [{"nome": "ref.png", "b64": png}]},
     )
     assert r.status_code == 200 and r.json()["estado"] == "rodando"
-    task, payload = api.app.state.pedidos[-1]  # type: ignore[attr-defined]
+    task, payload = api.app.state.requests[-1]  # type: ignore[attr-defined]
     assert task == "codigo.enviar" and payload["claude_sessao"] is None
     # Segunda mensagem enquanto roda: recusada.
     assert api.post(
@@ -75,7 +75,7 @@ def test_aba_recebe_pedido_etapas_e_continua_a_sessao(api: TestClient) -> None:
     assert api.get(f"/api/codigo/sessoes/{aba['id']}/imagens/{name}").content == b"\x89PNG"
 
     api.post(f"/api/codigo/sessoes/{aba['id']}/commit", json={"push": True, "publicar": True})
-    _, payload = api.app.state.pedidos[-1]  # type: ignore[attr-defined]
+    _, payload = api.app.state.requests[-1]  # type: ignore[attr-defined]
     assert payload["claude_sessao"] == "abc"
     assert "git push" in payload["texto"] and "publicar_app" in payload["texto"]
 
@@ -86,13 +86,13 @@ def test_parar_destrava_aba_sem_processo_no_pc(api: TestClient) -> None:
     assert api.post(f"/api/codigo/sessoes/{aba['id']}/parar").json()["estado"] == "erro"
     assert api.get("/api/codigo/git").json()["status"] == "## master"
     api.get("/api/codigo/arquivo", params={"caminho": "a.py", "commit": "abc1"})
-    assert api.app.state.pedidos[-1] == (  # type: ignore[attr-defined]
+    assert api.app.state.requests[-1] == (  # type: ignore[attr-defined]
         "codigo.arquivo", {"caminho": "a.py", "commit": "abc1"}
     )
     api.get("/api/codigo/arvore")
-    assert api.app.state.pedidos[-1] == ("codigo.arvore", {"commit": ""})  # type: ignore[attr-defined]
+    assert api.app.state.requests[-1] == ("codigo.arvore", {"commit": ""})  # type: ignore[attr-defined]
     api.get("/api/codigo/busca", params={"termo": "x", "observacoes": True})
-    assert api.app.state.pedidos[-1] == (  # type: ignore[attr-defined]
+    assert api.app.state.requests[-1] == (  # type: ignore[attr-defined]
         "codigo.buscar", {"termo": "x", "commit": "", "observacoes": True}
     )
     assert api.delete(f"/api/codigo/sessoes/{aba['id']}").status_code == 204
@@ -106,7 +106,7 @@ def test_contas_do_claude_vao_ao_worker(api: TestClient) -> None:
     api.post("/api/codigo/contas/trabalho/codigo", json={"codigo": "abc#123"})
     api.post("/api/codigo/contas/trabalho/ativar")
     api.delete("/api/codigo/contas/trabalho")
-    assert api.app.state.pedidos == [  # type: ignore[attr-defined]
+    assert api.app.state.requests == [  # type: ignore[attr-defined]
         ("contas.listar", {}),
         ("contas.entrar", {"nome": "trabalho"}),
         ("contas.codigo", {"nome": "trabalho", "codigo": "abc#123"}),

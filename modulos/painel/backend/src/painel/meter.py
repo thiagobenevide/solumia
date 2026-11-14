@@ -20,28 +20,28 @@ def _pct(values: list[int], p: float) -> int | None:
 
 class Meter:
     def __init__(self, root: str | Path) -> None:
-        self.raiz = Path(root).expanduser()
-        self.raiz.mkdir(parents=True, exist_ok=True)
-        self._arquivo = self.raiz / "uso.jsonl"
-        self._trava = threading.Lock()
-        self._linhas: deque[dict[str, Any]] = deque(maxlen=MEMORY)
+        self.root = Path(root).expanduser()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self._arquivo = self.root / "uso.jsonl"
+        self._lock = threading.Lock()
+        self._lines: deque[dict[str, Any]] = deque(maxlen=MEMORY)
         if self._arquivo.exists():
             with self._arquivo.open(encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
-                        self._linhas.append(json.loads(line))
+                        self._lines.append(json.loads(line))
 
     def registrar(self, event: dict[str, Any]) -> None:
         line = {"em": time.time(), **event}
-        with self._trava:
-            self._linhas.append(line)
+        with self._lock:
+            self._lines.append(line)
             with self._arquivo.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
     def resumo(self, horas: float = 24, recent: int = 50) -> dict[str, Any]:
         since = time.time() - horas * 3600
-        with self._trava:
-            lines = [x for x in self._linhas if x["em"] >= since]
+        with self._lock:
+            lines = [x for x in self._lines if x["em"] >= since]
         providers: dict[str, dict[str, Any]] = {}
         for p in sorted({x["provedor"] for x in lines}):
             dele = [x for x in lines if x["provedor"] == p]

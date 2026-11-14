@@ -64,10 +64,10 @@ def test_agenda_sugerida_e_contestacao(api: TestClient) -> None:
 
 def test_metas_e_disciplina(tmp_path: Path) -> None:
     c = Nagger(tmp_path)
-    reading = c.criar_meta(
+    reading = c.create_meta(
         {"titulo": "Ler", "frequencia": "diaria", "alvo": 2, "unidade": "capítulo"}
     )
-    c.registrar_acao(reading["id"])
+    c.register_action(reading["id"])
     tasks = [
         {
             "id": "t1",
@@ -77,7 +77,7 @@ def test_metas_e_disciplina(tmp_path: Path) -> None:
             "coluna": "pendente",
         }
     ]
-    c.sugerir(c.agora().date().isoformat(), tasks)
+    c.suggest(c.agora().date().isoformat(), tasks)
 
     night = c.agora().replace(hour=19, minute=0)
     d = c.disciplina(tasks, night)
@@ -91,7 +91,7 @@ def test_metas_e_disciplina(tmp_path: Path) -> None:
 
 def test_meta_semanal_ritmo(tmp_path: Path) -> None:
     c = Nagger(tmp_path)
-    m = c.criar_meta({"titulo": "Treino", "frequencia": "semanal", "alvo": 7})
+    m = c.create_meta({"titulo": "Treino", "frequencia": "semanal", "alvo": 7})
     quarta = datetime(2026, 10, 28).date()
     assert c.metas(quarta)[0]["esperado"] == 3.0
     assert c.metas(quarta)[0]["id"] == m["id"]
@@ -283,7 +283,7 @@ def test_dashboard_mede_os_pedidos(app, api: TestClient) -> None:  # type: ignor
     # o arquivo persiste: um novo medidor relê os pedidos
     from painel.meter import Meter
 
-    assert Meter(m.raiz).resumo()["provedores"]["local"]["pedidos"] == 2
+    assert Meter(m.root).resumo()["provedores"]["local"]["pedidos"] == 2
 
 
 def test_notificador_envia_cada_alerta_uma_vez(tmp_path: Path) -> None:
@@ -301,9 +301,9 @@ def test_notificador_envia_cada_alerta_uma_vez(tmp_path: Path) -> None:
         }
     ]
     n = Notifier(c, lambda: tasks, "https://ntfy.sh/x", enviar=lambda *a: enviados.append(a))
-    assert n.verificar() and any("Imposto" in e[1] and e[2] == "high" for e in enviados)
+    assert n.verify() and any("Imposto" in e[1] and e[2] == "high" for e in enviados)
     total = len(enviados)
-    assert n.verificar() == [] and len(enviados) == total
+    assert n.verify() == [] and len(enviados) == total
 
 
 def test_agente_cria_nos_outros_modulos(tmp_path: Path) -> None:
@@ -346,10 +346,10 @@ def test_agente_cria_nos_outros_modulos(tmp_path: Path) -> None:
     assert "criar_caderno" in system and "agora" not in system.split("# Retrato do dia")[1]
     assert question.startswith("[Hoje ") and question.endswith("crie um caderno e o resto")
 
-    assert [c["titulo"] for c in app.state.cadernos_design.listar()] == ["Diário"]
-    flow = app.state.quadros_design.listar()[0]
+    assert [c["titulo"] for c in app.state.cadernos_design.list_all()] == ["Diário"]
+    flow = app.state.quadros_design.list_all()[0]
     elements = app.state.quadros_design.obter(flow["id"])["elementos"]
     assert {e["tipo"] for e in elements} == {"no", "ligacao"}
-    assert app.state.estudos.listar_projetos()[0]["secoes"] == ["Macro"]
-    assert app.state.estudos.listar_leituras()[0]["titulo"] == "O Capital"
-    assert any(m["titulo"] == "Ler 20 páginas" for m in app.state.cobrador.metas())
+    assert app.state.studies.list_projects()[0]["secoes"] == ["Macro"]
+    assert app.state.studies.list_readings()[0]["titulo"] == "O Capital"
+    assert any(m["titulo"] == "Ler 20 páginas" for m in app.state.nagger.metas())

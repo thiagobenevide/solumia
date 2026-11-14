@@ -195,37 +195,37 @@ def read(arquivo: Path, root: Path) -> Note:
 
 class Vault:
     def __init__(self, root: Path | str) -> None:
-        self.raiz = Path(root).expanduser()
-        self._notas: dict[str, Note] = {}
-        self._trava = threading.RLock()
+        self.root = Path(root).expanduser()
+        self._notes: dict[str, Note] = {}
+        self._lock = threading.RLock()
 
     # ---------- índice ----------
 
-    def _sincronizar(self) -> None:
-        self.raiz.mkdir(parents=True, exist_ok=True)
-        by_path = {n.caminho: n for n in self._notas.values()}
+    def _sync(self) -> None:
+        self.root.mkdir(parents=True, exist_ok=True)
+        by_path = {n.caminho: n for n in self._notes.values()}
         new: dict[str, Note] = {}
-        for file in self.raiz.rglob("*.md"):
-            rel = file.relative_to(self.raiz)
+        for file in self.root.rglob("*.md"):
+            rel = file.relative_to(self.root)
             if any(p.startswith(".") for p in rel.parts):
                 continue
             current = by_path.get(rel)
             if current is None or current.mtime_ns != file.stat().st_mtime_ns:
-                current = read(file, self.raiz)
+                current = read(file, self.root)
             new[current.id] = current
-        self._notas = new
+        self._notes = new
 
-    def _indice(self) -> dict[str, Note]:
+    def _index(self) -> dict[str, Note]:
         idx: dict[str, Note] = {}
-        for n in self._notas.values():
+        for n in self._notes.values():
             for name in (n.titulo, *n.aliases):
                 idx.setdefault(key(name), n)
         return idx
 
-    def _entradas(self, idx: dict[str, Note]) -> dict[str, list[tuple[Note, str, str]]]:
+    def _inputs(self, idx: dict[str, Note]) -> dict[str, list[tuple[Note, str, str]]]:
         """id -> [(origem, tipo, alvo como escrito)]."""
         ent: dict[str, list[tuple[Note, str, str]]] = {}
-        for n in self._notas.values():
+        for n in self._notes.values():
             for kind, target in n.relacoes():
                 destination = idx.get(key(target))
                 if destination and destination.id != n.id:
@@ -233,20 +233,20 @@ class Vault:
         return ent
 
     def _pegar(self, id_: str) -> Note:
-        self._sincronizar()
-        if id_ not in self._notas:
+        self._sync()
+        if id_ not in self._notes:
             raise NoteNotFound(id_)
-        return self._notas[id_]
+        return self._notes[id_]
 
     # ---------- leitura ----------
 
-    def listar(self, q: str = "", tipo: str | None = None, tag: str | None = None) -> list[dict]:
-        with self._trava:
-            self._sincronizar()
-            ent = self._entradas(self._indice())
+    def list_all(self, q: str = "", tipo: str | None = None, tag: str | None = None) -> list[dict]:
+        with self._lock:
+            self._sync()
+            ent = self._inputs(self._index())
             term = key(q)
             output = []
-            for n in self._notas.values():
+            for n in self._notes.values():
                 # "nota" também traz os tipos que o app não conhece (roteiro, moc...)
                 outro = tipo == "nota" and n.tipo not in KINDS_DO_APP.values()
                 if tipo and n.tipo != tipo and not outro or tag and tag not in n.tags:
@@ -257,10 +257,10 @@ class Vault:
             return sorted(output, key=lambda r: r["atualizada"], reverse=True)
 
     def obter(self, id_: str) -> dict[str, Any]:
-        with self._trava:
+        with self._lock:
             n = self._pegar(id_)
-            idx = self._indice()
-            ent = self._entradas(idx)
+            idx = self._index()
+            ent = self._inputs(idx)
             saidas = []
             for kind, target in n.relacoes():
                 d = idx.get(key(target))
@@ -273,7 +273,7 @@ class Vault:
             names = [key(x) for x in (n.titulo, *n.aliases) if len(x) >= 3]
             mencoes = [
                 {"tipo": "sem link", "id": o.id, "titulo": o.titulo, "trecho": ""}
-                for o in self._notas.values()
+                for o in self._notes.values()
                 if o.id != n.id
                 and o.id not in ligadas
                 and any(re.search(rf"\b{re.escape(x)}\b", key(o.corpo)) for x in names)
@@ -289,24 +289,24 @@ class Vault:
                 "mencoes": mencoes[:20],
             }
 
-    def na_pasta(self, pasta: str) -> list[dict[str, Any]]:
+    def in_folder(self, pasta: str) -> list[dict[str, Any]]:
         """Notas dentro de `pasta` (e subpastas), com propriedades: para módulos que organizam
         o cofre por pastas, como o YouTube (`Notas/Empreendimento/YouTube/<canal>/...`)."""
         root = Path(pasta)
-        with self._trava:
-            self._sincronizar()
+        with self._lock:
+            self._sync()
             return [
                 n.resumo() | {"aliases": n.aliases, "propriedades": n.propriedades}
-                for n in self._notas.values()
+                for n in self._notes.values()
                 if n.caminho.parent == root or root in n.caminho.parents
             ]
 
-    def sugerir(self, q: str, limite: int = 10) -> list[dict[str, str]]:
-        with self._trava:
-            self._sincronizar()
+    def suggest(self, q: str, limite: int = 10) -> list[dict[str, str]]:
+        with self._lock:
+            self._sync()
             term = key(q)
             found = []
-            for n in self._notas.values():
+            for n in self._notes.values():
                 for name in (n.titulo, *n.aliases):
                     c = key(name)
                     if term in c:
@@ -317,14 +317,14 @@ class Vault:
                 {"id": n.id, "titulo": name, "tipo": n.tipo} for *_, name, n in found[:limite]
             ]
 
-    def analise(self, hoje: date | None = None) -> dict[str, Any]:
+    def analysis(self, hoje: date | None = None) -> dict[str, Any]:
         """Visão do cofre para o painel e o Cobrador: saúde dos links e o que está atrasado."""
         hoje = hoje or date.today()
-        with self._trava:
-            self._sincronizar()
-            idx = self._indice()
-            ent = self._entradas(idx)
-            notes = list(self._notas.values())
+        with self._lock:
+            self._sync()
+            idx = self._index()
+            ent = self._inputs(idx)
+            notes = list(self._notes.values())
             quebrados, with_output = [], set()
             for n in notes:
                 for kind, target in n.relacoes():
@@ -363,12 +363,12 @@ class Vault:
                 "paradas": resumos([n for n in opened if n.atualizada[:10] < limit_stop]),
             }
 
-    def grafo(self) -> dict[str, list[dict[str, Any]]]:
-        with self._trava:
-            self._sincronizar()
-            idx = self._indice()
+    def graph(self) -> dict[str, list[dict[str, Any]]]:
+        with self._lock:
+            self._sync()
+            idx = self._index()
             arestas = []
-            for n in self._notas.values():
+            for n in self._notes.values():
                 for kind, target in n.relacoes():
                     d = idx.get(key(target))
                     if d and d.id != n.id:
@@ -385,17 +385,17 @@ class Vault:
                     "tags": n.tags,
                     "grau": grau.get(n.id, 0),
                 }
-                for n in self._notas.values()
+                for n in self._notes.values()
             ]
             return {"nos": nodes, "arestas": arestas}
 
     # ---------- escrita ----------
 
     def criar(self, dados: dict[str, Any]) -> dict[str, Any]:
-        with self._trava:
-            self._sincronizar()
+        with self._lock:
+            self._sync()
             title = name_file(dados["titulo"])
-            if key(title) in self._indice():
+            if key(title) in self._index():
                 raise NoteConflict(f"Já existe uma nota chamada {title!r}")
             folder = Path(dados.get("pasta") or "")
             if folder.is_absolute() or ".." in folder.parts:
@@ -413,32 +413,32 @@ class Vault:
                 criada=now,
                 atualizada=now,
             )
-            self._gravar(n)
+            self._write(n)
             return self.obter(n.id)
 
     def atualizar(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
-        with self._trava:
+        with self._lock:
             n = self._pegar(id_)
             new = name_file(dados.get("titulo") or n.titulo)
             if new != n.titulo:
-                other = self._indice().get(key(new))
+                other = self._index().get(key(new))
                 if other and other.id != n.id:
                     raise NoteConflict(f"Já existe uma nota chamada {new!r}")
-                self._renomear(n, new)
+                self._rename(n, new)
             for field in ("tipo", "tags", "aliases", "propriedades", "corpo"):
                 if dados.get(field) is not None:
                     setattr(n, field, dados[field])
             n.atualizada = _now()
-            self._gravar(n)
+            self._write(n)
             return self.obter(n.id)
 
     def excluir(self, id_: str) -> None:
-        with self._trava:
+        with self._lock:
             n = self._pegar(id_)
-            (self.raiz / n.caminho).unlink(missing_ok=True)
-            del self._notas[id_]
+            (self.root / n.caminho).unlink(missing_ok=True)
+            del self._notes[id_]
 
-    def _renomear(self, n: Note, new: str) -> None:
+    def _rename(self, n: Note, new: str) -> None:
         """Move o arquivo e reescreve os links das outras notas, como o Obsidian faz."""
         old = key(n.titulo)
 
@@ -446,24 +446,24 @@ class Vault:
             return f"[[{new}" if key(m.group(1)) == old else m.group(0)
 
         default = re.compile(r"\[\[([^\[\]|#]+)(?=[\]|#])")
-        (self.raiz / n.caminho).unlink(missing_ok=True)
+        (self.root / n.caminho).unlink(missing_ok=True)
         n.caminho = n.caminho.with_name(f"{new}.md")
         n.titulo = new
-        for o in self._notas.values():
+        for o in self._notes.values():
             if o.id == n.id:
                 continue
             body = default.sub(trocar, o.corpo)
             props = {k: _swap(v, default, trocar) for k, v in o.propriedades.items()}
             if body != o.corpo or props != o.propriedades:
                 o.corpo, o.propriedades = body, props
-                self._gravar(o)
+                self._write(o)
 
-    def _gravar(self, n: Note) -> None:
-        file = self.raiz / n.caminho
+    def _write(self, n: Note) -> None:
+        file = self.root / n.caminho
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text(n.texto(), "utf-8")
         n.mtime_ns = file.stat().st_mtime_ns
-        self._notas[n.id] = n
+        self._notes[n.id] = n
 
 
 def _swap(v: Any, default: re.Pattern[str], swap: Callable[[re.Match[str]], str]) -> Any:

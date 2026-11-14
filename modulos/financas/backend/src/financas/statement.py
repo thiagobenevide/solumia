@@ -388,7 +388,7 @@ def write_entries(arm: Warehouse, items: list[dict[str, Any]], account_id: str) 
     """Grava os lançamentos lidos sem duplicar (mesmo hash), com parcela, forma de pagamento,
     categoria e contraparte."""
     account = arm.obter("contas", account_id)
-    with arm.trava:
+    with arm.lock:
         existentes = {t["hash"] for t in arm.todos("transacoes") if t["hash"]}
         history = _history(arm)
         seen: dict[str, int] = {}
@@ -433,7 +433,7 @@ def write_entries(arm: Warehouse, items: list[dict[str, Any]], account_id: str) 
 
 
 def apply_rules(arm: Warehouse) -> int:
-    with arm.trava:
+    with arm.lock:
         history = _history(arm)
         accounts = {c["id"]: c["tipo"] for c in arm.todos("contas")}
         n = 0
@@ -465,7 +465,7 @@ def fix(arm: Warehouse, originais: dict[str, list[tuple[str, bytes]]]) -> dict[s
     originais ([originais] por conta, relidos com a regra nova); sem original, do texto. O hash é
     refeito para a reimportação do mesmo arquivo continuar sem duplicar."""
     sinais = 0
-    with arm.trava:
+    with arm.lock:
         cartoes = [c for c in arm.todos("contas") if c["tipo"] == "cartao"]
         for account in cartoes:
             certos: dict[tuple[str, str, float], float] = {}

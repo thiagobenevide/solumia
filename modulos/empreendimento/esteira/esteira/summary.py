@@ -18,7 +18,7 @@ def _ids(texto):
 
 
 def summary(project, cenas=None, without_text=False):
-    plan = project.carregar_json("plano.json")
+    plan = project.load_json("plano.json")
     so = _ids(cenas)
     without_media = [c["id"] for c in plan["cenas"] if not c.get("midia")]
     print(f"{plan.get('titulo') or '(sem título)'} · {plan['duracao']:.0f}s · {len(plan['cenas'])} cenas"
@@ -39,8 +39,8 @@ def summary(project, cenas=None, without_text=False):
 def _words(project):
     # alinhamento.json tem o texto do roteiro (grafia certa); a transcrição é o fallback.
     if project.caminho("alinhamento.json").exists():
-        return project.carregar_json("alinhamento.json")
-    return project.carregar_json("transcricao.json")["palavras"]
+        return project.load_json("alinhamento.json")
+    return project.load_json("transcricao.json")["palavras"]
 
 
 def words(project, de=0.0, ate=None):
@@ -66,7 +66,7 @@ def adjust(project, arquivo=None):
     Só os campos informados mudam. Destaque pode ser texto puro: o início é achado nas palavras da cena.
     """
     entry = open(arquivo, encoding="utf-8").read() if arquivo else sys.stdin.read()
-    plan = project.carregar_json("plano.json")
+    plan = project.load_json("plano.json")
     by_id = {c["id"]: c for c in plan["cenas"]}
     words_ = _words(project)
     errors, mudou = [], []
@@ -106,7 +106,7 @@ def adjust(project, arquivo=None):
             ed["destaques"] = items
         c.update(ed)
         mudou.append(str(c["id"]))
-    project.salvar_json("plano.json", plan)
+    project.save_json("plano.json", plan)
     print(f"  {len(mudou)} cenas ajustadas" + (f": {','.join(mudou)}" if mudou else ""))
     for e in errors:
         print(f"  ! {e}")

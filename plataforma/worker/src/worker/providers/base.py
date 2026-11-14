@@ -22,6 +22,6 @@ class Provider(ABC):
         """Modelos disponíveis, carregados e ocupados (processando) agora."""
         return {"modelos": await self.list_models(), "carregados": [], "ocupados": []}
 
-    async def carregar(self, modelo: str) -> dict[str, Any]:
+    async def load(self, modelo: str) -> dict[str, Any]:
         """Troca o modelo carregado (pedido pelo app, via Gateway)."""
         raise NotImplementedError("Este provider não troca de modelo")

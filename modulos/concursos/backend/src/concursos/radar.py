@@ -288,36 +288,36 @@ class Radar:
         transporte: httpx.AsyncBaseTransport | None = None,
         hoje: Callable[[], date] = date.today,
     ) -> None:
-        self.raiz = Path(root).expanduser() / "radar"
-        self.raiz.mkdir(parents=True, exist_ok=True)
+        self.root = Path(root).expanduser() / "radar"
+        self.root.mkdir(parents=True, exist_ok=True)
         self.llm = llm
-        self.origem_nome = origem
-        self.geo = Geo(self.raiz, transporte)
+        self.origin_name = origem
+        self.geo = Geo(self.root, transporte)
         self._transporte = transporte
         self.hoje = hoje
-        self._arquivo = self.raiz / "radar.json"
-        self._trava = asyncio.Lock()
+        self._arquivo = self.root / "radar.json"
+        self._lock = asyncio.Lock()
         self.coletando = False
         self.pesquisando_claude = False
 
     def _http(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=self._transporte, timeout=30, follow_redirects=True)
 
-    def _ler(self) -> dict[str, Any]:
+    def _read(self) -> dict[str, Any]:
         if not self._arquivo.exists():
             return {"atualizado": None, "erro": "", "origem": None, "itens": {}}
         data: dict[str, Any] = json.loads(self._arquivo.read_text("utf-8"))
         return data
 
-    def _gravar(self, dados: dict[str, Any]) -> None:
+    def _write(self, dados: dict[str, Any]) -> None:
         tmp = self._arquivo.with_suffix(".tmp")
         tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=1), "utf-8")
         tmp.replace(self._arquivo)
 
-    def listar(self) -> dict[str, Any]:
+    def list_all(self) -> dict[str, Any]:
         """Concursos de TI com inscrição aberta (ou sem data), do local de prova mais perto ao
         mais longe."""
-        data = self._ler()
+        data = self._read()
         today = self.hoje().isoformat()
         abertos = [
             i
@@ -342,28 +342,28 @@ class Radar:
         }
 
     def item(self, id_: str) -> dict[str, Any] | None:
-        return self._ler()["itens"].get(id_)
+        return self._read()["itens"].get(id_)
 
-    async def _origem(self) -> dict[str, Any]:
-        o = await self.geo.municipio(*self.origem_nome)
+    async def _origin(self) -> dict[str, Any]:
+        o = await self.geo.municipio(*self.origin_name)
         if not o:
-            raise ValueError(f"Cidade de origem não encontrada: {self.origem_nome}")
+            raise ValueError(f"Cidade de origem não encontrada: {self.origin_name}")
         return o
 
     async def atualizar(self, limit_llm: int = LIMIT_LLM) -> dict[str, Any]:
         """Uma coleta: listagens → filtro de TI → detalhamento dos novos pela LLM local."""
-        if self._trava.locked():
+        if self._lock.locked():
             return {"ja_rodando": True}
-        async with self._trava:
+        async with self._lock:
             self.coletando = True
             try:
-                return await self._atualizar(limit_llm)
+                return await self._update(limit_llm)
             finally:
                 self.coletando = False
 
-    async def _atualizar(self, limit_llm: int) -> dict[str, Any]:
-        data = self._ler()
-        data["origem"] = await self._origem()
+    async def _update(self, limit_llm: int) -> dict[str, Any]:
+        data = self._read()
+        data["origem"] = await self._origin()
         items: dict[str, Any] = data["itens"]
         new = 0
         async with self._http() as c:
@@ -397,7 +397,7 @@ class Radar:
             if (v.get("inscricoes_fim") or v["inscricao_ate"] or "9999") < cut
         ]:
             del items[k]
-        self._gravar(data)
+        self._write(data)
 
         # o que falhou (ex.: worker desligado) volta para a fila, até TENTATIVAS vezes
         for v in items.values():
@@ -421,7 +421,7 @@ class Radar:
                     )
                     detalhados += 1
                     failures += 1
-                self._gravar(data)
+                self._write(data)
                 await asyncio.sleep(0.5)  # gentil com o PCI
         data["atualizado"] = _now()
         if not self.llm:
@@ -430,7 +430,7 @@ class Radar:
             data["erro"] = f"A LLM local falhou em {failures} edital(is): {last_failure}"
         else:
             data["erro"] = ""
-        self._gravar(data)
+        self._write(data)
         return {"novos": new, "detalhados": detalhados}
 
     async def _detalhar(self, item: dict[str, Any], origem: dict[str, Any]) -> bool:
@@ -448,11 +448,11 @@ class Radar:
             # os PDFs do PCI ficam atrás de captcha: o edital vem do site oficial citado na notícia
             pdfs: list[str] = []
             for site in sites_official(news_item)[:2]:
-                pdfs += await self._pdfs_do_site(c, site)
+                pdfs += await self._pdfs_of_site(c, site)
             pdfs = list(dict.fromkeys(pdfs))[:8]
             notice = ""
             if pdfs:
-                notice = await self._trechos_pdf(c, pdfs[0])
+                notice = await self._spans_pdf(c, pdfs[0])
         assert self.llm is not None
         prompt = (
             f"Órgão: {item['orgao']} ({item['uf']})\n"
@@ -473,10 +473,10 @@ class Radar:
         notice_url = str(d.get("edital_url") or "")
         d["edital_url"] = notice_url if notice_url in pdfs else (pdfs[0] if pdfs else "")
         item["pdfs"] = pdfs
-        await self._aplicar(item, d, origem)
+        await self._apply(item, d, origem)
         return True
 
-    async def _aplicar(
+    async def _apply(
         self, item: dict[str, Any], d: dict[str, Any], origem: dict[str, Any]
     ) -> None:
         """Grava no item os dados extraídos (LLM local ou Claude), com sede, locais e rotas."""
@@ -508,10 +508,10 @@ class Radar:
         item["sede"] = await self.geo.municipio(
             str(sede_d.get("cidade") or ""), str(sede_d.get("uf") or item["uf"])
         )
-        await self._localizar(item, d.get("cidades_prova") or [], origem)
+        await self._locate(item, d.get("cidades_prova") or [], origem)
         item.update(estado="detalhado", detalhado_em=_now(), erro="")
 
-    async def pesquisar_claude(self, execute: ExecuteClaude) -> dict[str, Any]:
+    async def search_claude(self, execute: ExecuteClaude) -> dict[str, Any]:
         """Pesquisa na web pelo Claude Code (worker do PC): abertos e previstos para este ano e
         o próximo, que a listagem do PCI não traz, uma rodada por esfera (federal, estadual e
         municipal; uma busca só para o Brasil todo estoura o tempo e traz poucos). Os achados
@@ -522,7 +522,7 @@ class Radar:
         ids: set[str] = set()
         errors: list[str] = []
         try:
-            origin = await self._origem()
+            origin = await self._origin()
             for sphere in SPHERES:
                 try:
                     r = await execute(
@@ -536,8 +536,8 @@ class Radar:
                         }
                     )
                     # a coleta do PCI lê e grava o arquivo inteiro: espera ela terminar
-                    async with self._trava:
-                        ids |= await self._juntar_claude(r, origin, sphere)
+                    async with self._lock:
+                        ids |= await self._join_claude(r, origin, sphere)
                 except Exception as e:
                     logger.exception("Falha na pesquisa %s do radar pelo Claude", sphere)
                     errors.append(f"{sphere}: {str(e)[:200] or type(e).__name__}")
@@ -545,9 +545,9 @@ class Radar:
             logger.exception("Falha na pesquisa do radar pelo Claude")
             errors.append(str(e)[:300])
         finally:
-            data = self._ler()
+            data = self._read()
             data["claude"] = {"em": _now(), "achados": len(ids), "erro": "; ".join(errors)}
-            self._gravar(data)
+            self._write(data)
             self.pesquisando_claude = False
         if errors and not ids:
             return {"erro": "; ".join(errors)}
@@ -575,11 +575,11 @@ class Radar:
             f'Use "esfera": "{esfera}". Traga o máximo que conseguir confirmar.'
         )
 
-    async def _juntar_claude(
+    async def _join_claude(
         self, r: dict[str, Any], origem: dict[str, Any], esfera: str
     ) -> set[str]:
         today = self.hoje()
-        data = self._ler()
+        data = self._read()
         items: dict[str, Any] = data["itens"]
         ids: set[str] = set()
         for c in r.get("concursos") or []:
@@ -610,16 +610,16 @@ class Radar:
                 pdfs=[],
             )
             try:
-                await self._aplicar(item, c, origem)
+                await self._apply(item, c, origem)
             except Exception:
                 logger.exception("Falha ao localizar %s", id_)
                 continue
             items[id_] = item
             ids.add(id_)
-        self._gravar(data)
+        self._write(data)
         return ids
 
-    async def _localizar(
+    async def _locate(
         self, item: dict[str, Any], cidades: list[Any], origem: dict[str, Any]
     ) -> None:
         local_names = []
@@ -650,13 +650,13 @@ class Radar:
         local_names.sort(key=lambda x: x["km_reta"])
         # rota de verdade só para os 3 mais perto em linha reta (o OSRM público é compartilhado)
         for loc in local_names[:3]:
-            route = await self.geo.rota(origem, loc)
+            route = await self.geo.route(origem, loc)
             loc.update(km=route["km"], horas=route["horas"], estimada=route["estimada"])
         with_route = [x for x in local_names if "km" in x]
         item["locais_prova"] = local_names
         item["mais_proximo"] = min(with_route, key=lambda x: x["km"]) if with_route else None
 
-    async def _pdfs_do_site(self, c: httpx.AsyncClient, site: str) -> list[str]:
+    async def _pdfs_of_site(self, c: httpx.AsyncClient, site: str) -> list[str]:
         """PDFs de edital da página oficial do concurso (com "edital" no link ou texto primeiro)."""
         try:
             r = await c.get(site, headers={"User-Agent": AGENT}, timeout=20)
@@ -670,7 +670,7 @@ class Radar:
         outros = [h for h, _ in links if h not in with_notice]
         return [urljoin(str(r.url), h) for h in with_notice + outros]
 
-    async def _trechos_pdf(self, c: httpx.AsyncClient, url: str) -> str:
+    async def _spans_pdf(self, c: httpx.AsyncClient, url: str) -> str:
         try:
             r = await c.get(url, headers={"User-Agent": AGENT})
             r.raise_for_status()
@@ -693,13 +693,13 @@ class Radar:
                 return ""
         return spans_notice(p.stdout)
 
-    async def rota(self, id_: str) -> dict[str, Any] | None:
+    async def route(self, id_: str) -> dict[str, Any] | None:
         """Rota completa (com a linha da estrada) da origem até o local de prova mais próximo."""
         item = self.item(id_)
         if not item or not item.get("mais_proximo"):
             return None
-        origin = await self._origem()
-        route = await self.geo.rota(origin, item["mais_proximo"])
+        origin = await self._origin()
+        route = await self.geo.route(origin, item["mais_proximo"])
         return {"origem": origin, "destino": item["mais_proximo"], **route}
 
     async def rodar(self, interval_s: float, delay_s: float = 60) -> None:

@@ -192,7 +192,7 @@ def words_key(texto, freq, n=2):
 
 def generate_scenes(project):
     cfg = project.cfg["cenas"]
-    transc = project.carregar_json("transcricao.json")
+    transc = project.load_json("transcricao.json")
     file = project.roteiro()
     if file:
         title, sentences = read_script(file.read_text())
@@ -202,11 +202,11 @@ def generate_scenes(project):
 
     by_sentence = align(sentences, transc)
     # Tempo de cada frase do roteiro na narração editada: os gráficos entram no instante em que ela é falada.
-    project.salvar_json("frases.json", [
+    project.save_json("frases.json", [
         {"texto": f["texto"], "destaques": f["destaques"], "ini": ps[0]["ini"] if ps else None,
          "fim": ps[-1]["fim"] if ps else None} for f, ps in zip(sentences, by_sentence)])
     # Texto do roteiro com o tempo de cada palavra: as legendas usam isto (o Whisper erra palavras).
-    project.salvar_json("alinhamento.json", [
+    project.save_json("alinhamento.json", [
         {"p": p["p"].replace("*", ""), "ini": round(p["ini"], 3), "fim": round(max(p["fim"], p["ini"] + 0.15), 3)}
         for ps in by_sentence for p in ps])
     blocks = []
@@ -246,8 +246,8 @@ def generate_scenes(project):
 
     # Rodar de novo (ex.: após mudar o roteiro) preserva o trabalho feito nas cenas que não mudaram.
     if project.caminho("plano.json").exists():
-        old = project.carregar_json("plano.json")
-        project.salvar_json("plano.anterior.json", old)
+        old = project.load_json("plano.json")
+        project.save_json("plano.anterior.json", old)
         by_time = {(c["inicio"], c["fim"]): c for c in old["cenas"]}
         for c in scenes:
             velha = by_time.get((c["inicio"], c["fim"]))
@@ -258,6 +258,6 @@ def generate_scenes(project):
                         c[k] = velha[k]
 
     plan = {"titulo": title, "audio": transc["audio"], "duracao": transc["duracao"], "cenas": scenes}
-    project.salvar_json("plano.json", plan)
+    project.save_json("plano.json", plan)
     print(f"  {len(scenes)} cenas → plano.json (ver com: ./dark summary {project.ep})")
     return plan

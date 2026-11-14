@@ -40,18 +40,18 @@ def test_busca_acompanha_e_novidade_vira_alerta(tmp_path: Path) -> None:
     assert asyncio.run(rumors.pesquisar(executar, "TRF5")) == {"achados": 1}
     assert '"TRF5"' in requests[0]["prompt"]
     assert len(requests) == 1  # sem acompanhados não reverifica
-    [item] = rumors.listar()["itens"]
+    [item] = rumors.list_all()["itens"]
     assert item["id"] == "trf-5-regi-o-pe" and item["fontes"][0]["url"] == RUMOR["fonte_url"]
-    assert rumors.alertas() == []
+    assert rumors.alerts() == []
 
-    rumors.acompanhar(item["id"], True)
+    rumors.track(item["id"], True)
     asyncio.run(rumors.pesquisar(executar))
-    item = rumors.listar()["itens"][0]
+    item = rumors.list_all()["itens"][0]
     assert item["fase"] == "autorizado"
     assert [n["texto"] for n in item["novidades"]] == ["Concurso autorizado"]
-    [alerta] = rumors.alertas()
+    [alerta] = rumors.alerts()
     assert alerta["texto"] == "Rumor TRF 5ª Região: Concurso autorizado"
     assert alerta["concurso"] == "TRF 5ª Região"
     # a mesma novidade não entra de novo
     asyncio.run(rumors.pesquisar(executar))
-    assert len(rumors.listar()["itens"][0]["novidades"]) == 1
+    assert len(rumors.list_all()["itens"][0]["novidades"]) == 1

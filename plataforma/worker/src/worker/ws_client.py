@@ -43,18 +43,18 @@ class WorkerClient:
     ) -> None:
         self._settings = settings
         self._provider = provider
-        self._voz = voice or Voice(settings)
+        self._voice = voice or Voice(settings)
         self._background_tasks: set[asyncio.Task[None]] = set()
         self._websocket: websockets.WebSocketClientProtocol | None = None
         # Sessões do Claude Code sobrevivem a reconexões: a etapa vai pela conexão do momento.
-        self._codigo = Code(settings, self._emitir_codigo)
+        self._codigo = Code(settings, self._issue_code)
         # conta do Claude Code ativa (troca pelo app): vale para todo `claude` deste processo
         self._contas = Accounts(settings.claude_contas_dir, settings.codigo_claude_bin)
 
     async def run_forever(self) -> None:
         backoff = self._settings.reconnect_min_backoff_seconds
         if self._settings.whisper_aquecer:
-            aquecer = asyncio.create_task(self._voz.aquecer())
+            aquecer = asyncio.create_task(self._voice.aquecer())
             self._background_tasks.add(aquecer)
             aquecer.add_done_callback(self._background_tasks.discard)
         while True:
@@ -99,7 +99,7 @@ class WorkerClient:
                 task_group.create_task(self._heartbeat_loop(websocket))
                 task_group.create_task(self._receive_loop(websocket))
 
-    async def _emitir_codigo(self, dados: dict) -> None:
+    async def _issue_code(self, dados: dict) -> None:
         if self._websocket is None:
             raise RuntimeError("sem conexão com o Gateway")
         await self._websocket.send(WorkerEvent(canal="codigo", dados=dados).model_dump_json())
@@ -131,7 +131,7 @@ class WorkerClient:
         try:
             task = message.payload.get("task")
             if task in TASKS:
-                payload = await self._voz.executar(task, message.payload)
+                payload = await self._voice.executar(task, message.payload)
             elif task in TAREFAS_CODIGO:
                 payload = await self._codigo.executar(task, message.payload)
             elif task in TAREFAS_CONTAS:
@@ -139,7 +139,7 @@ class WorkerClient:
             elif task == pc.TASK:
                 payload = await pc.execute(message.payload)
             elif task == "carregar_modelo":
-                payload = await self._provider.carregar(str(message.payload["modelo"]))
+                payload = await self._provider.load(str(message.payload["modelo"]))
             elif task == "simular_spice":
                 payload = await run_ngspice(
                     str(message.payload["netlist"]), float(message.payload.get("timeout_s", 120))

@@ -26,7 +26,7 @@ DOCX = b"PK\x03\x04 docx de mentira"
 @pytest.fixture
 def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # Sem LibreOffice nos testes: a reconversão agendada pelo PutFile não faz nada.
-    monkeypatch.setattr(Collection, "converter", lambda self, id_: {})
+    monkeypatch.setattr(Collection, "convert", lambda self, id_: {})
     monkeypatch.setitem(
         wopi._discovery, "http://collabora:9980", (time.time(), wopi._read_discovery(DISCOVERY))
     )

@@ -70,22 +70,22 @@ def _call(f: Callable[[], Any]) -> Any:
 
 @router.get("/esquema")
 def schema(yt: YoutubeDep) -> Any:
-    return yt.esquema()
+    return yt.schema()
 
 
 @router.post("/importar")
 def run_import(entrada: Import, yt: YoutubeDep) -> Any:
-    return _call(lambda: yt.importar(entrada.substituir))
+    return _call(lambda: yt.run_import(entrada.substituir))
 
 
 @router.get("/canais")
 def channels(yt: YoutubeDep) -> Any:
-    return yt.canais()
+    return yt.channels()
 
 
 @router.post("/canais", status_code=201)
 def create_channel(entrada: ChannelInput, yt: YoutubeDep) -> Any:
-    return _call(lambda: yt.criar_canal(entrada.model_dump()))
+    return _call(lambda: yt.create_channel(entrada.model_dump()))
 
 
 @router.get("/canais/{slug}")
@@ -95,12 +95,12 @@ def channel(slug: str, yt: YoutubeDep) -> Any:
 
 @router.patch("/canais/{slug}")
 def edit_channel(slug: str, edicao: ChannelEdit, yt: YoutubeDep) -> Any:
-    return _call(lambda: yt.editar_canal(slug, edicao.model_dump()))
+    return _call(lambda: yt.edit_channel(slug, edicao.model_dump()))
 
 
 @router.delete("/canais/{slug}", status_code=204)
 def delete_channel(slug: str, yt: YoutubeDep) -> Response:
-    _call(lambda: yt.excluir_canal(slug))
+    _call(lambda: yt.delete_channel(slug))
     return Response(status_code=204)
 
 
@@ -121,7 +121,7 @@ def item(slug: str, colecao: str, id_: str, yt: YoutubeDep) -> Any:
 
 @router.patch("/canais/{slug}/{colecao}/{id_}")
 def edit(slug: str, colecao: str, id_: str, edicao: ItemEdit, yt: YoutubeDep) -> Any:
-    return _call(lambda: yt.editar(slug, colecao, id_, edicao.model_dump()))
+    return _call(lambda: yt.edit(slug, colecao, id_, edicao.model_dump()))
 
 
 @router.delete("/canais/{slug}/{colecao}/{id_}", status_code=204)
@@ -132,4 +132,4 @@ def delete(slug: str, colecao: str, id_: str, yt: YoutubeDep) -> Response:
 
 @router.post("/canais/{slug}/temas/{id_}/derivar", status_code=201)
 def derive(slug: str, id_: str, entrada: Derivation, yt: YoutubeDep) -> Any:
-    return _call(lambda: yt.derivar(slug, id_, entrada.colecao))
+    return _call(lambda: yt.derive(slug, id_, entrada.colecao))

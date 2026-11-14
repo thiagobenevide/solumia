@@ -23,7 +23,7 @@ def api(tmp_path: Path) -> TestClient:
         return {"texto": "Realizou-se o teste.", "mudancas": [], "observacoes": ""}
 
     app.state.reescrita = Rewrite(executar, lambda: None)
-    app.state.pedidos = requests
+    app.state.requests = requests
     return TestClient(app, headers=AUTH_HEADERS)
 
 
@@ -59,7 +59,7 @@ def test_rota_reescreve_e_valida(api: TestClient) -> None:
         api.post("/api/arquivos/reescrever", json={"trecho": "x", "arquivo_id": "nao"}).status_code
         == 404
     )
-    assert len(api.app.state.pedidos) == 1  # type: ignore[attr-defined]
+    assert len(api.app.state.requests) == 1  # type: ignore[attr-defined]
 
 
 def test_traducao_por_pagina_alinha_frases_e_usa_cache(tmp_path: Path) -> None:
@@ -111,6 +111,6 @@ def test_traduzir_trecho_vai_pela_llm_local_mesmo_sem_claude(api: TestClient) ->
     r = api.post("/api/arquivos/reescrever", json=body)
     assert r.status_code == 200 and r.json()["texto"] == "O método funciona."
     assert "<trecho>" in local_names[0]["prompt"] and local_names[0]["esquema"]["required"][0] == "texto"
-    assert not api.app.state.pedidos  # type: ignore[attr-defined]
+    assert not api.app.state.requests  # type: ignore[attr-defined]
     body["objetivo"] = "formal"
     assert api.post("/api/arquivos/reescrever", json=body).status_code == 503

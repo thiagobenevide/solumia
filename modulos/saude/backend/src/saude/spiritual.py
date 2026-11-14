@@ -75,12 +75,12 @@ def _data(valor: str) -> date:
 
 class Espiritual:
     def __init__(self, root: str | Path) -> None:
-        self.raiz = Path(root).expanduser()
-        self.raiz.mkdir(parents=True, exist_ok=True)
-        self._trava = threading.RLock()
-        self._planos = self.raiz / "planos.json"
+        self.root = Path(root).expanduser()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
+        self._plans = self.root / "planos.json"
 
-    def _resumo(self, p: dict[str, Any], hoje: date) -> dict[str, Any]:
+    def _summary(self, p: dict[str, Any], hoje: date) -> dict[str, Any]:
         start = date.fromisoformat(p["inicio"])
         n_today = (hoje - start).days
         done = set(p.get("feitos", []))
@@ -96,17 +96,17 @@ class Espiritual:
             "fim": (start + timedelta(days=p["dias"] - 1)).isoformat(),
         }
 
-    def planos(self, hoje: date | None = None) -> list[dict[str, Any]]:
-        with self._trava:
-            return [self._resumo(p, hoje or date.today()) for p in _read(self._planos, [])]
+    def plans(self, hoje: date | None = None) -> list[dict[str, Any]]:
+        with self._lock:
+            return [self._summary(p, hoje or date.today()) for p in _read(self._plans, [])]
 
-    def _plano(self, id_: str) -> dict[str, Any]:
-        for p in _read(self._planos, []):
+    def _plan(self, id_: str) -> dict[str, Any]:
+        for p in _read(self._plans, []):
             if p["id"] == id_:
                 return p
         raise NotFound(id_)
 
-    def criar_plano(self, dados: dict[str, Any]) -> dict[str, Any]:
+    def create_plan(self, dados: dict[str, Any]) -> dict[str, Any]:
         if dados.get("escopo") not in SCOPES:
             raise Invalid(f"escopo deve ser um de {list(SCOPES)}")
         days = int(dados.get("dias", 365))
@@ -121,23 +121,23 @@ class Espiritual:
             "inicio": start,
             "feitos": [],
         }
-        with self._trava:
-            items = _read(self._planos, [])
+        with self._lock:
+            items = _read(self._plans, [])
             items.append(new)
-            _write(self._planos, items)
-        return self._resumo(new, date.today())
+            _write(self._plans, items)
+        return self._summary(new, date.today())
 
-    def excluir_plano(self, id_: str) -> None:
-        with self._trava:
-            items = _read(self._planos, [])
+    def delete_plan(self, id_: str) -> None:
+        with self._lock:
+            items = _read(self._plans, [])
             restantes = [p for p in items if p["id"] != id_]
             if len(restantes) == len(items):
                 raise NotFound(id_)
-            _write(self._planos, restantes)
+            _write(self._plans, restantes)
 
-    def leituras(self, id_: str, de: str, ate: str) -> list[dict[str, Any]]:
-        with self._trava:
-            p = self._plano(id_)
+    def readings(self, id_: str, de: str, ate: str) -> list[dict[str, Any]]:
+        with self._lock:
+            p = self._plan(id_)
         start = date.fromisoformat(p["inicio"])
         books = SCOPES[p["escopo"]][1]
         done = set(p.get("feitos", []))
@@ -156,8 +156,8 @@ class Espiritual:
 
     def marcar(self, id_: str, day: str, done: bool) -> dict[str, Any]:
         key = _data(day).isoformat()
-        with self._trava:
-            items = _read(self._planos, [])
+        with self._lock:
+            items = _read(self._plans, [])
             for p in items:
                 if p["id"] == id_:
                     feitos = set(p.get("feitos", []))
@@ -166,6 +166,6 @@ class Espiritual:
                     else:
                         feitos.discard(key)
                     p["feitos"] = sorted(feitos)
-                    _write(self._planos, items)
-                    return self._resumo(p, date.today())
+                    _write(self._plans, items)
+                    return self._summary(p, date.today())
         raise NotFound(id_)

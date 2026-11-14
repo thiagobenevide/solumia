@@ -48,7 +48,7 @@ def _generate(
     except Exception as e:
         raise _Failure(422, str(e)) from e
     try:
-        return spice.generate(project, projects.simbolo, analise, parametros)
+        return spice.generate(project, projects.symbol, analise, parametros)
     except ValueError as e:
         raise _Failure(422, str(e)) from e
 

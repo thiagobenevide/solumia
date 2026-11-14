@@ -35,7 +35,7 @@ def _notes_by_time(project):
     if not file.exists() or not project.caminho("frases.json").exists():
         return []
     from esteira.graphics.plan import _speech_to_sentence
-    rot, sentences = json.loads(file.read_text()), project.carregar_json("frases.json")
+    rot, sentences = json.loads(file.read_text()), project.load_json("frases.json")
     mapping = _speech_to_sentence(project.roteiro().read_text())
     output = []
     for n in rot.get("notas", []):
@@ -53,7 +53,7 @@ def _repeated(term, previous):
 
 
 def curate(project, refazer=False):
-    plan = project.carregar_json("plano.json")
+    plan = project.load_json("plano.json")
     scenes = plan["cenas"]
     channel = getattr(project, "canal", None) or ""
     notes = _notes_by_time(project)
@@ -83,7 +83,7 @@ def curate(project, refazer=False):
                  alternativas=[a for a in r.alternativas if a and a.lower() != r.busca_en.lower()][:2])
         used.append(r.busca_en)
         done += 1
-    project.salvar_json("plano.json", plan)
+    project.save_json("plano.json", plan)
     moods = {x: sum(c.get("clima") == x for c in scenes) for x in MOODS}
     print(f"  {done} cenas curadas pelo LLM local" + (f"; {failures} sem resposta (ficam com o termo automático)"
                                                        if failures else "") + f"; climas {moods}")

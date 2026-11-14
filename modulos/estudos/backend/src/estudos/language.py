@@ -251,18 +251,18 @@ class Language:
         texto_do_arquivo: Callable[[str], str] | None = None,
         somar_minutos: Callable[[str, str, int], None] | None = None,
     ) -> None:
-        self.raiz = Path(root).expanduser() / "linguagem"
-        (self.raiz / "cache" / "fala").mkdir(parents=True, exist_ok=True)
-        (self.raiz / "cache" / "traducao").mkdir(parents=True, exist_ok=True)
+        self.root = Path(root).expanduser() / "linguagem"
+        (self.root / "cache" / "fala").mkdir(parents=True, exist_ok=True)
+        (self.root / "cache" / "traducao").mkdir(parents=True, exist_ok=True)
         lock = threading.RLock()
-        self.vocabulario = Collection(self.raiz / "vocabulario.json", lock)
-        self.escritas = Collection(self.raiz / "escritas.json", lock)
-        self.leituras_voz = Collection(self.raiz / "leituras_voz.json", lock)
-        self.atividades = Collection(self.raiz / "atividades.json", lock)
+        self.vocabulary = Collection(self.root / "vocabulario.json", lock)
+        self.writes = Collection(self.root / "escritas.json", lock)
+        self.readings_voice = Collection(self.root / "leituras_voz.json", lock)
+        self.activities = Collection(self.root / "atividades.json", lock)
         self._chat = chat
         self._worker = worker
-        self._texto_do_arquivo = texto_do_arquivo or (lambda _id: "")
-        self._somar_minutos = somar_minutos or (lambda _i, _d, _m: None)
+        self._text_of_file = texto_do_arquivo or (lambda _id: "")
+        self._add_up_minutes = somar_minutos or (lambda _i, _d, _m: None)
 
     # --- acesso à LLM local e ao worker ---
 
@@ -283,7 +283,7 @@ class Language:
         except RuntimeError as e:
             raise Unavailable(str(e)) from e
 
-    async def _tarefa(self, task: str, payload: dict[str, Any]) -> dict[str, Any]:
+    async def _task(self, task: str, payload: dict[str, Any]) -> dict[str, Any]:
         if self._worker is None:
             raise Unavailable("Worker de voz não configurado neste servidor.")
         try:
@@ -295,15 +295,15 @@ class Language:
 
     def _cache(self, tipo: str, chave: str) -> Path:
         return (
-            self.raiz / "cache" / tipo / f"{hashlib.sha256(chave.encode()).hexdigest()[:32]}.json"
+            self.root / "cache" / tipo / f"{hashlib.sha256(chave.encode()).hexdigest()[:32]}.json"
         )
 
-    def _podar_falas(self) -> None:
-        files = sorted((self.raiz / "cache" / "fala").glob("*.json"), key=os.path.getmtime)
+    def _prune_speeches(self) -> None:
+        files = sorted((self.root / "cache" / "fala").glob("*.json"), key=os.path.getmtime)
         for f in files[: max(0, len(files) - LIMIT_CACHE_SPEECH)]:
             f.unlink(missing_ok=True)
 
-    async def fala(self, text: str, language: str, speed: float = 1.0) -> dict[str, Any]:
+    async def speech(self, text: str, language: str, speed: float = 1.0) -> dict[str, Any]:
         """Áudio da frase e o tempo de cada palavra (`inicio`/`fim` no texto, `t0`/`t1` em s)."""
         language = _language(language)
         text = " ".join(text.split())
@@ -314,7 +314,7 @@ class Language:
             os.utime(cache)
             data: dict[str, Any] = json.loads(cache.read_text("utf-8"))
             return data
-        r = await self._tarefa(
+        r = await self._task(
             "falar_marcado", {"texto": text, "idioma": language, "velocidade": speed}
         )
         data = {
@@ -325,10 +325,10 @@ class Language:
             "palavras": r.get("palavras", []),
         }
         cache.write_text(json.dumps(data), "utf-8")
-        self._podar_falas()
+        self._prune_speeches()
         return data
 
-    async def traduzir(
+    async def translate(
         self, term: str, sentence: str, language: str, destination: str = "pt"
     ) -> dict[str, Any]:
         """Tradução do trecho no sentido da frase, com classe, IPA e a frase traduzida."""
@@ -356,23 +356,23 @@ class Language:
 
     # --- caderno de vocabulário ---
 
-    def _nivel(self, language: str) -> str:
+    def _level(self, language: str) -> str:
         return "B1" if language != "pt" else "C1"
 
-    def listar_vocabulario(
+    def list_vocabulary(
         self, language: str | None = None, devidas: bool = False
     ) -> list[dict[str, Any]]:
         now = _iso(_now())
         items = [
             v
-            for v in self.vocabulario.ler()
+            for v in self.vocabulary.ler()
             if (language is None or v["idioma"] == language)
             and (not devidas or v.get("cartao", {}).get("proxima", "") <= now)
         ]
         key = (lambda v: v.get("cartao", {}).get("proxima", "")) if devidas else None
         return sorted(items, key=key) if key else items[::-1]
 
-    def criar_vocabulario(self, dados: dict[str, Any]) -> dict[str, Any]:
+    def create_vocabulary(self, dados: dict[str, Any]) -> dict[str, Any]:
         """Palavra marcada na leitura. A mesma palavra de novo junta o contexto à que já existe."""
         language = _language(str(dados.get("idioma") or ""))
         term = " ".join(str(dados.get("termo") or "").split())
@@ -384,16 +384,16 @@ class Language:
             "titulo": _text(dados.get("titulo"), 300),
             "pagina": dados.get("pagina"),
         }
-        with self.vocabulario.trava:
-            for v in self.vocabulario.ler():
+        with self.vocabulary.lock:
+            for v in self.vocabulary.ler():
                 if v["idioma"] == language and normalize_word(v["termo"]) == normalize_word(term):
                     contextos = v.get("contextos", [])
                     if context["frase"] and all(
                         c["frase"] != context["frase"] for c in contextos
                     ):
                         contextos = [*contextos, context]
-                    return self.vocabulario.editar(v["id"], {"contextos": contextos})
-            return self.vocabulario.criar(
+                    return self.vocabulary.edit(v["id"], {"contextos": contextos})
+            return self.vocabulary.criar(
                 {
                     "termo": term,
                     "idioma": language,
@@ -409,14 +409,14 @@ class Language:
                 }
             )
 
-    async def gerar_pratica(self, id_: str) -> dict[str, Any]:
+    async def generate_practice(self, id_: str) -> dict[str, Any]:
         """Frases e exercícios da palavra pela LLM local (substitui os anteriores)."""
-        item = self.vocabulario.obter(id_)
-        self.vocabulario.editar(id_, {"gerando": True, "erro": ""})
+        item = self.vocabulary.obter(id_)
+        self.vocabulary.edit(id_, {"gerando": True, "erro": ""})
         try:
-            r = await self._json(prompt_practice(item, self._nivel(item["idioma"])))
+            r = await self._json(prompt_practice(item, self._level(item["idioma"])))
         except (Unavailable, Invalid) as e:
-            self.vocabulario.editar(id_, {"gerando": False, "erro": str(e)})
+            self.vocabulary.edit(id_, {"gerando": False, "erro": str(e)})
             raise
         sentences = [
             {
@@ -438,17 +438,17 @@ class Language:
             and e.get("tipo") in ("lacuna", "traducao", "producao")
             and e.get("enunciado")
         ]
-        return self.vocabulario.editar(
+        return self.vocabulary.edit(
             id_, {"frases": sentences, "exercicios": exercises, "gerando": False, "erro": ""}
         )
 
-    def revisar_vocabulario(self, id_: str, note: int) -> dict[str, Any]:
-        item = self.vocabulario.obter(id_)
-        return self.vocabulario.editar(id_, {"cartao": review(item.get("cartao", {}), note)})
+    def review_vocabulary(self, id_: str, note: int) -> dict[str, Any]:
+        item = self.vocabulary.obter(id_)
+        return self.vocabulary.edit(id_, {"cartao": review(item.get("cartao", {}), note)})
 
-    async def responder_exercicio(self, id_: str, indice: int, answer: str) -> dict[str, Any]:
+    async def answer_exercise(self, id_: str, indice: int, answer: str) -> dict[str, Any]:
         """Corrige a resposta (lacuna igual à referência dispensa a IA) e agenda a revisão."""
-        item = self.vocabulario.obter(id_)
+        item = self.vocabulary.obter(id_)
         exercises = item.get("exercicios", [])
         if not 0 <= indice < len(exercises):
             raise NotFound(f"exercício {indice}")
@@ -469,25 +469,25 @@ class Language:
             }
         record = {"exercicio": indice, "resposta": answer, **correction, "data": _iso(_now())}
         cartao = review(item.get("cartao", {}), note_of(correction["nota"]))
-        atualizado = self.vocabulario.editar(
+        atualizado = self.vocabulary.edit(
             id_, {"respostas": [*item.get("respostas", []), record][-50:], "cartao": cartao}
         )
         return {"correcao": record, "item": atualizado}
 
     # --- escrita ---
 
-    def listar_escritas(self, language: str | None = None) -> list[dict[str, Any]]:
-        return [e for e in self.escritas.ler() if language is None or e["idioma"] == language][::-1]
+    def list_writes(self, language: str | None = None) -> list[dict[str, Any]]:
+        return [e for e in self.writes.ler() if language is None or e["idioma"] == language][::-1]
 
-    async def criar_escrita(self, dados: dict[str, Any]) -> dict[str, Any]:
+    async def create_writing(self, dados: dict[str, Any]) -> dict[str, Any]:
         """Tarefa de escrita sobre um artigo dos Arquivos (ou um texto colado), pela LLM local."""
         language = _language(str(dados.get("idioma") or ""))
-        level = dados.get("nivel") if dados.get("nivel") in LEVELS else self._nivel(language)
+        level = dados.get("nivel") if dados.get("nivel") in LEVELS else self._level(language)
         text = _text(dados.get("texto"), 20_000)
         file_id = dados.get("arquivo_id")
         if not text and file_id:
-            text = self._texto_do_arquivo(str(file_id))[:20_000]
-        words = [v["termo"] for v in self.listar_vocabulario(language, devidas=True)[:8]]
+            text = self._text_of_file(str(file_id))[:20_000]
+        words = [v["termo"] for v in self.list_vocabulary(language, devidas=True)[:8]]
         r = await self._json(prompt_writing(language, str(level), text, words))
         perguntas = [
             {
@@ -500,7 +500,7 @@ class Language:
         ]
         if not perguntas:
             raise Invalid("A IA não criou as perguntas; tente de novo.")
-        return self.escritas.criar(
+        return self.writes.criar(
             {
                 "idioma": language,
                 "nivel": level,
@@ -513,8 +513,8 @@ class Language:
             }
         )
 
-    async def responder_escrita(self, id_: str, indice: int, answer: str) -> dict[str, Any]:
-        e = self.escritas.obter(id_)
+    async def answer_writing(self, id_: str, indice: int, answer: str) -> dict[str, Any]:
+        e = self.writes.obter(id_)
         if not 0 <= indice < len(e["perguntas"]):
             raise NotFound(f"pergunta {indice}")
         if len(answer.split()) < 3:
@@ -541,14 +541,14 @@ class Language:
             "data": _iso(_now()),
         }
         answers = {**e.get("respostas", {}), str(indice): correction}
-        return self.escritas.editar(id_, {"respostas": answers})
+        return self.writes.edit(id_, {"respostas": answers})
 
     # --- leitura em voz alta ---
 
-    def listar_leituras_voz(self, language: str | None = None) -> list[dict[str, Any]]:
-        return [x for x in self.leituras_voz.ler() if language is None or x["idioma"] == language][::-1]
+    def list_readings_voice(self, language: str | None = None) -> list[dict[str, Any]]:
+        return [x for x in self.readings_voice.ler() if language is None or x["idioma"] == language][::-1]
 
-    async def avaliar_leitura(
+    async def evaluate_reading(
         self, audio: bytes, mime: str, language: str, reference: str, fonte: dict[str, Any]
     ) -> dict[str, Any]:
         """Compara a gravação com o texto: palavras certas/trocadas/puladas, ritmo, pausas e,
@@ -557,7 +557,7 @@ class Language:
         reference = " ".join(reference.split())
         if not reference:
             raise Invalid("Sem o texto que foi lido.")
-        r = await self._tarefa(
+        r = await self._task(
             "avaliar_leitura",
             {
                 "audio_b64": base64.b64encode(audio).decode(),
@@ -585,7 +585,7 @@ class Language:
             result["pronuncia"] = round(100 * sum(spoken) / len(spoken), 1) if spoken else None
         else:
             result["pronuncia"] = None
-        return self.leituras_voz.criar(
+        return self.readings_voice.criar(
             {
                 "idioma": language,
                 "referencia": reference,
@@ -599,7 +599,7 @@ class Language:
 
     # --- atividades e progresso ---
 
-    def registrar_atividade(self, dados: dict[str, Any]) -> dict[str, Any]:
+    def register_activity(self, dados: dict[str, Any]) -> dict[str, Any]:
         """Tempo de estudo feito fora da aba (leitura guiada nos Arquivos…); os minutos entram na
         trilha do idioma, se houver uma."""
         kind = str(dados.get("tipo") or "")
@@ -610,7 +610,7 @@ class Language:
         if not 0 <= minutes <= 600:
             raise Invalid("Minutos entre 0 e 600.")
         day = _now().astimezone().date().isoformat()
-        activity = self.atividades.criar(
+        activity = self.activities.criar(
             {
                 "tipo": kind,
                 "idioma": language,
@@ -624,17 +624,17 @@ class Language:
             }
         )
         if minutes:
-            self._somar_minutos(language, day, minutes)
+            self._add_up_minutes(language, day, minutes)
         return activity
 
-    def progresso(self, language: str) -> dict[str, Any]:
+    def progress(self, language: str) -> dict[str, Any]:
         language = _language(language)
         now = _iso(_now())
-        vocab = self.listar_vocabulario(language)
+        vocab = self.list_vocabulary(language)
         cartoes = [v.get("cartao", {}) for v in vocab]
         writes = [
             {"data": c["data"], "nota": c["nota"], "nivel_cefr": c.get("nivel_cefr", "")}
-            for e in self.listar_escritas(language)
+            for e in self.list_writes(language)
             for c in e.get("respostas", {}).values()
         ]
         readings = [
@@ -644,10 +644,10 @@ class Language:
                 "ppm": x["ppm"],
                 "pronuncia": x.get("pronuncia"),
             }
-            for x in self.listar_leituras_voz(language)
+            for x in self.list_readings_voice(language)
         ]
         minutes: dict[str, int] = {}
-        for a in self.atividades.ler():
+        for a in self.activities.ler():
             if a["idioma"] == language:
                 minutes[a["tipo"]] = minutes.get(a["tipo"], 0) + int(a["minutos"])
         return {

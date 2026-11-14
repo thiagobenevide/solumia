@@ -30,7 +30,7 @@ router = APIRouter(
 
 
 def get_collection(request: Request) -> Collection:
-    collection: Collection = request.app.state.biblioteca
+    collection: Collection = request.app.state.collection
     return collection
 
 
@@ -58,7 +58,7 @@ def _404(e: FileNotFound) -> HTTPException:
 def list_all(
     biblioteca: CollectionDep, q: str = "", tipo: str | None = None, pasta: str | None = None
 ) -> Any:
-    return biblioteca.listar(q, tipo, pasta)
+    return biblioteca.list_all(q, tipo, pasta)
 
 
 @router.post("", status_code=201)
@@ -73,7 +73,7 @@ async def send(
     except FileInvalid as e:
         raise HTTPException(415, str(e)) from e
     if meta["status"] == "convertendo" and not meta.get("duplicado"):
-        tarefas.add_task(biblioteca.converter, meta["id"])
+        tarefas.add_task(biblioteca.convert, meta["id"])
     return meta
 
 
@@ -87,17 +87,17 @@ class NewFile(BaseModel):
 def new(entrada: NewFile, biblioteca: CollectionDep, tarefas: BackgroundTasks) -> Any:
     """Documento/planilha/apresentação em branco para editar no app."""
     try:
-        meta = biblioteca.criar_vazio(entrada.tipo, entrada.titulo, entrada.pasta)
+        meta = biblioteca.create_empty(entrada.tipo, entrada.titulo, entrada.pasta)
     except FileInvalid as e:
         raise HTTPException(422, str(e)) from e
     if meta["status"] == "convertendo" and not meta.get("duplicado"):
-        tarefas.add_task(biblioteca.converter, meta["id"])
+        tarefas.add_task(biblioteca.convert, meta["id"])
     return meta
 
 
 @router.get("/pastas")
 def folders(biblioteca: CollectionDep) -> Any:
-    return biblioteca.pastas()
+    return biblioteca.folders()
 
 
 @router.get("/destaques")
@@ -110,7 +110,7 @@ def highlights(biblioteca: CollectionDep, q: str = "", arquivo_id: str | None = 
 
 @router.get("/mudancas")
 def changes(biblioteca: CollectionDep, desde: int = 0) -> Any:
-    return biblioteca.mudancas(desde)
+    return biblioteca.changes(desde)
 
 
 @router.get("/{id_}")
@@ -124,7 +124,7 @@ def get(id_: str, biblioteca: CollectionDep) -> Any:
 @router.patch("/{id_}")
 def edit(id_: str, edicao: FileEdit, biblioteca: CollectionDep) -> Any:
     try:
-        return biblioteca.editar(id_, edicao.model_dump())
+        return biblioteca.edit(id_, edicao.model_dump())
     except FileNotFound as e:
         raise _404(e) from e
 
@@ -141,28 +141,28 @@ def delete(id_: str, biblioteca: CollectionDep) -> Response:
 @router.post("/{id_}/duplicar", status_code=201)
 def duplicate(id_: str, biblioteca: CollectionDep, tarefas: BackgroundTasks) -> Any:
     try:
-        meta = biblioteca.duplicar(id_)
+        meta = biblioteca.duplicate(id_)
     except FileNotFound as e:
         raise _404(e) from e
     if meta["status"] == "convertendo":
-        tarefas.add_task(biblioteca.converter, meta["id"])
+        tarefas.add_task(biblioteca.convert, meta["id"])
     return meta
 
 
 @router.post("/{id_}/converter", status_code=202)
 def reconvert(id_: str, biblioteca: CollectionDep, tarefas: BackgroundTasks) -> Any:
     try:
-        meta = biblioteca.marcar_convertendo(id_)
+        meta = biblioteca.mark_convertendo(id_)
     except FileNotFound as e:
         raise _404(e) from e
-    tarefas.add_task(biblioteca.converter, id_)
+    tarefas.add_task(biblioteca.convert, id_)
     return meta
 
 
 @router.get("/{id_}/original")
 def original(id_: str, biblioteca: CollectionDep) -> FileResponse:
     try:
-        path, name = biblioteca.caminho_original(id_)
+        path, name = biblioteca.path_original(id_)
     except FileNotFound as e:
         raise _404(e) from e
     return FileResponse(path, filename=name)
@@ -182,7 +182,7 @@ async def replace(
     except FileInvalid as e:
         raise HTTPException(415, str(e)) from e
     if meta["status"] == "convertendo":
-        tarefas.add_task(biblioteca.converter, id_)
+        tarefas.add_task(biblioteca.convert, id_)
     return meta
 
 
@@ -190,7 +190,7 @@ async def replace(
 def export(id_: str, formato: str, biblioteca: CollectionDep) -> Response:
     """Original convertido pelo LibreOffice (DOCX→ODT/PDF/RTF/TXT/HTML, XLSX→ODS/CSV/PDF…)."""
     try:
-        content, name = biblioteca.exportar(id_, formato.lower())
+        content, name = biblioteca.export(id_, formato.lower())
     except FileNotFound as e:
         raise _404(e) from e
     except FileInvalid as e:
@@ -212,7 +212,7 @@ async def collabora(id_: str, request: Request) -> Any:
 @router.get("/{id_}/pdf")
 def pdf(id_: str, biblioteca: CollectionDep) -> FileResponse:
     try:
-        path = biblioteca.caminho_pdf(id_)
+        path = biblioteca.path_pdf(id_)
     except FileNotFound as e:
         raise _404(e) from e
     if path is None:
@@ -223,7 +223,7 @@ def pdf(id_: str, biblioteca: CollectionDep) -> FileResponse:
 @router.get("/{id_}/miniatura")
 def thumbnail(id_: str, biblioteca: CollectionDep) -> FileResponse:
     try:
-        path = biblioteca.caminho_miniatura(id_)
+        path = biblioteca.path_thumbnail(id_)
     except FileNotFound as e:
         raise _404(e) from e
     if path is None:
@@ -239,7 +239,7 @@ def thumbnail(id_: str, biblioteca: CollectionDep) -> FileResponse:
 @router.get("/{id_}/anotacoes")
 def annotations(id_: str, biblioteca: CollectionDep) -> Any:
     try:
-        return biblioteca.anotacoes(id_)
+        return biblioteca.annotations(id_)
     except FileNotFound as e:
         raise _404(e) from e
 
@@ -247,11 +247,11 @@ def annotations(id_: str, biblioteca: CollectionDep) -> Any:
 @router.put("/{id_}/anotacoes")
 def save_annotations(id_: str, entrada: AnnotationsInput, biblioteca: CollectionDep) -> Any:
     try:
-        return biblioteca.salvar_anotacoes(
+        return biblioteca.save_annotations(
             id_, entrada.versao_base, entrada.model_dump(exclude={"versao_base"})
         )
     except FileNotFound as e:
         raise _404(e) from e
     except AnnotationsConflict as e:
         # Devolve as anotações atuais para o app mesclar sem outra ida ao servidor.
-        return JSONResponse(status_code=409, content={"detail": str(e), "atuais": e.atuais})
+        return JSONResponse(status_code=409, content={"detail": str(e), "atuais": e.current})

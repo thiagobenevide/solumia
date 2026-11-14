@@ -62,7 +62,7 @@ class Button(BaseModel):
     descricao: str = ""
 
     @model_validator(mode="after")
-    def _padrao_valido(self):
+    def _default_valid(self):
         if self.padrao not in self.valores:
             raise ValueError(f"botão {self.nome}: padrão {self.padrao!r} fora dos valores")
         return self
@@ -95,7 +95,7 @@ class Card(BaseModel):
     notas: str = ""
 
     @model_validator(mode="after")
-    def _coerente(self):
+    def _coherent(self):
         names = [e.nome for e in self.encaixes]
         if len(set(names)) != len(names):
             raise ValueError("encaixes com nome repetido")

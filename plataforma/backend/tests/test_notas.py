@@ -50,7 +50,7 @@ def test_le_vault_e_analisa(tmp_path: Path) -> None:
         "---\ntipo: tarefa\nstatus: aberta\nprazo: 2026-01-10\n---\n[[Nada]]\n"
     )
     (tmp_path / "Solta.md").write_text("sem frontmatter")
-    an = Vault(tmp_path).analise(hoje=date(2026, 2, 1))
+    an = Vault(tmp_path).analysis(hoje=date(2026, 2, 1))
     assert an["total"] == 2
     assert [v["titulo"] for v in an["vencidas"]] == ["Velha"]
     assert an["quebrados"][0]["trecho"] == "Nada"
@@ -74,8 +74,8 @@ def test_filtra_tipos_do_vault(tmp_path: Path) -> None:
     (tmp_path / "Roteiro.md").write_text("---\ntipo: roteiro\n---\n")
     (tmp_path / "Solta.md").write_text("sem frontmatter")
     c = Vault(tmp_path)
-    assert {n["titulo"] for n in c.listar(tipo="tarefa")} == {"Tarefa", "Todo"}
-    assert {n["titulo"] for n in c.listar(tipo="nota")} == {"Roteiro", "Solta"}
-    [r] = c.listar(tipo="roteiro")
+    assert {n["titulo"] for n in c.list_all(tipo="tarefa")} == {"Tarefa", "Todo"}
+    assert {n["titulo"] for n in c.list_all(tipo="nota")} == {"Roteiro", "Solta"}
+    [r] = c.list_all(tipo="roteiro")
     c.atualizar(r["id"], {"corpo": "x"})
     assert "tipo: roteiro" in (tmp_path / "Roteiro.md").read_text()

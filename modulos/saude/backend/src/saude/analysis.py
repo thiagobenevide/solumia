@@ -91,14 +91,14 @@ def assemble_context(
 
     for d in clock.dias(d1, d2):
         add(d["data"], "relógio: " + _line_clock(d))
-    for d in mental.diario(d1, d2):
+    for d in mental.daily(d1, d2):
         fields = [
             f"{k} {d[k]}" for k in ("humor", "ansiedade", "gatilhos") if d.get(k) not in (None, "")
         ]
         add(d["data"], "diário: " + ", ".join(fields) if fields else "")
-    for day, minutes in mental.foco(d1, d2)["minutos_por_dia"].items():
+    for day, minutes in mental.focus(d1, d2)["minutos_por_dia"].items():
         add(day, f"foco {minutes} min")
-    habits = mental.habitos(d1, d2)
+    habits = mental.habits(d1, d2)
     for h in habits:
         for day in h["feitos"]:
             add(day, f"hábito {'feito' if h['tipo'] == 'construir' else 'recaída'}: {h['nome']}")
@@ -109,7 +109,7 @@ def assemble_context(
         workouts_day[i["data"]][1] += 1 if i.get("feito") else 0
     for day, (total, done) in workouts_day.items():
         add(day, f"treino {done}/{total} exercícios feitos")
-    for s in Sessions(workouts).listar(d1, d2):
+    for s in Sessions(workouts).list_all(d1, d2):
         if (r := s.get("resumo")) is None:
             continue
         fc = s.get("frequencia") or {}
@@ -156,7 +156,7 @@ async def analyze(
     text = await llm(
         [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
     )
-    return clock.guardar_analise(
+    return clock.store_analysis(
         {
             "criada_em": datetime.now(UTC).isoformat(timespec="seconds"),
             "de": de.isoformat(),

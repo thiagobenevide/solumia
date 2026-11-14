@@ -38,24 +38,24 @@ def _seconds(session: dict[str, Any], agora: datetime) -> int:
 
 class Frame:
     def __init__(self, root: str | Path) -> None:
-        self.raiz = Path(root).expanduser()
-        self.raiz.mkdir(parents=True, exist_ok=True)
-        self._arquivo = self.raiz / "tarefas.json"
-        self._trava = threading.RLock()
+        self.root = Path(root).expanduser()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self._arquivo = self.root / "tarefas.json"
+        self._lock = threading.RLock()
 
-    def _ler(self) -> list[dict[str, Any]]:
+    def _read(self) -> list[dict[str, Any]]:
         if not self._arquivo.exists():
             return []
         data: list[dict[str, Any]] = json.loads(self._arquivo.read_text("utf-8"))
         return data
 
-    def _gravar(self, tarefas: list[dict[str, Any]]) -> None:
+    def _write(self, tarefas: list[dict[str, Any]]) -> None:
         tmp = self._arquivo.with_suffix(".tmp")
         tmp.write_text(json.dumps(tarefas, ensure_ascii=False, indent=1), "utf-8")
         os.replace(tmp, self._arquivo)
 
     @staticmethod
-    def _achar(tarefas: list[dict[str, Any]], id_: str) -> dict[str, Any]:
+    def _find(tarefas: list[dict[str, Any]], id_: str) -> dict[str, Any]:
         for t in tarefas:
             if t["id"] == id_:
                 return t
@@ -72,7 +72,7 @@ class Frame:
         }
 
     @staticmethod
-    def _validar(dados: dict[str, Any]) -> None:
+    def _validate(dados: dict[str, Any]) -> None:
         if dados.get("prioridade", "media") not in PRIORITIES:
             raise Invalid(f"Prioridade inválida: {dados['prioridade']}")
         if dados.get("prazo"):
@@ -82,7 +82,7 @@ class Frame:
                 raise Invalid(f"Prazo inválido: {dados['prazo']}") from e
 
     @staticmethod
-    def _parar(t: dict[str, Any], agora: datetime) -> None:
+    def _stop(t: dict[str, Any], agora: datetime) -> None:
         for s in t["sessoes"]:
             if not s["fim"]:
                 s["fim"] = _iso(agora)
@@ -95,22 +95,22 @@ class Frame:
 
     # --- consultas ---
 
-    def listar(self) -> list[dict[str, Any]]:
+    def list_all(self) -> list[dict[str, Any]]:
         now = _now()
-        with self._trava:
-            tasks = self._ler()
+        with self._lock:
+            tasks = self._read()
         tasks.sort(key=lambda t: (COLUMNS.index(t["coluna"]), t["ordem"]))
         return [self._publica(t, now) for t in tasks]
 
     def obter(self, id_: str) -> dict[str, Any]:
-        with self._trava:
-            return self._publica(self._achar(self._ler(), id_), _now())
+        with self._lock:
+            return self._publica(self._find(self._read(), id_), _now())
 
     def resumo(self) -> dict[str, Any]:
         """Contagem por coluna, tempo gasto hoje (UTC) e o cronômetro ativo."""
         now = _now()
         start_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        tasks = self.listar()
+        tasks = self.list_all()
         today = 0
         for t in tasks:
             for s in t["sessoes"]:
@@ -127,13 +127,13 @@ class Frame:
     # --- edição ---
 
     def criar(self, dados: dict[str, Any]) -> dict[str, Any]:
-        self._validar(dados)
+        self._validate(dados)
         coluna = dados.get("coluna", "pendente")
         if coluna not in COLUMNS:
             raise Invalid(f"Coluna inválida: {coluna}")
         now = _now()
-        with self._trava:
-            tasks = self._ler()
+        with self._lock:
+            tasks = self._read()
             t = {
                 "id": uuid.uuid4().hex[:12],
                 "titulo": dados["titulo"].strip(),
@@ -148,19 +148,19 @@ class Frame:
                 "sessoes": [],
             }
             tasks.append(t)
-            self._gravar(tasks)
+            self._write(tasks)
             return self._publica(t, now)
 
     def atualizar(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
         changes = {k: v for k, v in dados.items() if k in FIELDS_EDITABLE and v is not None}
-        self._validar(changes)
-        with self._trava:
-            tasks = self._ler()
-            t = self._achar(tasks, id_)
+        self._validate(changes)
+        with self._lock:
+            tasks = self._read()
+            t = self._find(tasks, id_)
             t.update(changes)
             if "prazo" in dados and dados["prazo"] == "":
                 t["prazo"] = None
-            self._gravar(tasks)
+            self._write(tasks)
             return self._publica(t, _now())
 
     def mover(self, id_: str, coluna: str, order: int | None = None) -> dict[str, Any]:
@@ -169,9 +169,9 @@ class Frame:
         if coluna not in COLUMNS:
             raise Invalid(f"Coluna inválida: {coluna}")
         now = _now()
-        with self._trava:
-            tasks = self._ler()
-            t = self._achar(tasks, id_)
+        with self._lock:
+            tasks = self._read()
+            t = self._find(tasks, id_)
             origin = t["coluna"]
             destination = sorted(
                 (x for x in tasks if x["coluna"] == coluna and x is not t),
@@ -183,58 +183,58 @@ class Frame:
                 x["ordem"] = i
             t["coluna"] = coluna
             if coluna == "concluida":
-                self._parar(t, now)
+                self._stop(t, now)
                 t["concluida_em"] = t["concluida_em"] or _iso(now)
             else:
                 t["concluida_em"] = None
             if origin != coluna:
                 self._reordenar(tasks, origin)
-            self._gravar(tasks)
+            self._write(tasks)
             return self._publica(t, now)
 
     def excluir(self, id_: str) -> None:
-        with self._trava:
-            tasks = self._ler()
-            t = self._achar(tasks, id_)
+        with self._lock:
+            tasks = self._read()
+            t = self._find(tasks, id_)
             tasks.remove(t)
             self._reordenar(tasks, t["coluna"])
-            self._gravar(tasks)
+            self._write(tasks)
 
     # --- temporizador ---
 
     def iniciar(self, id_: str) -> dict[str, Any]:
         """Um cronômetro por vez: pausa o que estiver rodando e leva a tarefa para execução."""
         now = _now()
-        with self._trava:
-            tasks = self._ler()
-            t = self._achar(tasks, id_)
+        with self._lock:
+            tasks = self._read()
+            t = self._find(tasks, id_)
             if t["coluna"] == "concluida":
                 raise Invalid("Reabra a tarefa antes de iniciar o cronômetro")
             if any(not s["fim"] for s in t["sessoes"]):
                 return self._publica(t, now)
             for other in tasks:
-                self._parar(other, now)
+                self._stop(other, now)
             t["sessoes"].append({"inicio": _iso(now), "fim": None})
-            self._gravar(tasks)
+            self._write(tasks)
         if t["coluna"] == "pendente":
             return self.mover(id_, "execucao", 0)
         return self._publica(t, now)
 
-    def pausar(self, id_: str) -> dict[str, Any]:
+    def pause(self, id_: str) -> dict[str, Any]:
         now = _now()
-        with self._trava:
-            tasks = self._ler()
-            t = self._achar(tasks, id_)
-            self._parar(t, now)
-            self._gravar(tasks)
+        with self._lock:
+            tasks = self._read()
+            t = self._find(tasks, id_)
+            self._stop(t, now)
+            self._write(tasks)
             return self._publica(t, now)
 
     def zerar(self, id_: str) -> dict[str, Any]:
-        with self._trava:
-            tasks = self._ler()
-            t = self._achar(tasks, id_)
+        with self._lock:
+            tasks = self._read()
+            t = self._find(tasks, id_)
             t["sessoes"] = []
-            self._gravar(tasks)
+            self._write(tasks)
             return self._publica(t, _now())
 
     # --- LLM ---
@@ -246,7 +246,7 @@ class Frame:
             return f"{s // 3600}h{s % 3600 // 60:02d}min"
 
         names = {"pendente": "Pendentes", "execucao": "Em execução", "concluida": "Concluídas"}
-        tasks = self.listar()
+        tasks = self.list_all()
         lines = [f"Agora (UTC): {_iso(_now())}"]
         for c in COLUMNS:
             lines.append(f"\n## {names[c]}")

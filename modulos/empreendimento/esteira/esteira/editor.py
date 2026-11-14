@@ -39,7 +39,7 @@ def _dim_thumb(project):
 # ---------- Gráficos ----------
 
 def graphics(project):
-    return project.carregar_json("graficos.json") if project.caminho("graficos.json").exists() else []
+    return project.load_json("graficos.json") if project.caminho("graficos.json").exists() else []
 
 
 def state_graphic(project, i, inicio=0.0):
@@ -98,14 +98,14 @@ def save_graphic(project, i, estado):
             item.pop(k, None)
     item["manual"] = True
     items.sort(key=lambda g: g["inicio"])
-    project.salvar_json("graficos.json", items)
+    project.save_json("graficos.json", items)
     return items.index(item)
 
 
 def delete_graphic(project, i):
     items = graphics(project)
     items.pop(i)
-    project.salvar_json("graficos.json", items)
+    project.save_json("graficos.json", items)
 
 
 # ---------- Thumbnails ----------
@@ -167,7 +167,7 @@ def save_thumb(project, estado):
     compose_file(e, project.caminho(f"thumbs/{e['fundo']}"), project.caminho(f"thumbs/{name}"), project.cfg)
     ed = _edits(project)
     ed[name] = e
-    project.salvar_json("thumbs/edicoes.json", ed)
+    project.save_json("thumbs/edicoes.json", ed)
     return name
 
 
@@ -227,7 +227,7 @@ FIXED = {"arquivo", "trecho", "pagina", "fundo"}  # a IA não troca PDF/trecho c
 def _context(project, inicio, dur):
     speeches = []
     if inicio is not None and project.caminho("frases.json").exists():
-        speeches = [f["texto"] for f in project.carregar_json("frases.json")
+        speeches = [f["texto"] for f in project.load_json("frases.json")
                  if f.get("ini") is not None and inicio - 6 <= f["ini"] <= inicio + dur + 4]
     rot = json.loads(project.caminho("roteiro.json").read_text()) if project.caminho("roteiro.json").exists() else {}
     sources = [f"{c.get('autores')} ({c.get('ano')}), {c.get('revista')}: \"{c.get('pt')}\"" for c in rot.get("citacoes", [])]

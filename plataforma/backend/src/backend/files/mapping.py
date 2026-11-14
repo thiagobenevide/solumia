@@ -473,16 +473,16 @@ class Mapper:
 
     def __init__(self, request_app: Any) -> None:
         self.app = request_app
-        self.rodando: dict[str, asyncio.Task[None]] = {}
+        self.running: dict[str, asyncio.Task[None]] = {}
 
     @property
-    def biblioteca(self) -> Collection:
-        b: Collection = self.app.state.biblioteca
+    def collection(self) -> Collection:
+        b: Collection = self.app.state.collection
         return b
 
     @property
-    def estudos(self) -> Any:
-        return self.app.state.estudos
+    def studies(self) -> Any:
+        return self.app.state.studies
 
     @property
     def claude(self) -> Rewrite:
@@ -490,27 +490,27 @@ class Mapper:
         return r
 
     def estado(self, project_id: str) -> dict[str, Any]:
-        project = self.estudos.projetos.obter(project_id)
+        project = self.studies.projects.obter(project_id)
         m: dict[str, Any] = dict(project.get("mapeamento") or {})
-        if m.get("estado") == "rodando" and project_id not in self.rodando:
-            m = self._salvar(project_id, estado="erro", erro="Interrompido (servidor reiniciou).")
+        if m.get("estado") == "rodando" and project_id not in self.running:
+            m = self._save(project_id, estado="erro", erro="Interrompido (servidor reiniciou).")
         return m
 
-    def _salvar(self, project_id: str, **fields: Any) -> dict[str, Any]:
-        with self.estudos.projetos.trava:
-            project = self.estudos.projetos.obter(project_id)
+    def _save(self, project_id: str, **fields: Any) -> dict[str, Any]:
+        with self.studies.projects.lock:
+            project = self.studies.projects.obter(project_id)
             m = {**(project.get("mapeamento") or {}), **fields}
-            self.estudos.projetos.editar(project_id, {"mapeamento": m})
+            self.studies.projects.edit(project_id, {"mapeamento": m})
         return m
 
     def iniciar(self, project_id: str, documento_id: str) -> dict[str, Any]:
-        if project_id in self.rodando:
+        if project_id in self.running:
             raise HTTPException(409, "O mapeamento deste projeto já está rodando.")
         reason = self.claude.disponivel()
         if reason or self.claude.executar_json is None:
             raise HTTPException(503, reason or "Claude indisponível neste servidor.")
-        meta = self.biblioteca.obter(documento_id)
-        m = self._salvar(
+        meta = self.collection.obter(documento_id)
+        m = self._save(
             project_id,
             documento_id=documento_id,
             documento_titulo=meta["titulo"],
@@ -519,9 +519,9 @@ class Mapper:
             erro=None,
             iniciado=_now(),
         )
-        task = asyncio.create_task(self._rodar(project_id, documento_id))
-        self.rodando[project_id] = task
-        task.add_done_callback(lambda _t: self.rodando.pop(project_id, None))
+        task = asyncio.create_task(self._run(project_id, documento_id))
+        self.running[project_id] = task
+        task.add_done_callback(lambda _t: self.running.pop(project_id, None))
         return m
 
     async def _claude(self, prompt: str, system: str, schema: dict[str, Any],
@@ -533,31 +533,31 @@ class Mapper:
             "ferramentas": ferramentas,
         })
 
-    def _texto_documento(self, documento_id: str) -> str:
-        meta = self.biblioteca.obter(documento_id)
+    def _text_document(self, documento_id: str) -> str:
+        meta = self.collection.obter(documento_id)
         if meta.get("extensao") == "docx":
-            original, _ext = self.biblioteca.caminho_original(documento_id)
+            original, _ext = self.collection.path_original(documento_id)
             return text_docx(original.read_bytes())
-        pdf = self.biblioteca.caminho_pdf(documento_id)
+        pdf = self.collection.path_pdf(documento_id)
         return "\n\n".join(pages_pdf(pdf)) if pdf else ""
 
-    async def _rodar(self, project_id: str, documento_id: str) -> None:
+    async def _run(self, project_id: str, documento_id: str) -> None:
         try:
             await self._mapear(project_id, documento_id)
         except Exception as e:  # noqa: BLE001 — qualquer falha vira estado legível no app
             logger.exception("mapeamento do projeto %s falhou", project_id)
-            self._salvar(project_id, estado="erro", erro=str(e) or type(e).__name__,
+            self._save(project_id, estado="erro", erro=str(e) or type(e).__name__,
                          concluido=_now())
 
-    def _catalogo(self, documento_id: str) -> list[dict[str, Any]]:
+    def _catalog(self, documento_id: str) -> list[dict[str, Any]]:
         cards = {
-            x["arquivo_id"]: x for x in self.estudos.leituras.ler() if x.get("arquivo_id")
+            x["arquivo_id"]: x for x in self.studies.readings.ler() if x.get("arquivo_id")
         }
         catalog = []
-        for meta in self.biblioteca.listar():
+        for meta in self.collection.list_all():
             if meta["id"] == documento_id or meta.get("status") != "pronto":
                 continue
-            pdf = self.biblioteca.caminho_pdf(meta["id"])
+            pdf = self.collection.path_pdf(meta["id"])
             if pdf is None or meta.get("tipo") not in ("pdf", "documento"):
                 continue
             pages = pages_pdf(pdf)
@@ -570,13 +570,13 @@ class Mapper:
         return catalog
 
     async def _mapear(self, project_id: str, documento_id: str) -> None:
-        document = await asyncio.to_thread(self._texto_documento, documento_id)
+        document = await asyncio.to_thread(self._text_document, documento_id)
         if not document.strip():
             raise RuntimeError("O documento não tem texto selecionável (PDF escaneado?).")
-        self._salvar(project_id, etapa="Montando o catálogo dos PDFs da biblioteca")
-        catalog = await asyncio.to_thread(self._catalogo, documento_id)
+        self._save(project_id, etapa="Montando o catálogo dos PDFs da biblioteca")
+        catalog = await asyncio.to_thread(self._catalog, documento_id)
         ids = {c["id"] for c in catalog}
-        self._salvar(project_id, etapa="Lendo as referências do documento")
+        self._save(project_id, etapa="Lendo as referências do documento")
         r = await self._claude(prompt_references(document, catalog), SYSTEM_REFERENCES,
                                SCHEMA_REFERENCES, 900)
         refs = {int(x["n"]): x for x in r.get("referencias") or []}
@@ -586,13 +586,13 @@ class Mapper:
         parts = divide_document(document)
         quotes: list[dict[str, Any]] = []
         for k, part in enumerate(parts, 1):
-            self._salvar(project_id, etapa=f"Lendo as citações do texto ({k}/{len(parts)})")
+            self._save(project_id, etapa=f"Lendo as citações do texto ({k}/{len(parts)})")
             rc = await self._claude(prompt_quotes(part, refs, k, len(parts)),
                                     SYSTEM_QUOTES, SCHEMA_QUOTES, 900)
             quotes += [c for c in rc.get("citacoes") or [] if int(c.get("ref", -1)) in refs]
         for c in quotes:
             c["ref_texto"] = refs[int(c["ref"])]["referencia"]
-        titulos = {m["id"]: m["titulo"] for m in self.biblioteca.listar()}
+        titulos = {m["id"]: m["titulo"] for m in self.collection.list_all()}
         references = []
         for n, ref in sorted(refs.items()):
             aid = ref.get("arquivo_id") or ""
@@ -609,31 +609,31 @@ class Mapper:
                 "marcadas": 0,
                 "nao_localizadas": [],
             })
-        self._salvar(project_id, referencias=references, citacoes=len(quotes))
-        await self._baixar_abertos(project_id, references, quotes)
+        self._save(project_id, referencias=references, citacoes=len(quotes))
+        await self._download_abertos(project_id, references, quotes)
 
         marcadas = 0
         for k, ref in enumerate(references):
             if not ref["arquivo_id"] or not ref["citacoes"]:
                 continue
-            self._salvar(
+            self._save(
                 project_id,
                 etapa=f"Procurando as citações em {ref['autor_citacao']} {ref['ano']} "
                 f"({k + 1}/{len(references)})",
             )
             cits = [c for c in quotes if int(c["ref"]) == ref["n"]]
             try:
-                await self._marcar_obra(project_id, ref, cits)
+                await self._mark_work(project_id, ref, cits)
             except Exception as e:  # noqa: BLE001 — uma obra com problema não para as outras
                 logger.exception("marcação em %s falhou", ref["arquivo_id"])
                 ref["nao_localizadas"].append(f"Falhou nesta obra ({e}); toque em Refazer.")
             marcadas += ref["marcadas"]
-            self._salvar(project_id, referencias=references, marcadas=marcadas)
+            self._save(project_id, referencias=references, marcadas=marcadas)
 
-        self._ficha_leituras(references)
+        self._card_readings(references)
         pending = [x for x in references if not x["arquivo_id"]]
-        self._tarefas_download(project_id, references)
-        self._salvar(
+        self._tasks_download(project_id, references)
+        self._save(
             project_id,
             estado="pronto",
             etapa="",
@@ -644,7 +644,7 @@ class Mapper:
             concluido=_now(),
         )
 
-    async def _baixar_abertos(self, project_id: str, referencias: list[dict[str, Any]],
+    async def _download_abertos(self, project_id: str, referencias: list[dict[str, Any]],
                               citacoes: list[dict[str, Any]]) -> None:
         """Para cada referência: DOI e link do artigo (para a planilha citar com o link) e, se
         ainda não tem PDF, baixa sozinho o de acesso aberto (OpenAlex; sem ele, o Claude busca
@@ -656,20 +656,20 @@ class Mapper:
             nonlocal done
             async with lock:
                 try:
-                    await self._buscar_obra(ref, [c for c in citacoes
+                    await self._fetch_work(ref, [c for c in citacoes
                                                   if int(c["ref"]) == ref["n"]])
                 except Exception:  # noqa: BLE001 — falha numa obra não para o mapeamento
                     logger.exception("busca da referência %r falhou", ref.get("titulo"))
                 done += 1
-                self._salvar(project_id, referencias=referencias,
+                self._save(project_id, referencias=referencias,
                              etapa=f"Buscando os artigos e os PDFs abertos "
                              f"({done}/{len(referencias)})")
 
-        self._salvar(project_id,
+        self._save(project_id,
                      etapa=f"Buscando os artigos e os PDFs abertos (0/{len(referencias)})")
         await asyncio.gather(*(uma(r) for r in referencias))
 
-    async def _buscar_obra(self, ref: dict[str, Any], cits: list[dict[str, Any]]) -> None:
+    async def _fetch_work(self, ref: dict[str, Any], cits: list[dict[str, Any]]) -> None:
         download = not ref["arquivo_id"]
         found = await fetch_pdf_open(ref, baixar=download)
         if (download and found["pdf"] is None) or not found["link"]:
@@ -696,7 +696,7 @@ class Mapper:
                       f"{ref['autor_citacao']} {ref['ano']} - {ref['titulo']}").strip()[:150]
         try:
             meta = await asyncio.to_thread(
-                self.biblioteca.adicionar, f"{name or 'referencia'}.pdf", found["pdf"],
+                self.collection.adicionar, f"{name or 'referencia'}.pdf", found["pdf"],
                 "Referências",
             )
         except FileInvalid:
@@ -706,14 +706,14 @@ class Mapper:
         ref["baixado_auto"] = True
         ref["url_pdf"] = found["url_pdf"]
 
-    async def _marcar_obra(self, project_id: str, ref: dict[str, Any],
+    async def _mark_work(self, project_id: str, ref: dict[str, Any],
                            cits: list[dict[str, Any]]) -> int:
         aid = ref["arquivo_id"]
-        pdf = self.biblioteca.caminho_pdf(aid)
+        pdf = self.collection.path_pdf(aid)
         if pdf is None:
             return 0
         pages = await asyncio.to_thread(pages_pdf, pdf)
-        existentes = {d["id"] for d in self.biblioteca.anotacoes(aid)["destaques"]}
+        existentes = {d["id"] for d in self.collection.annotations(aid)["destaques"]}
         a_fazer = [c for c in cits if _id_highlight(project_id, c) not in existentes]
         ref["marcadas"] = len(cits) - len(a_fazer)  # já marcadas num mapeamento anterior
         if not a_fazer or not pages:
@@ -763,13 +763,13 @@ class Mapper:
             c["_tipo_citacao"] = _kind_quote(c, t["trecho"])
             c["_confianca"] = t.get("confianca") or ""
         if new:
-            self._gravar_destaques(aid, new)
+            self._write_highlights(aid, new)
             by_id = {d["id"]: d for d in new}
             for c in a_fazer:
                 d = by_id.get(_id_highlight(project_id, c))
                 if d is None:
                     continue
-                self.estudos.classificar(project_id, d["id"], {
+                self.studies.classify(project_id, d["id"], {
                     "secao": c["secao"],
                     "tipo_citacao": c["_tipo_citacao"],
                     "status_uso": "Usado",
@@ -782,28 +782,28 @@ class Mapper:
         ref["marcadas"] += len(new)
         return len(new)
 
-    def _gravar_destaques(self, file_id: str, new: list[dict[str, Any]]) -> None:
+    def _write_highlights(self, file_id: str, new: list[dict[str, Any]]) -> None:
         for _ in range(5):
-            current = self.biblioteca.anotacoes(file_id)
+            current = self.collection.annotations(file_id)
             ids = {d["id"] for d in current["destaques"]}
             data = {**current, "destaques": [
                 *current["destaques"], *(d for d in new if d["id"] not in ids)
             ]}
             try:
-                self.biblioteca.salvar_anotacoes(file_id, current["versao"], data)
+                self.collection.save_annotations(file_id, current["versao"], data)
                 return
             except AnnotationsConflict:
                 continue
         raise RuntimeError("Não consegui gravar as marcações (arquivo sendo editado).")
 
-    def _ficha_leituras(self, referencias: list[dict[str, Any]]) -> None:
+    def _card_readings(self, referencias: list[dict[str, Any]]) -> None:
         """Cria a ficha da leitura (autor, ano, referência, DOI e link) dos PDFs ligados que ainda
         não têm, e completa DOI/link/referência que faltam nas existentes, para a matriz e a
         planilha citarem certo e com o link do artigo."""
         from estudos.studies import AREAS
 
         cards = {
-            x["arquivo_id"]: x for x in self.estudos.leituras.ler() if x.get("arquivo_id")
+            x["arquivo_id"]: x for x in self.studies.readings.ler() if x.get("arquivo_id")
         }
         for ref in referencias:
             if not ref["arquivo_id"]:
@@ -817,9 +817,9 @@ class Mapper:
                     if v and not card.get(k)
                 }
                 if missing:
-                    self.estudos.editar_leitura(card["id"], missing)
+                    self.studies.edit_reading(card["id"], missing)
                 continue
-            cards[ref["arquivo_id"]] = self.estudos.criar_leitura({
+            cards[ref["arquivo_id"]] = self.studies.create_reading({
                 "titulo": ref["titulo"] or ref["arquivo_titulo"] or reference[:200],
                 "autor": ref["autor_citacao"],
                 "tipo": "artigo",
@@ -832,14 +832,14 @@ class Mapper:
                 "url": ref.get("link") or "",
             })
 
-    def _tarefas_download(self, project_id: str, referencias: list[dict[str, Any]]) -> None:
+    def _tasks_download(self, project_id: str, referencias: list[dict[str, Any]]) -> None:
         """Pendência de download no Quadro de Rotinas para cada referência sem PDF; a que já
         tem PDF é concluída."""
         frame = getattr(self.app.state, "quadro", None)
         if frame is None:
             return
-        project = self.estudos.projetos.obter(project_id)
-        tasks = {t["titulo"]: t for t in frame.listar() if TAG_TASK in (t.get("tags") or [])}
+        project = self.studies.projects.obter(project_id)
+        tasks = {t["titulo"]: t for t in frame.list_all() if TAG_TASK in (t.get("tags") or [])}
         for ref in referencias:
             title = f"Baixar PDF: {ref['autor_citacao']} ({ref['ano']}) — {ref['titulo']}"[:300]
             t = tasks.get(title)
@@ -884,7 +884,7 @@ def _project(m: Mapper, id_: str) -> dict[str, Any]:
     from estudos.studies import NotFound
 
     try:
-        project: dict[str, Any] = m.estudos.projetos.obter(id_)
+        project: dict[str, Any] = m.studies.projects.obter(id_)
     except NotFound as e:
         raise HTTPException(404, "Projeto não encontrado") from e
     return project
@@ -909,18 +909,18 @@ async def attach(
     content = await arquivo.read()
     previous = (project.get("mapeamento") or {}).get("documento_id")
     try:
-        current = m.biblioteca.obter(previous) if previous else None
+        current = m.collection.obter(previous) if previous else None
     except FileNotFound:
         current = None  # o documento anterior foi excluído dos Arquivos
     try:
         if current and current.get("extensao") == "docx" and name.lower().endswith(".docx"):
-            meta = m.biblioteca.substituir(previous, content)
+            meta = m.collection.substituir(previous, content)
         else:
-            meta = m.biblioteca.adicionar(name, content, pasta=project.get("nome", ""))
+            meta = m.collection.adicionar(name, content, pasta=project.get("nome", ""))
     except FileInvalid as e:
         raise HTTPException(422, str(e)) from e
     if meta.get("status") == "convertendo":
-        tarefas.add_task(m.biblioteca.converter, meta["id"])
+        tarefas.add_task(m.collection.convert, meta["id"])
     return m.iniciar(id_, meta["id"])
 
 
@@ -937,7 +937,7 @@ async def redo(id_: str, m: MapperDep, pedido: RequestMapping | None = None) -> 
     if not doc:
         raise HTTPException(422, "Anexe o documento (.docx ou PDF) primeiro.")
     try:
-        meta = m.biblioteca.obter(doc)
+        meta = m.collection.obter(doc)
     except FileNotFound as e:
         raise HTTPException(404, "Documento não está mais nos Arquivos.") from e
     if meta.get("extensao") not in ("docx", "pdf"):

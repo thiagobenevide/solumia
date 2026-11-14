@@ -193,7 +193,7 @@ class CVM:
         return zipfile.ZipFile(destination)
 
     @staticmethod
-    def _linhas(zf: zipfile.ZipFile, part: str, criteria: str = "") -> Any:
+    def _lines(zf: zipfile.ZipFile, part: str, criteria: str = "") -> Any:
         """Linhas do CSV [parte]; com [filtro], só as que contêm o texto (descarta em bytes, antes
         do CSV, o que é muitas vezes mais rápido; quem chama ainda confere o campo exato). Não
         usar filtro em arquivo com texto livre de várias linhas (IPE)."""
@@ -207,7 +207,7 @@ class CVM:
         lines = itertools.chain([raw.readline()], (x for x in raw if target in x))
         return csv.DictReader((x.decode("latin-1") for x in lines), delimiter=";")
 
-    def _ano_existente(self, doc: str, year: int) -> int:
+    def _year_existente(self, doc: str, year: int) -> int:
         """O ano mais recente que a CVM já publicou para [doc] (o ano corrente pode não existir)."""
         for a in (year, year - 1):
             try:
@@ -222,11 +222,11 @@ class CVM:
         today = date.today().year
         for doc, year in (("FCA", today), ("ITR", today), ("IPE", today), ("FII_INF_MENSAL", today)):
             try:
-                self._ano_existente(doc, year)
+                self._year_existente(doc, year)
             except ErrorCVM:
                 continue
         try:
-            last = self._ano_existente("DFP", today - 1)
+            last = self._year_existente("DFP", today - 1)
             for a in range(last - YEARS_DFP + 1, last):
                 self._zip("DFP", a)
         except ErrorCVM:
@@ -240,14 +240,14 @@ class CVM:
     def indice(self) -> list[dict[str, Any]]:
         """Todas as companhias com ticker (FCA) e todos os FIIs (informe mensal), para a busca
         enquanto digita. Fica em memória: montar lê dois CSVs inteiros."""
-        return _memo(("indice", str(self.pasta)), self._indice)
+        return _memo(("indice", str(self.pasta)), self._index)
 
-    def _indice(self) -> list[dict[str, Any]]:
+    def _index(self) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         try:
-            zf = self._zip("FCA", self._ano_existente("FCA", date.today().year))
+            zf = self._zip("FCA", self._year_existente("FCA", date.today().year))
             tickers: dict[str, set[str]] = {}
-            for r in self._linhas(zf, "valor_mobiliario"):
+            for r in self._lines(zf, "valor_mobiliario"):
                 cod = r["Codigo_Negociacao"].upper().strip()
                 # só ações, units e BDRs negociados hoje (debêntures têm código de 6+ dígitos)
                 if (
@@ -256,7 +256,7 @@ class CVM:
                     and re.fullmatch(r"[A-Z0-9]{4}\d{1,2}", cod)
                 ):
                     tickers.setdefault(r["CNPJ_Companhia"], set()).add(cod)
-            for r in self._linhas(zf, "geral"):
+            for r in self._lines(zf, "geral"):
                 ts = sorted(tickers.get(r["CNPJ_Companhia"], ()))
                 if not ts:
                     continue
@@ -282,7 +282,7 @@ class CVM:
                 zf = self._zip("FII_INF_MENSAL", a)
             except ErrorCVM:
                 continue
-            for r in self._linhas(zf, "geral"):
+            for r in self._lines(zf, "geral"):
                 t = ticker_of_isin(r["Codigo_ISIN"])
                 if t and (t not in fiis or r["Data_Referencia"] > fiis[t]["_ref"]):
                     fiis[t] = {
@@ -307,7 +307,7 @@ class CVM:
             x["_anteriores"] = _words(x["anterior"])
         return items
 
-    def sugerir(self, query: str, limite: int = 12) -> list[dict[str, Any]]:
+    def suggest(self, query: str, limite: int = 12) -> list[dict[str, Any]]:
         """Busca enquanto digita: ticker pelo começo (ITU → ITUB3, ITUB4), nome popular (Itaú,
         Magalu), palavra do nome pelo começo ou no meio e, por último, nome parecido (erro de
         digitação). Ações e FIIs juntos, os mais prováveis primeiro."""
@@ -349,14 +349,14 @@ class CVM:
         found.sort(key=lambda p: (-p[0], len(p[1]["nome"])))
         return [{k: v for k, v in x.items() if not k.startswith("_")} for _, x in found[:limite]]
 
-    def buscar(self, query: str) -> list[dict[str, Any]]:
+    def fetch(self, query: str) -> list[dict[str, Any]]:
         """Companhias (só ações) por ticker, nome ou apelido, com CNPJ, código CVM, setor, site de
         RI e todos os tickers; a mais provável primeiro."""
-        return [x for x in self.sugerir(query, 20) if x["tipo"] == "acao"][:10]
+        return [x for x in self.suggest(query, 20) if x["tipo"] == "acao"][:10]
 
     # ---------- demonstrativos ----------
 
-    def demonstrativos(
+    def statements(
         self, code_cvm: int, years: int = YEARS_DFP, ao_ano: Any = None
     ) -> list[dict[str, Any]]:
         """Anos fechados no formato de `analise.CONTAS` (R$ mil; `acoes` em mil), do
@@ -364,13 +364,13 @@ class CVM:
         antigo, para a ficha ir aparecendo."""
         return _memo(
             ("demonstrativos", str(self.pasta), code_cvm, years),
-            lambda: self._demonstrativos(code_cvm, years, ao_ano),
+            lambda: self._statements(code_cvm, years, ao_ano),
         )
 
-    def _demonstrativos(
+    def _statements(
         self, code_cvm: int, years: int, ao_ano: Any = None
     ) -> list[dict[str, Any]]:
-        last = self._ano_existente("DFP", date.today().year - 1)
+        last = self._year_existente("DFP", date.today().year - 1)
         by_year: dict[int, dict[str, Any]] = {}
         cnpj = ""
         for year_file in range(last, last - years, -1):
@@ -379,7 +379,7 @@ class CVM:
             except ErrorCVM:
                 continue
             for part in ("DRE_con", "BPA_con", "BPP_con", "DFC_MI_con", "DFC_MD_con"):
-                for r in self._linhas(zf, part, str(code_cvm)):
+                for r in self._lines(zf, part, str(code_cvm)):
                     if _cd(r["CD_CVM"]) != code_cvm:
                         continue
                     cnpj = cnpj or r["CNPJ_CIA"]
@@ -402,7 +402,7 @@ class CVM:
                     if part.startswith("DFC"):
                         _flow(line, account, desc, value)
             if cnpj:
-                for r in self._linhas(zf, "composicao_capital", cnpj):
+                for r in self._lines(zf, "composicao_capital", cnpj):
                     if r["CNPJ_CIA"] == cnpj and int(r["DT_REFER"][:4]) in by_year:
                         q = _num(r["QT_ACAO_TOTAL_CAP_INTEGR"]) or 0
                         q -= _num(r["QT_ACAO_TOTAL_TESOURO"]) or 0
@@ -425,9 +425,9 @@ class CVM:
         today = date.today().year
         dfp, itr, ipe = [], [], []
         try:
-            last = self._ano_existente("DFP", today - 1)
+            last = self._year_existente("DFP", today - 1)
             for a in range(last - YEARS_DFP + 1, last + 1):
-                for r in self._linhas(
+                for r in self._lines(
                     self._zip("DFP", a), f"dfp_cia_aberta_{a}.csv", str(code_cvm)
                 ):
                     if _cd(r["CD_CVM"]) == code_cvm:
@@ -442,7 +442,7 @@ class CVM:
             pass
         for a in (today, today - 1):
             try:
-                for r in self._linhas(
+                for r in self._lines(
                     self._zip("ITR", a), f"itr_cia_aberta_{a}.csv", str(code_cvm)
                 ):
                     if _cd(r["CD_CVM"]) == code_cvm:
@@ -456,7 +456,7 @@ class CVM:
             except ErrorCVM:
                 continue
             try:
-                for r in self._linhas(self._zip("IPE", a), f"ipe_cia_aberta_{a}.csv"):
+                for r in self._lines(self._zip("IPE", a), f"ipe_cia_aberta_{a}.csv"):
                     if _cd(r["Codigo_CVM"]) == code_cvm and r["Categoria"] in CATEGORIES_IPE:
                         ipe.append(
                             {
@@ -542,7 +542,7 @@ def _fii(cvm: "CVM", t: str) -> dict[str, Any] | None:
             continue
     cnpj, general = None, None
     for zf in zips:
-        for r in cvm._linhas(zf, "geral"):
+        for r in cvm._lines(zf, "geral"):
             if ticker_of_isin(r["Codigo_ISIN"]) == t and (
                 general is None or r["Data_Referencia"] > general["Data_Referencia"]
             ):
@@ -555,7 +555,7 @@ def _fii(cvm: "CVM", t: str) -> dict[str, Any] | None:
     composition: dict[str, float] = {}
     last_ap = ""
     for zf in zips:
-        for r in cvm._linhas(zf, "complemento", cnpj):
+        for r in cvm._lines(zf, "complemento", cnpj):
             if r["CNPJ_Fundo_Classe"] == cnpj:
                 months[r["Data_Referencia"][:7]] = {
                     "mes": r["Data_Referencia"][:7],
@@ -567,7 +567,7 @@ def _fii(cvm: "CVM", t: str) -> dict[str, Any] | None:
                     "cotistas": _num(r["Total_Numero_Cotistas"]),
                     "taxa_adm_pct": _num(r["Percentual_Despesas_Taxa_Administracao"]),
                 }
-        for r in cvm._linhas(zf, "ativo_passivo", cnpj):
+        for r in cvm._lines(zf, "ativo_passivo", cnpj):
             if r["CNPJ_Fundo_Classe"] == cnpj and r["Data_Referencia"] >= last_ap:
                 last_ap = r["Data_Referencia"]
                 composition = {

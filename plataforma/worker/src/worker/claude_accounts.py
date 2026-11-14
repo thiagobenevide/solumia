@@ -65,56 +65,56 @@ def _clean(output: bytes) -> str:
 
 class Accounts:
     def __init__(self, pasta: str, binario: str = "claude", default: str = "~/.claude") -> None:
-        self._pasta = Path(pasta).expanduser()
+        self._folder = Path(pasta).expanduser()
         self._bin = binario
-        self._padrao = Path(default).expanduser()
+        self._default = Path(default).expanduser()
         self._logins: dict[str, _Login] = {}
-        self._aplicar(self.ativa())
+        self._apply(self.ativa())
 
     async def executar(self, task: str, payload: dict[str, Any]) -> dict[str, Any]:
         name = str(payload.get("nome") or "")
         if task == "contas.ativar":
-            return await self.ativar(name)
+            return await self.activate(name)
         if task == "contas.entrar":
-            return await self.entrar(name)
+            return await self.enter(name)
         if task == "contas.codigo":
             return await self.codigo(name, str(payload.get("codigo") or ""))
         if task == "contas.remover":
             return await self.remover(name)
-        return await self.listar()
+        return await self.list_all()
 
     def ativa(self) -> str:
         try:
-            name = (self._pasta / "ativa").read_text().strip()
+            name = (self._folder / "ativa").read_text().strip()
         except OSError:
             return MAIN
-        return name if name != MAIN and (self._pasta / name).is_dir() else MAIN
+        return name if name != MAIN and (self._folder / name).is_dir() else MAIN
 
     def _dir(self, nome: str) -> Path:
-        return self._padrao if nome == MAIN else self._pasta / nome
+        return self._default if nome == MAIN else self._folder / nome
 
-    def _nomes(self) -> list[str]:
-        if not self._pasta.is_dir():
+    def _names(self) -> list[str]:
+        if not self._folder.is_dir():
             return [MAIN]
-        return [MAIN, *sorted(p.name for p in self._pasta.iterdir() if p.is_dir())]
+        return [MAIN, *sorted(p.name for p in self._folder.iterdir() if p.is_dir())]
 
-    def _ambiente(self, nome: str) -> dict[str, str]:
+    def _environment(self, nome: str) -> dict[str, str]:
         env = dict(os.environ)
         env.pop("CLAUDE_CONFIG_DIR", None)
         if nome != MAIN:
             env["CLAUDE_CONFIG_DIR"] = str(self._dir(nome))
         return env
 
-    def _aplicar(self, nome: str) -> None:
+    def _apply(self, nome: str) -> None:
         if nome == MAIN:
             os.environ.pop("CLAUDE_CONFIG_DIR", None)
         else:
             os.environ["CLAUDE_CONFIG_DIR"] = str(self._dir(nome))
 
-    def _validar(self, nome: str, existente: bool = True) -> None:
+    def _validate(self, nome: str, existente: bool = True) -> None:
         if nome != MAIN and not _NAME.match(nome):
             raise RuntimeError("Nome de conta inválido: use letras minúsculas, números, - ou _.")
-        if existente and nome not in self._nomes():
+        if existente and nome not in self._names():
             raise RuntimeError(f"Conta {nome!r} não existe.")
 
     async def _status(self, nome: str) -> dict[str, Any]:
@@ -122,7 +122,7 @@ class Accounts:
         try:
             process = await asyncio.create_subprocess_exec(
                 self._bin, "auth", "status", "--json",
-                env=self._ambiente(nome),
+                env=self._environment(nome),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -137,28 +137,28 @@ class Accounts:
             "plano": str(data.get("subscriptionType") or ""),
         }
 
-    async def listar(self) -> dict[str, Any]:
-        accounts = await asyncio.gather(*(self._status(n) for n in self._nomes()))
+    async def list_all(self) -> dict[str, Any]:
+        accounts = await asyncio.gather(*(self._status(n) for n in self._names()))
         return {"ativa": self.ativa(), "contas": list(accounts)}
 
-    async def ativar(self, nome: str) -> dict[str, Any]:
-        self._validar(nome)
+    async def activate(self, nome: str) -> dict[str, Any]:
+        self._validate(nome)
         if not (await self._status(nome))["logado"]:
             raise RuntimeError(f"A conta {nome!r} não está logada. Entre nela antes de ativar.")
-        self._pasta.mkdir(parents=True, exist_ok=True)
-        (self._pasta / "ativa").write_text(nome)
-        self._aplicar(nome)
-        return await self.listar()
+        self._folder.mkdir(parents=True, exist_ok=True)
+        (self._folder / "ativa").write_text(nome)
+        self._apply(nome)
+        return await self.list_all()
 
-    def _preparar(self, nome: str) -> None:
+    def _prepare(self, nome: str) -> None:
         folder = self._dir(nome)
         folder.mkdir(parents=True, exist_ok=True)
         for item in _SHARED:
-            origin, destination = self._padrao / item, folder / item
+            origin, destination = self._default / item, folder / item
             if origin.exists() and not destination.exists() and not destination.is_symlink():
                 destination.symlink_to(origin)
 
-    def _cancelar(self, nome: str) -> None:
+    def _cancel(self, nome: str) -> None:
         login = self._logins.pop(nome, None)
         if login is None:
             return
@@ -167,17 +167,17 @@ class Accounts:
         with contextlib.suppress(OSError):
             os.close(login.fd)
 
-    async def entrar(self, nome: str) -> dict[str, Any]:
+    async def enter(self, nome: str) -> dict[str, Any]:
         """Começa o login da conta (cria a pasta se for nova) e devolve o link de autorização."""
-        self._validar(nome, existente=False)
+        self._validate(nome, existente=False)
         if nome != MAIN:
-            self._preparar(nome)
-        self._cancelar(nome)
+            self._prepare(nome)
+        self._cancel(nome)
         mestre, escravo = os.openpty()
         try:
             process = await asyncio.create_subprocess_exec(
                 self._bin, "auth", "login",
-                env={**self._ambiente(nome), "BROWSER": "/bin/true"},  # o navegador é o do app
+                env={**self._environment(nome), "BROWSER": "/bin/true"},  # o navegador é o do app
                 stdin=escravo, stdout=escravo, stderr=escravo,
                 start_new_session=True,
             )
@@ -197,7 +197,7 @@ class Accounts:
 
         def abandonar() -> None:  # só se ainda for este login (não um começado depois)
             if self._logins.get(nome) is login:
-                self._cancelar(nome)
+                self._cancel(nome)
 
         asyncio.get_running_loop().call_later(_ABANDONMENT_S, abandonar)
         return {"nome": nome, "url": found[1].decode()}
@@ -221,15 +221,15 @@ class Accounts:
         if not status["logado"]:
             reason = _clean(output)[-300:] or "sem resposta"
             raise RuntimeError(f"O login não foi concluído: {reason}")
-        return await self.listar()
+        return await self.list_all()
 
     async def remover(self, nome: str) -> dict[str, Any]:
-        self._validar(nome)
+        self._validate(nome)
         if nome == MAIN:
             raise RuntimeError("A conta principal (a do terminal) não pode ser removida.")
-        self._cancelar(nome)
+        self._cancel(nome)
         if self.ativa() == nome:
-            (self._pasta / "ativa").write_text(MAIN)
-            self._aplicar(MAIN)
+            (self._folder / "ativa").write_text(MAIN)
+            self._apply(MAIN)
         shutil.rmtree(self._dir(nome))  # os links compartilhados são apagados, não seguidos
-        return await self.listar()
+        return await self.list_all()

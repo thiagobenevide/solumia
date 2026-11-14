@@ -92,52 +92,52 @@ def validate_schematic(e: dict[str, Any], symbol: SearchSymbol = POR_ID.get) -> 
 
 class Projects:
     def __init__(self, root: str | Path, symbol: SearchSymbol = POR_ID.get) -> None:
-        self.simbolo = symbol
-        self.raiz = Path(root).expanduser() / "projetos"
-        self.raiz.mkdir(parents=True, exist_ok=True)
-        self._trava = threading.RLock()
+        self.symbol = symbol
+        self.root = Path(root).expanduser() / "projetos"
+        self.root.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
 
-    def _resumo(self, p: dict[str, Any]) -> dict[str, Any]:
+    def _summary(self, p: dict[str, Any]) -> dict[str, Any]:
         return {
             **{k: v for k, v in p.items() if k not in LISTS},
-            "total": sum(1 for c in p["componentes"] if _is_piece(self.simbolo, c["simbolo"])),
+            "total": sum(1 for c in p["componentes"] if _is_piece(self.symbol, c["simbolo"])),
         }
 
-    def _caminho(self, id_: str) -> Path:
+    def _path(self, id_: str) -> Path:
         if not _ID.match(id_):
             raise NotFound(id_)
-        return self.raiz / f"{id_}.json"
+        return self.root / f"{id_}.json"
 
-    def _ler(self, id_: str) -> dict[str, Any]:
-        path = self._caminho(id_)
+    def _read(self, id_: str) -> dict[str, Any]:
+        path = self._path(id_)
         if not path.exists():
             raise NotFound(id_)
         data: dict[str, Any] = json.loads(path.read_text("utf-8"))
         return data
 
-    def _gravar(self, p: dict[str, Any]) -> None:
-        path = self._caminho(p["id"])
+    def _write(self, p: dict[str, Any]) -> None:
+        path = self._path(p["id"])
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(p, ensure_ascii=False, separators=(",", ":")), "utf-8")
         os.replace(tmp, path)
 
-    def listar(self, pasta: str | None = None) -> list[dict[str, Any]]:
-        with self._trava:
-            projects = [self._resumo(self._ler(p.stem)) for p in self.raiz.glob("*.json")]
+    def list_all(self, pasta: str | None = None) -> list[dict[str, Any]]:
+        with self._lock:
+            projects = [self._summary(self._read(p.stem)) for p in self.root.glob("*.json")]
         if pasta is not None:
             projects = [p for p in projects if p["pasta"] == pasta]
         return sorted(projects, key=lambda p: p["atualizado"], reverse=True)
 
     def obter(self, id_: str) -> dict[str, Any]:
-        with self._trava:
-            return self._ler(id_)
+        with self._lock:
+            return self._read(id_)
 
     def criar(self, fields: dict[str, Any]) -> dict[str, Any]:
         schematic = {
             "folhas": fields.get("folhas") or [{"id": "f1", "nome": "Folha 1"}],
             **{items: fields.get(items, []) for items in LISTS},
         }
-        validate_schematic(schematic, self.simbolo)
+        validate_schematic(schematic, self.symbol)
         now = _now()
         p = {
             "id": uuid.uuid4().hex,
@@ -148,23 +148,23 @@ class Projects:
             "versao": 1,
             **schematic,
         }
-        with self._trava:
-            self._gravar(p)
+        with self._lock:
+            self._write(p)
         return p
 
-    def editar(self, id_: str, fields: dict[str, Any]) -> dict[str, Any]:
+    def edit(self, id_: str, fields: dict[str, Any]) -> dict[str, Any]:
         fields = {k: v for k, v in fields.items() if k in FIELDS_EDITABLE and v is not None}
-        with self._trava:
-            p = self._ler(id_)
+        with self._lock:
+            p = self._read(id_)
             p.update(fields, atualizado=_now())
-            self._gravar(p)
-        return self._resumo(p)
+            self._write(p)
+        return self._summary(p)
 
     def salvar(self, id_: str, schematic: dict[str, Any], versao: int) -> dict[str, Any]:
         """Troca folhas e itens se [versao] for a atual; devolve o resumo com a versão nova."""
-        validate_schematic(schematic, self.simbolo)
-        with self._trava:
-            p = self._ler(id_)
+        validate_schematic(schematic, self.symbol)
+        with self._lock:
+            p = self._read(id_)
             if versao != p["versao"]:
                 raise Conflict(p)
             p.update(
@@ -172,16 +172,16 @@ class Projects:
                 versao=p["versao"] + 1,
                 atualizado=_now(),
             )
-            self._gravar(p)
-        return self._resumo(p)
+            self._write(p)
+        return self._summary(p)
 
-    def duplicar(self, id_: str) -> dict[str, Any]:
+    def duplicate(self, id_: str) -> dict[str, Any]:
         p = self.obter(id_)
         return self.criar({**p, "titulo": f"{p['titulo']} (cópia)"})
 
     def excluir(self, id_: str) -> None:
-        with self._trava:
-            path = self._caminho(id_)
+        with self._lock:
+            path = self._path(id_)
             if not path.exists():
                 raise NotFound(id_)
             path.unlink()

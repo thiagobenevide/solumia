@@ -310,7 +310,7 @@ def fetch(project, refazer=False, cenas=None):
         print("  aviso: sem PEXELS_API_KEY/PIXABAY_API_KEY_* no .env; só fotos do Openverse (sem vídeos)")
 
     ac = cfg.get("acervo", {})
-    plan = project.carregar_json("plano.json")
+    plan = project.load_json("plano.json")
     from esteira import production
     production.mark_presenter(project, plan)  # no modo apresentador, cenas de câmera não buscam mídia
     folder = project.caminho("midia")
@@ -375,7 +375,7 @@ def fetch(project, refazer=False, cenas=None):
                         midia_origem="acervo" if chosen.get("arquivo") else "banco")
             library.mark_usage(chosen["id"], project.canal, project.ep, cena["id"])
             events.debug(f"cena {cena['id']} ← {chosen['id']}", midia=chosen["tipo"], busca=cena.get("busca_en"))
-            project.salvar_json("plano.json", plan)
+            project.save_json("plano.json", plan)
 
     with ThreadPoolExecutor(cfg["midia"].get("paralelo", 6)) as ex:
         list(ex.map(uma, pending))
@@ -412,7 +412,7 @@ def sheet(project, frames, destino, colunas=4, w=384, h=216):
 
 def review(project, cenas=None, by_sheet=16):
     """Folhas de contato revisao_NN.jpg (16 cenas cada, legíveis e baratas de ler) com número e busca."""
-    plan = project.carregar_json("plano.json")
+    plan = project.load_json("plano.json")
     cenas = [c for c in plan["cenas"] if c.get("midia") and (not cenas or c["id"] in cenas)]
     if not cenas:
         raise SystemExit("nenhuma cena com mídia; rode buscar")

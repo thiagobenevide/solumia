@@ -85,16 +85,16 @@ class Youtube:
 
     # ---------- canais ----------
 
-    def _pasta(self, slug: str) -> str:
+    def _folder(self, slug: str) -> str:
         if not SLUG.match(slug):
             raise Invalid(
                 f"Identificador de canal inválido: {slug!r} (use minúsculas, números e -)"
             )
         return f"{ROOT}/{slug}"
 
-    def _canal_nota(self, slug: str, notes: list[dict] | None = None) -> dict[str, Any]:
-        folder = self._pasta(slug)
-        for n in notes if notes is not None else self.cofre.na_pasta(folder):
+    def _channel_note(self, slug: str, notes: list[dict] | None = None) -> dict[str, Any]:
+        folder = self._folder(slug)
+        for n in notes if notes is not None else self.cofre.in_folder(folder):
             if n["tipo"] == "canal" and n["pasta"] == folder:
                 return n
         raise NotFound(f"Canal não encontrado: {slug}")
@@ -122,8 +122,8 @@ class Youtube:
             "colecoes": self._contagens(slug, notes),
         }
 
-    def canais(self) -> list[dict[str, Any]]:
-        notes = self.cofre.na_pasta(ROOT)
+    def channels(self) -> list[dict[str, Any]]:
+        notes = self.cofre.in_folder(ROOT)
         channels = [
             n
             for n in notes
@@ -132,14 +132,14 @@ class Youtube:
         return sorted((self._canal(n, notes) for n in channels), key=lambda c: c["titulo"])
 
     def canal(self, slug: str) -> dict[str, Any]:
-        notes = self.cofre.na_pasta(self._pasta(slug))
-        n = self._canal_nota(slug, notes)
+        notes = self.cofre.in_folder(self._folder(slug))
+        n = self._channel_note(slug, notes)
         return self.cofre.obter(n["id"]) | self._canal(n, notes)
 
-    def criar_canal(self, dados: dict[str, Any]) -> dict[str, Any]:
+    def create_channel(self, dados: dict[str, Any]) -> dict[str, Any]:
         slug = dados["slug"]
-        folder = self._pasta(slug)
-        if any(n["tipo"] == "canal" for n in self.cofre.na_pasta(folder)):
+        folder = self._folder(slug)
+        if any(n["tipo"] == "canal" for n in self.cofre.in_folder(folder)):
             raise Invalid(f"O canal {slug!r} já existe")
         status = dados.get("status") or "ideia"
         if status not in STATUS_CHANNEL:
@@ -158,8 +158,8 @@ class Youtube:
         )
         return self.canal(slug)
 
-    def editar_canal(self, slug: str, dados: dict[str, Any]) -> dict[str, Any]:
-        current = self.cofre.obter(self._canal_nota(slug)["id"])
+    def edit_channel(self, slug: str, dados: dict[str, Any]) -> dict[str, Any]:
+        current = self.cofre.obter(self._channel_note(slug)["id"])
         edit: dict[str, Any] = {
             k: dados[k] for k in ("titulo", "tags", "corpo") if dados.get(k) is not None
         }
@@ -173,9 +173,9 @@ class Youtube:
         self.cofre.atualizar(current["id"], edit)
         return self.canal(slug)
 
-    def excluir_canal(self, slug: str) -> None:
-        notes = self.cofre.na_pasta(self._pasta(slug))
-        n = self._canal_nota(slug, notes)
+    def delete_channel(self, slug: str) -> None:
+        notes = self.cofre.in_folder(self._folder(slug))
+        n = self._channel_note(slug, notes)
         if len(notes) > 1:
             raise Invalid(f"O canal ainda tem {len(notes) - 1} notas; exclua-as antes")
         self.cofre.excluir(n["id"])
@@ -205,8 +205,8 @@ class Youtube:
         self, slug: str, collection: str, q: str = "", status: str | None = None
     ) -> list[dict[str, Any]]:
         c = _collection(collection)
-        notes = self.cofre.na_pasta(self._pasta(slug))
-        self._canal_nota(slug, notes)
+        notes = self.cofre.in_folder(self._folder(slug))
+        self._channel_note(slug, notes)
         folder = f"{ROOT}/{slug}/{c['pasta']}"
         term = q.strip().casefold()
         output = [
@@ -222,23 +222,23 @@ class Youtube:
     def item(self, slug: str, collection: str, id_: str) -> dict[str, Any]:
         c = _collection(collection)
         n = self.cofre.obter(id_)
-        if n["tipo"] != c["tipo"] or not n["pasta"].startswith(f"{self._pasta(slug)}/"):
+        if n["tipo"] != c["tipo"] or not n["pasta"].startswith(f"{self._folder(slug)}/"):
             raise NotFound(f"{c['item']} não encontrado neste canal")
         return n | {"colecao": collection, "ligacoes": self._item(n, c)["ligacoes"]}
 
-    def _titulo(self, c: dict[str, Any], titulo: str) -> str:
+    def _title(self, c: dict[str, Any], titulo: str) -> str:
         titulo = titulo.strip()
         return titulo if titulo.startswith(c["item"]) else f"{c['item']} — {titulo}"
 
     def criar(self, slug: str, collection: str, dados: dict[str, Any]) -> dict[str, Any]:
         c = _collection(collection)
-        channel = self._canal_nota(slug)
+        channel = self._channel_note(slug)
         props = _merge(
             {"canal": _link(channel["titulo"])}, _props(c, dados.get("propriedades", {}))
         )
         n = self.cofre.criar(
             {
-                "titulo": self._titulo(c, dados["titulo"]),
+                "titulo": self._title(c, dados["titulo"]),
                 "tipo": c["tipo"],
                 "pasta": f"{ROOT}/{slug}/{c['pasta']}",
                 "tags": [c["tag"], *(t for t in dados.get("tags", []) if t != c["tag"])],
@@ -248,14 +248,14 @@ class Youtube:
         )
         return self.item(slug, collection, n["id"])
 
-    def editar(self, slug: str, collection: str, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
+    def edit(self, slug: str, collection: str, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
         c = _collection(collection)
         current = self.item(slug, collection, id_)
         edit: dict[str, Any] = {
             k: dados[k] for k in ("tags", "corpo") if dados.get(k) is not None
         }
         if dados.get("titulo"):
-            edit["titulo"] = self._titulo(c, dados["titulo"])
+            edit["titulo"] = self._title(c, dados["titulo"])
         if dados.get("propriedades") is not None:
             edit["propriedades"] = _merge(
                 current["propriedades"], _props(c, dados["propriedades"])
@@ -267,7 +267,7 @@ class Youtube:
         self.item(slug, collection, id_)
         self.cofre.excluir(id_)
 
-    def derivar(self, slug: str, tema_id: str, collection: str) -> dict[str, Any]:
+    def derive(self, slug: str, tema_id: str, collection: str) -> dict[str, Any]:
         """Cria o roteiro ou a história de um tema, com o mesmo nome, e liga os dois."""
         if collection not in ("roteiros", "historias"):
             raise Invalid("Só se derivam roteiros e histórias de um tema")
@@ -287,13 +287,13 @@ class Youtube:
             collection,
             {"titulo": f"{COLLECTIONS[collection]['item']} {rest}", "propriedades": props},
         )
-        self.editar(slug, "temas", tema_id, {"propriedades": {field: new["titulo"]}})
+        self.edit(slug, "temas", tema_id, {"propriedades": {field: new["titulo"]}})
         return new
 
     # ---------- esquema e importação ----------
 
-    def esquema(self) -> dict[str, Any]:
+    def schema(self) -> dict[str, Any]:
         return schema()
 
-    def importar(self, replace: bool = False) -> dict[str, Any]:
-        return run_import(self.vault, self.cofre.raiz, replace)
+    def run_import(self, replace: bool = False) -> dict[str, Any]:
+        return run_import(self.vault, self.cofre.root, replace)

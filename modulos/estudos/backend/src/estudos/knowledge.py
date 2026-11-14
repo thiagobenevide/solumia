@@ -37,24 +37,24 @@ class Knowledge:
         create_reading: Callable[[dict[str, Any]], dict[str, Any]],
     ) -> None:
         self.arquivo = arquivo
-        self.trava = lock
-        self._leituras = readings
-        self._criar_leitura = create_reading
+        self.lock = lock
+        self._readings = readings
+        self._create_reading = create_reading
 
-    def _ler(self) -> dict[str, Any]:
+    def _read(self) -> dict[str, Any]:
         base: dict[str, Any] = {"livros": {}, "lidas": {}, "praticas": {}, "notas": {}}
         if self.arquivo.exists():
             base.update(json.loads(self.arquivo.read_text("utf-8")))
         return base
 
-    def _gravar(self, estado: dict[str, Any]) -> None:
+    def _write(self, estado: dict[str, Any]) -> None:
         tmp = self.arquivo.with_suffix(".tmp")
         tmp.write_text(json.dumps(estado, ensure_ascii=False, indent=1), "utf-8")
         os.replace(tmp, self.arquivo)
 
     # --- estante ---
 
-    def _leitura_do_livro(
+    def _reading_of_book(
         self, book: dict[str, Any], my: dict[str, Any], readings: list[dict[str, Any]]
     ) -> dict[str, Any] | None:
         """A leitura ligada (por id) ou, se não houver, a de mesmo título na aba Leituras."""
@@ -66,7 +66,7 @@ class Knowledge:
         fields = ("id", "status", "arquivo_id", "nota_id", "pagina_atual", "paginas")
         return {k: achada.get(k) for k in fields}
 
-    def _livro(
+    def _book(
         self, id_: str, estado: dict[str, Any], readings: list[dict[str, Any]]
     ) -> dict[str, Any]:
         book = _BOOKS[id_]
@@ -74,38 +74,38 @@ class Knowledge:
         return {
             **book,
             "tenho": my.get("tenho", book["tenho"]),
-            "leitura": self._leitura_do_livro(book, my, readings),
+            "leitura": self._reading_of_book(book, my, readings),
         }
 
     def livros(self) -> list[dict[str, Any]]:
-        state, readings = self._ler(), self._leituras()
+        state, readings = self._read(), self._readings()
         uses: dict[str, int] = {}
         for t in TRACKS:
             for e in t["etapas"]:
                 for ind in e["leituras"]:
                     uses[ind["livro"]] = uses.get(ind["livro"], 0) + 1
-        return [{**self._livro(x["id"], state, readings), "indicacoes": uses.get(x["id"], 0)}
+        return [{**self._book(x["id"], state, readings), "indicacoes": uses.get(x["id"], 0)}
                 for x in BOOKS]
 
-    def editar_livro(self, id_: str, have: bool) -> dict[str, Any]:
+    def edit_book(self, id_: str, have: bool) -> dict[str, Any]:
         if id_ not in _BOOKS:
             raise ItemNonexistent(id_)
-        with self.trava:
-            state = self._ler()
+        with self.lock:
+            state = self._read()
             state["livros"].setdefault(id_, {})["tenho"] = have
-            self._gravar(state)
-            return self._livro(id_, state, self._leituras())
+            self._write(state)
+            return self._book(id_, state, self._readings())
 
-    def vincular_leitura(self, id_: str) -> dict[str, Any]:
+    def link_reading(self, id_: str) -> dict[str, Any]:
         """Liga o livro a uma leitura da aba Leituras (cria se não houver) para ler e grifar lá."""
         if id_ not in _BOOKS:
             raise ItemNonexistent(id_)
-        with self.trava:
-            state = self._ler()
+        with self.lock:
+            state = self._read()
             book = _BOOKS[id_]
-            reading = self._leitura_do_livro(book, state["livros"].get(id_, {}), self._leituras())
+            reading = self._reading_of_book(book, state["livros"].get(id_, {}), self._readings())
             if reading is None:
-                reading = self._criar_leitura({
+                reading = self._create_reading({
                     "titulo": book["titulo"],
                     "autor": book["autor"],
                     "area": "Tecnologia",
@@ -115,12 +115,12 @@ class Knowledge:
             my = state["livros"].setdefault(id_, {})
             my["leitura_id"] = reading["id"]
             my["tenho"] = True
-            self._gravar(state)
-            return self._livro(id_, state, self._leituras())
+            self._write(state)
+            return self._book(id_, state, self._readings())
 
     # --- trilhas ---
 
-    def _etapa(
+    def _stage(
         self, e: dict[str, Any], estado: dict[str, Any], readings: list[dict[str, Any]]
     ) -> dict[str, Any]:
         indicacoes = []
@@ -131,7 +131,7 @@ class Knowledge:
                 "chave": key,
                 "indice": i,
                 "feita": estado["lidas"].get(key),
-                "livro": self._livro(ind["livro"], estado, readings),
+                "livro": self._book(ind["livro"], estado, readings),
             })
         practice = estado["praticas"].get(e["id"])
         done = sum(bool(x["feita"]) for x in indicacoes) + bool(practice)
@@ -162,7 +162,7 @@ class Knowledge:
             return {**base, "tipo": "pratica", "pratica": e["pratica"]}
         return None
 
-    def _resumo(self, stages: list[dict[str, Any]]) -> dict[str, Any]:
+    def _summary(self, stages: list[dict[str, Any]]) -> dict[str, Any]:
         return {
             "total_etapas": len(stages),
             "etapas_concluidas": sum(e["concluida"] for e in stages),
@@ -171,14 +171,14 @@ class Knowledge:
             else 0,
         }
 
-    def listar_trilhas(self) -> list[dict[str, Any]]:
-        state, readings = self._ler(), self._leituras()
+    def list_tracks(self) -> list[dict[str, Any]]:
+        state, readings = self._read(), self._readings()
         items = []
         for t in TRACKS:
-            stages = [self._etapa(e, state, readings) for e in t["etapas"]]
+            stages = [self._stage(e, state, readings) for e in t["etapas"]]
             items.append({
                 **{k: v for k, v in t.items() if k != "etapas"},
-                **self._resumo(stages),
+                **self._summary(stages),
                 "proxima": self._proxima(stages),
             })
         return items
@@ -187,8 +187,8 @@ class Knowledge:
         t = _TRACKS.get(id_)
         if t is None:
             raise ItemNonexistent(id_)
-        state, readings = self._ler(), self._leituras()
-        stages = [self._etapa(e, state, readings) for e in t["etapas"]
+        state, readings = self._read(), self._readings()
+        stages = [self._stage(e, state, readings) for e in t["etapas"]
                   if frente is None or frente in e["frentes"]]
         presentes = {f for e in t["etapas"] for f in e["frentes"]}
         return {
@@ -196,7 +196,7 @@ class Knowledge:
             "frentes": [f for f in FRONTS if f in presentes],
             "frente": frente,
             "etapas": stages,
-            **self._resumo(stages),
+            **self._summary(stages),
             "proxima": self._proxima(stages),
         }
 
@@ -207,8 +207,8 @@ class Knowledge:
         if stage is None:
             raise ItemNonexistent(stage_id)
         today = date.today().isoformat()
-        with self.trava:
-            state = self._ler()
+        with self.lock:
+            state = self._read()
             if dados.get("leitura") is not None:
                 i = int(dados["leitura"])
                 if not 0 <= i < len(stage["leituras"]):
@@ -225,5 +225,5 @@ class Knowledge:
                     state["praticas"].pop(stage_id, None)
             if dados.get("nota_id"):
                 state["notas"][stage_id] = dados["nota_id"]
-            self._gravar(state)
-            return self._etapa(stage, state, self._leituras())
+            self._write(state)
+            return self._stage(stage, state, self._readings())

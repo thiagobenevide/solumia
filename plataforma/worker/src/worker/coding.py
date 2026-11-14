@@ -146,29 +146,29 @@ class Code:
 
     def __init__(self, settings: WorkerSettings, issue: Issue) -> None:
         self._settings = settings
-        self._emitir = issue
-        self._processos: dict[str, asyncio.subprocess.Process] = {}
-        self._tarefas: set[asyncio.Task[None]] = set()
+        self._issue = issue
+        self._processes: dict[str, asyncio.subprocess.Process] = {}
+        self._tasks: set[asyncio.Task[None]] = set()
 
     @property
     def _repo(self) -> Path:
         return Path(self._settings.codigo_dir).expanduser()
 
     @property
-    def _imagens_dir(self) -> Path:
+    def _images_dir(self) -> Path:
         return Path(self._settings.codigo_imagens_dir).expanduser()
 
     async def executar(self, task: str, payload: dict[str, Any]) -> dict[str, Any]:
         if task == "codigo.enviar":
             return await self.enviar(payload)
         if task == "codigo.parar":
-            return self.parar(str(payload["sessao_id"]))
+            return self.stop(str(payload["sessao_id"]))
         if task == "codigo.arvore":
-            return await self.arvore(str(payload.get("commit") or ""))
+            return await self.tree(str(payload.get("commit") or ""))
         if task == "codigo.arquivo":
             return await self.arquivo(str(payload["caminho"]), str(payload.get("commit") or ""))
         if task == "codigo.buscar":
-            return await self.buscar(
+            return await self.fetch(
                 str(payload.get("termo") or ""),
                 str(payload.get("commit") or ""),
                 observacoes=bool(payload.get("observacoes")),
@@ -178,10 +178,10 @@ class Code:
     async def enviar(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Grava as imagens, sobe o `claude` e volta na hora; as etapas seguem por `evento`."""
         session = str(payload["sessao_id"])
-        if session in self._processos:
+        if session in self._processes:
             raise RuntimeError("Esta aba ainda está trabalhando. Pare ou espere terminar.")
         text = str(payload.get("texto") or "").strip()
-        paths = self._gravar_imagens(session, payload.get("imagens") or [])
+        paths = self._write_images(session, payload.get("imagens") or [])
         if paths:
             text += "\n\nImagens de referência (abra com a ferramenta Read):\n" + "\n".join(
                 f"- {c}" for c in paths
@@ -192,7 +192,7 @@ class Code:
             "--verbose",
             "--permission-mode", self._settings.codigo_permissao,
             "--append-system-prompt", SYSTEM,
-            "--add-dir", str(self._imagens_dir),
+            "--add-dir", str(self._images_dir),
         ]
         if self._settings.codigo_ferramentas.strip():
             command += ["--allowedTools", *self._settings.codigo_ferramentas.split(",")]
@@ -215,18 +215,18 @@ class Code:
             )
         except FileNotFoundError as e:
             raise RuntimeError("Claude Code (`claude`) não está instalado neste computador.") from e
-        self._processos[session] = process
+        self._processes[session] = process
         assert process.stdin is not None
         process.stdin.write(text.encode())
         await process.stdin.drain()
         process.stdin.close()
-        task = asyncio.create_task(self._acompanhar(session, process))
-        self._tarefas.add(task)
-        task.add_done_callback(self._tarefas.discard)
+        task = asyncio.create_task(self._track(session, process))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
         return {"ok": True, "imagens": paths}
 
-    def _gravar_imagens(self, session: str, images: list[dict[str, Any]]) -> list[str]:
-        folder = self._imagens_dir / _name_safe(session)
+    def _write_images(self, session: str, images: list[dict[str, Any]]) -> list[str]:
+        folder = self._images_dir / _name_safe(session)
         paths = []
         for img in images:
             folder.mkdir(parents=True, exist_ok=True)
@@ -235,7 +235,7 @@ class Code:
             paths.append(str(file))
         return paths
 
-    async def _acompanhar(self, session: str, process: asyncio.subprocess.Process) -> None:
+    async def _track(self, session: str, process: asyncio.subprocess.Process) -> None:
         assert process.stdout is not None and process.stderr is not None
         terminou = False
         try:
@@ -256,17 +256,17 @@ class Code:
             logger.exception("Falha acompanhando a sessão %s", session)
             await self._avisar(session, {"tipo": "fim", "erro": True, "texto": str(e)})
         finally:
-            self._processos.pop(session, None)
+            self._processes.pop(session, None)
 
     async def _avisar(self, session: str, etapa: dict[str, Any]) -> None:
         try:
-            await self._emitir({**etapa, "sessao_id": session, "em": datetime.now(UTC).isoformat()})
+            await self._issue({**etapa, "sessao_id": session, "em": datetime.now(UTC).isoformat()})
         except Exception:
             # Sem conexão com o Gateway agora: a etapa se perde, o Claude segue trabalhando.
             logger.warning("Etapa da sessão %s não entregue ao Gateway", session)
 
-    def parar(self, session: str) -> dict[str, Any]:
-        process = self._processos.get(session)
+    def stop(self, session: str) -> dict[str, Any]:
+        process = self._processes.get(session)
         if process is None:
             return {"ok": False}
         process.terminate()
@@ -286,7 +286,7 @@ class Code:
         return {
             "status": await rodar("status", "--short", "--branch"),
             "log": await rodar("log", "--oneline", "-10"),
-            "rodando": sorted(self._processos),
+            "rodando": sorted(self._processes),
         }
 
     async def _git(self, *args: str, vazio_ok: bool = False) -> bytes:
@@ -310,7 +310,7 @@ class Code:
         output = await self._git("rev-parse", "--verify", f"{commit or 'HEAD'}^{{commit}}")
         return output.decode().strip()
 
-    async def arvore(self, commit: str) -> dict[str, Any]:
+    async def tree(self, commit: str) -> dict[str, Any]:
         """Arquivos do repositório no [commit], o que ele mudou e os últimos commits."""
         target = await self._commit(commit)
         log = await self._git("log", "-40", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%cI")
@@ -350,7 +350,7 @@ class Code:
             "novas": lines_new(diff.decode(errors="replace")),
         }
 
-    async def buscar(self, term: str, commit: str, *, observacoes: bool = False) -> dict[str, Any]:
+    async def fetch(self, term: str, commit: str, *, observacoes: bool = False) -> dict[str, Any]:
         """Linhas com o [termo] (sem diferenciar maiúsculas) nos arquivos de texto do [commit];
         [observacoes]: só onde o termo está num comentário (sem termo: TODO/FIXME/...)."""
         term = term.strip()

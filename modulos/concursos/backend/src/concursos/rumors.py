@@ -98,22 +98,22 @@ class Rumors:
         self._arquivo = folder / "rumores.json"
         self.hoje = hoje
         self.pesquisando = False
-        self._trava = asyncio.Lock()
+        self._lock = asyncio.Lock()
 
-    def _ler(self) -> dict[str, Any]:
+    def _read(self) -> dict[str, Any]:
         if not self._arquivo.exists():
             return {"itens": {}, "busca": None}
         data: dict[str, Any] = json.loads(self._arquivo.read_text("utf-8"))
         return data
 
-    def _gravar(self, dados: dict[str, Any]) -> None:
+    def _write(self, dados: dict[str, Any]) -> None:
         tmp = self._arquivo.with_suffix(".tmp")
         tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=1), "utf-8")
         tmp.replace(self._arquivo)
 
-    def listar(self) -> dict[str, Any]:
+    def list_all(self) -> dict[str, Any]:
         """Acompanhados primeiro, depois do mais recente ao mais antigo."""
-        data = self._ler()
+        data = self._read()
         items = sorted(
             data["itens"].values(),
             key=lambda i: (i.get("data_noticia") or i["visto_em"][:10]),
@@ -122,16 +122,16 @@ class Rumors:
         items.sort(key=lambda i: not i.get("acompanhado"))
         return {"pesquisando": self.pesquisando, "busca": data.get("busca"), "itens": items}
 
-    def acompanhar(self, id_: str, sim: bool) -> dict[str, Any] | None:
-        data = self._ler()
+    def track(self, id_: str, sim: bool) -> dict[str, Any] | None:
+        data = self._read()
         item = data["itens"].get(id_)
         if item is None:
             return None
         item["acompanhado"] = sim
-        self._gravar(data)
+        self._write(data)
         return item  # type: ignore[no-any-return]
 
-    def alertas(self) -> list[dict[str, Any]]:
+    def alerts(self) -> list[dict[str, Any]]:
         """Novidades de hoje dos rumores acompanhados (o notificador manda cada uma uma vez)."""
         today = self.hoje().isoformat()
         return [
@@ -141,7 +141,7 @@ class Rumors:
                 "concurso": i["orgao"],
                 "rumor_id": i["id"],
             }
-            for i in self._ler()["itens"].values()
+            for i in self._read()["itens"].values()
             if i.get("acompanhado")
             for n in i.get("novidades", [])
             if n["registrada_em"][:10] == today
@@ -170,26 +170,26 @@ class Rumors:
                     "ferramentas": "WebSearch,WebFetch",
                 }
             )
-            async with self._trava:
-                found = self._juntar(r.get("rumores") or [])
-            await self._verificar(execute)
+            async with self._lock:
+                found = self._join(r.get("rumores") or [])
+            await self._verify(execute)
         except Exception as e:
             logger.exception("Falha na pesquisa de rumores")
             error = str(e)[:300] or type(e).__name__
         finally:
-            data = self._ler()
+            data = self._read()
             data["busca"] = {
                 "em": _now(),
                 "consulta": query,
                 "achados": found,
                 "erro": error,
             }
-            self._gravar(data)
+            self._write(data)
             self.pesquisando = False
         return {"erro": error} if error else {"achados": found}
 
-    def _juntar(self, rumors: list[Any]) -> int:
-        data = self._ler()
+    def _join(self, rumors: list[Any]) -> int:
+        data = self._read()
         items: dict[str, Any] = data["itens"]
         n = 0
         for r in rumors:
@@ -226,7 +226,7 @@ class Rumors:
             if source["url"] not in {f["url"] for f in item["fontes"]}:
                 item["fontes"].append(source)
             n += 1
-        self._gravar(data)
+        self._write(data)
         return n
 
     def _novidade(self, item: dict[str, Any], text: str, fonte: dict[str, str], fase: str) -> None:
@@ -234,9 +234,9 @@ class Rumors:
             {"texto": text, "fonte": fonte, "fase": fase, "registrada_em": _now()}
         )
 
-    async def _verificar(self, execute: ExecuteClaude) -> int:
+    async def _verify(self, execute: ExecuteClaude) -> int:
         """Pede ao Claude o que saiu depois da última notícia conhecida de cada acompanhado."""
-        acompanhados = [i for i in self._ler()["itens"].values() if i.get("acompanhado")]
+        acompanhados = [i for i in self._read()["itens"].values() if i.get("acompanhado")]
         if not acompanhados:
             return 0
         def ultima(i: dict[str, Any]) -> str:
@@ -262,8 +262,8 @@ class Rumors:
                 "ferramentas": "WebSearch,WebFetch",
             }
         )
-        async with self._trava:
-            data = self._ler()
+        async with self._lock:
+            data = self._read()
             n = 0
             for nov in r.get("novidades") or []:
                 item = data["itens"].get(str(nov.get("id", "")))
@@ -279,7 +279,7 @@ class Rumors:
                 if source["url"] not in {f["url"] for f in item["fontes"]}:
                     item["fontes"].append(source)
                 n += 1
-            self._gravar(data)
+            self._write(data)
         return n
 
     async def rodar(
@@ -291,7 +291,7 @@ class Rumors:
             if not self.pesquisando:
                 self.pesquisando = True
                 try:
-                    await self._verificar(execute)
+                    await self._verify(execute)
                 except Exception:
                     logger.exception("Falha ao reverificar os rumores acompanhados")
                 finally:

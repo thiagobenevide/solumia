@@ -231,7 +231,7 @@ class _Context:
     raridade: Counter[str]  # em quantos lançamentos da base cada palavra aparece
 
     @property
-    def por_codigo(self) -> dict[str, str]:
+    def by_code(self) -> dict[str, str]:
         return {v: k for k, v in self.codigo.items()}
 
 
@@ -337,7 +337,7 @@ def _reason(t: dict[str, Any], r: dict[str, Any] | None, ctx: _Context) -> str:
     cat = str(r.get("cat") or "")
     if not cat:
         return ""
-    cat_id = ctx.por_codigo.get(cat)
+    cat_id = ctx.by_code.get(cat)
     if cat_id is None:
         return f"o código {cat} não existe; use um da lista de categorias"
     kind = ctx.tipos[cat_id]
@@ -402,11 +402,11 @@ async def categorize(
             for id_, r in of_new.items():
                 if not _reason(arm.obter("transacoes", id_), r, ctx):
                     answers[id_] = r
-        with arm.trava:
+        with arm.lock:
             for t in batch:
                 r = answers.get(t["id"]) or {}
                 current = arm.obter("transacoes", t["id"])  # o usuário pode ter mexido no meio
-                cat_id = ctx.por_codigo.get(str(r.get("cat") or ""))
+                cat_id = ctx.by_code.get(str(r.get("cat") or ""))
                 if (
                     cat_id
                     and cat_id != current["categoria_id"]
@@ -457,9 +457,9 @@ async def data_current(internet: Any, parametros: dict[str, Any]) -> dict[str, A
         return {}
     import asyncio
 
-    tasks = {"indicadores": internet.usar("indicadores", {})}
+    tasks = {"indicadores": internet.use("indicadores", {})}
     if parametros.get("tipo") in ("carro", "moto") and parametros.get("modelo"):
-        tasks["fipe"] = internet.usar("fipe", {
+        tasks["fipe"] = internet.use("fipe", {
             "marca": parametros.get("marca", ""),
             "modelo": parametros["modelo"],
             "ano": str(parametros.get("ano") or ""),

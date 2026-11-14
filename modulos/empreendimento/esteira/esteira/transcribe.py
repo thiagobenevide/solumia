@@ -125,6 +125,6 @@ def transcribe(project, cfg, audio=None, saida_json="transcricao.json"):
 
     output = {"audio": audio.name, "duracao": round(info.duration, 3), "texto": " ".join(texts),
              "palavras": words, "refinada": True}
-    project.salvar_json(saida_json, output)
+    project.save_json(saida_json, output)
     print(f"  {len(words)} palavras, {info.duration:.1f}s → {saida_json}")
     return output

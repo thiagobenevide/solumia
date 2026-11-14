@@ -81,12 +81,12 @@ class Internet:
     ) -> None:
         self._transporte = transporte
         # Os buscadores barram o IP da VPS: com o worker conectado, a busca sai do PC de casa.
-        self.buscar_no_pc = buscar_no_pc
+        self.fetch_node_pc = buscar_no_pc
 
     def _cliente(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=self._transporte, follow_redirects=True)
 
-    async def usar(self, nome: str, args: dict[str, Any]) -> dict[str, Any]:
+    async def use(self, nome: str, args: dict[str, Any]) -> dict[str, Any]:
         """Roda uma ferramenta; falha vira `{"erro": ...}` (a IA diz que não conseguiu)."""
         async with self._cliente() as c:
             try:
@@ -113,7 +113,7 @@ class Internet:
                         return await f.dividends(c, str(args.get("ticker", "")))
                     case "buscar_web":
                         query = str(args.get("consulta", ""))
-                        found = await self.buscar_no_pc(query) if self.buscar_no_pc else None
+                        found = await self.fetch_node_pc(query) if self.fetch_node_pc else None
                         return await f.fetch_web(c, query, achados=found)
                     case _:
                         return {"erro": f"ferramenta desconhecida: {nome}"}
@@ -148,7 +148,7 @@ class Internet:
         if aviso is not None:
             names = list(dict.fromkeys(_ONGOING.get(n, "a web") for n, _ in calls))
             await aviso("Consultando " + _join(names) + ".")
-        results = await asyncio.gather(*(self.usar(n, a) for n, a in calls))
+        results = await asyncio.gather(*(self.use(n, a) for n, a in calls))
         data = [
             {"ferramenta": n, "args": a, "resultado": r}
             for (n, a), r in zip(calls, results, strict=True)

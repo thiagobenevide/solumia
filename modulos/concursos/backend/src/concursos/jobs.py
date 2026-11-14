@@ -143,13 +143,13 @@ class Slots:
         self.arquivo = Path(root).expanduser() / "vagas" / "vagas.json"
         self.hoje = hoje
         self.geo = geo
-        self.curriculos = Resumes(root)
+        self.resumes = Resumes(root)
         self.pesquisando = False
-        self.progresso = ""
-        self.gerando: set[str] = set()
-        self.erros_curriculo: dict[str, str] = {}
+        self.progress = ""
+        self.generating: set[str] = set()
+        self.errors_resume: dict[str, str] = {}
 
-    def _ler(self) -> dict[str, Any]:
+    def _read(self) -> dict[str, Any]:
         if not self.arquivo.exists():
             return {"perfil": dict(PROFILE_DEFAULT), "itens": {}, "claude": None}
         data: dict[str, Any] = json.loads(self.arquivo.read_text())
@@ -157,60 +157,60 @@ class Slots:
         data.setdefault("itens", {})
         return data
 
-    def _gravar(self, dados: dict[str, Any]) -> None:
+    def _write(self, dados: dict[str, Any]) -> None:
         self.arquivo.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.arquivo.with_suffix(".tmp")
         tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=1))
         tmp.replace(self.arquivo)
 
-    def listar(self) -> dict[str, Any]:
-        data = self._ler()
+    def list_all(self) -> dict[str, Any]:
+        data = self._read()
         items = sorted(
             data["itens"].values(),
             key=lambda v: (v.get("publicada_em") or "", v.get("visto_em") or ""),
             reverse=True,
         )
         for v in items:
-            if v.get("curriculo") and not self.curriculos.existe(v["curriculo"]):
+            if v.get("curriculo") and not self.resumes.existe(v["curriculo"]):
                 v.pop("curriculo")
         return {
             "perfil": data["perfil"],
             "vagas": items,
-            "gerando_curriculo": sorted(self.gerando),
-            "erros_curriculo": self.erros_curriculo,
+            "gerando_curriculo": sorted(self.generating),
+            "erros_curriculo": self.errors_resume,
             "claude": data.get("claude"),
             "pesquisando": self.pesquisando,
-            "progresso": self.progresso,
+            "progresso": self.progress,
         }
 
-    def salvar_perfil(self, profile: dict[str, Any]) -> dict[str, Any]:
-        data = self._ler()
+    def save_profile(self, profile: dict[str, Any]) -> dict[str, Any]:
+        data = self._read()
         data["perfil"] = {**PROFILE_DEFAULT, **profile}
-        self._gravar(data)
+        self._write(data)
         return data["perfil"]
 
     def marcar(self, id_: str, estado: str) -> dict[str, Any] | None:
-        data = self._ler()
+        data = self._read()
         slot = data["itens"].get(id_)
         if slot is None:
             return None
         slot["estado"] = estado
-        self._gravar(data)
+        self._write(data)
         return dict(slot)
 
     def remover(self, id_: str) -> bool:
-        data = self._ler()
+        data = self._read()
         if data["itens"].pop(id_, None) is None:
             return False
-        self._gravar(data)
+        self._write(data)
         return True
 
-    async def localizar(self) -> None:
+    async def locate(self) -> None:
         """Põe `geo` nas vagas que ainda não tentaram (o CSV de municípios fica em cache)."""
         if self.geo is None:
             return
         found: dict[str, dict[str, Any]] = {}
-        for id_, v in self._ler()["itens"].items():
+        for id_, v in self._read()["itens"].items():
             if "geo" in v:
                 continue
             city, uf = _city_uf(v)
@@ -223,21 +223,21 @@ class Slots:
         if not found:
             return
         # relê: a pesquisa pode ter gravado no meio
-        data = self._ler()
+        data = self._read()
         for id_, m in found.items():
             if id_ in data["itens"]:
                 data["itens"][id_]["geo"] = m
-        self._gravar(data)
+        self._write(data)
 
-    async def gerar_curriculo(self, id_: str, execute: ExecuteClaude) -> dict[str, Any]:
+    async def generate_resume(self, id_: str, execute: ExecuteClaude) -> dict[str, Any]:
         """Adapta o currículo padrão à vaga pelo Claude Code e grava como `vaga-<id>`."""
-        slot = self._ler()["itens"].get(id_)
-        base = self.curriculos.padrao()
+        slot = self._read()["itens"].get(id_)
+        base = self.resumes.default()
         if slot is None or base is None:
-            self.gerando.discard(id_)
+            self.generating.discard(id_)
             return {"erro": "vaga ou currículo padrão não encontrado"}
-        self.gerando.add(id_)
-        self.erros_curriculo.pop(id_, None)
+        self.generating.add(id_)
+        self.errors_resume.pop(id_, None)
         try:
             fields = ("titulo", "empresa", "local", "modalidade", "contrato", "senioridade")
             lines = [f"{k}: {slot[k]}" for k in fields if slot.get(k)]
@@ -267,20 +267,20 @@ class Slots:
             if not markdown:
                 raise ValueError("o Claude não devolveu o currículo")
             name = " · ".join(str(slot[k]) for k in ("titulo", "empresa") if slot.get(k))
-            c = self.curriculos.salvar(f"vaga-{id_}", name, markdown + "\n", vaga=id_)
-            data = self._ler()
+            c = self.resumes.salvar(f"vaga-{id_}", name, markdown + "\n", vaga=id_)
+            data = self._read()
             if id_ in data["itens"]:
                 data["itens"][id_]["curriculo"] = c["id"]
-                self._gravar(data)
+                self._write(data)
             return c
         except Exception as e:
             logger.exception("Falha ao gerar o currículo da vaga %s", id_)
-            self.erros_curriculo[id_] = str(e)[:200] or type(e).__name__
-            return {"erro": self.erros_curriculo[id_]}
+            self.errors_resume[id_] = str(e)[:200] or type(e).__name__
+            return {"erro": self.errors_resume[id_]}
         finally:
-            self.gerando.discard(id_)
+            self.generating.discard(id_)
 
-    def _rodadas(self, profile: dict[str, Any]) -> list[tuple[str, str]]:
+    def _rounds(self, profile: dict[str, Any]) -> list[tuple[str, str]]:
         """(rótulo, prompt) de cada rodada: área × fonte e, se houver, as empresas acompanhadas."""
         today = self.hoje().isoformat()
         modes = ", ".join(profile.get("modalidades") or MODALITIES)
@@ -327,7 +327,7 @@ class Slots:
             )
         return rounds
 
-    async def pesquisar_claude(self, execute: ExecuteClaude) -> dict[str, Any]:
+    async def search_claude(self, execute: ExecuteClaude) -> dict[str, Any]:
         """Pesquisa pelo Claude Code (worker do PC), uma rodada por área × fonte; a falha de uma
         não perde as outras. As vagas achadas entram como `nova` e as já vistas mantêm o estado
         que o usuário marcou."""
@@ -337,9 +337,9 @@ class Slots:
         errors: list[str] = []
         found = 0
         try:
-            rounds = self._rodadas(self._ler()["perfil"])
+            rounds = self._rounds(self._read()["perfil"])
             for n, (label, prompt) in enumerate(rounds, 1):
-                self.progresso = f"{n}/{len(rounds)} · {label}"
+                self.progress = f"{n}/{len(rounds)} · {label}"
                 try:
                     r = await execute(
                         {
@@ -351,23 +351,23 @@ class Slots:
                             "ferramentas": "WebSearch,WebFetch",
                         }
                     )
-                    found += self._juntar(r, label)
+                    found += self._join(r, label)
                 except Exception as e:
                     logger.exception("Falha na pesquisa de vagas (%s)", label)
                     errors.append(f"{label}: {str(e)[:150] or type(e).__name__}")
         finally:
-            data = self._ler()
+            data = self._read()
             data["claude"] = {"em": _now(), "achadas": found, "erro": "; ".join(errors)}
-            self._gravar(data)
+            self._write(data)
             self.pesquisando = False
-            self.progresso = ""
-        await self.localizar()
+            self.progress = ""
+        await self.locate()
         if errors and not found:
             return {"erro": "; ".join(errors)}
         return {"achadas": found}
 
-    def _juntar(self, r: dict[str, Any], rounded: str = "") -> int:
-        data = self._ler()
+    def _join(self, r: dict[str, Any], rounded: str = "") -> int:
+        data = self._read()
         items: dict[str, Any] = data["itens"]
         n = 0
         for v in r.get("vagas") or []:
@@ -402,5 +402,5 @@ class Slots:
                 fields[k] = old.get(k) or fields[k]
             items[id_] = {**old, **fields, "atualizada_em": _now()}
             n += 1
-        self._gravar(data)
+        self._write(data)
         return n

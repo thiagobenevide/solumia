@@ -72,7 +72,7 @@ class Voice:
 
 
 def get_nagger(request: Request) -> Nagger:
-    nagger: Nagger = request.app.state.cobrador
+    nagger: Nagger = request.app.state.nagger
     return nagger
 
 
@@ -188,7 +188,7 @@ def goals(cobrador: NaggerDep) -> Any:
 @router.post("/metas", status_code=201)
 def create_meta(m: MetaInput, cobrador: NaggerDep) -> Any:
     try:
-        return cobrador.criar_meta(m.model_dump())
+        return cobrador.create_meta(m.model_dump())
     except Invalid as e:
         raise _error(e) from e
 
@@ -196,7 +196,7 @@ def create_meta(m: MetaInput, cobrador: NaggerDep) -> Any:
 @router.delete("/metas/{id_}", status_code=204)
 def delete_meta(id_: str, cobrador: NaggerDep) -> None:
     try:
-        cobrador.excluir_meta(id_)
+        cobrador.delete_meta(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -204,7 +204,7 @@ def delete_meta(id_: str, cobrador: NaggerDep) -> None:
 @router.post("/metas/{id_}/acoes", status_code=201)
 def register_action(id_: str, a: ActionInput, cobrador: NaggerDep) -> Any:
     try:
-        return cobrador.registrar_acao(id_, a.quantidade, a.nota)
+        return cobrador.register_action(id_, a.quantidade, a.nota)
     except NotFound as e:
         raise _error(e) from e
 
@@ -223,7 +223,7 @@ def agenda(dia: str, cobrador: NaggerDep) -> Any:
 @router.post("/agenda/{dia}/sugerir")
 def suggest(dia: str, cobrador: NaggerDep, fontes: SourcesDep) -> Any:
     try:
-        return cobrador.sugerir(dia, fontes.tarefas())
+        return cobrador.suggest(dia, fontes.tarefas())
     except ValueError as e:
         raise _error(e) from e
 
@@ -424,12 +424,12 @@ async def _chat(
     system = SYSTEM + agent.INSTRUCTIONS + agent.instructions_modules(sources.modulos)
     if pc is not None:
         system += agent.COMPUTER
-    system += "\n# Retrato do dia\n" + nagger.retrato(tasks)
+    system += "\n# Retrato do dia\n" + nagger.portrait(tasks)
     analysis = None
     if _PERFORMANCE.search(c.mensagem):
         analysis = performance.analyze(tasks, nagger)
         system += "\n" + performance.text(analysis) + "\n" + agent.ANALYSIS
-    now = f"[{nagger.momento(tasks)}]\n\n"
+    now = f"[{nagger.moment(tasks)}]\n\n"
     if c.falada:  # na última mensagem, não no sistema: não invalida o cache do prompt
         now += _SPOKEN
 

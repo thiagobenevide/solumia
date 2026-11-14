@@ -14,8 +14,8 @@ router = APIRouter(prefix="/sessoes")
 
 def get_sessions(request: Request) -> Sessions:
     state = request.app.state
-    if getattr(state, "sessoes", None) is None or state.sessoes.treinos is not state.treinos:
-        state.sessoes = Sessions(state.treinos)
+    if getattr(state, "sessoes", None) is None or state.sessoes.workouts is not state.workouts:
+        state.sessoes = Sessions(state.workouts)
     sessions: Sessions = state.sessoes
     return sessions
 
@@ -73,7 +73,7 @@ def _error(e: Exception) -> HTTPException:
 @router.get("")
 def list_all(sessoes: SessionsDep, de: str, ate: str) -> Any:
     try:
-        return sessoes.listar(de, ate)
+        return sessoes.list_all(de, ate)
     except Invalid as e:
         raise _error(e) from e
 
@@ -94,7 +94,7 @@ def start(sessoes: SessionsDep, corpo: Start) -> Any:
 @router.get("/{id_}")
 def session(sessoes: SessionsDep, id_: str) -> Any:
     try:
-        return sessoes.sessao(id_)
+        return sessoes.session(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -104,7 +104,7 @@ def command(sessoes: SessionsDep, id_: str, corpo: Command) -> Any:
     data = corpo.model_dump(exclude_none=True)
     action = data.pop("acao")
     try:
-        return sessoes.comando(id_, action, data)
+        return sessoes.command(id_, action, data)
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 
@@ -113,7 +113,7 @@ def command(sessoes: SessionsDep, id_: str, corpo: Command) -> Any:
 def register_fc(sessoes: SessionsDep, id_: str, corpo: BatchFc) -> Any:
     """Frequência cardíaca ao vivo do relógio (lotes de alguns segundos)."""
     try:
-        return sessoes.registrar_fc(id_, [a.model_dump() for a in corpo.amostras])
+        return sessoes.register_fc(id_, [a.model_dump() for a in corpo.amostras])
     except (NotFound, ValueError) as e:
         raise _error(e) from e
 
@@ -121,7 +121,7 @@ def register_fc(sessoes: SessionsDep, id_: str, corpo: BatchFc) -> Any:
 @router.post("/{id_}/concluir")
 def finish(sessoes: SessionsDep, id_: str, corpo: Closing) -> Any:
     try:
-        return sessoes.concluir(id_, corpo.model_dump(exclude_unset=True))
+        return sessoes.finish(id_, corpo.model_dump(exclude_unset=True))
     except NotFound as e:
         raise _error(e) from e
 
@@ -129,7 +129,7 @@ def finish(sessoes: SessionsDep, id_: str, corpo: Closing) -> Any:
 @router.patch("/{id_}")
 def edit(sessoes: SessionsDep, id_: str, corpo: Closing) -> Any:
     try:
-        return sessoes.editar(id_, corpo.model_dump(exclude_unset=True))
+        return sessoes.edit(id_, corpo.model_dump(exclude_unset=True))
     except NotFound as e:
         raise _error(e) from e
 

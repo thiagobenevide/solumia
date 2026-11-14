@@ -66,11 +66,11 @@ def test_extrair_json_ignora_pensamento() -> None:
 
 class _LLMFalsa:
     def __init__(self) -> None:
-        self.pedidos: list[str] = []
+        self.requests: list[str] = []
 
     async def __call__(self, mensagens: list[dict[str, str]]) -> str:
         p = mensagens[-1]["content"]
-        self.pedidos.append(p)
+        self.requests.append(p)
         if "Traduza o trecho" in p:
             return json.dumps(
                 {
@@ -145,7 +145,7 @@ def api(tmp_path: Path) -> tuple[TestClient, _LLMFalsa]:
     app = create_app(settings=s)
     llm = _LLMFalsa()
     app.state.linguagem = Language(
-        tmp_path, chat=llm, worker=_worker, somar_minutos=app.state.estudos.somar_minutos
+        tmp_path, chat=llm, worker=_worker, somar_minutos=app.state.studies.add_up_minutes
     )
     return TestClient(app, headers=AUTH_HEADERS), llm
 
@@ -157,7 +157,7 @@ def test_fala_e_traducao_com_cache(api: tuple[TestClient, _LLMFalsa]) -> None:
     body = {"termo": "method", "frase": "The method works.", "idioma": "en"}
     assert c.post("/api/estudos/linguagem/traduzir", json=body).json()["traducao"] == "método"
     c.post("/api/estudos/linguagem/traduzir", json=body)
-    assert len(llm.pedidos) == 1
+    assert len(llm.requests) == 1
 
 
 def test_vocabulario_pratica_e_revisao(api: tuple[TestClient, _LLMFalsa]) -> None:

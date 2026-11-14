@@ -125,7 +125,7 @@ def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         return {}
 
     app.state.reescrita = Rewrite(executar, lambda: None, executar_json)
-    app.state.pedidos = requests
+    app.state.requests = requests
     with TestClient(app, headers=AUTH_HEADERS) as c:
         yield c
 

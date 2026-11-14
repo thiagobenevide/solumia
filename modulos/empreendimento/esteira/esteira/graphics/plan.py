@@ -179,8 +179,8 @@ def _source_quoted(texto, fontes):
 def candidates(project):
     cfg = project.cfg
     rot = json.loads(project.caminho("roteiro.json").read_text()) if project.caminho("roteiro.json").exists() else {}
-    sentences = project.carregar_json("frases.json")
-    transc = project.carregar_json("transcricao.json")
+    sentences = project.load_json("frases.json")
+    transc = project.load_json("transcricao.json")
     duration, words = transc["duracao"], transc["palavras"]
     sources = rot.get("fontes", [])
     mapping = _speech_to_sentence(project.roteiro().read_text())
@@ -415,7 +415,7 @@ def schedule(cands, duration, interval=1.5, coverage_max=0.4, fixos=()):
 def plan(project):
     cands, sources, duration = candidates(project)
     events.debug("gráficos: candidatos", n=len(cands))
-    old = project.carregar_json("graficos.json") if project.caminho("graficos.json").exists() else []
+    old = project.load_json("graficos.json") if project.caminho("graficos.json").exists() else []
     fixed = [c for c in old if c.get("manual")]
     plan = schedule(cands, duration, fixos=fixed, **project.cfg.get("graficos", {}).get("agenda", {}))
     if fixed:
@@ -424,7 +424,7 @@ def plan(project):
         events.progress(n, len(plan), f"{c['modelo']} {c['inicio']:.0f}s")
         if c["modelo"] == "citacao" and not c.get("roteiro") and not c.get("manual"):
             c.update(_prepare_quote(c, sources, project))
-    project.salvar_json("graficos.json", plan)
+    project.save_json("graficos.json", plan)
     by_kind = {}
     for c in plan:
         by_kind[c["modelo"]] = by_kind.get(c["modelo"], 0) + 1
@@ -457,7 +457,7 @@ def render_graphics(project):
     `.ecproj` editável) ou "html" (Chromium). Um `.ecproj` salvo à mão no EffectCraft (mais novo que a geração)
     é renderizado como está e a peça vira `manual` (o replanejamento a mantém)."""
     from esteira.graphics import effectcraft
-    plan = project.carregar_json("graficos.json")
+    plan = project.load_json("graficos.json")
     g = project.cfg.get("graficos", {})
     color = g.get("cor", "#ffd400")
     w, h = project.cfg["video"]["largura"], project.cfg["video"]["altura"]
@@ -501,7 +501,7 @@ def render_graphics(project):
             c.update(ecproj=rel(ecp), ec_gerado=ecp.stat().st_mtime)
         else:
             render.render(*pc, c["dur"], file, cor=color, paralelo=g.get("paralelo", 6), w=w, h=h, fps=fps)
-    project.salvar_json("graficos.json", plan)
+    project.save_json("graficos.json", plan)
     if edited:
         print(f"  {edited} gráficos editados à mão no EffectCraft renderizados")
     print(f"  {sum(1 for c in plan if c.get('arquivo'))} gráficos renderizados em graficos/ ({engine})")

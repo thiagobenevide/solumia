@@ -17,7 +17,7 @@ def assembly(project: Project) -> str | None:
     from esteira import assemble, production
     if not project.caminho("plano.json").exists():
         return None
-    plan = project.carregar_json("plano.json")
+    plan = project.load_json("plano.json")
     cam = production.camera(project) if production.mode(project) == "apresentador" else None
     scenes = ([c for c in plan["cenas"] if c.get("midia") and not c.get("camera")] if cam
              else assemble._scenes_with_media(plan))

@@ -52,22 +52,22 @@ def _id() -> str:
 
 class Nagger:
     def __init__(self, root: str | Path, timezone: str = "America/Sao_Paulo") -> None:
-        self.raiz = Path(root).expanduser()
-        self.raiz.mkdir(parents=True, exist_ok=True)
-        self.fuso = ZoneInfo(timezone)
-        self._arquivo = self.raiz / "cobrador.json"
-        self._trava = threading.RLock()
+        self.root = Path(root).expanduser()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.timezone = ZoneInfo(timezone)
+        self._arquivo = self.root / "cobrador.json"
+        self._lock = threading.RLock()
 
     def agora(self) -> datetime:
-        return datetime.now(self.fuso)
+        return datetime.now(self.timezone)
 
-    def _ler(self) -> dict[str, Any]:
+    def _read(self) -> dict[str, Any]:
         if not self._arquivo.exists():
             return {"metas": [], "acoes": [], "agendas": {}}
         data: dict[str, Any] = json.loads(self._arquivo.read_text("utf-8"))
         return data
 
-    def _gravar(self, dados: dict[str, Any]) -> None:
+    def _write(self, dados: dict[str, Any]) -> None:
         tmp = self._arquivo.with_suffix(".tmp")
         tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=1), "utf-8")
         os.replace(tmp, self._arquivo)
@@ -77,8 +77,8 @@ class Nagger:
     def metas(self, hoje: date | None = None) -> list[dict[str, Any]]:
         """Metas com o progresso do período atual (dia ou semana iniciada na segunda)."""
         hoje = hoje or self.agora().date()
-        with self._trava:
-            data = self._ler()
+        with self._lock:
+            data = self._read()
         output = []
         for m in data["metas"]:
             start = hoje if m["frequencia"] == "diaria" else hoje - timedelta(days=hoje.weekday())
@@ -92,7 +92,7 @@ class Nagger:
             output.append(m | {"feito": done, "esperado": round(m["alvo"] * fraction, 1)})
         return output
 
-    def criar_meta(self, d: dict[str, Any]) -> dict[str, Any]:
+    def create_meta(self, d: dict[str, Any]) -> dict[str, Any]:
         if d.get("frequencia", "diaria") not in FREQUENCIES:
             raise Invalid("Frequência deve ser diaria ou semanal")
         if d.get("alvo", 1) <= 0:
@@ -105,25 +105,25 @@ class Nagger:
             "unidade": d.get("unidade", "vez"),
             "criada_em": self.agora().isoformat(timespec="seconds"),
         }
-        with self._trava:
-            data = self._ler()
+        with self._lock:
+            data = self._read()
             data["metas"].append(meta)
-            self._gravar(data)
+            self._write(data)
         return meta
 
-    def excluir_meta(self, id_: str) -> None:
-        with self._trava:
-            data = self._ler()
+    def delete_meta(self, id_: str) -> None:
+        with self._lock:
+            data = self._read()
             if not any(m["id"] == id_ for m in data["metas"]):
                 raise NotFound(id_)
             data["metas"] = [m for m in data["metas"] if m["id"] != id_]
             data["acoes"] = [a for a in data["acoes"] if a["meta_id"] != id_]
-            self._gravar(data)
+            self._write(data)
 
-    def registrar_acao(self, meta_id: str, quantidade: float = 1, note: str = "") -> dict[str, Any]:
+    def register_action(self, meta_id: str, quantidade: float = 1, note: str = "") -> dict[str, Any]:
         now = self.agora()
-        with self._trava:
-            data = self._ler()
+        with self._lock:
+            data = self._read()
             if not any(m["id"] == meta_id for m in data["metas"]):
                 raise NotFound(meta_id)
             action = {
@@ -135,18 +135,18 @@ class Nagger:
                 "nota": note,
             }
             data["acoes"].append(action)
-            self._gravar(data)
+            self._write(data)
         return action
 
     # --- agenda ---
 
     def agenda(self, day: str) -> dict[str, Any]:
         date.fromisoformat(day)
-        with self._trava:
-            ag = self._ler()["agendas"].get(day)
+        with self._lock:
+            ag = self._read()["agendas"].get(day)
         return ag or {"data": day, "blocos": [], "sugerida": None, "alteracoes": []}
 
-    def sugerir(self, day: str, tarefas: list[dict[str, Any]]) -> dict[str, Any]:
+    def suggest(self, day: str, tarefas: list[dict[str, Any]]) -> dict[str, Any]:
         """Monta a agenda do dia com as tarefas abertas: prazo vencido/de hoje primeiro, depois
         prioridade e prazo. Guarda a sugestão como referência para contestar mudanças."""
         today = date.fromisoformat(day)
@@ -184,10 +184,10 @@ class Nagger:
             "sugerida": [dict(b) for b in blocks],
             "alteracoes": [],
         }
-        with self._trava:
-            data = self._ler()
+        with self._lock:
+            data = self._read()
             data["agendas"][day] = ag
-            self._gravar(data)
+            self._write(data)
         return ag
 
     def salvar(self, day: str, blocks: list[dict[str, Any]], motivo: str = "") -> dict[str, Any]:
@@ -200,8 +200,8 @@ class Nagger:
             b.setdefault("id", _id())
             b.setdefault("feito", False)
             b.setdefault("prioridade", "media")
-        with self._trava:
-            data = self._ler()
+        with self._lock:
+            data = self._read()
             before = data["agendas"].get(day) or self.agenda(day)
             contestacoes = self._contestar(before["blocos"], blocks)
             alteracoes = before.get("alteracoes", []) + [
@@ -216,7 +216,7 @@ class Nagger:
                 "alteracoes": alteracoes,
             }
             data["agendas"][day] = ag
-            self._gravar(data)
+            self._write(data)
         return ag | {"contestacoes": contestacoes}
 
     @staticmethod
@@ -241,14 +241,14 @@ class Nagger:
         return output
 
     def marcar(self, day: str, block_id: str, done: bool = True) -> dict[str, Any]:
-        with self._trava:
-            data = self._ler()
+        with self._lock:
+            data = self._read()
             ag = data["agendas"].get(day)
             block = next((b for b in (ag or {}).get("blocos", []) if b["id"] == block_id), None)
             if block is None:
                 raise NotFound(block_id)
             block["feito"] = done
-            self._gravar(data)
+            self._write(data)
         return block
 
     # --- cobrança ---
@@ -326,9 +326,9 @@ class Nagger:
 
     def contexto(self, tarefas: list[dict[str, Any]]) -> str:
         """Retrato do dia em texto para o prompt do cobrador."""
-        return self.momento(tarefas) + "\n" + self.retrato(tarefas)
+        return self.moment(tarefas) + "\n" + self.portrait(tarefas)
 
-    def momento(self, tarefas: list[dict[str, Any]]) -> str:
+    def moment(self, tarefas: list[dict[str, Any]]) -> str:
         """O que muda a cada minuto (hora, índice, alertas). Fica fora do prompt de sistema para o
         llama-server reaproveitar o cache do prefixo entre as mensagens."""
         d = self.disciplina(tarefas)
@@ -337,7 +337,7 @@ class Nagger:
         lines += [f"- [{a['nivel']}] {a['texto']}" for a in d["alertas"]] or ["- nenhum"]
         return "\n".join(lines)
 
-    def retrato(self, tarefas: list[dict[str, Any]], max_tasks: int = 40) -> str:
+    def portrait(self, tarefas: list[dict[str, Any]], max_tasks: int = 40) -> str:
         """Agenda, metas e tarefas abertas (as mais urgentes primeiro, no máximo [max_tarefas])."""
         lines = ["## Agenda do dia"]
         for b in self.agenda(self.agora().date().isoformat())["blocos"]:

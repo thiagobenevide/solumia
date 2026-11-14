@@ -61,7 +61,7 @@ def test_troca_carrega_no_worker_e_salva(tmp_path: Path) -> None:
 def test_troca_proibida_com_outro_modulo_usando(tmp_path: Path) -> None:
     client, registry = _cliente(tmp_path)
     _worker(registry)
-    registry._em_uso["x"] = {
+    registry._in_use["x"] = {
         "origem": "Rotinas",
         "tarefa": "chat",
         "modelo": "a",

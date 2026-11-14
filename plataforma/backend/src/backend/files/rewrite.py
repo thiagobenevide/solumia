@@ -56,7 +56,7 @@ RewriteDep = Annotated[Rewrite, Depends(get_rewrite)]
 
 def text_of_document(collection: Collection, id_: str) -> str:
     """Texto do PDF exibido (DOCX já convertido) pelo pdftotext; vazio se não houver."""
-    pdf = collection.caminho_pdf(id_)
+    pdf = collection.path_pdf(id_)
     if pdf is None:
         return ""
     try:
@@ -82,7 +82,7 @@ async def rewrite(pedido: RequestRewrite, request: Request, reescrita: RewriteDe
         raise HTTPException(503, reason)
     data = pedido.model_dump()
     if not pedido.contexto and pedido.arquivo_id:
-        collection: Collection = request.app.state.biblioteca
+        collection: Collection = request.app.state.collection
         try:
             collection.obter(pedido.arquivo_id)
         except FileNotFound as e:
@@ -156,7 +156,7 @@ def prompt_translation(titulo: str, segments: list[str]) -> str:
 
 @router.get("/{id_}/traducao")
 def translation(id_: str, request: Request) -> Any:
-    collection: Collection = request.app.state.biblioteca
+    collection: Collection = request.app.state.collection
     try:
         return collection.traducao(id_)
     except FileNotFound as e:
@@ -168,7 +168,7 @@ async def translate(
     id_: str, pedido: RequestTranslation, request: Request, reescrita: RewriteDep
 ) -> Any:
     """Traduz as páginas pedidas (as que já estão no cache com as mesmas frases voltam direto)."""
-    collection: Collection = request.app.state.biblioteca
+    collection: Collection = request.app.state.collection
     try:
         meta = collection.obter(id_)
         cache = collection.traducao(id_)
@@ -213,5 +213,5 @@ async def translate(
                 traducoes.append(by_n.get(n, ""))
                 n += 1
             new[str(p.pagina)] = {"segmentos": p.segmentos, "traducoes": traducoes}
-        cache = collection.salvar_traducao(id_, new)
+        cache = collection.save_translation(id_, new)
     return {str(p.pagina): cache[str(p.pagina)] for p in pedido.paginas}

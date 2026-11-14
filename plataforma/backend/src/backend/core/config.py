@@ -223,10 +223,10 @@ class Settings(BaseSettings):
     @property
     def client_api_key_list(self) -> list[str]:
         """Só as chaves (sem o prefixo de escopo); ver `client_api_key_escopos`."""
-        return list(self.client_api_key_escopos)
+        return list(self.client_api_key_scopes)
 
     @property
-    def client_api_key_escopos(self) -> dict[str, str]:
+    def client_api_key_scopes(self) -> dict[str, str]:
         """Chave → escopo. `relogio:<chave>` só abre as rotas do relógio; sem prefixo = tudo
         (escopo vazio, como as chaves antigas)."""
         scopes: dict[str, str] = {}

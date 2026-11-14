@@ -111,7 +111,7 @@ class FileInvalid(ValueError):
 class AnnotationsConflict(ValueError):
     def __init__(self, current: dict[str, Any]) -> None:
         super().__init__("As anotações mudaram em outro aparelho")
-        self.atuais = current
+        self.current = current
 
 
 def _now() -> str:
@@ -146,53 +146,53 @@ def reference(titulo: str, highlight: dict[str, Any]) -> str:
 
 class Collection:
     def __init__(self, root: str | Path, soffice: str = "soffice", pdftoppm: str = "pdftoppm"):
-        self.raiz = Path(root).expanduser()
-        self.raiz.mkdir(parents=True, exist_ok=True)
+        self.root = Path(root).expanduser()
+        self.root.mkdir(parents=True, exist_ok=True)
         self.soffice = soffice
         self.pdftoppm = pdftoppm
-        self._trava = threading.RLock()
-        self._log = self.raiz / "mudancas.jsonl"
+        self._lock = threading.RLock()
+        self._log = self.root / "mudancas.jsonl"
 
     # --- caminhos ---
 
-    def _pasta(self, id_: str) -> Path:
+    def _folder(self, id_: str) -> Path:
         if not re.fullmatch(r"[a-z0-9]{12}", id_):
             raise FileNotFound(id_)
-        folder = self.raiz / id_
+        folder = self.root / id_
         if not (folder / "meta.json").is_file():
             raise FileNotFound(id_)
         return folder
 
-    def caminho_original(self, id_: str) -> tuple[Path, str]:
+    def path_original(self, id_: str) -> tuple[Path, str]:
         meta = self.obter(id_)
-        return self._pasta(id_) / f"original.{meta['extensao']}", meta["nome_original"]
+        return self._folder(id_) / f"original.{meta['extensao']}", meta["nome_original"]
 
-    def caminho_pdf(self, id_: str) -> Path | None:
-        pdf = self._pasta(id_) / "documento.pdf"
+    def path_pdf(self, id_: str) -> Path | None:
+        pdf = self._folder(id_) / "documento.pdf"
         return pdf if pdf.is_file() else None
 
-    def caminho_miniatura(self, id_: str) -> Path | None:
-        png = self._pasta(id_) / "miniatura.png"
+    def path_thumbnail(self, id_: str) -> Path | None:
+        png = self._folder(id_) / "miniatura.png"
         return png if png.is_file() else None
 
     # --- mudanças ---
 
-    def _registrar(self, action: str, id_: str, **extra: Any) -> int:
-        with self._trava:
-            seq = self.seq_atual() + 1
+    def _register(self, action: str, id_: str, **extra: Any) -> int:
+        with self._lock:
+            seq = self.seq_current() + 1
             line = {"seq": seq, "em": _now(), "acao": action, "arquivo_id": id_, **extra}
             with self._log.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(line, ensure_ascii=False) + "\n")
-            (self.raiz / "seq").write_text(str(seq))
+            (self.root / "seq").write_text(str(seq))
             return seq
 
-    def seq_atual(self) -> int:
+    def seq_current(self) -> int:
         try:
-            return int((self.raiz / "seq").read_text())
+            return int((self.root / "seq").read_text())
         except (FileNotFoundError, ValueError):
             return 0
 
-    def mudancas(self, since: int = 0, limite: int = 500) -> dict[str, Any]:
+    def changes(self, since: int = 0, limite: int = 500) -> dict[str, Any]:
         items: list[dict[str, Any]] = []
         if self._log.is_file():
             with self._log.open(encoding="utf-8") as f:
@@ -200,14 +200,14 @@ class Collection:
                     item = json.loads(line)
                     if item["seq"] > since:
                         items.append(item)
-        return {"seq": self.seq_atual(), "mudancas": items[-limite:]}
+        return {"seq": self.seq_current(), "mudancas": items[-limite:]}
 
     # --- arquivos ---
 
-    def listar(self, q: str = "", tipo: str | None = None, pasta: str | None = None) -> list[dict]:
+    def list_all(self, q: str = "", tipo: str | None = None, pasta: str | None = None) -> list[dict]:
         term = _key(q)
         items = []
-        for meta_json in self.raiz.glob("*/meta.json"):
+        for meta_json in self.root.glob("*/meta.json"):
             meta = _read_json(meta_json, None)
             if not meta:
                 continue
@@ -221,11 +221,11 @@ class Collection:
             items.append(meta)
         return sorted(items, key=lambda m: m["atualizado"], reverse=True)
 
-    def pastas(self) -> list[str]:
-        return sorted({m["pasta"] for m in self.listar() if m["pasta"]})
+    def folders(self) -> list[str]:
+        return sorted({m["pasta"] for m in self.list_all() if m["pasta"]})
 
     def obter(self, id_: str) -> dict[str, Any]:
-        meta: dict[str, Any] = _read_json(self._pasta(id_) / "meta.json", None)
+        meta: dict[str, Any] = _read_json(self._folder(id_) / "meta.json", None)
         return meta
 
     def adicionar(self, nome: str, content: bytes, pasta: str = "") -> dict[str, Any]:
@@ -239,12 +239,12 @@ class Collection:
         if not content:
             raise FileInvalid("Arquivo vazio")
         sha = hashlib.sha256(content).hexdigest()
-        with self._trava:
-            for meta in self.listar():
+        with self._lock:
+            for meta in self.list_all():
                 if meta["sha256"] == sha:
                     return {**meta, "duplicado": True}
             id_ = secrets.token_hex(6)
-            destination = self.raiz / id_
+            destination = self.root / id_
             destination.mkdir()
             (destination / f"original.{extension}").write_bytes(content)
             if kind == "pdf":
@@ -268,21 +268,21 @@ class Collection:
                 "atualizado": now,
             }
             _write_json(destination / "meta.json", meta)
-            _write_json(destination / "anotacoes.json", self._anotacoes_vazias())
-            self._registrar("criado", id_)
+            _write_json(destination / "anotacoes.json", self._annotations_empty())
+            self._register("criado", id_)
         if kind == "pdf":
-            self._gerar_miniatura(destination)
+            self._generate_thumbnail(destination)
         return meta
 
-    def editar(self, id_: str, fields: dict[str, Any]) -> dict[str, Any]:
-        with self._trava:
+    def edit(self, id_: str, fields: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
             meta = self.obter(id_)
             for name in ("titulo", "pasta", "tags"):
                 if fields.get(name) is not None:
                     meta[name] = fields[name]
             meta["atualizado"] = _now()
-            _write_json(self._pasta(id_) / "meta.json", meta)
-            self._registrar("editado", id_)
+            _write_json(self._folder(id_) / "meta.json", meta)
+            self._register("editado", id_)
             return meta
 
     def substituir(self, id_: str, content: bytes) -> dict[str, Any]:
@@ -290,9 +290,9 @@ class Collection:
         volta a `convertendo`; quem chama roda [converter]."""
         if not content:
             raise FileInvalid("Arquivo vazio")
-        with self._trava:
+        with self._lock:
             meta = self.obter(id_)
-            folder = self._pasta(id_)
+            folder = self._folder(id_)
             (folder / f"original.{meta['extensao']}").write_bytes(content)
             if meta["tipo"] == "pdf":
                 (folder / "documento.pdf").write_bytes(content)
@@ -305,34 +305,34 @@ class Collection:
                 atualizado=_now(),
             )
             _write_json(folder / "meta.json", meta)
-            self._registrar("editado", id_)
+            self._register("editado", id_)
         if meta["tipo"] == "pdf":
-            self._gerar_miniatura(folder)
+            self._generate_thumbnail(folder)
         return meta
 
-    def duplicar(self, id_: str) -> dict[str, Any]:
+    def duplicate(self, id_: str) -> dict[str, Any]:
         """Cópia com id novo (original, PDF, miniatura e anotações); o envio comum recusaria por
         ser idêntico."""
-        with self._trava:
-            origin = self._pasta(id_)
+        with self._lock:
+            origin = self._folder(id_)
             new = secrets.token_hex(6)
-            shutil.copytree(origin, self.raiz / new)
+            shutil.copytree(origin, self.root / new)
             now = _now()
             meta = {**self.obter(id_), "id": new, "criado": now, "atualizado": now}
             meta["titulo"] = f"{meta['titulo']} (cópia)"
-            _write_json(self.raiz / new / "meta.json", meta)
-            self._registrar("criado", new)
+            _write_json(self.root / new / "meta.json", meta)
+            self._register("criado", new)
             return meta
 
     def excluir(self, id_: str) -> None:
-        with self._trava:
-            shutil.rmtree(self._pasta(id_))
-            self._registrar("excluido", id_)
+        with self._lock:
+            shutil.rmtree(self._folder(id_))
+            self._register("excluido", id_)
 
-    def converter(self, id_: str) -> dict[str, Any]:
+    def convert(self, id_: str) -> dict[str, Any]:
         """Gera `documento.pdf` de um DOCX/PPTX/planilha/extrato pelo LibreOffice headless (demora
         segundos)."""
-        folder = self._pasta(id_)
+        folder = self._folder(id_)
         meta = self.obter(id_)
         if meta["tipo"] == "pdf" or meta["tipo"] in SEM_PDF:
             return meta
@@ -362,24 +362,24 @@ class Collection:
             except subprocess.TimeoutExpired:
                 error = f"Conversão passou de {TIME_CONVERSION} s"
         if error is None:
-            self._gerar_miniatura(folder)
+            self._generate_thumbnail(folder)
         else:
             logger.warning("Conversão de %s falhou: %s", id_, error)
-        with self._trava:
+        with self._lock:
             meta = self.obter(id_)
             meta.update(status="erro" if error else "pronto", erro=error, atualizado=_now())
             _write_json(folder / "meta.json", meta)
-            self._registrar("convertido", id_, status=meta["status"])
+            self._register("convertido", id_, status=meta["status"])
         return meta
 
-    def exportar(self, id_: str, fmt: str) -> tuple[bytes, str]:
+    def export(self, id_: str, fmt: str) -> tuple[bytes, str]:
         """Original convertido para [formato] (ver `EXPORTACOES`) e o nome do arquivo gerado."""
         meta = self.obter(id_)
         filters = EXPORTS.get(meta["tipo"], {})
         if fmt not in filters:
             aceitos = ", ".join(filters) or "nenhum"
             raise FileInvalid(f"Este arquivo não exporta para {fmt} (aceitos: {aceitos})")
-        original, name = self.caminho_original(id_)
+        original, name = self.path_original(id_)
         base = Path(name).stem or "arquivo"
         if meta["extensao"] == fmt:
             return original.read_bytes(), name
@@ -401,7 +401,7 @@ class Collection:
                 raise FileInvalid(error)
             return gerado.read_bytes(), f"{base}.{fmt}"
 
-    def criar_vazio(self, tipo: str, titulo: str, pasta: str = "") -> dict[str, Any]:
+    def create_empty(self, tipo: str, titulo: str, pasta: str = "") -> dict[str, Any]:
         """Documento (.docx), planilha (.xlsx) ou apresentação (.pptx) em branco, gerado pelo
         LibreOffice a partir de um modelo mínimo, e guardado como um envio comum."""
         models = {
@@ -432,14 +432,14 @@ class Collection:
                 raise FileInvalid("LibreOffice não gerou o arquivo em branco")
             return self.adicionar(f"{name}.{destination}", gerado.read_bytes(), pasta)
 
-    def marcar_convertendo(self, id_: str) -> dict[str, Any]:
-        with self._trava:
+    def mark_convertendo(self, id_: str) -> dict[str, Any]:
+        with self._lock:
             meta = self.obter(id_)
             meta.update(status="convertendo", erro=None)
-            _write_json(self._pasta(id_) / "meta.json", meta)
+            _write_json(self._folder(id_) / "meta.json", meta)
             return meta
 
-    def _gerar_miniatura(self, pasta: Path) -> None:
+    def _generate_thumbnail(self, pasta: Path) -> None:
         command = [
             self.pdftoppm, "-png", "-singlefile", "-f", "1", "-l", "1", "-scale-to", "360",
             str(pasta / "documento.pdf"), str(pasta / "miniatura"),
@@ -452,30 +452,30 @@ class Collection:
     # --- anotações ---
 
     @staticmethod
-    def _anotacoes_vazias() -> dict[str, Any]:
+    def _annotations_empty() -> dict[str, Any]:
         return {"versao": 0, "atualizado": None, "tracos": [], "destaques": [], "textos": []}
 
-    def anotacoes(self, id_: str) -> dict[str, Any]:
+    def annotations(self, id_: str) -> dict[str, Any]:
         data: dict[str, Any] = _read_json(
-            self._pasta(id_) / "anotacoes.json", self._anotacoes_vazias()
+            self._folder(id_) / "anotacoes.json", self._annotations_empty()
         )
         return data
 
     def traducao(self, id_: str) -> dict[str, Any]:
         """Tradução para o português por página (0-based, como chave texto):
         `{"3": {"segmentos": [...], "traducoes": [...]}}`, alinhada frase a frase."""
-        data: dict[str, Any] = _read_json(self._pasta(id_) / "traducao.json", {})
+        data: dict[str, Any] = _read_json(self._folder(id_) / "traducao.json", {})
         return data
 
-    def salvar_traducao(self, id_: str, pages: dict[str, Any]) -> dict[str, Any]:
-        with self._trava:
+    def save_translation(self, id_: str, pages: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
             data = {**self.traducao(id_), **pages}
-            _write_json(self._pasta(id_) / "traducao.json", data)
+            _write_json(self._folder(id_) / "traducao.json", data)
             return data
 
-    def salvar_anotacoes(self, id_: str, version_base: int, new: dict[str, Any]) -> dict[str, Any]:
-        with self._trava:
-            current = self.anotacoes(id_)
+    def save_annotations(self, id_: str, version_base: int, new: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            current = self.annotations(id_)
             if version_base != current["versao"]:
                 raise AnnotationsConflict(current)
             data = {
@@ -483,7 +483,7 @@ class Collection:
                 "atualizado": _now(),
                 **{name: list(new.get(name) or []) for name in LISTS_ANNOTATION},
             }
-            folder = self._pasta(id_)
+            folder = self._folder(id_)
             _write_json(folder / "anotacoes.json", data)
             meta = self.obter(id_)
             meta.update(
@@ -492,16 +492,16 @@ class Collection:
                 atualizado=data["atualizado"],
             )
             _write_json(folder / "meta.json", meta)
-            self._registrar("anotado", id_, versao=data["versao"])
+            self._register("anotado", id_, versao=data["versao"])
             return data
 
     def destaques(self, q: str = "", file_id: str | None = None) -> list[dict[str, Any]]:
         """Trechos marcados com o marca-texto em todos os arquivos, cada um com a citação pronta."""
         term = _key(q)
-        goals = [self.obter(file_id)] if file_id else self.listar()
+        goals = [self.obter(file_id)] if file_id else self.list_all()
         items = []
         for meta in goals:
-            for d in self.anotacoes(meta["id"])["destaques"]:
+            for d in self.annotations(meta["id"])["destaques"]:
                 if term and term not in _key(f"{d.get('texto', '')} {d.get('comentario', '')}"):
                     continue
                 items.append({
@@ -512,12 +512,12 @@ class Collection:
                 })
         return sorted(items, key=lambda d: str(d.get("criado") or ""), reverse=True)
 
-    def marcacoes_do_projeto(self, project_id: str) -> list[dict[str, Any]]:
+    def markings_of_project(self, project_id: str) -> list[dict[str, Any]]:
         """Destaques, textos e traços à mão ligados ao projeto de leitura (campo `projetos` de cada
         elemento), com `tipo` (`destaque`/`texto`/`traco`) e o arquivo de origem."""
         items = []
-        for meta in self.listar():
-            anot = self.anotacoes(meta["id"])
+        for meta in self.list_all():
+            anot = self.annotations(meta["id"])
             pairs = (("destaque", "destaques"), ("texto", "textos"), ("traco", "tracos"))
             for kind, lista in pairs:
                 for e in anot.get(lista) or []:

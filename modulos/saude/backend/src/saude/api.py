@@ -19,7 +19,7 @@ router = APIRouter(tags=["saude"])
 
 
 def get_workouts(request: Request) -> Workouts:
-    workouts: Workouts = request.app.state.treinos
+    workouts: Workouts = request.app.state.workouts
     return workouts
 
 
@@ -81,18 +81,18 @@ def _error(e: Exception) -> HTTPException:
 
 @router.get("/exercicios")
 def list_exercises(treinos: WorkoutsDep) -> Any:
-    return {"areas": AREAS, "exercicios": treinos.listar_exercicios()}
+    return {"areas": AREAS, "exercicios": treinos.list_exercises()}
 
 
 @router.post("/exercicios", status_code=201)
 def create_exercise(treinos: WorkoutsDep, corpo: ExerciseInput) -> Any:
-    return treinos.criar_exercicio(corpo.model_dump())
+    return treinos.create_exercise(corpo.model_dump())
 
 
 @router.patch("/exercicios/{id_}")
 def edit_exercise(treinos: WorkoutsDep, id_: str, corpo: ExerciseEdit) -> Any:
     try:
-        return treinos.editar_exercicio(id_, corpo.model_dump(exclude_unset=True))
+        return treinos.edit_exercise(id_, corpo.model_dump(exclude_unset=True))
     except NotFound as e:
         raise _error(e) from e
 
@@ -100,7 +100,7 @@ def edit_exercise(treinos: WorkoutsDep, id_: str, corpo: ExerciseEdit) -> Any:
 @router.delete("/exercicios/{id_}", status_code=204)
 def delete_exercise(treinos: WorkoutsDep, id_: str) -> None:
     try:
-        treinos.excluir_exercicio(id_)
+        treinos.delete_exercise(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -123,7 +123,7 @@ async def send_image(
         kind = arquivo.content_type or ""
         if not kind.startswith("image/"):
             kind = mimetypes.guess_type(arquivo.filename or "")[0] or ""
-        return treinos.salvar_imagem(id_, kind, await arquivo.read())
+        return treinos.save_image(id_, kind, await arquivo.read())
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 
@@ -131,7 +131,7 @@ async def send_image(
 @router.delete("/exercicios/{id_}/imagem")
 def remove_image(treinos: WorkoutsDep, id_: str) -> Any:
     try:
-        return treinos.remover_imagem(id_)
+        return treinos.remove_image(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -155,7 +155,7 @@ def mark(treinos: WorkoutsDep, corpo: ItemInput) -> Any:
 @router.patch("/agenda/{id_}")
 def edit_item(treinos: WorkoutsDep, id_: str, corpo: ItemEdit) -> Any:
     try:
-        return treinos.editar_item(id_, corpo.model_dump(exclude_unset=True))
+        return treinos.edit_item(id_, corpo.model_dump(exclude_unset=True))
     except (NotFound, Invalid) as e:
         raise _error(e) from e
 
@@ -163,7 +163,7 @@ def edit_item(treinos: WorkoutsDep, id_: str, corpo: ItemEdit) -> Any:
 @router.delete("/agenda/{id_}", status_code=204)
 def unmark(treinos: WorkoutsDep, id_: str) -> None:
     try:
-        treinos.desmarcar(id_)
+        treinos.unmark(id_)
     except NotFound as e:
         raise _error(e) from e
 
@@ -171,7 +171,7 @@ def unmark(treinos: WorkoutsDep, id_: str) -> None:
 @router.post("/agenda/copiar", status_code=201)
 def copy(treinos: WorkoutsDep, corpo: Copy) -> Any:
     try:
-        return treinos.copiar(corpo.de, corpo.ate, corpo.destino)
+        return treinos.copy(corpo.de, corpo.ate, corpo.destino)
     except Invalid as e:
         raise _error(e) from e
 

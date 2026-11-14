@@ -89,7 +89,7 @@ def fetch_symbols(
     bibliotecas: LibrariesDep, q: str = "", biblioteca: str | None = None, limite: int = 60
 ) -> Any:
     """Símbolos importados com todas as palavras de `q` (nome, valor, descrição, palavras-chave)."""
-    return bibliotecas.buscar(q, biblioteca, min(max(limite, 1), 200))
+    return bibliotecas.fetch(q, biblioteca, min(max(limite, 1), 200))
 
 
 @router.post("/biblioteca/simbolos")
@@ -100,7 +100,7 @@ def symbols(pedido: Ids, bibliotecas: LibrariesDep) -> Any:
 
 @router.get("/bibliotecas")
 def list_libraries(bibliotecas: LibrariesDep) -> Any:
-    return bibliotecas.listar()
+    return bibliotecas.list_all()
 
 
 @router.post("/bibliotecas/importar", status_code=201)
@@ -115,7 +115,7 @@ async def import_collection(
     name = re.sub(r"[^A-Za-z0-9_.+-]+", "_", name).strip("_") or "Importada"
     try:
         symbols = kicad.read_collection(raw.decode("utf-8", "replace"), name)
-        return bibliotecas.guardar(name, symbols, "arquivo")
+        return bibliotecas.store(name, symbols, "arquivo")
     except (kicad.FileInvalid, NameInvalid) as e:
         raise HTTPException(422, str(e)) from e
 
@@ -134,14 +134,14 @@ async def download_kicad(pedido: RequestKicad, request: Request, bibliotecas: Li
     async with httpx.AsyncClient(timeout=60, follow_redirects=True) as http:
         for name in pedido.nomes:
             try:
-                Libraries.validar_nome(name)
+                Libraries.validate_name(name)
                 r = await http.get(URL_KICAD.format(versao=version, nome=name))
                 if r.status_code != 200 or not r.text.lstrip().startswith("(kicad_symbol_lib"):
                     raise kicad.FileInvalid(
                         f"não achou no KiCad {version} (HTTP {r.status_code})"
                     )
                 symbols = kicad.read_collection(r.text, name)
-                output.append(bibliotecas.guardar(name, symbols, f"kicad {version}"))
+                output.append(bibliotecas.store(name, symbols, f"kicad {version}"))
             except (httpx.HTTPError, kicad.FileInvalid, NameInvalid) as e:
                 output.append({"nome": name, "erro": str(e) or type(e).__name__})
     return output
@@ -158,7 +158,7 @@ def remove_collection(nome: str, bibliotecas: LibrariesDep) -> Response:
 
 @router.get("/projetos")
 def list_all(projetos: ProjectsDep, pasta: str | None = None) -> Any:
-    return projetos.listar(pasta)
+    return projetos.list_all(pasta)
 
 
 @router.post("/projetos", status_code=201)
@@ -177,7 +177,7 @@ def get(id_: str, projetos: ProjectsDep) -> Any:
 @router.patch("/projetos/{id_}")
 def edit(id_: str, edicao: ProjectEdit, projetos: ProjectsDep) -> Any:
     try:
-        return projetos.editar(id_, edicao.model_dump(exclude_unset=True))
+        return projetos.edit(id_, edicao.model_dump(exclude_unset=True))
     except Exception as e:
         raise _error(e) from e
 
@@ -196,12 +196,12 @@ def save(id_: str, g: Recording, projetos: ProjectsDep) -> Any:
 
 @router.get("/projetos/{id_}/netlist")
 def show_netlist(id_: str, projetos: ProjectsDep) -> Any:
-    return netlist(_get(projetos, id_), projetos.simbolo)
+    return netlist(_get(projetos, id_), projetos.symbol)
 
 
 @router.get("/projetos/{id_}/bom")
 def show_bom(id_: str, projetos: ProjectsDep) -> Any:
-    return bom(_get(projetos, id_), projetos.simbolo)
+    return bom(_get(projetos, id_), projetos.symbol)
 
 
 @router.get("/projetos/{id_}/bom.csv")
@@ -209,7 +209,7 @@ def download_bom(id_: str, projetos: ProjectsDep) -> Response:
     p = _get(projetos, id_)
     name = re.sub(r"[^\w.-]+", "_", p["titulo"]).strip("_") or "projeto"
     return Response(
-        bom_csv(p, projetos.simbolo),
+        bom_csv(p, projetos.symbol),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{name}-bom.csv"'},
     )
@@ -218,7 +218,7 @@ def download_bom(id_: str, projetos: ProjectsDep) -> Response:
 @router.post("/projetos/{id_}/duplicar", status_code=201)
 def duplicate(id_: str, projetos: ProjectsDep) -> Any:
     try:
-        return projetos.duplicar(id_)
+        return projetos.duplicate(id_)
     except Exception as e:
         raise _error(e) from e
 
@@ -237,4 +237,4 @@ def show_erc(id_: str, projetos: ProjectsDep) -> Any:
     """Problemas da verificação elétrica (erros primeiro)."""
     from eletronica.erc import erc
 
-    return erc(_get(projetos, id_), projetos.simbolo)
+    return erc(_get(projetos, id_), projetos.symbol)
