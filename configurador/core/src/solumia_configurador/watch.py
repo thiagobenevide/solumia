@@ -36,6 +36,10 @@ class WatchError(Exception):
     pass
 
 
+class KeyNotOnServer(WatchError):
+    """The VPS answered 401/403 to the watch key: its gateway.env predates the key."""
+
+
 def adb_path() -> str:
     found = shutil.which("adb")
     if found:
@@ -198,8 +202,7 @@ def check_key(url: str, key: str, log: Callable[[str], None] = print) -> None:
     """The VPS must already accept the watch key, otherwise the watch would only get 401."""
     r = httpx.get(f"{url}/api/atualizacoes", headers={"Authorization": f"Bearer {key}"}, timeout=15)
     if r.status_code in (401, 403):
-        raise WatchError("a VPS ainda não conhece a chave do relógio: em VPS, aplique a instalação de novo "
-                         "e depois repita a instalação no relógio")
+        raise KeyNotOnServer("a VPS ainda não conhece a chave do relógio")
     r.raise_for_status()
     log(f"Chave do relógio aceita por {url}")
 

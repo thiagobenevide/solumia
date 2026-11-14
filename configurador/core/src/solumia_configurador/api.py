@@ -356,6 +356,12 @@ def create_app(state: State, token: str, porta: int) -> FastAPI:
             ctx.recursos["relogio"] = watch.connect(dados.host, dados.porta, log=ctx.log)
 
         def conferir_chave(ctx) -> None:  # noqa: ANN001
+            try:
+                watch.check_key(url, key, log=ctx.log)
+                return
+            except watch.KeyNotOnServer:
+                ctx.log("A VPS ainda não tem a chave do relógio: enviando e reiniciando só o gateway")
+            vps.push_gateway_env(s.manifest(), s.cofre, ctx.log, ctx.recursos.get("_mascara", lambda x: x))
             watch.check_key(url, key, log=ctx.log)
 
         def baixar(ctx) -> None:  # noqa: ANN001
@@ -363,13 +369,18 @@ def create_app(state: State, token: str, porta: int) -> FastAPI:
             ctx.recursos["apk_relogio"] = info["caminho"]
 
         def instalar(ctx) -> None:  # noqa: ANN001
+            # a resumed run skips the steps already done: redo what this step needs
+            if "relogio" not in ctx.recursos:
+                conectar(ctx)
+            if "apk_relogio" not in ctx.recursos:
+                baixar(ctx)
             watch.install(ctx.recursos["relogio"], Path(ctx.recursos["apk_relogio"]), url, key, log=ctx.log)
 
         return s.store_plan(Plan("Instalar o Solumia no relógio", [
             Step("conectar", f"Conectar ao relógio {dados.host}",
                  "adb por Wi-Fi; a porta de conexão é encontrada sozinha", conectar),
             Step("chave", f"Conferir a chave do relógio em {url}",
-                 "chave própria do relógio: só abre as rotas dele", conferir_chave),
+                 "chave própria do relógio (só abre as rotas dele); enviada à VPS se faltar", conferir_chave),
             Step("baixar", "Baixar o app do relógio da release",
                  "assinatura (chave fixada) e SHA-256 conferidos", baixar),
             Step("instalar", "Instalar e configurar no relógio",
