@@ -75,12 +75,12 @@ def test_texto_pop_e_correcoes():
 
 def test_esquema_fechado_e_erros():
     with pytest.raises(ValidationError):  # transição fora do catálogo
-        N1.Montagem.model_validate({"ops": [{"op": "transicao", "alvo": "x", "tipo": "explosao"}]})
+        N1.Assembly.model_validate({"ops": [{"op": "transicao", "alvo": "x", "tipo": "explosao"}]})
     with pytest.raises(ValidationError):  # campo desconhecido
-        N1.Montagem.model_validate({"ops": [{"op": "cortar", "em": 1, "pixels": 3}]})
-    with pytest.raises(N1.ErroN1):
+        N1.Assembly.model_validate({"ops": [{"op": "cortar", "em": 1, "pixels": 3}]})
+    with pytest.raises(N1.ErrorN1):
         _executar([{"op": "sequencia", "nome": "e"}, {"op": "remover", "alvo": "fantasma"}])
-    with pytest.raises(N1.ErroN1):
+    with pytest.raises(N1.ErrorN1):
         _executar([{"op": "colocar", "id": "x", "midia": "cena:999", "trilha": "base", "em": 0}])
-    esquema = N1.esquema_json(N1.Montagem) if hasattr(N1, "esquema_json") else N1.Montagem.model_json_schema()
+    esquema = N1.esquema_json(N1.Assembly) if hasattr(N1, "esquema_json") else N1.Assembly.model_json_schema()
     assert "ops" in esquema["properties"]

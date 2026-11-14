@@ -54,7 +54,7 @@ def pexels(termo, tipo, env, idioma):
             for p in r.json().get("photos", [])]
 
 
-def _chave_pixabay(env, tipo):
+def _key_pixabay(env, tipo):
     """Chaves no .env: PIXABAY_API_KEY_VIDEO / PIXABAY_API_KEY_IMAGE (ou uma só, PIXABAY_API_KEY)."""
     return env.get("PIXABAY_API_KEY_VIDEO" if tipo == "video" else "PIXABAY_API_KEY_IMAGE") or env.get("PIXABAY_API_KEY")
 
@@ -82,7 +82,7 @@ def _pixabay_get(url, params):
 
 
 def pixabay(termo, tipo, env, idioma):
-    chave = _chave_pixabay(env, tipo)
+    chave = _key_pixabay(env, tipo)
     if not chave:
         return []
     comum = {"key": chave, "q": termo[:100], "lang": idioma.split("-")[0], "per_page": 20, "safesearch": "true"}
@@ -138,7 +138,7 @@ def openverse(termo, tipo, env, idioma):
     return saida
 
 
-PROVEDORES = {"pexels": pexels, "pixabay": pixabay, "openverse": openverse}
+PROVIDERS = {"pexels": pexels, "pixabay": pixabay, "openverse": openverse}
 
 
 # ---------------------------------------------------------------- normalização
@@ -147,22 +147,22 @@ def _ffmpeg(*args):
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", *map(str, args)], check=True)
 
 
-def duracao_midia(caminho):
+def duration_media(caminho):
     saida = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
                             str(caminho)], capture_output=True, text=True).stdout.strip()
     return float(saida) if saida else 0.0
 
 
-def normalizar_imagem(origem, destino, w, h):
+def normalize_image(origem, destino, w, h):
     # Preenche o quadro (corta o excesso), sem barras pretas.
     _ffmpeg("-i", origem, "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}",
             "-frames:v", "1", "-q:v", 2, destino)
 
 
-def normalizar_video(origem, destino, w, h, fps, segundos):
+def normalize_video(origem, destino, w, h, fps, segundos):
     """Recorta/estica o vídeo para cobrir a cena (+1 s de folga para as transições), sem áudio."""
     alvo = segundos + 1.0
-    dur = duracao_midia(origem)
+    dur = duration_media(origem)
     filtros = [f"scale={w}:{h}:force_original_aspect_ratio=increase", f"crop={w}:{h}", f"fps={fps}"]
     entrada = ["-i", origem]
     if 0 < dur < alvo:
@@ -179,7 +179,7 @@ def normalizar_video(origem, destino, w, h, fps, segundos):
 
 # ---------------------------------------------------------------- etapa
 
-def _baixar(url, destino, tentativas=4):
+def _download(url, destino, tentativas=4):
     for n in range(tentativas):
         with requests.get(url, headers=UA, stream=True, timeout=120) as r:
             if r.status_code == 429 and n < tentativas - 1:
@@ -196,49 +196,49 @@ def _baixar(url, destino, tentativas=4):
             return
 
 
-PARADA = set("a an the of with at on in and or for to from by into over under is are de da do das dos e ou em no "
+STOP = set("a an the of with at on in and or for to from by into over under is are de da do das dos e ou em no "
              "na nos nas com para por um uma uns umas os as o ao aos".split())
 
 
-def _raizes(texto):
+def _roots(texto):
     import unicodedata
     s = unicodedata.normalize("NFKD", (texto or "").lower())
     s = "".join(c for c in s if not unicodedata.combining(c))
-    return {w[:5] for w in re.findall(r"[a-z]+", s) if len(w) > 2 and w not in PARADA}
+    return {w[:5] for w in re.findall(r"[a-z]+", s) if len(w) > 2 and w not in STOP}
 
 
-def chave_da_cena(cena):
+def key_of_scene(cena):
     """Palavras que a mídia tem de mostrar: `chave_en` da curadoria (o objeto/sujeito da fala) ou o termo."""
-    return _raizes(cena.get("chave_en") or cena.get("busca_en") or cena.get("busca") or "")
+    return _roots(cena.get("chave_en") or cena.get("busca_en") or cena.get("busca") or "")
 
 
-RELEVANTE = 0.66  # "credit card" pede as duas palavras: "birthday card" não serve
+RELEVANT = 0.66  # "credit card" pede as duas palavras: "birthday card" não serve
 
 
-def relevancia(cand, chave):
+def relevance(cand, chave):
     """Fração das palavras-chave da cena que aparecem nas tags/título/descrição do candidato (a descrição do
     acervo vem do modelo de visão, a mais confiável)."""
     if not chave:
         return 0.0
-    alvo = _raizes(" ".join(str(cand.get(k) or "") for k in ("tags", "titulo", "descricao")))
+    alvo = _roots(" ".join(str(cand.get(k) or "") for k in ("tags", "titulo", "descricao")))
     # tags vêm da mais importante para a menos: a chave nas 3 primeiras vale mais ("credit card" no fim de
     # uma foto de barbearia, não)
-    topo = _raizes(", ".join(str(cand.get("tags") or "").split(",")[:3]) + " " + str(cand.get("descricao") or ""))
+    topo = _roots(", ".join(str(cand.get("tags") or "").split(",")[:3]) + " " + str(cand.get("descricao") or ""))
     return round(len(chave & alvo) / len(chave) + 0.3 * (len(chave & topo) / len(chave)), 2)
 
 
-def termos_da_cena(cena):
+def terms_of_scene(cena):
     """[(termo, idioma)]: os termos em inglês com lang inglês (os bancos indexam em inglês) e o termo em
     português com o idioma do canal."""
     en = [t for t in [cena.get("busca_en"), *cena.get("alternativas", [])] if t]
     return [(t, "en-US") for t in dict.fromkeys(en)] + ([(cena["busca"], None)] if cena.get("busca") else [])
 
 
-def _candidatos(cena, tipo, provedores, env, idioma, minimo=6):
+def _candidates(cena, tipo, provedores, env, idioma, minimo=6):
     """Junta candidatos de todos os provedores, termo a termo, até ter `minimo` relevantes (a chave
     nas tags); a ordem final é por relevância (ver `ordenar`), não pela ordem em que os bancos responderam."""
-    chave = chave_da_cena(cena)
-    termos = termos_da_cena(cena)
+    chave = key_of_scene(cena)
+    termos = terms_of_scene(cena)
     # sem resultado, o termo principal perde palavras do fim (escrito da mais importante para a menos)
     if termos:
         t0 = termos[0][0].split()
@@ -247,7 +247,7 @@ def _candidatos(cena, tipo, provedores, env, idioma, minimo=6):
     for termo, lang in termos:
         for nome in provedores:
             try:
-                achados = PROVEDORES[nome](termo, tipo, env, lang or idioma)
+                achados = PROVIDERS[nome](termo, tipo, env, lang or idioma)
             except requests.RequestException as e:
                 print(f"     {nome}: erro na busca ({e})")
                 continue
@@ -255,24 +255,24 @@ def _candidatos(cena, tipo, provedores, env, idioma, minimo=6):
                 if a["id"] not in vistos:
                     vistos.add(a["id"])
                     saida.append(a)
-        if sum(relevancia(a, chave) >= RELEVANTE for a in saida) >= minimo:
+        if sum(relevance(a, chave) >= RELEVANT for a in saida) >= minimo:
             break
     return saida
 
 
-def ordenar(cands, chave, exigir=False):
+def sort(cands, chave, exigir=False):
     """Mais relevante primeiro (acervo e bancos juntos; no empate, o acervo, que não gasta download). Se há
     candidatos com a chave inteira (2 de 3 palavras numa chave longa), só eles ficam (sem nenhum, fica tudo: o modelo de visão do
     avaliar confere depois). `exigir`: só os relevantes, mesmo que não sobre nenhum (vídeo sem nada relevante
     → a cena passa para foto, que acha o objeto exato com mais facilidade)."""
     for c in cands:
-        c["relevancia"] = relevancia(c, chave)
-    if exigir or any(c["relevancia"] >= RELEVANTE for c in cands):
-        cands = [c for c in cands if c["relevancia"] >= RELEVANTE]
+        c["relevancia"] = relevance(c, chave)
+    if exigir or any(c["relevancia"] >= RELEVANT for c in cands):
+        cands = [c for c in cands if c["relevancia"] >= RELEVANT]
     return sorted(cands, key=lambda c: (-c["relevancia"], not c.get("arquivo")))
 
 
-def _preparar(cand, cena, pasta, w, h, fps, dur, termo=""):
+def _prepare(cand, cena, pasta, w, h, fps, dur, termo=""):
     """Baixa um candidato para o acervo (ou usa o arquivo que já está lá) e converte para a cena;
     devolve o arquivo final ou None se falhar."""
     video = cand["tipo"] == "video"
@@ -280,15 +280,15 @@ def _preparar(cand, cena, pasta, w, h, fps, dur, termo=""):
     bruto = pasta / f"bruto_{cena['id']:03d}{'.mp4' if video else '.img'}"
     try:
         if cand.get("arquivo"):  # veio do acervo: nada de rede
-            origem = library.pasta() / cand["arquivo"]
-            library.registrar(cand, origem, termo)  # só acrescenta o termo
+            origem = library.folder() / cand["arquivo"]
+            library.register(cand, origem, termo)  # só acrescenta o termo
         else:
-            _baixar(cand["url"], bruto)
-            origem = library.registrar(cand, bruto, termo)
+            _download(cand["url"], bruto)
+            origem = library.register(cand, bruto, termo)
         if video:
-            normalizar_video(origem, final, w, h, fps, dur)
+            normalize_video(origem, final, w, h, fps, dur)
         else:
-            normalizar_imagem(origem, final, w, h)
+            normalize_image(origem, final, w, h)
         return final
     except (requests.RequestException, subprocess.CalledProcessError, OSError) as e:
         print(f"     {cand['id']}: falhou ({str(e)[:90]}); tentando o próximo")
@@ -297,7 +297,7 @@ def _preparar(cand, cena, pasta, w, h, fps, dur, termo=""):
         bruto.unlink(missing_ok=True)
 
 
-def buscar(projeto, refazer=False, cenas=None):
+def fetch(projeto, refazer=False, cenas=None):
     """refazer: troca a mídia das cenas (todas, ou só as de `cenas`) por outro resultado."""
     cfg = projeto.cfg
     w, h, fps = cfg["video"]["largura"], cfg["video"]["altura"], cfg["video"]["fps"]
@@ -306,13 +306,13 @@ def buscar(projeto, refazer=False, cenas=None):
     provedores = cfg["midia"]["provedores"]
     idioma = cfg["midia"]["idioma_busca"]
     env = projeto.env
-    if not env.get("PEXELS_API_KEY") and not _chave_pixabay(env, "video"):
+    if not env.get("PEXELS_API_KEY") and not _key_pixabay(env, "video"):
         print("  aviso: sem PEXELS_API_KEY/PIXABAY_API_KEY_* no .env; só fotos do Openverse (sem vídeos)")
 
     ac = cfg.get("acervo", {})
     plano = projeto.carregar_json("plano.json")
     from esteira import production
-    production.marcar_apresentador(projeto, plano)  # no modo apresentador, cenas de câmera não buscam mídia
+    production.mark_presenter(projeto, plano)  # no modo apresentador, cenas de câmera não buscam mídia
     pasta = projeto.caminho("midia")
     alvo = set(cenas) if cenas else {c["id"] for c in plano["cenas"]}
     for cena in plano["cenas"]:
@@ -332,14 +332,14 @@ def buscar(projeto, refazer=False, cenas=None):
         dur = cena["fim"] - cena["inicio"]
         ordem = [cena["tipo"], "imagem"] if cena["tipo"] == "video" else ["imagem"]
         escolhido, falhas, final = None, 0, None
-        termos = [t for t, _ in termos_da_cena(cena)]
-        chave = chave_da_cena(cena)
+        termos = [t for t, _ in terms_of_scene(cena)]
+        chave = key_of_scene(cena)
         for tipo in ordem:
             # Acervo primeiro (sem rede, sem API); depois os bancos de imagens.
-            do_acervo = library.procurar(termos, tipo, "retrato" if retrato else "paisagem", dur,
+            do_acervo = library.search(termos, tipo, "retrato" if retrato else "paisagem", dur,
                                         excluir=set(cena.get("rejeitados", [])) | usados, canal=projeto.canal,
                                         max_usos_canal=ac.get("max_usos_canal", 2)) if ac.get("reaproveitar", True) else []
-            cands = ordenar([*do_acervo, *_candidatos(cena, tipo, provedores, env, idioma)], chave,
+            cands = sort([*do_acervo, *_candidates(cena, tipo, provedores, env, idioma)], chave,
                             exigir=tipo != ordem[-1])
             events.debug(f"cena {cena['id']}: {len(cands)} candidatos ({tipo})", chave=sorted(chave),
                           melhores=[(c["id"], c["relevancia"]) for c in cands[:3]])
@@ -352,7 +352,7 @@ def buscar(projeto, refazer=False, cenas=None):
                     if cand["id"] in usados:
                         continue
                     usados.add(cand["id"])
-                final = _preparar(cand, cena, pasta, w, h, fps, dur, termos[0] if termos else "")
+                final = _prepare(cand, cena, pasta, w, h, fps, dur, termos[0] if termos else "")
                 if final:
                     escolhido = cand
                     break
@@ -373,7 +373,7 @@ def buscar(projeto, refazer=False, cenas=None):
                         relevancia=escolhido.get("relevancia"),
                         midia_tipo=escolhido["tipo"], credito=escolhido["credito"],
                         midia_origem="acervo" if escolhido.get("arquivo") else "banco")
-            library.marcar_uso(escolhido["id"], projeto.canal, projeto.ep, cena["id"])
+            library.mark_usage(escolhido["id"], projeto.canal, projeto.ep, cena["id"])
             events.debug(f"cena {cena['id']} ← {escolhido['id']}", midia=escolhido["tipo"], busca=cena.get("busca_en"))
             projeto.salvar_json("plano.json", plano)
 
@@ -390,7 +390,7 @@ def buscar(projeto, refazer=False, cenas=None):
           + f"; {reuso}/{len(pendentes)} reaproveitadas do acervo" + (f"; faltam {faltando}" if faltando else ""))
 
 
-def folha(projeto, quadros, destino, colunas=4, w=384, h=216):
+def sheet(projeto, quadros, destino, colunas=4, w=384, h=216):
     # 4 × 384 = 1536 px: abaixo dos 1568 px em que a imagem é reduzida antes de o Claude vê-la.
     """Grade de quadros [(arquivo, inicio_s ou None, legenda)] numa imagem só."""
     entradas, filtros = [], []
@@ -410,7 +410,7 @@ def folha(projeto, quadros, destino, colunas=4, w=384, h=216):
     _ffmpeg(*entradas, "-filter_complex", ";".join(filtros), "-frames:v", "1", "-q:v", 4, destino)
 
 
-def revisar(projeto, cenas=None, por_folha=16):
+def review(projeto, cenas=None, por_folha=16):
     """Folhas de contato revisao_NN.jpg (16 cenas cada, legíveis e baratas de ler) com número e busca."""
     plano = projeto.carregar_json("plano.json")
     cenas = [c for c in plano["cenas"] if c.get("midia") and (not cenas or c["id"] in cenas)]
@@ -421,18 +421,18 @@ def revisar(projeto, cenas=None, por_folha=16):
     for n in range(0, len(cenas), por_folha):
         grupo = cenas[n:n + por_folha]
         destino = projeto.caminho(f"revisao_{n // por_folha + 1:02d}.jpg")
-        folha(projeto, [(projeto.pasta / c["midia"], 0.5 if c.get("midia_tipo") == "video" else None,
+        sheet(projeto, [(projeto.pasta / c["midia"], 0.5 if c.get("midia_tipo") == "video" else None,
                          f"{c['id']} {c.get('busca_en') or c['busca']}") for c in grupo], destino)
         print(f"  {destino.name}: cenas {grupo[0]['id']}–{grupo[-1]['id']}")
 
 
-def quadros(projeto, n=8):
+def frames(projeto, n=8):
     """Folha quadros.jpg com n quadros do final.mp4 espalhados pela duração, para conferir a montagem."""
     final = projeto.caminho("final.mp4")
     if not final.exists():
         raise SystemExit("final.mp4 não existe; rode montar")
-    dur = duracao_midia(final)
+    dur = duration_media(final)
     tempos = [round(dur * (i + 0.5) / n, 1) for i in range(n)]
     destino = projeto.caminho("quadros.jpg")
-    folha(projeto, [(final, t, f"{t:.1f}s") for t in tempos], destino)
+    sheet(projeto, [(final, t, f"{t:.1f}s") for t in tempos], destino)
     print(f"  {destino.name}: {', '.join(f'{t:.1f}s' for t in tempos)}")

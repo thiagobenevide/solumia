@@ -19,11 +19,11 @@ JSX = Path(__file__).with_name("effectcraft.jsx")
 CLI = "effectcraft-cli"
 
 
-def disponivel():
+def available():
     return shutil.which(CLI) is not None
 
 
-def _rodar(cmd, rotulo=None, timeout=600):
+def _run(cmd, rotulo=None, timeout=600):
     """Roda o effectcraft-cli; com `rotulo`, lê as linhas `progress <feito> <total> …` e alimenta a barra do Monitor."""
     if not rotulo:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
@@ -44,36 +44,36 @@ def _rodar(cmd, rotulo=None, timeout=600):
         raise RuntimeError(f"EffectCraft: {''.join(erros).strip()[-400:]}")
 
 
-def construir(modelo, dados, segundos, destino, w=1920, h=1080, cor="#ffd400", fps=30):
+def build(modelo, dados, segundos, destino, w=1920, h=1080, cor="#ffd400", fps=30):
     """Cria `destino` (.ecproj) com as comps "Conteúdo" e "Peça". `dados` como em `render.html` (com efeito e caixas)."""
-    from esteira.graphics.render import CAIXA
+    from esteira.graphics.render import BOX
     dados = dict(dados)
     efeito = dados.pop("efeito", None) or {}
-    caixas = [dict(CAIXA, **c) for c in dados.pop("caixas", None) or []]
+    caixas = [dict(BOX, **c) for c in dados.pop("caixas", None) or []]
     entrada = {"modelo": modelo, "dados": dados, "dur": segundos, "w": w, "h": h, "cor": cor, "fps": fps,
                "efeito": efeito, "caixas": caixas}
     destino = Path(destino)
     with tempfile.TemporaryDirectory(prefix="ec_") as tmp:
         script = Path(tmp) / "peca.jsx"
         script.write_text(f"var DADOS = {json.dumps(entrada, ensure_ascii=False)};\n" + JSX.read_text())
-        saida = _rodar([CLI, "script", str(script), "--save-as", str(destino)])
+        saida = _run([CLI, "script", str(script), "--save-as", str(destino)])
     if "ok " not in saida:
         raise RuntimeError(f"EffectCraft não montou a peça: {saida.strip()[-300:]}")
     return destino
 
 
-def renderizar(ecproj, destino, previa=None, w=1920, h=1080):
+def render(ecproj, destino, previa=None, w=1920, h=1080):
     """`ecproj` → `destino` (.mov ProRes 4444 com alfa). `previa`: instante (s) salvo em PNG sobre fundo cinza."""
     destino = Path(destino)
-    _rodar([CLI, "render", "--project", str(ecproj), "--comp", "Peça", "--out", str(destino), "--format", "prores",
+    _run([CLI, "render", "--project", str(ecproj), "--comp", "Peça", "--out", str(destino), "--format", "prores",
             "--prores", "4444", "--channels", "rgba", "--quality", "best", "--progress"],
            rotulo=f"EffectCraft: {destino.name}")
     if previa is not None:
-        quadro(ecproj, previa, destino.with_suffix(".png"), w, h)
+        frame(ecproj, previa, destino.with_suffix(".png"), w, h)
     return destino
 
 
-def quadro(ecproj, t, destino, w=1920, h=1080, fundo="0x2a2d33", max_lado=None):
+def frame(ecproj, t, destino, w=1920, h=1080, fundo="0x2a2d33", max_lado=None):
     """Um quadro da peça em PNG (sobre cinza, como a prévia do painel)."""
     with tempfile.TemporaryDirectory(prefix="ecq_") as tmp:
         png = Path(tmp) / "q.png"
@@ -81,13 +81,13 @@ def quadro(ecproj, t, destino, w=1920, h=1080, fundo="0x2a2d33", max_lado=None):
                "--out", str(png), "--transparent"]
         if max_lado:
             cmd += ["--max-side", str(max_lado)]
-        _rodar(cmd)
+        _run(cmd)
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-i", str(png), "-f", "lavfi",
                         "-i", f"color=c={fundo}:s=16x16", "-filter_complex",
                         "[1][0]scale2ref[f][q];[f][q]overlay", "-frames:v", "1", str(destino)], check=True)
     return Path(destino)
 
 
-def abrir(ecproj):
+def open_file(ecproj):
     """Abre o projeto no EffectCraft (janela), sem prender o processo que chamou."""
     open_program("effectcraft", str(ecproj))

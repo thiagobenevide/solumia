@@ -45,19 +45,19 @@ def test_episodio_do_estudio_usa_o_final_do_estudio(tmp_path, monkeypatch):
     from esteira.web import app as painel
     pasta = tmp_path / "canal" / "001"
     (pasta / "estudio" / "16x9").mkdir(parents=True)
-    monkeypatch.setattr(painel, "pasta_ep", lambda ep: pasta)
-    monkeypatch.setattr(api, "pasta_ep", lambda ep: pasta)
-    monkeypatch.setattr(painel, "Projeto", lambda p: type("P", (), {"cfg": {"video": {"formato": "16:9"}}}))
+    monkeypatch.setattr(painel, "folder_ep", lambda ep: pasta)
+    monkeypatch.setattr(api, "folder_ep", lambda ep: pasta)
+    monkeypatch.setattr(painel, "Project", lambda p: type("P", (), {"cfg": {"video": {"formato": "16:9"}}}))
     antigo, novo = pasta / "final.mp4", pasta / "estudio" / "16x9" / "final.mp4"
     plano = pasta / "plano.json"
     for n, a in enumerate((antigo, plano, novo, novo.with_name("previa.mp4"))):
         a.write_text("x")
         os.utime(a, (n + 1, n + 1))
-    r = painel._resumo_ep("canal-001")
+    r = painel._summary_ep("canal-001")
     assert r["final"] and not r["desatualizado"] and r["feitas"] == 2  # graficos e montar: o Estúdio os substitui
-    assert api._video_leve("canal-001", painel.final_do_ep(pasta)).startswith("/arq/canal-001/estudio/16x9/previa.mp4")
+    assert api._video_light("canal-001", painel.final_of_ep(pasta)).startswith("/arq/canal-001/estudio/16x9/previa.mp4")
     os.utime(plano, (9, 9))
-    assert painel._resumo_ep("canal-001")["desatualizado"]
+    assert painel._summary_ep("canal-001")["desatualizado"]
 
 
 def test_recusa_host_de_fora_e_post_de_outro_site():

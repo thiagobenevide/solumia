@@ -23,7 +23,7 @@ def ep(tmp_path):
 
 
 def _zip(pasta, arquivo, nome="pct"):
-    return zipfile.ZipFile(io.BytesIO(b"".join(package.empacotar(arquivo, pasta, nome))))
+    return zipfile.ZipFile(io.BytesIO(b"".join(package.pack(arquivo, pasta, nome))))
 
 
 def test_pacote_leva_midia_e_caminhos_relativos(ep):
@@ -31,7 +31,7 @@ def test_pacote_leva_midia_e_caminhos_relativos(ep):
     assert sorted(z.namelist()) == [
         "pct/graficos/pag.png", "pct/midia/c1.mp4", "pct/projeto.fcproj"]
     dados = json.loads(z.read("pct/projeto.fcproj"))
-    caminhos = [n["path"] for n in package._nos_com_caminho(dados)]
+    caminhos = [n["path"] for n in package._nodes_with_path(dados)]
     assert caminhos == ["midia/c1.mp4", "graficos/pag.png"]
     assert z.read("pct/midia/c1.mp4") == b"video"
     g = json.loads(_zip(ep, ep / "graficos" / "g.ecproj").read("pct/graficos/g.ecproj"))
@@ -45,21 +45,21 @@ def test_receber_religa_caminhos_de_outra_maquina_e_guarda_anterior(ep):
         {"path": "C:\\Users\\eu\\pct\\graficos\\pag.png"},              # só pelo nome
         {"path": "midia/sumiu.mp4"},
     ]}
-    r = package.receber(json.dumps(editado).encode(), ep / "projeto.fcproj", ep)
+    r = package.receive(json.dumps(editado).encode(), ep / "projeto.fcproj", ep)
     assert r == {"ok": True, "midia_faltando": 1}
     gravado = json.loads((ep / "projeto.fcproj").read_text())
-    caminhos = [n["path"] for n in package._nos_com_caminho(gravado)]
+    caminhos = [n["path"] for n in package._nodes_with_path(gravado)]
     assert caminhos[:2] == [str(ep / "midia" / "c1.mp4"), str(ep / "graficos" / "pag.png")]
     guardados = list((ep / "log" / "envios").glob("projeto.*.fcproj"))
     assert len(guardados) == 1 and guardados[0].read_text() == anterior
 
 
 def test_receber_aceita_o_zip_baixado_e_recusa_lixo(ep):
-    zipado = b"".join(package.empacotar(ep / "graficos" / "g.ecproj", ep, "pct"))
-    package.receber(zipado, ep / "graficos" / "g.ecproj", ep)
+    zipado = b"".join(package.pack(ep / "graficos" / "g.ecproj", ep, "pct"))
+    package.receive(zipado, ep / "graficos" / "g.ecproj", ep)
     g = json.loads((ep / "graficos" / "g.ecproj").read_text())
     assert g["kind"]["path"] == str((ep / "graficos" / "pag.png").resolve())
     with pytest.raises(ValueError):
-        package.receber(b"isto nao e json", ep / "projeto.fcproj", ep)
+        package.receive(b"isto nao e json", ep / "projeto.fcproj", ep)
     with pytest.raises(ValueError):
-        package.receber(b"PK\x03\x04", ep / "thumbs.pcraft", ep)
+        package.receive(b"PK\x03\x04", ep / "thumbs.pcraft", ep)

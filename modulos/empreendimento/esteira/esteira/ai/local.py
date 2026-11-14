@@ -18,7 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 from esteira.ai import llama
 from esteira.core import events, trace
-from esteira.project import CACHE, RAIZ
+from esteira.project import CACHE, ROOT
 
 # ids in the llama.cpp router (file/folder in ~/agent-data/modelos)
 # Gemma 4 12B: better than or equal to qwen3-14b/qwen2.5vl-7b on every bench task (Oct 2026) and reads images,
@@ -205,16 +205,16 @@ def ask(text, schema: type[BaseModel], model=TEXT, images=None, think=False, tem
 
 def _root_config():
     import tomllib
-    return tomllib.loads((RAIZ / "config.toml").read_text())
+    return tomllib.loads((ROOT / "config.toml").read_text())
 
 
 def _via_claude(text, schema, name, images):
     """Process with `--engine claude`: the same question goes to Claude (no GPU), under the [claude] cap."""
     from esteira.ai import claude
-    from esteira.project import Projeto, pasta_ep
+    from esteira.project import Project, folder_ep
     ep = os.environ.get("ESTEIRA_EP")
     try:
-        cfg = Projeto(pasta_ep(ep)).cfg if ep else _root_config()
+        cfg = Project(folder_ep(ep)).cfg if ep else _root_config()
     except (OSError, ValueError):
         cfg = _root_config()
     image = None

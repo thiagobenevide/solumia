@@ -1,7 +1,7 @@
 """Editor manual do painel: gráficos animados (dados, tempo, efeitos, caixas de texto livres) e thumbnails.
 
 O estado de um gráfico é o próprio item do graficos.json ({modelo, inicio, dur, dados, efeito, caixas}); o
-de uma thumb são os campos de `thumbs.dados_thumb` + `fundo` (arquivo em thumbs/). A prévia é o mesmo HTML
+de uma thumb são os campos de `thumbs.data_thumb` + `fundo` (arquivo em thumbs/). A prévia é o mesmo HTML
 que vira o vídeo/PNG, servido ao navegador com `seek`. Gráfico salvo fica `manual: true`: o replanejamento
 o mantém e só ele é renderizado de novo (o resto está em cache). O assistente de IA (Claude ou LLM local)
 devolve um estado novo para a prévia; nada é salvo sem o usuário.
@@ -14,16 +14,16 @@ import shutil
 from pydantic import BaseModel, Field
 
 from esteira.graphics import plan, render
-from esteira.thumbs import dados_thumb
+from esteira.thumbs import data_thumb
 
-MODELOS = ("caixas", "frase", "numero", "lista", "comparacao", "capitulo", "fonte", "citacao")
-NOVO = {"modelo": "caixas", "dur": 4.0, "dados": {"veu": "baixo"}, "efeito": {},
-        "caixas": [dict(render.CAIXA, texto="Novo *texto*")]}
-CAMPOS_THUMB = ("texto", "destaque", "layout", "seta", "selo", "tamanho", "cor_d", "alerta", "fundo", "caixas")
+MODELS = ("caixas", "frase", "numero", "lista", "comparacao", "capitulo", "fonte", "citacao")
+NEW = {"modelo": "caixas", "dur": 4.0, "dados": {"veu": "baixo"}, "efeito": {},
+        "caixas": [dict(render.BOX, texto="Novo *texto*")]}
+FIELDS_THUMB = ("texto", "destaque", "layout", "seta", "selo", "tamanho", "cor_d", "alerta", "fundo", "caixas")
 
 
-def _trocas(projeto, ep):
-    return {render.RAIZ.as_uri(): "/graf", projeto.pasta.resolve().as_uri(): f"/arq/{ep}"}
+def _swaps(projeto, ep):
+    return {render.ROOT.as_uri(): "/graf", projeto.pasta.resolve().as_uri(): f"/arq/{ep}"}
 
 
 def _dim(projeto):
@@ -38,55 +38,55 @@ def _dim_thumb(projeto):
 
 # ---------- Gráficos ----------
 
-def graficos(projeto):
+def graphics(projeto):
     return projeto.carregar_json("graficos.json") if projeto.caminho("graficos.json").exists() else []
 
 
-def estado_grafico(projeto, i, inicio=0.0):
+def state_graphic(projeto, i, inicio=0.0):
     """Item `i` do graficos.json; i < 0 → peça nova de caixas em `inicio`."""
     if i < 0:
-        return dict(json.loads(json.dumps(NOVO)), inicio=round(inicio, 2))
-    g = graficos(projeto)[i]
+        return dict(json.loads(json.dumps(NEW)), inicio=round(inicio, 2))
+    g = graphics(projeto)[i]
     return {k: g.get(k) for k in ("modelo", "inicio", "dur", "dados", "efeito", "caixas", "origem")} | {
         "efeito": g.get("efeito") or {}, "caixas": g.get("caixas") or []}
 
 
-def _limpo(e):
-    if e.get("modelo") not in MODELOS:
+def _clean(e):
+    if e.get("modelo") not in MODELS:
         raise ValueError("modelo desconhecido")
     return {"modelo": e["modelo"], "inicio": round(float(e["inicio"]), 2), "dur": round(max(1.0, float(e["dur"])), 2),
             "dados": dict(e.get("dados") or {}), "efeito": dict(e.get("efeito") or {}),
             "caixas": [dict(c) for c in e.get("caixas") or []]}
 
 
-def previa_grafico(projeto, ep, estado):
-    e = _limpo(estado)
+def preview_graphic(projeto, ep, estado):
+    e = _clean(estado)
     w, h = _dim(projeto)
     pasta = projeto.caminho("graficos")
     pasta.mkdir(exist_ok=True)
-    pc = plan.peca(e, pasta, w, h, pasta / "pag_editor.png")
+    pc = plan.piece(e, pasta, w, h, pasta / "pag_editor.png")
     if not pc:
         raise ValueError("o trecho da citação não foi achado no PDF")
-    return render.previa(*pc, e["dur"], w, h, projeto.cfg.get("graficos", {}).get("cor", "#ffd400"),
-                         _trocas(projeto, ep))
+    return render.preview(*pc, e["dur"], w, h, projeto.cfg.get("graficos", {}).get("cor", "#ffd400"),
+                         _swaps(projeto, ep))
 
 
-def html_grafico(projeto, estado):
+def html_graphic(projeto, estado):
     """(HTML com caminhos file://, w, h) da peça: o que o app pede como quadro PNG (`web/frames.py`)."""
-    e = _limpo(estado)
+    e = _clean(estado)
     w, h = _dim(projeto)
     pasta = projeto.caminho("graficos")
     pasta.mkdir(exist_ok=True)
-    pc = plan.peca(e, pasta, w, h, pasta / "pag_editor.png")
+    pc = plan.piece(e, pasta, w, h, pasta / "pag_editor.png")
     if not pc:
         raise ValueError("o trecho da citação não foi achado no PDF")
     return render.html(*pc, e["dur"], w, h, projeto.cfg.get("graficos", {}).get("cor", "#ffd400")), w, h
 
 
-def salvar_grafico(projeto, i, estado):
+def save_graphic(projeto, i, estado):
     """Grava no graficos.json como `manual` (i < 0 acrescenta). Devolve o índice na lista ordenada."""
-    e = _limpo(estado)
-    lista = graficos(projeto)
+    e = _clean(estado)
+    lista = graphics(projeto)
     if i < 0:
         item = dict(e, origem="editor")
         lista.append(item)
@@ -102,20 +102,20 @@ def salvar_grafico(projeto, i, estado):
     return lista.index(item)
 
 
-def excluir_grafico(projeto, i):
-    lista = graficos(projeto)
+def delete_graphic(projeto, i):
+    lista = graphics(projeto)
     lista.pop(i)
     projeto.salvar_json("graficos.json", lista)
 
 
 # ---------- Thumbnails ----------
 
-def _edicoes(projeto):
+def _edits(projeto):
     arq = projeto.caminho("thumbs/edicoes.json")
     return json.loads(arq.read_text()) if arq.exists() else {}
 
 
-def fundos(projeto):
+def backgrounds(projeto):
     pasta = projeto.caminho("thumbs")
     return sorted(p.name for p in pasta.iterdir() if p.name.startswith(("fundo_", "upload_"))
                   and p.suffix in (".png", ".jpg", ".jpeg", ".webp")) if pasta.exists() else []
@@ -130,13 +130,13 @@ def thumbs(projeto):
         fundo = r.get("fundo") or f"fundo_{hashlib.sha1(c['cena_en'].encode()).hexdigest()[:8]}.png"
         saida.append({"arquivo": r["arquivo"], "nota": r.get("nota"), "origem": "etapa",
                       "estado": {k: c.get(k) for k in ("texto", "destaque", "layout", "seta")} | {"fundo": fundo}})
-    for arq, e in _edicoes(projeto).items():
+    for arq, e in _edits(projeto).items():
         saida.append({"arquivo": arq, "nota": None, "origem": "editor", "estado": e})
     return [t for t in saida if projeto.caminho(f"thumbs/{t['arquivo']}").exists()]
 
 
-def _limpo_thumb(projeto, e):
-    e = {k: e[k] for k in CAMPOS_THUMB if k in e}
+def _clean_thumb(projeto, e):
+    e = {k: e[k] for k in FIELDS_THUMB if k in e}
     if e.get("layout") not in ("rosto_direita", "rosto_esquerda", "numero"):
         e["layout"] = "rosto_direita"
     if "/" in e.get("fundo", "/") or not projeto.caminho(f"thumbs/{e['fundo']}").exists():
@@ -144,34 +144,34 @@ def _limpo_thumb(projeto, e):
     return e
 
 
-def previa_thumb(projeto, ep, estado):
-    e = _limpo_thumb(projeto, estado)
+def preview_thumb(projeto, ep, estado):
+    e = _clean_thumb(projeto, estado)
     w, h = _dim_thumb(projeto)
-    dados = dados_thumb(e, projeto.caminho(f"thumbs/{e['fundo']}").resolve().as_uri(), projeto.cfg)
-    return render.previa("thumb", dados, 1, w, h, "#ffd400", _trocas(projeto, ep), estatico=True)
+    dados = data_thumb(e, projeto.caminho(f"thumbs/{e['fundo']}").resolve().as_uri(), projeto.cfg)
+    return render.preview("thumb", dados, 1, w, h, "#ffd400", _swaps(projeto, ep), estatico=True)
 
 
 def html_thumb(projeto, estado):
     """(HTML com caminhos file://, w, h) da thumb, como `html_grafico`."""
-    e = _limpo_thumb(projeto, estado)
+    e = _clean_thumb(projeto, estado)
     w, h = _dim_thumb(projeto)
-    dados = dados_thumb(e, projeto.caminho(f"thumbs/{e['fundo']}").resolve().as_uri(), projeto.cfg)
+    dados = data_thumb(e, projeto.caminho(f"thumbs/{e['fundo']}").resolve().as_uri(), projeto.cfg)
     return render.html("thumb", dados, 1, w, h, "#ffd400", estatico=True), w, h
 
 
-def salvar_thumb(projeto, estado):
-    e = _limpo_thumb(projeto, estado)
+def save_thumb(projeto, estado):
+    e = _clean_thumb(projeto, estado)
     nome = f"manual_{hashlib.sha1(json.dumps(e, sort_keys=True).encode()).hexdigest()[:8]}.png"
     w, h = _dim_thumb(projeto)
-    from esteira.thumbs import compor_arquivo
-    compor_arquivo(e, projeto.caminho(f"thumbs/{e['fundo']}"), projeto.caminho(f"thumbs/{nome}"), projeto.cfg)
-    ed = _edicoes(projeto)
+    from esteira.thumbs import compose_file
+    compose_file(e, projeto.caminho(f"thumbs/{e['fundo']}"), projeto.caminho(f"thumbs/{nome}"), projeto.cfg)
+    ed = _edits(projeto)
     ed[nome] = e
     projeto.salvar_json("thumbs/edicoes.json", ed)
     return nome
 
 
-def usar_thumb(projeto, arquivo, k):
+def use_thumb(projeto, arquivo, k):
     """Põe a thumb na vaga k (1..3) do teste A/B; a 1 também vira thumb.png."""
     origem = projeto.caminho(f"thumbs/{arquivo}")
     if "/" in arquivo or not origem.exists() or k not in (1, 2, 3):
@@ -181,14 +181,14 @@ def usar_thumb(projeto, arquivo, k):
         shutil.copy2(origem, projeto.caminho("thumb.png"))
     try:  # escolha da pessoa → veredito no dataset (candidata gerada pela etapa thumbs)
         from esteira.dataset import registry as R
-        rg = R.ultimo(f"thumb:{projeto.ep}", "thumb_compor", arquivo=arquivo)
+        rg = R.last(f"thumb:{projeto.ep}", "thumb_compor", arquivo=arquivo)
         if rg:
-            R.avaliar(rg["id"], "escolhida", comentario=f"vaga {k}")
+            R.evaluate(rg["id"], "escolhida", comentario=f"vaga {k}")
     except Exception:  # noqa: BLE001
         pass
 
 
-def guardar_fundo(projeto, conteudo, sufixo):
+def store_background(projeto, conteudo, sufixo):
     nome = f"upload_{hashlib.sha1(conteudo).hexdigest()[:8]}{sufixo}"
     projeto.caminho("thumbs").mkdir(exist_ok=True)
     projeto.caminho(f"thumbs/{nome}").write_bytes(conteudo)
@@ -197,7 +197,7 @@ def guardar_fundo(projeto, conteudo, sufixo):
 
 # ---------- Assistente de IA ----------
 
-class CaixaIA(BaseModel):
+class BoxAi(BaseModel):
     texto: str = Field(max_length=220)
     x: float = Field(ge=0, le=100)
     y: float = Field(ge=0, le=100)
@@ -213,18 +213,18 @@ class CaixaIA(BaseModel):
     atraso: float = Field(0.2, ge=0, le=20)
 
 
-class Sugestao(BaseModel):
+class Suggestion(BaseModel):
     dados_json: str = Field(description="objeto JSON com as mesmas chaves de estado.dados, valores novos")
     entrada: str = Field("padrao", pattern="^(padrao|nenhuma|fade|subir|zoom|deslizar|desfoque|revelar)$")
     saida: str = Field("padrao", pattern="^(padrao|nenhuma|fade|zoom|deslizar|descer)$")
-    caixas: list[CaixaIA] = Field([], max_length=8)
+    caixas: list[BoxAi] = Field([], max_length=8)
     explicacao: str = Field("", max_length=240)
 
 
-FIXOS = {"arquivo", "trecho", "pagina", "fundo"}  # a IA não troca PDF/trecho conferido nem o fundo da thumb
+FIXED = {"arquivo", "trecho", "pagina", "fundo"}  # a IA não troca PDF/trecho conferido nem o fundo da thumb
 
 
-def _contexto(projeto, inicio, dur):
+def _context(projeto, inicio, dur):
     falas = []
     if inicio is not None and projeto.caminho("frases.json").exists():
         falas = [f["texto"] for f in projeto.carregar_json("frases.json")
@@ -234,26 +234,26 @@ def _contexto(projeto, inicio, dur):
     return rot.get("titulo", ""), " ".join(falas), fontes
 
 
-def _numeros(texto):
+def _numbers(texto):
     return set(re.findall(r"\d+(?:[.,]\d+)?", texto))
 
 
-def sugerir(projeto, ep, estado, pedido, motor="claude", tipo="grafico"):
+def suggest(projeto, ep, estado, pedido, motor="claude", tipo="grafico"):
     """Devolve (estado_novo, explicacao, avisos) ou levanta ValueError."""
     from esteira.ai import claude, local
     thumb = tipo == "thumb"
     if thumb:
-        e = _limpo_thumb(projeto, estado)
+        e = _clean_thumb(projeto, estado)
         w, h = _dim_thumb(projeto)
         dados = {k: v for k, v in e.items() if k not in ("caixas", "fundo")}
-        titulo, falas, fontes = _contexto(projeto, None, 0)
+        titulo, falas, fontes = _context(projeto, None, 0)
         alvo = f"a thumbnail ({w}x{h}) do YouTube; texto gigante, poucas palavras, layout rosto_direita|rosto_esquerda|numero"
         caixas, efeito = e.get("caixas") or [], {}
     else:
-        e = _limpo(estado)
+        e = _clean(estado)
         w, h = _dim(projeto)
-        dados = {k: v for k, v in e["dados"].items() if k not in FIXOS}
-        titulo, falas, fontes = _contexto(projeto, e["inicio"], e["dur"])
+        dados = {k: v for k, v in e["dados"].items() if k not in FIXED}
+        titulo, falas, fontes = _context(projeto, e["inicio"], e["dur"])
         alvo = f"um gráfico animado ({w}x{h}, modelo {e['modelo']}, {e['dur']}s, sobreposto ao vídeo)"
         caixas, efeito = e["caixas"], e["efeito"]
     dossie = "\n".join([
@@ -270,9 +270,9 @@ def sugerir(projeto, ep, estado, pedido, motor="claude", tipo="grafico"):
     trace.node(f"editor:{ep}", "editor", pedido[:120])
     try:
         if motor == "local":
-            r = local.ask(dossie, Sugestao, temperature=0.4, max_tokens=2500, operation="editor")
+            r = local.ask(dossie, Suggestion, temperature=0.4, max_tokens=2500, operation="editor")
         else:
-            r = claude.query(dossie, Sugestao, projeto.cfg, ep, f"editor: {pedido[:40]}")
+            r = claude.query(dossie, Suggestion, projeto.cfg, ep, f"editor: {pedido[:40]}")
     finally:
         trace.node(None, None)
     if not r:
@@ -284,10 +284,10 @@ def sugerir(projeto, ep, estado, pedido, motor="claude", tipo="grafico"):
     if not isinstance(novos, dict):
         novos = {}
     novos = {k: v for k, v in novos.items() if k in dados}
-    caixas_n = [dict(render.CAIXA, **c.model_dump()) for c in r.caixas]
-    base = _numeros(" ".join([falas, *fontes, json.dumps(dados, ensure_ascii=False), json.dumps(caixas, ensure_ascii=False)]))
+    caixas_n = [dict(render.BOX, **c.model_dump()) for c in r.caixas]
+    base = _numbers(" ".join([falas, *fontes, json.dumps(dados, ensure_ascii=False), json.dumps(caixas, ensure_ascii=False)]))
     saida_txt = json.dumps(novos, ensure_ascii=False) + " ".join(c["texto"] for c in caixas_n)
-    avisos = [f"o número {n} não aparece na fala nem nas fontes: confira" for n in sorted(_numeros(saida_txt) - base)]
+    avisos = [f"o número {n} não aparece na fala nem nas fontes: confira" for n in sorted(_numbers(saida_txt) - base)]
     if thumb:
         novo = dict(e, **novos, caixas=caixas_n)
     else:

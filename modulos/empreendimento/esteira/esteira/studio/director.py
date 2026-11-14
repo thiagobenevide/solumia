@@ -13,7 +13,7 @@ import re
 
 from pydantic import BaseModel
 
-from esteira.bench import CENAS, NUMERICAS, Cena, normalizar, numeros
+from esteira.bench import SCENES, NUMERIC, Scene, normalize, numbers
 from esteira.core import events
 from esteira.ai import local
 
@@ -23,32 +23,32 @@ TAKEOVER = {"contador", "barras_comparacao", "versus", "linha_do_tempo", "pergun
 CLAUDE_MAX = 0.2  # fração das frases que pode ir ao Claude
 
 
-def problemas(frase, r: Cena, permitidas):
+def problems(frase, r: Scene, permitidas):
     erros = []
     if r.cena not in permitidas:
         erros.append(f"a cena '{r.cena}' não está no cardápio deste estilo")
-    if r.cena != "midia" and not (r.ancora.strip() and normalizar(r.ancora) in normalizar(frase)):
+    if r.cena != "midia" and not (r.ancora.strip() and normalize(r.ancora) in normalize(frase)):
         erros.append(f"a âncora '{r.ancora}' não está escrita na frase; copie palavras exatas dela")
-    inventados = set().union(*[numeros(v.valor) for v in r.valores], numeros(r.titulo)) - numeros(frase)
+    inventados = set().union(*[numbers(v.valor) for v in r.valores], numbers(r.titulo)) - numbers(frase)
     if inventados:
         erros.append(f"números que não foram ditos: {', '.join(sorted(inventados))}")
-    if r.cena in NUMERICAS and numeros(frase) and not r.valores:
+    if r.cena in NUMERIC and numbers(frase) and not r.valores:
         erros.append("cena numérica sem os valores ditos na frase")
     return erros
 
 
-def regra(frase, permitidas):
+def rule(frase, permitidas):
     """Plano B sem LLM: número → contador, pergunta → pergunta, resto → mídia."""
     ns = re.findall(r"(?:R\$\s*)?\d[\d.,]*\s*%?", frase)
     if ns and "contador" in permitidas:
-        return Cena(cena="contador", ancora=ns[0].strip(), titulo=" ".join(frase.split()[:5])[:60],
+        return Scene(cena="contador", ancora=ns[0].strip(), titulo=" ".join(frase.split()[:5])[:60],
                     valores=[{"rotulo": "", "valor": ns[0].strip()[:20]}])
     if frase.strip().endswith("?") and "pergunta_destaque" in permitidas:
-        return Cena(cena="pergunta_destaque", ancora=frase.split()[0], titulo=frase[:60], valores=[])
-    return Cena(cena="midia", ancora="", titulo="", valores=[])
+        return Scene(cena="pergunta_destaque", ancora=frase.split()[0], titulo=frase[:60], valores=[])
+    return Scene(cena="midia", ancora="", titulo="", valores=[])
 
 
-def _exemplos(estilo):
+def _examples(estilo):
     """Exemplos aprovados + os exemplos dos gatilhos do estilo (o guia que a IA local segue nas frases sem gatilho)."""
     linhas = [f'- "{e.frase}" → {e.cena}' + (f' ("{e.titulo}")' if e.titulo else "") for e in estilo.exemplos]
     linhas += [f'- "{x}" → {g.peca} (gatilho {g.nome})' for g in getattr(estilo, "gatilhos", []) if g.ativo and g.peca
@@ -56,22 +56,22 @@ def _exemplos(estilo):
     return "\n".join(linhas) or "(nenhum)"
 
 
-def _marcada(frase, cena, r):
+def _marked(frase, cena, r):
     """Cena fixada no apontamento: usa o que a IA preencheu se veio na cena certa; senão o mínimo pela frase."""
     if r and r.cena == cena:
         return r
     palavras = frase.split()
-    return Cena(cena=cena, ancora=" ".join(palavras[:2])[:60], titulo=" ".join(palavras[:8])[:60], valores=[])
+    return Scene(cena=cena, ancora=" ".join(palavras[:2])[:60], titulo=" ".join(palavras[:8])[:60], valores=[])
 
 
-def escolher(frases, estilo, marcas=None, gat=None):
+def choose(frases, estilo, marcas=None, gat=None):
     """[(i, Cena, por)] para cada frase com tempo suficiente. `marcas`: {i: cena} do apontamento; `gat`: {i: detecção}
     dos gatilhos (`gatilhos.aplicar`) — a peça do gatilho vale como marca, com `por: "gatilho"`."""
-    from esteira.studio.marking import NENHUMA
+    from esteira.studio.marking import NONE
     marcas = marcas or {}
     gat = gat or {}
     permitidas = estilo.regras.cardapio()
-    catalogo = "\n".join(f"- {k}: {CENAS[k]}" for k in permitidas)
+    catalogo = "\n".join(f"- {k}: {SCENES[k]}" for k in permitidas)
     escolhas, falhas = [], []
     for i, f in enumerate(frases):
         events.progress(i + 1, len(frases), f["texto"][:40])
@@ -80,32 +80,32 @@ def escolher(frases, estilo, marcas=None, gat=None):
         g = gat[i]["gatilho"] if i in gat else None
         # sem peça: no apresentador fica na câmera/B-roll; no dark a IA escolhe como antes
         if not cena and g and (g.peca or estilo.modo == "apresentador"):
-            if not g.peca or g.peca not in CENAS or g.peca == "midia":
-                escolhas.append((i, Cena(cena="midia", ancora="", titulo="", valores=[]), "gatilho"))
+            if not g.peca or g.peca not in SCENES or g.peca == "midia":
+                escolhas.append((i, Scene(cena="midia", ancora="", titulo="", valores=[]), "gatilho"))
                 continue
             cena, por_fixo = g.peca, "gatilho"
-        if cena == NENHUMA:
-            escolhas.append((i, Cena(cena="midia", ancora="", titulo="", valores=[]), "voce"))
+        if cena == NONE:
+            escolhas.append((i, Scene(cena="midia", ancora="", titulo="", valores=[]), "voce"))
             continue
         antes = frases[i - 1]["texto"] if i else ""
         base = local.prompt("estudio_cena", frase=f["texto"], antes=antes, catalogo=catalogo, guia=estilo.guia,
-                            exemplos=_exemplos(estilo))
+                            exemplos=_examples(estilo))
         if cena:
-            base = local.Prompt(f"{base}\n\nA cena deste trecho já foi escolhida pela pessoa: {cena} ({CENAS[cena]}). "
+            base = local.Prompt(f"{base}\n\nA cena deste trecho já foi escolhida pela pessoa: {cena} ({SCENES[cena]}). "
                                 "Responda com essa cena e preencha só a âncora, o título e os valores ditos.")
             base.nome = "estudio_cena"
             perm = permitidas + [cena]
-            r = local.ask(base, Cena, max_tokens=400, operation="studio_scene")
-            ok = r and not problemas(f["texto"], r, perm)
-            escolhas.append((i, _marcada(f["texto"], cena, r if ok else None), por_fixo))
+            r = local.ask(base, Scene, max_tokens=400, operation="studio_scene")
+            ok = r and not problems(f["texto"], r, perm)
+            escolhas.append((i, _marked(f["texto"], cena, r if ok else None), por_fixo))
             continue
-        r = local.ask(base, Cena, max_tokens=400, operation="studio_scene")
-        erros = problemas(f["texto"], r, permitidas) if r else ["sem resposta"]
+        r = local.ask(base, Scene, max_tokens=400, operation="studio_scene")
+        erros = problems(f["texto"], r, permitidas) if r else ["sem resposta"]
         if erros and r:
             texto = local.Prompt(f"{base}\n\nSua resposta anterior foi recusada: {'; '.join(erros)}. Corrija.")
             texto.nome = "estudio_cena"
-            r = local.ask(texto, Cena, max_tokens=400, operation="studio_scene")
-            erros = problemas(f["texto"], r, permitidas) if r else ["sem resposta"]
+            r = local.ask(texto, Scene, max_tokens=400, operation="studio_scene")
+            erros = problems(f["texto"], r, permitidas) if r else ["sem resposta"]
         if erros:
             falhas.append(i)
             escolhas.append((i, None, None))
@@ -113,17 +113,17 @@ def escolher(frases, estilo, marcas=None, gat=None):
             escolhas.append((i, r, "local"))
     if falhas:
         from esteira.core import options
-        resolvidas = _escalar(frases, falhas, permitidas, catalogo, estilo) if options.read()["claude_fallback"] else {}
-        escolhas = [(i, *(resolvidas.get(i) or (regra(frases[i]["texto"], permitidas), "regra")))
+        resolvidas = _escalate(frases, falhas, permitidas, catalogo, estilo) if options.read()["claude_fallback"] else {}
+        escolhas = [(i, *(resolvidas.get(i) or (rule(frases[i]["texto"], permitidas), "regra")))
                     if r is None else (i, r, por) for i, r, por in escolhas]
     return escolhas
 
 
-class _Lote(BaseModel):
-    cenas: list[Cena]
+class _Batch(BaseModel):
+    cenas: list[Scene]
 
 
-def _escalar(frases, falhas, permitidas, catalogo, estilo):
+def _escalate(frases, falhas, permitidas, catalogo, estilo):
     """Uma chamada ao Claude com as frases que a IA local errou duas vezes (até CLAUDE_MAX do total)."""
     teto = max(1, int(len(frases) * CLAUDE_MAX))
     if not falhas or len(falhas) > teto * 3:
@@ -133,19 +133,19 @@ def _escalar(frases, falhas, permitidas, catalogo, estilo):
     dossie = (f"Guia do canal: {estilo.guia}\nCenas permitidas:\n{catalogo}\n\nPara cada frase, escolha a cena, a âncora "
               "(palavras exatas da frase), um título curto e só números ditos. Responda na mesma ordem.\n"
               + "\n".join(f"{n + 1}. {frases[i]['texto']}" for n, i in enumerate(alvo)))
-    r = claude.query(dossie, _Lote, {"claude": {}}, "estudio", "estudio_cena")
+    r = claude.query(dossie, _Batch, {"claude": {}}, "estudio", "estudio_cena")
     if not r or len(r.cenas) != len(alvo):
         return {}
     return {i: (c, "claude") for i, c in zip(alvo, r.cenas, strict=True)
-            if not problemas(frases[i]["texto"], c, permitidas)}
+            if not problems(frases[i]["texto"], c, permitidas)}
 
 
-def _inicio(frase, ancora, palavras):
+def _start(frase, ancora, palavras):
     """Instante da 1ª palavra da âncora dentro da frase (cai no início da frase se não achar)."""
     dentro = [p for p in palavras if frase["ini"] - 0.05 <= p["ini"] < frase["fim"]]
-    alvo = normalizar(ancora).split()
+    alvo = normalize(ancora).split()
     if alvo:
-        norm = [normalizar(p["p"]) for p in dentro]
+        norm = [normalize(p["p"]) for p in dentro]
         for k in range(len(norm)):
             # 1ª e 2ª palavra batem (o Whisper às vezes parte números, então não exige a âncora inteira)
             if norm[k] == alvo[0] and norm[k + 1:k + 2] == alvo[1:2]:
@@ -153,7 +153,7 @@ def _inicio(frase, ancora, palavras):
     return frase["ini"]
 
 
-def cronometrar(frases, escolhas, palavras, estilo, duracao, gat=None):
+def time(frases, escolhas, palavras, estilo, duracao, gat=None):
     """Tempos de cada cena + orçamento de takeover + variedade; devolve a lista do mapa. `gat`: detecções dos
     gatilhos — gravam `gatilho`, `cor` e `layout_pedido` (B-roll pedido fica como cena de mídia)."""
     from esteira.studio.triggers import LAYOUTS
@@ -166,9 +166,9 @@ def cronometrar(frases, escolhas, palavras, estilo, duracao, gat=None):
         lay = LAYOUTS.get(d["gatilho"].layout) if d else None
         if r is None or (r.cena == "midia" and not r.titulo and lay != "broll"):
             continue
-        if f["fim"] - f["ini"] < rg.dur_min * 0.6 and not numeros(f["texto"]) and por != "voce":
+        if f["fim"] - f["ini"] < rg.dur_min * 0.6 and not numbers(f["texto"]) and por != "voce":
             continue  # frase curta demais: a cena anterior segue
-        t = max(0.0, _inicio(f, r.ancora, palavras) - 0.08)
+        t = max(0.0, _start(f, r.ancora, palavras) - 0.08)
         cenas.append({"frase_i": i, "frase": f["texto"], "cena": r.cena, "t": round(t, 3),
                       "ate": round(f["fim"] + 0.4, 3), "titulo": r.titulo, "ancora": r.ancora,
                       "valores": [v.model_dump() for v in r.valores], "por": por})
@@ -211,7 +211,7 @@ def cronometrar(frases, escolhas, palavras, estilo, duracao, gat=None):
     return cenas
 
 
-def trechos(frases, palavras, max_s):
+def spans(frases, palavras, max_s):
     """Frases longas viram trechos nas pausas de pontuação (vírgula, ponto e vírgula, dois-pontos), cada um com o
     seu tempo pelas palavras faladas; pedaço com menos de 4 palavras cola no vizinho."""
     saida = []
@@ -238,53 +238,53 @@ def trechos(frases, palavras, max_s):
     return saida
 
 
-def _midia_tempos(projeto):
+def _media_times(projeto):
     """[{ini}] das trocas de mídia do plano no tempo do corte (para a conferência de ritmo)."""
     arq = projeto.pasta / "plano.json"
     if not arq.exists():
         return []
     from esteira.studio import cut
-    novo = cut.novo(projeto)
+    novo = cut.new(projeto)
     return [{"ini": novo(c["inicio"])} for c in json.loads(arq.read_text())["cenas"] if c.get("midia")]
 
 
-def ritmar(cenas, frases, estilo, perfil, midia, duracao):
+def pace(cenas, frases, estilo, perfil, midia, duracao):
     """Perfil de ritmo no mapa: sem capítulos (curto), anti-repetição, gancho e conferência. → (cenas, avisos)."""
     from esteira.studio import rhythm
     cardapio = set(estilo.regras.cardapio())
-    trocas = {k: v for k, v in rhythm.TROCAS.items() if v in cardapio}
-    cenas = rhythm.sem_capitulos(cenas, perfil)
-    cenas = rhythm.anti_repeticao(cenas, perfil, trocas)
+    trocas = {k: v for k, v in rhythm.SWAPS.items() if v in cardapio}
+    cenas = rhythm.without_chapters(cenas, perfil)
+    cenas = rhythm.anti_repetition(cenas, perfil, trocas)
     cenas = [c for c in cenas if c["cena"] != "midia" or c.get("layout_pedido") == "broll"]
-    cenas = rhythm.gancho(cenas, perfil, frases)
+    cenas = rhythm.hook(cenas, perfil, frases)
     for n, c in enumerate(cenas):
         c["id"] = n
         c["takeover"] = c["cena"] in TAKEOVER
-    return cenas, rhythm.conferir(cenas, midia, duracao, perfil)
+    return cenas, rhythm.cross_check(cenas, midia, duracao, perfil)
 
 
-def dirigir(projeto, estilo, perfil=None):
+def direct(projeto, estilo, perfil=None):
     """Escreve `<ep>/estudio/mapa.json`; devolve o mapa. `perfil`: ritmo do vídeo (padrão: o do roteiro/formato)."""
     from esteira.studio import rhythm
-    perfil = perfil or rhythm.perfil_do(projeto)
+    perfil = perfil or rhythm.profile_of(projeto)
     pasta = projeto.pasta / "estudio"
     pasta.mkdir(exist_ok=True)
     from esteira.studio import cut
-    frases, palavras = cut.frases(projeto), cut.palavras(projeto)
+    frases, palavras = cut.sentences(projeto), cut.words(projeto)
     duracao = frases[-1]["fim"] + 1.0 if frases else 0
-    frases = trechos(frases, palavras, estilo.regras.trecho_max_s)
+    frases = spans(frases, palavras, estilo.regras.trecho_max_s)
     arq = pasta / "mapa.json"
     manuais = [c for c in json.loads(arq.read_text())["cenas"] if c.get("manual")] if arq.exists() else []
     from esteira.studio import marking, triggers
     gat = triggers.aplicar(frases, estilo.gatilhos)
-    escolhas = escolher(frases, estilo, marking.marcas(projeto, frases), gat)
-    cenas = cronometrar(frases, escolhas, palavras, estilo, duracao, gat)
+    escolhas = choose(frases, estilo, marking.marks(projeto, frases), gat)
+    cenas = time(frases, escolhas, palavras, estilo, duracao, gat)
     if manuais:  # o que foi ajustado à mão fica; a cena automática da mesma frase sai
         fixas = {c["frase_i"] for c in manuais}
         cenas = sorted([c for c in cenas if c["frase_i"] not in fixas] + manuais, key=lambda c: c["t"])
         for n, c in enumerate(cenas):
             c["id"] = n
-    cenas, avisos = ritmar(cenas, frases, estilo, perfil, _midia_tempos(projeto), duracao)
+    cenas, avisos = pace(cenas, frases, estilo, perfil, _media_times(projeto), duracao)
     por = {k: sum(1 for _, r, p in escolhas if p == k) for k in ("voce", "gatilho", "local", "claude", "regra")}
     por["ritmo"] = sum(1 for c in cenas if c.get("por") == "ritmo" or c.get("repeticao"))
     mapa = {"estilo": estilo.id, "versao": estilo.versao, "duracao": duracao, "decisoes": por, "cenas": cenas,

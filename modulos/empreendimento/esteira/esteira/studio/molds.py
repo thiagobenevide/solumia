@@ -10,17 +10,17 @@ import re
 
 from esteira.studio import piece as P
 
-ARQ = P.PASTA / "_ec" / "moldes.json"
+FILE = P.FOLDER / "_ec" / "moldes.json"
 # peças do kit têm o contrato universal titulo + valores (o dado vai escondido nos pares): por ele o molde certo não
 # liga (contador, anel e riscado caíam em `barras`). O mapa dá a cada uma os encaixes reais e o molde dela.
-KIT = P.PASTA / "_ec" / "kit_porte.json"
-LISTAS = ("itens", "pares")
-TEXTUAIS = ("texto", "numero", "tematico", "icone")
-VELOCIDADE = {"lenta", "normal", "rapida"}
+KIT = P.FOLDER / "_ec" / "kit_porte.json"
+LISTS = ("itens", "pares")
+TEXTUAL = ("texto", "numero", "tematico", "icone")
+SPEED = {"lenta", "normal", "rapida"}
 
 # o que o N1 por caixas não desenha: a LLM improvisa (elipse no lugar de foto, linhas retas no lugar de onda) e o
 # Claude reprova sempre. Procurado no que a peça comunica, nos encaixes e no conceito da ideia.
-NAO_DESENHA = (
+NAO_DRAWS = (
     (r"\bfotos?\b|fotogr|\bimage[mn]s?\b|retrato|ilustra|recorte de jornal", "foto ou imagem"),
     (r"\bondas?\b|senoid|\bcurvas?\b|sinuos|gr[áa]fico de linha|linhas? que (sobe|desce)", "curva ou onda"),
     (r"perspectiva|horizonte|ponto de fuga|\bpiso\b|estrada|t[úu]nel|c[âa]mera (avan|atravess)", "perspectiva"),
@@ -31,8 +31,8 @@ NAO_DESENHA = (
 )
 
 
-def carregar() -> list[dict]:
-    return json.loads(ARQ.read_text())
+def load() -> list[dict]:
+    return json.loads(FILE.read_text())
 
 
 def kit(ficha: dict) -> dict | None:
@@ -42,13 +42,13 @@ def kit(ficha: dict) -> dict | None:
     return json.loads(KIT.read_text()).get(ficha.get("id")) if KIT.exists() else None
 
 
-def ficha_porte(ficha: dict) -> dict:
+def card_size(ficha: dict) -> dict:
     """Ficha de partida do porte: a do kit troca titulo + valores pelos encaixes do mapa; as outras ficam iguais."""
     k = kit(ficha)
     return {**ficha, "encaixes": copy.deepcopy(k["encaixes"])} if k else ficha
 
 
-def inviavel(ficha: dict, conceito: str = "") -> str:
+def unfeasible(ficha: dict, conceito: str = "") -> str:
     """Motivo de a peça não ir para a LLM local (o N1 não a desenha), ou "" se dá."""
     if ficha.get("origem") == "kit" and not kit(ficha):
         return "peça do kit sem molde próprio (o contrato titulo + valores não diz o que desenhar)"
@@ -62,30 +62,30 @@ def inviavel(ficha: dict, conceito: str = "") -> str:
     if set(ficha.get("intencoes") or []) <= {"fundo", "transicao"}:
         return "fundo ou transição decorativa (sem conteúdo para os moldes)"
     texto = " ".join([ficha.get("comunica", ""), conceito or "", *(e.get("descricao", "") for e in encs)]).lower()
-    for padrao, o_que in NAO_DESENHA:
+    for padrao, o_que in NAO_DRAWS:
         if m := re.search(padrao, texto):
             return f"pede {o_que} ('{m.group(0)}'), que o N1 não desenha"
-    if not escolher(ficha)[0]:
+    if not choose(ficha)[0]:
         return "nenhum molde serve aos encaixes da ficha"
-    return _rascunho_quebrado(ficha)
+    return _draft_broken(ficha)
 
 
-def _rascunho_quebrado(ficha: dict) -> str:
+def _draft_broken(ficha: dict) -> str:
     """O rascunho do molde já reprova no portão estrutural (ex.: encaixes que sobram espremidos no rodapé): a LLM
     partiria de algo quebrado e a última rodada (o próprio rascunho) também cairia."""
     from esteira.studio import ec as EC
     from esteira.n1 import effectcraft as N1
     try:
-        f = P.Ficha.model_validate({"id": "triagem", **ficha})
+        f = P.Card.model_validate({"id": "triagem", **ficha})
     except ValueError:
         return ""
-    mid, n1 = rascunho(ficha)
-    if erros := EC.checar_estrutura(N1.Peca.model_validate(n1), f):
+    mid, n1 = draft(ficha)
+    if erros := EC.check_structure(N1.Piece.model_validate(n1), f):
         return f"o molde {mid!r} não comporta a ficha ({erros[0][:120]})"
     return ""
 
 
-def _percentual(ficha: dict) -> bool:
+def _percent(ficha: dict) -> bool:
     for e in ficha.get("encaixes") or []:
         if e.get("tipo") in ("numero", "pares") and "%" in json.dumps(e.get("exemplo", ""), ensure_ascii=False):
             return True
@@ -94,12 +94,12 @@ def _percentual(ficha: dict) -> bool:
     return False
 
 
-def _dica(slot: dict, enc: dict) -> bool:
+def _hint(slot: dict, enc: dict) -> bool:
     nome = enc["nome"].lower()
     return any(d == nome or d in nome.split("_") or (len(d) > 3 and d in nome) for d in slot.get("dicas", []))
 
 
-def _ligar(molde: dict, encaixes: list[dict]) -> dict | None:
+def _enable(molde: dict, encaixes: list[dict]) -> dict | None:
     """lugar do molde → encaixe da ficha (tipo + dica do nome). None se falta encaixe para um lugar obrigatório.
     Ordem: obrigatórios; opcionais cuja dica bate; opcionais que sobram, pelo tipo."""
     livres, mapa = list(encaixes), {}
@@ -112,36 +112,36 @@ def _ligar(molde: dict, encaixes: list[dict]) -> dict | None:
                 continue
             cands = [e for e in livres if e.get("tipo") in s["tipos"]]
             if passo == "dica":
-                cands = [e for e in cands if _dica(s, e)]
+                cands = [e for e in cands if _hint(s, e)]
             if not cands:
                 if passo == "obrig":
                     return None
                 continue
-            e = max(cands, key=lambda e: (_dica(s, e) * 10 + e.get("obrigatorio", True) * 2
+            e = max(cands, key=lambda e: (_hint(s, e) * 10 + e.get("obrigatorio", True) * 2
                                           + (e.get("max_car", 40) / 100 if s["nome"] == "frase" else 0)))
             mapa[s["nome"]] = e
             livres.remove(e)
     return mapa
 
 
-def escolher(ficha: dict) -> tuple[dict | None, dict | None]:
+def choose(ficha: dict) -> tuple[dict | None, dict | None]:
     """O molde que mais serve à ficha (intenções, encaixes ligados, nada de lista sobrando) e a ligação."""
     encs = [e for e in ficha.get("encaixes") or [] if e.get("tipo") not in ("imagem", "pagina")]
     inten = ficha.get("intencoes") or []
     melhor = (None, None, None)
     forcado = (kit(ficha) or {}).get("molde")
-    for k, m in enumerate(carregar()):
+    for k, m in enumerate(load()):
         if forcado and m["id"] != forcado:
             continue
-        if m.get("condicao") == "percentual" and not _percentual(ficha):
+        if m.get("condicao") == "percentual" and not _percent(ficha):
             continue
-        mapa = _ligar(m, encs)
+        mapa = _enable(m, encs)
         if mapa is None:
             continue
         sobra = [e for e in encs if all(e is not x for x in mapa.values())]
         nota = (3 * len(set(m["intencoes"]) & set(inten)) + 2 * bool(inten and inten[0] in m["intencoes"])
                 + len(mapa) - 2 * len(sobra)
-                - sum((6 if e.get("obrigatorio", True) else 1) for e in sobra if e.get("tipo") in LISTAS)
+                - sum((6 if e.get("obrigatorio", True) else 1) for e in sobra if e.get("tipo") in LISTS)
                 + m.get("bonus", 0), -k)
         if melhor[0] is None or nota > melhor[0]:
             melhor = (nota, m, mapa)
@@ -154,7 +154,7 @@ def _refs(el: dict) -> set[str]:
     return refs | {v[1:] for k in ("encaixe", "ativos") if isinstance(v := el.get(k), str) and v.startswith("$")}
 
 
-def preencher(molde: dict, mapa: dict, ficha: dict) -> dict:
+def fill(molde: dict, mapa: dict, ficha: dict) -> dict:
     """Rascunho N1 da ficha: tira o que usa lugar sem encaixe, liga os nomes, põe os encaixes que sobraram em
     textos de apoio, `se` nos opcionais, `maximo` da ficha e o botão de velocidade."""
     doc = copy.deepcopy(molde["n1"])
@@ -190,11 +190,11 @@ def preencher(molde: dict, mapa: dict, ficha: dict) -> dict:
     doc["elementos"] = podar(doc["elementos"])
     doc["animacoes"] = [a for a in doc.get("animacoes", []) if a["alvo"] not in fora]
     sobra = [e for e in ficha.get("encaixes") or []
-             if all(e is not x for x in mapa.values()) and e.get("tipo") in (*TEXTUAIS, *LISTAS)]
+             if all(e is not x for x in mapa.values()) and e.get("tipo") in (*TEXTUAL, *LISTS)]
     if sobra:
-        _apoio(doc, sobra)
+        _support(doc, sobra)
     for b in ficha.get("botoes") or []:
-        if len(VELOCIDADE & {str(v) for v in b.get("valores", [])}) >= 2:
+        if len(SPEED & {str(v) for v in b.get("valores", [])}) >= 2:
             doc["botao_velocidade"] = b["nome"]
             break
     txt = json.dumps(doc, ensure_ascii=False)
@@ -203,7 +203,7 @@ def preencher(molde: dict, mapa: dict, ficha: dict) -> dict:
     return json.loads(txt)
 
 
-def _apoio(doc: dict, sobra: list[dict]):
+def _support(doc: dict, sobra: list[dict]):
     """Encaixes que o molde não tem lugar: textos (ou lista em linha) na base; com esquerda/direita (que descem
     até a base), no topo."""
     caixas = {c["nome"]: c for c in doc["elementos"] if c["tipo"] == "caixa"}
@@ -219,7 +219,7 @@ def _apoio(doc: dict, sobra: list[dict]):
     alvo["disposicao"] = "coluna"
     for e in sobra:
         nome = f"Apoio_{e['nome']}"
-        if e["tipo"] in LISTAS:
+        if e["tipo"] in LISTS:
             campo = "{{item.rotulo}} {{item.valor}}" if e["tipo"] == "pares" else "{{item}}"
             el = {"tipo": "caixa", "nome": nome, "disposicao": "linha", "filhos": [
                 {"tipo": "repetir", "nome": f"{nome}_itens", "encaixe": e["nome"], "maximo": e.get("max_itens", 6),
@@ -234,7 +234,7 @@ def _apoio(doc: dict, sobra: list[dict]):
         alvo["filhos"].append(el)
 
 
-def rascunho(ficha: dict) -> tuple[str, dict] | None:
+def draft(ficha: dict) -> tuple[str, dict] | None:
     """(id do molde, N1 pronto para a ficha) ou None se nenhum molde serve."""
-    m, mapa = escolher(ficha)
-    return (m["id"], preencher(m, mapa, ficha)) if m else None
+    m, mapa = choose(ficha)
+    return (m["id"], fill(m, mapa, ficha)) if m else None

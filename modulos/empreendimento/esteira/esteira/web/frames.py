@@ -14,19 +14,19 @@ from pathlib import Path
 
 from esteira.graphics import render
 
-_pedidos: queue.Queue = queue.Queue()
-_inicio = threading.Lock()
+_requests: queue.Queue = queue.Queue()
+_start = threading.Lock()
 _thread = None
 _TMP = Path(tempfile.mkdtemp(prefix="quadros_"))
 
 
-def _servir():
+def _serve():
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
         nav = pw.chromium.launch()
         paginas = {}  # (w, h) → [página, hash do HTML aberto]
         while True:
-            html, w, h, t, transparente, fut = _pedidos.get()
+            html, w, h, t, transparente, fut = _requests.get()
             try:
                 if (w, h) not in paginas:
                     pg = nav.new_page(viewport={"width": w, "height": h}, device_scale_factor=0.5)
@@ -46,13 +46,13 @@ def _servir():
                 fut.set_exception(e)
 
 
-def quadro(html, w, h, t=0.0, transparente=True, espera=30):
+def frame(html, w, h, t=0.0, transparente=True, espera=30):
     """PNG do HTML no instante `t` (segundos)."""
     global _thread
-    with _inicio:
+    with _start:
         if _thread is None or not _thread.is_alive():
-            _thread = threading.Thread(target=_servir, daemon=True, name="quadros")
+            _thread = threading.Thread(target=_serve, daemon=True, name="quadros")
             _thread.start()
     fut = Future()
-    _pedidos.put((html, w, h, t, transparente, fut))
+    _requests.put((html, w, h, t, transparente, fut))
     return fut.result(timeout=espera)

@@ -18,13 +18,13 @@ from typing import Annotated, Any, Literal
 from pydantic import AfterValidator, BaseModel, BeforeValidator, Field
 
 APP = "effectcraft"
-VERSAO = 1
+VERSION = 1
 
-PapelCor = Literal["fundo", "fundo2", "texto", "destaque", "apoio", "acento"]
-PapelFonte = Literal["fD", "fT", "fM", "fE", "fL"]
+RoleColor = Literal["fundo", "fundo2", "texto", "destaque", "apoio", "acento"]
+RoleSource = Literal["fD", "fT", "fM", "fE", "fL"]
 
 
-def _norm_tempo(v):
+def _norm_time(v):
     """O que modelos escrevem fora do padrão (a gramática não força o `pattern`): espaços, número em texto,
     "0.5v" sem base, "+0.2" → forma canônica; o resto o padrão reprova."""
     if not isinstance(v, str):
@@ -37,36 +37,36 @@ def _norm_tempo(v):
     return s
 
 
-def _norm_dur(v):
+def _norm_duration(v):
     if not isinstance(v, str):
         return v
     s = re.sub(r"\s+", "", v).lstrip("+").replace(",", ".")
     return float(s) if re.fullmatch(r"\d+(\.\d+)?s?", s) and (s := s.rstrip("s")) else s
 
 
-def _positivo(v: float) -> float:
+def _positive(v: float) -> float:
     return max(v, 0.002)  # 0 (linha fina, traço que ainda vai crescer) vira um fio: a forma existe
 
 
-Tempo = Annotated[float | Annotated[str, Field(pattern=r"^(T0|@[a-z_]+)([+-]\d+(\.\d+)?v?)*$")],
-                  BeforeValidator(_norm_tempo)]
-Duracao = Annotated[float | Annotated[str, Field(pattern=r"^\d+(\.\d+)?v$", description="sufixo v: × velocidade")],
-                    BeforeValidator(_norm_dur)]
-Positivo = Annotated[float, Field(ge=0), AfterValidator(_positivo)]
+Time = Annotated[float | Annotated[str, Field(pattern=r"^(T0|@[a-z_]+)([+-]\d+(\.\d+)?v?)*$")],
+                  BeforeValidator(_norm_time)]
+Duration = Annotated[float | Annotated[str, Field(pattern=r"^\d+(\.\d+)?v$", description="sufixo v: × velocidade")],
+                    BeforeValidator(_norm_duration)]
+Positive = Annotated[float, Field(ge=0), AfterValidator(_positive)]
 
 
-def _norm_valor(v):
+def _norm_value(v):
     """Valor de chave escrito como texto ("100%", "1,2", "[100, 100]") → número ou lista."""
     if isinstance(v, str):
         nums = [float(n.replace(",", ".")) for n in re.findall(r"-?\d+(?:[.,]\d+)?", v)]
         return nums[0] if len(nums) == 1 else nums or v
     if isinstance(v, list):
-        return [_norm_valor(x) if isinstance(x, str) else x for x in v]
+        return [_norm_value(x) if isinstance(x, str) else x for x in v]
     return v
 
 
-Valor = Annotated[float | list[float], BeforeValidator(_norm_valor)]
-TamTexto = Annotated[float, Field(gt=0), AfterValidator(lambda v: min(v, 0.6))]
+Value = Annotated[float | list[float], BeforeValidator(_norm_value)]
+SizeText = Annotated[float, Field(gt=0), AfterValidator(lambda v: min(v, 0.6))]
 
 
 class _M(BaseModel):
@@ -79,25 +79,25 @@ class Cond(_M):
     encaixe: str | None = None
 
 
-Condicao = Cond | list[Cond] | None
+Condition = Cond | list[Cond] | None
 
 
-def condicoes(se: Condicao) -> list[Cond]:
+def conditions(se: Condition) -> list[Cond]:
     return [] if se is None else se if isinstance(se, list) else [se]
 
 
 class _El(_M):
     nome: str
-    se: Condicao = None
+    se: Condition = None
     vertical: dict[str, Any] = Field(default_factory=dict)
 
 
-class Apos(_M):
+class After(_M):
     nome: str = Field(description="texto de referência: este começa logo depois dele")
     folga: float = 0.0
 
 
-class Texto(_El):
+class Text(_El):
     tipo: Literal["texto"]
     conteudo: str
     nivel: Literal["titulo", "destaque", "numero", "corpo", "rotulo"] | None = Field(
@@ -105,10 +105,10 @@ class Texto(_El):
     x: float | None = Field(None, ge=-0.5, le=1.5, description="só fora de caixa")
     y: float | None = Field(None, ge=-0.5, le=1.5, description="só fora de caixa: topo (com largura) ou linha de base")
     largura: float | None = Field(None, gt=0, le=1.5, description="com largura: parágrafo; sem: uma linha")
-    fonte: PapelFonte = "fT"
+    fonte: RoleSource = "fT"
     peso: int = Field(400, ge=100, le=900)
-    tam: TamTexto | None = None
-    cor: PapelCor = "texto"
+    tam: SizeText | None = None
+    cor: RoleColor = "texto"
     alinhar: Literal["esquerda", "centro", "direita"] = "esquerda"
     caps: bool = False
     italico: bool = False
@@ -116,16 +116,16 @@ class Texto(_El):
     entrelinha: float | None = None
     numero: bool = Field(False, description="o conteúdo é um número dito: formata pt-BR e pode `contar`")
     unidade_de: str | None = Field(None, description="mostra a unidade (o que vem depois) do texto-número indicado")
-    apos: Apos | None = None
+    apos: After | None = None
 
 
-class Retangulo(_El):
+class Rectangle(_El):
     tipo: Literal["retangulo"]
     x: float | None = Field(None, description="só fora de caixa")
     y: float | None = Field(None, description="só fora de caixa")
-    w: Positivo | None = Field(None, description="fração do lado menor; dentro de caixa, sem w/h preenche a célula")
-    h: Positivo | None = Field(None, description="fração do lado menor (ex.: 0.006 = linha fina)")
-    cor: PapelCor = "destaque"
+    w: Positive | None = Field(None, description="fração do lado menor; dentro de caixa, sem w/h preenche a célula")
+    h: Positive | None = Field(None, description="fração do lado menor (ex.: 0.006 = linha fina)")
+    cor: RoleColor = "destaque"
     opacidade: float = Field(100, ge=0, le=100)
     raio: float = 0
     proporcional: bool = Field(False, description="num `repetir` de pares dentro de caixa: o tamanho segue o valor do "
@@ -135,12 +135,12 @@ class Retangulo(_El):
     centralizar: bool = Field(False, description="x é o centro (não o canto)")
 
 
-class Elipse(_El):
+class Ellipse(_El):
     tipo: Literal["elipse"]
     x: float | None = Field(None, description="centro; só fora de caixa")
     y: float | None = Field(None, description="centro; só fora de caixa")
-    d: Positivo | None = Field(None, description="diâmetro, fração do lado menor; dentro de caixa, sem d ocupa a célula")
-    cor: PapelCor = "destaque"
+    d: Positive | None = Field(None, description="diâmetro, fração do lado menor; dentro de caixa, sem d ocupa a célula")
+    cor: RoleColor = "destaque"
     contorno: float = Field(0, ge=0, description="espessura, fração do lado menor (0 = cheio)")
     inicio: float = Field(0, ge=0, le=1, description="arco: começo, fração da volta a partir do topo (horário)")
     fim: float = Field(1, ge=0, le=1, description="arco: fim, fração da volta (1 = volta inteira)")
@@ -148,49 +148,49 @@ class Elipse(_El):
                         "à soma com o dele (rosca de percentuais); arco sempre com contorno")
 
 
-Elemento = Annotated[Texto | Retangulo | Elipse, Field(discriminator="tipo")]
+Element = Annotated[Text | Rectangle | Ellipse, Field(discriminator="tipo")]
 
 
 class _Anim(_M):
     alvo: str
-    se: Condicao = None
+    se: Condition = None
 
 
-class Entrar(_Anim):
+class Enter(_Anim):
     anim: Literal["entrar"]
     de: Literal["baixo", "esq", "dir", "aparecer", "escala"] = "baixo"
-    t: Tempo = 0
-    dur: Duracao = 0.6
+    t: Time = 0
+    dur: Duration = 0.6
 
 
-class Tracar(_Anim):
+class Plot(_Anim):
     anim: Literal["tracar"]
-    t: Tempo = 0
-    dur: Duracao = 0.8
+    t: Time = 0
+    dur: Duration = 0.8
     vertical: bool = False
 
 
-class Contar(_Anim):
+class Count(_Anim):
     anim: Literal["contar"]
-    t: Tempo = 0
-    dur: Duracao = 0.9
+    t: Time = 0
+    dur: Duration = 0.9
 
 
-class Chaves(_Anim):
+class Keys(_Anim):
     anim: Literal["chaves"]
     prop: Literal["escala", "opacidade", "posicao", "rotacao"]
-    pares: list[tuple[Tempo, Valor]]
+    pares: list[tuple[Time, Value]]
 
 
-class Desfocar(_Anim):
+class Blur(_Anim):
     anim: Literal["desfocar"]
-    pares: list[tuple[Tempo, Annotated[float, BeforeValidator(_norm_valor)]]]
+    pares: list[tuple[Time, Annotated[float, BeforeValidator(_norm_value)]]]
 
 
-Animacao = Annotated[Entrar | Tracar | Contar | Chaves | Desfocar, Field(discriminator="anim")]
+Animation = Annotated[Enter | Plot | Count | Keys | Blur, Field(discriminator="anim")]
 
 
-class Repetir(_El):
+class Repeat(_El):
     """Um molde de elementos e animações para cada item de um encaixe-lista (itens ou pares). No molde,
     `{{item}}` (itens) ou `{{item.rotulo}}`/`{{item.valor}}` (pares); nomes ganham " N"; posições andam `passo`
     por item e os tempos atrasam `intervalo` s por item."""
@@ -202,17 +202,17 @@ class Repetir(_El):
     colunas: int | None = Field(None, ge=1, le=20, description="grade: o item i vai à coluna i % colunas e à linha "
                                 "i // colunas (passo = [entre colunas, entre linhas]); sem colunas, anda em linha")
     ativos: str | None = Field(None, description="encaixe com número (ou %): os primeiros N itens usam `cor_ativa`")
-    cor_ativa: PapelCor = "destaque"
+    cor_ativa: RoleColor = "destaque"
     intervalo: float = Field(0.0, ge=0)
     disposicao_item: Literal["coluna", "linha", "camadas"] = Field(
         "coluna", description="dentro de caixa: como os elementos de UM item se arrumam na célula do item")
     pesos_item: list[float] | None = Field(None, description="dentro de caixa: tamanho relativo de cada elemento do "
                                            "item na célula (sem: texto 1, forma 3)")
-    elementos: list[Elemento]
-    animacoes: list[Animacao] = Field(default_factory=list)
+    elementos: list[Element]
+    animacoes: list[Animation] = Field(default_factory=list)
 
 
-class Caixa(_El):
+class Box(_El):
     """Layout relacional: a caixa ocupa uma região da tela (no nível de cima) ou a célula da caixa-mãe e divide
     o espaço entre os filhos; o compilador calcula posição e tamanho (nada de x/y). No 9:16 as regiões e o
     `fluxo` se reorganizam sozinhos."""
@@ -226,30 +226,30 @@ class Caixa(_El):
     pesos: list[float] | None = Field(None, description="coluna/linha: tamanho relativo de cada filho (ex.: [1, 3])")
     espaco: float = Field(0.02, ge=0, le=0.2, description="vão entre filhos, fração do lado menor")
     alinhar: Literal["inicio", "centro", "fim"] = "centro"
-    filhos: list["ElementoOuRepetir"]
+    filhos: list["ElementOrRepeat"]
 
 
-ElementoOuRepetir = Annotated[Texto | Retangulo | Elipse | Repetir | Caixa, Field(discriminator="tipo")]
-Caixa.model_rebuild()
+ElementOrRepeat = Annotated[Text | Rectangle | Ellipse | Repeat | Box, Field(discriminator="tipo")]
+Box.model_rebuild()
 
 
-class Peca(BaseModel):
+class Piece(BaseModel):
     versao: Literal[1] = 1
     fundo: Literal["tela", "veu", "nenhum"] = "veu"
     fundo_tela_cheia: Literal["tela", "veu", "nenhum"] = "tela"
     opacidade_veu: float = 0.85
     batidas_padrao: dict[str, float] = Field(default_factory=dict)
     botao_velocidade: str | None = None
-    elementos: list[ElementoOuRepetir]
-    animacoes: list[Animacao] = Field(default_factory=list)
+    elementos: list[ElementOrRepeat]
+    animacoes: list[Animation] = Field(default_factory=list)
 
 
-DOCUMENTO = Peca
-VEL = {"lenta": 1.6, "normal": 1.0, "rapida": 0.6}
+DOCUMENT = Piece
+SPEED = {"lenta": 1.6, "normal": 1.0, "rapida": 0.6}
 _PROP = {"escala": "Scale", "opacidade": "Opacity", "posicao": "Position", "rotacao": "Rotation"}
 
 
-class ErroN1(ValueError):
+class ErrorN1(ValueError):
     pass
 
 
@@ -261,11 +261,11 @@ def _num(x: float) -> str:
     return repr(round(float(x), 3))
 
 
-class Compilador:
-    """N1 + DADOS do script (`estudio/ec.dados`) → corpo da peça em script do EffectCraft."""
+class Compiler:
+    """N1 + DADOS do script (`estudio/ec.data`) → corpo da peça em script do EffectCraft."""
 
-    def __init__(self, doc: Peca | dict, d: dict):
-        self.doc = doc if isinstance(doc, Peca) else Peca.model_validate(doc)
+    def __init__(self, doc: Piece | dict, d: dict):
+        self.doc = doc if isinstance(doc, Piece) else Piece.model_validate(doc)
         self.d = d
         self.W, self.H = d["w"], d["h"]
         self.vert = self.H > self.W
@@ -273,7 +273,7 @@ class Compilador:
         self.t0 = d.get("t0") or 0
         enc, bot = d.get("encaixes") or {}, d.get("botoes") or {}
         self.enc, self.bot, self.bat = enc, bot, d.get("batidas") or {}
-        self.vel = VEL.get(bot.get(self.doc.botao_velocidade), 1.0) if self.doc.botao_velocidade else 1.0
+        self.vel = SPEED.get(bot.get(self.doc.botao_velocidade), 1.0) if self.doc.botao_velocidade else 1.0
         self.vars: dict[str, str] = {}
         self.x_px: dict[str, float] = {}
         self.numeros: set[str] = set()
@@ -283,8 +283,8 @@ class Compilador:
         self.miudos: list[str] = []  # textos de caixa que a célula espremeu a menos de 60% do nível
         self.m = (d.get("area") or 0.03) * self.U * 1.15  # margem da área segura (a mesma do portão, com folga)
 
-    def ativo(self, se: Condicao) -> bool:
-        for c in condicoes(se):
+    def ativo(self, se: Condition) -> bool:
+        for c in conditions(se):
             if c.botao is not None and str(self.bot.get(c.botao)) != str(c.igual):
                 return False
             if c.encaixe is not None and not str(self.enc.get(c.encaixe) or "").strip():
@@ -296,7 +296,7 @@ class Compilador:
             return self.t0 + t
         m = re.fullmatch(r"(T0|@([a-z_]+))((?:[+-]\d+(?:\.\d+)?v?)*)", t)
         if not m:
-            raise ErroN1(f"tempo inválido: {t}")
+            raise ErrorN1(f"tempo inválido: {t}")
         if m.group(1) == "T0":
             base = self.t0
         else:
@@ -315,7 +315,7 @@ class Compilador:
             return float(t)
         m = re.fullmatch(r"(\d+(?:\.\d+)?)(v?)", str(t).lstrip("+"))
         if not m:
-            raise ErroN1(f"duração inválida: {t}")
+            raise ErrorN1(f"duração inválida: {t}")
         return float(m.group(1)) * (self.vel if m.group(2) else 1)
 
     def texto(self, s: str) -> str:
@@ -330,7 +330,7 @@ class Compilador:
             return str(v or "")
         s = re.sub(r"\{\{(\w+)(?:\.(\w+))?\}\}", valor, s)
         if m := re.search(r"\{\{[^}]*\}\}", s):  # o que sobrar apareceria literal na tela
-            raise ErroN1(f"marcador sem valor no texto: {m.group(0)}")
+            raise ErrorN1(f"marcador sem valor no texto: {m.group(0)}")
         return s
 
     def _el(self, e):
@@ -342,10 +342,10 @@ class Compilador:
 
     def _regiao(self, nome: str) -> tuple[float, float, float, float]:
         """Região nomeada → (x, y, w, h) em px, dentro da área segura; no 9:16 esquerda/direita viram cima/baixo."""
-        r = (REGIOES_V if self.vert else REGIOES_H)[nome]
+        r = (REGIONS_V if self.vert else REGIONS_H)[nome]
         return r[0] * self.W, r[1] * self.H, r[2] * self.W, r[3] * self.H
 
-    def _celulas(self, disp, rect, n, cx: "Caixa"):
+    def _celulas(self, disp, rect, n, cx: "Box"):
         x, y, w, h = rect
         g = cx.espaco * self.U
         if n <= 0:
@@ -368,31 +368,31 @@ class Compilador:
             pos += t + g
         return cel
 
-    def _encaixar(self, e, cel, cx: "Caixa", grade=False, barra=None):
+    def _encaixar(self, e, cel, cx: "Box", grade=False, barra=None):
         """Elemento → posição e tamanho absolutos dentro da célula (frações da tela, como o N1 solto)."""
         x, y, w, h = cel
-        if isinstance(e, Texto):
-            tam = (e.tam or NIVEIS[e.nivel or "corpo"]) * self.U
+        if isinstance(e, Text):
+            tam = (e.tam or LEVELS[e.nivel or "corpo"]) * self.U
             tam = min(tam, h * 0.9)
             # o bloco do EffectCraft fixa o topo e quebra para baixo: centrar como uma linha só fazia o texto de
             # várias linhas invadir a célula de baixo. Estima as linhas e encolhe até caber na célula.
             n = self._linhas(e, tam, w)
             # a palavra mais longa também cabe na largura: o bloco não quebra no meio dela ("1.234,5" vazava do anel)
-            while (n * tam * 1.25 > h or self._palavra(e, tam) > w * 0.95) and tam > NIVEIS["rotulo"] * self.U:
+            while (n * tam * 1.25 > h or self._palavra(e, tam) > w * 0.95) and tam > LEVELS["rotulo"] * self.U:
                 tam *= 0.92
                 n = self._linhas(e, tam, w)
-            if tam < 0.6 * (e.tam or NIVEIS[e.nivel or "corpo"]) * self.U and tam < 0.026 * self.U:  # < 28 px no 1080
+            if tam < 0.6 * (e.tam or LEVELS[e.nivel or "corpo"]) * self.U and tam < 0.026 * self.U:  # < 28 px no 1080
                 self.miudos.append(e.nome)
             ty = y + max(0.0, (h - n * tam * 1.25) / 2)
             self.limites[e.nome] = (x, y, x + w, y + h)
             return e.model_copy(update={
                 "x": x / self.W, "y": ty / self.H, "largura": w / self.W, "tam": tam / self.U, "apos": None,
                 "alinhar": {"inicio": "esquerda", "centro": "centro", "fim": "direita"}[cx.alinhar], "vertical": {}})
-        if isinstance(e, Elipse):
+        if isinstance(e, Ellipse):
             d = min(e.d * self.U if e.d else 1e9, min(w, h) * 0.92)
             return e.model_copy(update={"x": (x + w / 2) / self.W, "y": (y + h / 2) / self.H, "d": d / self.U,
                                         "vertical": {}})
-        if isinstance(e, Retangulo):
+        if isinstance(e, Rectangle):
             if grade and not (e.w or e.h):
                 lado = min(w, h) * 0.86
                 rw, rh = lado, lado
@@ -413,20 +413,20 @@ class Compilador:
                                         "w": rw / self.U, "h": rh / self.U, "centralizar": False, "vertical": {}})
         return e
 
-    def _palavra(self, e: "Texto", tam: float) -> float:
+    def _palavra(self, e: "Text", tam: float) -> float:
         """Largura estimada (px) da palavra mais longa do texto."""
         try:
             s = self.texto(e.conteudo)
-        except ErroN1:
+        except ErrorN1:
             s = e.conteudo
         maior = max((len(p) for p in s.replace("*", "").split()), default=0)
         return maior * tam * (0.62 + e.tracking / 1000) * (1.12 if e.caps else 1)
 
-    def _linhas(self, e: "Texto", tam: float, w: float) -> int:
+    def _linhas(self, e: "Text", tam: float, w: float) -> int:
         """Linhas estimadas do texto na largura w (largura média do caractere ≈ 0,55 do corpo; caps e tracking a mais)."""
         try:
             s = self.texto(e.conteudo)
-        except ErroN1:
+        except ErrorN1:
             s = e.conteudo
         car = tam * (0.55 + e.tracking / 1000) * (1.12 if e.caps else 1)
         return max(1, math.ceil(len(s.replace("*", "")) * car / max(w * 0.95, 1)))
@@ -436,7 +436,7 @@ class Compilador:
         elipse cheia ou do retângulo, com folga."""
         x, y, w, h = rect
         lado = min(w, h)
-        el = [f for f in formas if isinstance(f, Elipse)]
+        el = [f for f in formas if isinstance(f, Ellipse)]
         if el:
             d = min(min(f.d * self.U if f.d else 1e9 for f in el), lado * 0.92)
             borda = max((f.contorno or (0.2 * (f.d or 0) if (f.inicio > 0 or f.fim < 1 or f.fatia) else 0)) * self.U
@@ -445,11 +445,11 @@ class Compilador:
                 borda = max(borda, d * 0.2)
             m = (d - 2 * borda) * 0.68
             return (x + (w - m) / 2, y + (h - m) / 2, m, m)
-        if any(isinstance(f, Retangulo) for f in formas):
+        if any(isinstance(f, Rectangle) for f in formas):
             return (x + w * 0.08, y + h * 0.1, w * 0.84, h * 0.8)
         return rect
 
-    def _resolver(self, cx: "Caixa", rect) -> tuple[list, list]:
+    def _resolver(self, cx: "Box", rect) -> tuple[list, list]:
         cx = self._el(cx)
         if not self.ativo(cx.se):
             return [], []
@@ -457,14 +457,14 @@ class Compilador:
         for f in cx.filhos:
             if not self.ativo(self._el(f).se):
                 continue
-            if isinstance(f, Repetir):
+            if isinstance(f, Repeat):
                 r = self._el(f)
                 els, an = self._desdobrar(r)
                 anims += an
                 k = max(len(r.elementos), 1)
                 for i in range(0, len(els), k):
                     itens.append(("item", els[i:i + k], (r.disposicao_item, r.pesos_item)))
-            elif isinstance(f, Caixa):
+            elif isinstance(f, Box):
                 itens.append(("caixa", f, None))
             else:
                 itens.append(("el", self._el(f), None))
@@ -476,8 +476,8 @@ class Compilador:
         if disp == "camadas":  # texto sobre forma: no furo do anel ou dentro da forma, vários textos em coluna
             miolo = self._miolo(rect, [c for t, c, _ in itens if t == "el"] +
                                 [e for t, c, _ in itens if t == "item" for e in c])
-            textos = [k for k, (t, c, _) in enumerate(itens) if t == "el" and isinstance(c, Texto)]
-            pilha = Caixa(tipo="caixa", nome="_miolo", espaco=cx.espaco / 2, filhos=[],
+            textos = [k for k, (t, c, _) in enumerate(itens) if t == "el" and isinstance(c, Text)]
+            pilha = Box(tipo="caixa", nome="_miolo", espaco=cx.espaco / 2, filhos=[],
                           pesos=[2.0 if itens[k][1].nivel in ("numero", "destaque", "titulo") else 1.0 for k in textos])
             celulas = list(celulas)
             for k, c in zip(textos, self._celulas("coluna", miolo, len(textos), pilha), strict=False):
@@ -491,16 +491,16 @@ class Compilador:
                 anims += an
             else:
                 sub, pesos_item = sub
-                interna = Caixa(tipo="caixa", nome="_item", disposicao=sub, espaco=cx.espaco / 2, alinhar=cx.alinhar,
-                                filhos=[], pesos=pesos_item or [1.0 if isinstance(e, Texto) else 3.0 for e in coisa])
+                interna = Box(tipo="caixa", nome="_item", disposicao=sub, espaco=cx.espaco / 2, alinhar=cx.alinhar,
+                                filhos=[], pesos=pesos_item or [1.0 if isinstance(e, Text) else 3.0 for e in coisa])
                 barra = {"linha": "alta", "coluna": "larga"}.get(disp)
                 for e, c in zip(coisa, self._celulas(sub, cel, len(coisa), interna), strict=False):
                     saida.append(self._encaixar(e, c, interna, disp == "grade", barra))
         if disp == "camadas":  # formas atrás, textos na frente
-            saida.sort(key=lambda e: isinstance(e, Texto))
+            saida.sort(key=lambda e: isinstance(e, Text))
         return saida, anims
 
-    def _desdobrar(self, r: Repetir) -> tuple[list, list]:
+    def _desdobrar(self, r: Repeat) -> tuple[list, list]:
         r = self._el(r)  # `vertical` do repetir (passo, colunas, posição) vale no 9:16
         if r.encaixe:
             lista = self.enc.get(r.encaixe) or []
@@ -509,14 +509,14 @@ class Compilador:
             lista = lista[: r.maximo]
         else:
             lista = [str(n + 1) for n in range(r.quantidade or r.maximo)]
-        vals = [_numero(x.get("valor") if isinstance(x, dict) else x) or 0 for x in lista]
+        vals = [_number(x.get("valor") if isinstance(x, dict) else x) or 0 for x in lista]
         total = sum(vals) or 1
         n_ativos = None
         if r.ativos:
             v = self.enc.get(r.ativos)
             v = v[0] if isinstance(v, list) and v else v
             v = v.get("valor") if isinstance(v, dict) else v
-            n = _numero(v)
+            n = _number(v)
             if n is not None:  # percentual sobre uma grade: 34% de 100 itens = 34 acesos
                 n_ativos = round(n * len(lista) / 100) if "%" in str(v) else round(n)
         els, anims = [], []
@@ -530,14 +530,14 @@ class Compilador:
             for e in map(self._el, r.elementos):  # o `vertical` do molde antes do passo (senão empilha os itens)
                 upd = {"nome": nomes[e.nome], "x": None if e.x is None else e.x + col * r.passo[0],
                        "y": None if e.y is None else e.y + lin * r.passo[1]}
-                if n_ativos is not None and i < n_ativos and not isinstance(e, Texto):
+                if n_ativos is not None and i < n_ativos and not isinstance(e, Text):
                     upd["cor"] = r.cor_ativa
-                if isinstance(e, Retangulo) and e.proporcional and vals:
+                if isinstance(e, Rectangle) and e.proporcional and vals:
                     upd["escala_valor"] = max(vals[i], 0) / (max(vals) or 1)
-                if isinstance(e, Elipse) and e.fatia:
+                if isinstance(e, Ellipse) and e.fatia:
                     upd.update(inicio=sum(vals[:i]) / total, fim=sum(vals[: i + 1]) / total, fatia=False,
-                               cor=CORES_FATIAS[i % len(CORES_FATIAS)])
-                if isinstance(e, Texto):
+                               cor=COLORS_SLICES[i % len(COLORS_SLICES)])
+                if isinstance(e, Text):
                     upd["conteudo"] = troca(e.conteudo)
                     if e.apos:
                         upd["apos"] = {"nome": nomes.get(e.apos.nome, e.apos.nome), "folga": e.apos.folga}
@@ -560,14 +560,14 @@ class Compilador:
 
     def compilar(self) -> str:
         doc, linhas = self.doc, []
-        declarados = {e.nome for e in percorrer(doc.elementos)}  # inclui os desligados por `se` dentro de caixas
+        declarados = {e.nome for e in walk(doc.elementos)}  # inclui os desligados por `se` dentro de caixas
         planos, extras = [], []
         for e in doc.elementos:
-            if isinstance(e, Caixa):
+            if isinstance(e, Box):
                 els, anims = self._resolver(e, self._regiao(self._el(e).regiao))
                 planos += els
                 extras += anims
-            elif isinstance(e, Repetir):
+            elif isinstance(e, Repeat):
                 if self.ativo(e.se):
                     els, anims = self._desdobrar(e)
                     planos += els
@@ -576,11 +576,11 @@ class Compilador:
                 planos.append(e)
         for e in planos:
             if e.x is None or e.y is None:
-                raise ErroN1(f"{e.nome!r} sem posição: ponha o elemento dentro de uma caixa (ou dê x e y)")
+                raise ErrorN1(f"{e.nome!r} sem posição: ponha o elemento dentro de uma caixa (ou dê x e y)")
         contados = {a.alvo for a in [*doc.animacoes, *extras] if a.anim == "contar"}
-        planos = [e.model_copy(update={"numero": True}) if isinstance(e, Texto) and e.nome in contados else e
+        planos = [e.model_copy(update={"numero": True}) if isinstance(e, Text) and e.nome in contados else e
                   for e in planos]  # `contar` num texto implica que ele é número
-        planos = _ordenar(planos)
+        planos = _sort(planos)
         doc = doc.model_copy(update={"elementos": planos, "animacoes": [*doc.animacoes, *extras]})
         self.nomes = {e.nome for e in planos}
         fundo = doc.fundo_tela_cheia if self.d.get("tela_cheia") else doc.fundo
@@ -601,7 +601,7 @@ class Compilador:
             if a.alvo not in self.vars:
                 if any(x.nome == a.alvo for x in doc.elementos) or a.alvo in declarados:
                     continue  # alvo desligado por `se`
-                raise ErroN1(f"animação de elemento inexistente: {a.alvo}")
+                raise ErrorN1(f"animação de elemento inexistente: {a.alvo}")
             v = self.vars[a.alvo]
             linhas += [f"if ({v}) {x}" for x in getattr(self, f"_{a.anim}")(a, v)]
         for nome, (x0, y0, x1, y1) in self.limites.items():  # texto de caixa: não sai da própria célula
@@ -614,11 +614,11 @@ class Compilador:
 
     # ---------- elementos ----------
 
-    def _texto(self, e: Texto, v):
+    def _texto(self, e: Text, v):
         s = self.texto(e.conteudo)
         if e.caps and e.largura is None:  # o bloco usa allCaps (o texto editável fica como foi escrito)
             s = s.upper()
-        tam = (e.tam or NIVEIS[e.nivel or "corpo"]) * self.U
+        tam = (e.tam or LEVELS[e.nivel or "corpo"]) * self.U
         x, m = e.x * self.W, self.m
         if e.largura is None:  # a âncora da linha fica dentro da área segura (o caber só encolhe em volta dela)
             x = min(max(x, m), self.W - m)  # (y não se move: empilharia textos; o portão acusa e a LLM corrige)
@@ -679,14 +679,14 @@ class Compilador:
                        f"{_num(e.largura * self.W)}, {_js(estilo)});")
         return out
 
-    def _retangulo(self, e: Retangulo, v):
+    def _retangulo(self, e: Rectangle, v):
         w, h = e.w * self.U, e.h * self.U
         x = e.x * self.W - (w / 2 if e.centralizar else 0)
         self.x_px[e.nome] = x
         return [f"var {v} = retangulo({_js(e.nome)}, {_num(x)}, {_num(e.y * self.H)}, {_num(w)}, {_num(h)}, "
                 f"{_js(e.cor)}, {_num(e.opacidade)}, {_num(e.raio * self.U)}, {_js(e.ancora_esq)});"]
 
-    def _elipse(self, e: Elipse, v):
+    def _elipse(self, e: Ellipse, v):
         self.x_px[e.nome] = e.x * self.W - e.d * self.U / 2
         arco = e.inicio > 0 or e.fim < 1
         espessura = e.contorno or (0.2 * e.d if arco else 0)  # arco cheio não existe: vira anel
@@ -697,15 +697,15 @@ class Compilador:
 
     # ---------- animações ----------
 
-    def _entrar(self, a: Entrar, v):
+    def _entrar(self, a: Enter, v):
         return [f"entrar({v}, {_js(a.de)}, {_num(self.tempo(a.t))}, {_num(self.dur(a.dur))});"]
 
-    def _tracar(self, a: Tracar, v):
+    def _tracar(self, a: Plot, v):
         return [f"traco({v}, {_num(self.tempo(a.t))}, {_num(self.dur(a.dur))}{', true' if a.vertical else ''});"]
 
-    def _contar(self, a: Contar, v):
+    def _contar(self, a: Count, v):
         if a.alvo not in self.numeros:
-            raise ErroN1(f"`contar` só em texto com numero=true: {a.alvo}")
+            raise ErrorN1(f"`contar` só em texto com numero=true: {a.alvo}")
         return [f"if (n_{v}) contagem({v}, n_{v}.n, n_{v}.casas, {_num(self.tempo(a.t))}, {_num(self.dur(a.dur))}, "
                 f"n_{v}.antes, \"\");"]
 
@@ -725,42 +725,42 @@ class Compilador:
             return vs[:2]
         return val[0] if isinstance(val, list) else val
 
-    def _chaves(self, a: Chaves, v):
+    def _chaves(self, a: Keys, v):
         todos = [val for _, val in a.pares]
         pares = [[round(self.tempo(t), 3), self._valor(a.prop, val, todos)] for t, val in a.pares]
         return [f"chaves(tr({v}, {_js(_PROP[a.prop])}), {_js(pares)});"]
 
-    def _desfocar(self, a: Desfocar, v):
+    def _desfocar(self, a: Blur, v):
         return [f"desfoque({v}, {_js([[round(self.tempo(t), 3), val] for t, val in a.pares])});"]
 
 
-CORES_FATIAS = ("destaque", "acento", "apoio", "texto", "fundo2")
-NIVEIS = {"titulo": 0.065, "destaque": 0.09, "numero": 0.15, "corpo": 0.045, "rotulo": 0.034}  # fração do lado menor
+COLORS_SLICES = ("destaque", "acento", "apoio", "texto", "fundo2")
+LEVELS = {"titulo": 0.065, "destaque": 0.09, "numero": 0.15, "corpo": 0.045, "rotulo": 0.034}  # fração do lado menor
 # regiões (x, y, w, h) em frações da tela, já dentro da área segura
-REGIOES_H = {"tela": (0.06, 0.08, 0.88, 0.84), "topo": (0.06, 0.07, 0.88, 0.17), "centro": (0.06, 0.27, 0.88, 0.5),
+REGIONS_H = {"tela": (0.06, 0.08, 0.88, 0.84), "topo": (0.06, 0.07, 0.88, 0.17), "centro": (0.06, 0.27, 0.88, 0.5),
              "base": (0.06, 0.79, 0.88, 0.14), "esquerda": (0.06, 0.27, 0.42, 0.66),
              "direita": (0.52, 0.27, 0.42, 0.66)}
-REGIOES_V = {"tela": (0.07, 0.06, 0.86, 0.88), "topo": (0.07, 0.06, 0.86, 0.13), "centro": (0.07, 0.23, 0.86, 0.52),
+REGIONS_V = {"tela": (0.07, 0.06, 0.86, 0.88), "topo": (0.07, 0.06, 0.86, 0.13), "centro": (0.07, 0.23, 0.86, 0.52),
              "base": (0.07, 0.80, 0.86, 0.12), "esquerda": (0.07, 0.22, 0.86, 0.34),
              "direita": (0.07, 0.58, 0.86, 0.34)}
 
 
-def percorrer(els):
+def walk(els):
     """Todos os nós do documento (caixas, repetir e o que está dentro deles), em profundidade."""
     for e in els:
         yield e
-        if isinstance(e, Caixa):
-            yield from percorrer(e.filhos)
-        elif isinstance(e, Repetir):
+        if isinstance(e, Box):
+            yield from walk(e.filhos)
+        elif isinstance(e, Repeat):
             yield from e.elementos
 
 
-def soltos(doc: "Peca") -> list[str]:
+def loose(doc: "Piece") -> list[str]:
     """Elementos fora de caixa (a LLM local só monta peça por caixas: coordenada absoluta era a causa dos erros)."""
-    return [e.nome for e in doc.elementos if not isinstance(e, Caixa)]
+    return [e.nome for e in doc.elementos if not isinstance(e, Box)]
 
 
-def _numero(v) -> float | None:
+def _number(v) -> float | None:
     """ "34%", "R$ 1.200", "1,5" → número (pt-BR)."""
     if isinstance(v, (int, float)):
         return float(v)
@@ -768,7 +768,7 @@ def _numero(v) -> float | None:
     return float(m.group(0).replace(".", "").replace(",", ".")) if m else None
 
 
-def _ordenar(els: list) -> list:
+def _sort(els: list) -> list:
     """Elementos referenciados por `apos`/`unidade_de` vêm antes de quem os usa (ordem estável no resto)."""
     feitos, saida, pendentes = set(), [], list(els)
     for _ in range(len(els) + 1):
@@ -783,5 +783,5 @@ def _ordenar(els: list) -> list:
     return saida
 
 
-def compilar(doc: Peca | dict, d: dict) -> str:
-    return Compilador(doc, d).compilar()
+def build(doc: Piece | dict, d: dict) -> str:
+    return Compiler(doc, d).compilar()

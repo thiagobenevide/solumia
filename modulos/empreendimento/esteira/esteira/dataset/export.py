@@ -14,13 +14,13 @@ from pathlib import Path
 
 from esteira.dataset import registry as R
 
-def _pastas():  # seguem R.PASTA em tempo de execução (os testes a redirecionam)
-    return R.PASTA / "exportacoes", R.PASTA / "ouro"
+def _folders():  # seguem R.PASTA em tempo de execução (os testes a redirecionam)
+    return R.FOLDER / "exportacoes", R.FOLDER / "ouro"
 
-VALIDACAO, FRACAO_OURO, TRECHO = 0.1, 0.08, 45.0
-TAREFAS = ("peca_animar", "montar", "corrigir_montagem", "thumb_compor", "foto_tratar")
+VALIDATION, FRACTION_GOLD, SPAN = 0.1, 0.08, 45.0
+TASKS = ("peca_animar", "montar", "corrigir_montagem", "thumb_compor", "foto_tratar")
 
-INSTRUCOES = {
+INSTRUCTIONS = {
     "peca_animar": "Escreva a peça de motion graphics desta ficha como documento N1 do EffectCraft.",
     "montar": "Monte este trecho do episódio no FilmCraft: responda com as operações N1 da montagem.",
     "corrigir_montagem": "Corrija a montagem: responda só com as operações N1 de correção.",
@@ -29,44 +29,44 @@ INSTRUCOES = {
 }
 
 
-def esquema(tarefa: str):
+def schema(tarefa: str):
     from esteira.n1 import effectcraft, filmcraft, photocraft
-    return {"peca_animar": effectcraft.Peca, "montar": filmcraft.Montagem, "corrigir_montagem": filmcraft.Montagem,
-            "thumb_compor": photocraft.Composicao, "foto_tratar": photocraft.FotoDecisao}[tarefa]
+    return {"peca_animar": effectcraft.Piece, "montar": filmcraft.Assembly, "corrigir_montagem": filmcraft.Assembly,
+            "thumb_compor": photocraft.Composition, "foto_tratar": photocraft.PhotoDecision}[tarefa]
 
 
-def _fracao(chave: str) -> float:
+def _fraction(chave: str) -> float:
     return int(hashlib.sha1(chave.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
 
 
-def _contexto(r: dict) -> dict:
+def _context(r: dict) -> dict:
     c = r["contexto"]
-    return R.ler_artefato(c["ref"]) if set(c) == {"ref"} else c
+    return R.read_artifact(c["ref"]) if set(c) == {"ref"} else c
 
 
-def resposta(r: dict):
+def answer(r: dict):
     """A saída que o modelo aprende (N1 ou N2), sem os anexos do registro."""
-    s = R.ler_artefato(r["saida"]["n1"])
+    s = R.read_artifact(r["saida"]["n1"])
     if r["tarefa"] == "peca_animar":
         return s.get("peca_n1") or None
     return s
 
 
-def contexto_modelo(r: dict) -> dict:
+def context_model(r: dict) -> dict:
     """O que o modelo recebe (sem campos de controle)."""
-    c = dict(_contexto(r))
+    c = dict(_context(r))
     if r["tarefa"] == "peca_animar":
-        s = R.ler_artefato(r["saida"]["n1"])
+        s = R.read_artifact(r["saida"]["n1"])
         ficha = {k: v for k, v in (s.get("ficha") or {}).items()
                  if k not in ("estado", "versao", "origem", "notas", "id", "motor")}
         return {"ficha": ficha, "pedido": c.get("pedido"), "modo": c.get("modo"), "comentario": c.get("comentario")}
     if r["tarefa"] == "corrigir_montagem" and isinstance(c.get("montagem"), str):
-        c["montagem"] = R.ler_artefato(c["montagem"])
+        c["montagem"] = R.read_artifact(c["montagem"])
     return c
 
 
 def prompt(tarefa: str, contexto: dict, exemplos=()) -> str:
-    partes = [INSTRUCOES[tarefa], "Responda só com JSON válido no esquema. Nada de texto fora do JSON."]
+    partes = [INSTRUCTIONS[tarefa], "Responda só com JSON válido no esquema. Nada de texto fora do JSON."]
     for k, (cx, rx) in enumerate(exemplos, 1):
         partes.append(f"<exemplo {k}>\n<contexto>{json.dumps(cx, ensure_ascii=False)}</contexto>\n"
                       f"<resposta>{json.dumps(rx, ensure_ascii=False)}</resposta>\n</exemplo {k}>")
@@ -74,25 +74,25 @@ def prompt(tarefa: str, contexto: dict, exemplos=()) -> str:
     return "\n\n".join(partes)
 
 
-def _sistema(tarefa: str) -> str:
+def _system(tarefa: str) -> str:
     # curto de propósito: o formato é garantido pela gramática do esquema na inferência; o JSON Schema inteiro
     # incharia cada exemplo e estouraria o contexto do treino (16 GB de VRAM)
-    app = R.TAREFAS[tarefa]
+    app = R.TASKS[tarefa]
     return f"Você opera o {app} pela linguagem N1 v1 e responde só com o JSON do esquema da tarefa {tarefa}."
 
 
 # ---------- montagem por trecho ----------
 
-def trechos_montagem(ctx: dict, doc: dict) -> list[tuple[dict, dict]]:
+def spans_assembly(ctx: dict, doc: dict) -> list[tuple[dict, dict]]:
     """Divide uma montagem em janelas de ~TRECHO s: (contexto do trecho, ops do trecho). As operações globais
     (sequência, narração, cor, música, legendas) ficam no primeiro trecho."""
     dur = ctx.get("duracao") or max((o.get("em", 0) + (o.get("dur") or 0) for o in doc["ops"]), default=0)
-    if dur <= TRECHO * 1.5:
+    if dur <= SPAN * 1.5:
         return [(ctx, doc)]
     janelas, a = [], 0.0
     while a < dur:
-        janelas.append((a, min(dur, a + TRECHO)))
-        a += TRECHO
+        janelas.append((a, min(dur, a + SPAN)))
+        a += SPAN
     nomes_de = {}
     for o in doc["ops"]:
         if o["op"] in ("colocar", "texto"):
@@ -111,25 +111,25 @@ def trechos_montagem(ctx: dict, doc: dict) -> list[tuple[dict, dict]]:
 
 # ---------- ouro ----------
 
-def ouro(tarefa: str) -> set[str]:
+def gold(tarefa: str) -> set[str]:
     """Ids do ouro da tarefa. Sem arquivo, escolhe os grupos pelo sha1 (≈8%, ao menos 1 com 5+ grupos) e grava."""
-    arq = _pastas()[1] / R.TAREFAS[tarefa] / f"{tarefa}.jsonl"
+    arq = _folders()[1] / R.TASKS[tarefa] / f"{tarefa}.jsonl"
     if arq.exists():
         return {json.loads(x)["id"] for x in arq.read_text().splitlines() if x.strip()}
-    bons = [r for r in R.registros(tarefa) if r["uso"] == "sft"]
-    grupos = sorted({r["grupo"] for r in bons}, key=lambda g: _fracao("ouro:" + g))
+    bons = [r for r in R.records(tarefa) if r["uso"] == "sft"]
+    grupos = sorted({r["grupo"] for r in bons}, key=lambda g: _fraction("ouro:" + g))
     if len(grupos) < 5:
         return set()
-    escolhidos = {g for g in grupos if _fracao("ouro:" + g) < FRACAO_OURO} or {grupos[0]}
+    escolhidos = {g for g in grupos if _fraction("ouro:" + g) < FRACTION_GOLD} or {grupos[0]}
     ids = [r["id"] for r in bons if r["grupo"] in escolhidos]
     arq.parent.mkdir(parents=True, exist_ok=True)
     arq.write_text("".join(json.dumps({"id": i, "auto": True}) + "\n" for i in ids))
     return set(ids)
 
 
-def marcar_ouro(tarefa: str, ids: list[str]) -> None:
-    arq = _pastas()[1] / R.TAREFAS[tarefa] / f"{tarefa}.jsonl"
-    atuais = ouro(tarefa) if arq.exists() else set()
+def mark_gold(tarefa: str, ids: list[str]) -> None:
+    arq = _folders()[1] / R.TASKS[tarefa] / f"{tarefa}.jsonl"
+    atuais = gold(tarefa) if arq.exists() else set()
     arq.parent.mkdir(parents=True, exist_ok=True)
     with open(arq, "a") as f:
         for i in ids:
@@ -139,27 +139,27 @@ def marcar_ouro(tarefa: str, ids: list[str]) -> None:
 
 # ---------- exportação ----------
 
-def _pares(tarefa: str) -> list[tuple[dict, dict]]:
+def _pairs(tarefa: str) -> list[tuple[dict, dict]]:
     """(contexto, resposta) de cada registro bom; a montagem vira trechos."""
     out = []
-    for r in R.registros(tarefa):
+    for r in R.records(tarefa):
         if r["uso"] != "sft":
             continue
-        resp = resposta(r)
+        resp = answer(r)
         if resp is None:
             continue
-        cx = contexto_modelo(r)
+        cx = context_model(r)
         if tarefa == "montar":
-            out += [(r, c, d) for c, d in trechos_montagem(cx, resp)]
+            out += [(r, c, d) for c, d in spans_assembly(cx, resp)]
         else:
             out.append((r, cx, resp))
     return out
 
 
-def casos_eval(tarefa: str) -> list[dict]:
-    ids = ouro(tarefa)
+def cases_eval(tarefa: str) -> list[dict]:
+    ids = gold(tarefa)
     casos = []
-    for r, cx, resp in _pares(tarefa):
+    for r, cx, resp in _pairs(tarefa):
         if r["id"] in ids:
             casos.append({"id": r["id"], "tarefa": tarefa, "contexto": cx, "referencia": resp})
     return casos
@@ -168,7 +168,7 @@ def casos_eval(tarefa: str) -> list[dict]:
 def _dpo(tarefa: str) -> list[dict]:
     """Pares do mesmo grupo: bom × ruim. Nas thumbs, a escolhida × as outras candidatas do mesmo episódio."""
     por: dict[str, dict[str, list]] = {}
-    for r in R.registros(tarefa):
+    for r in R.records(tarefa):
         lado = ("bom" if r["uso"] == "sft" else "ruim" if r["uso"] == "dpo_ruim"
                 else "ruim" if tarefa == "thumb_compor" and r["uso"] == "pendente" else None)
         if lado:
@@ -177,32 +177,32 @@ def _dpo(tarefa: str) -> list[dict]:
     for g in por.values():
         for b in g["bom"]:
             for m in g["ruim"]:
-                rb, rm = resposta(b), resposta(m)
+                rb, rm = answer(b), answer(m)
                 if rb is None or rm is None or rb == rm:
                     continue
-                saida.append({"grupo": b["grupo"], "prompt": prompt(tarefa, contexto_modelo(b)),
+                saida.append({"grupo": b["grupo"], "prompt": prompt(tarefa, context_model(b)),
                               "chosen": json.dumps(rb, ensure_ascii=False), "rejected": json.dumps(rm, ensure_ascii=False)})
     return saida
 
 
-def exportar(tarefas=None) -> dict:
-    from esteira.n1 import salvar_esquemas
-    destino = _pastas()[0] / datetime.now().strftime("%Y%m%d-%H%M%S")
+def export(tarefas=None) -> dict:
+    from esteira.n1 import save_schemas
+    destino = _folders()[0] / datetime.now().strftime("%Y%m%d-%H%M%S")
     resumo = {"em": datetime.now().isoformat(timespec="seconds"), "pasta": str(destino), "tarefas": {}}
-    arquivos = salvar_esquemas(destino / "esquemas")
-    for t in tarefas or TAREFAS:
-        ids_ouro = ouro(t)
+    arquivos = save_schemas(destino / "esquemas")
+    for t in tarefas or TASKS:
+        ids_ouro = gold(t)
         sft = {"train": [], "val": []}
         avaliacao = []
-        for r, cx, resp in _pares(t):
+        for r, cx, resp in _pairs(t):
             if r["id"] in ids_ouro:
                 avaliacao.append({"id": r["id"], "contexto": cx, "referencia": resp})
                 continue
             linha = {"id": r["id"], "tarefa": t, "grupo": r["grupo"], "messages": [
-                {"role": "system", "content": _sistema(t)},
+                {"role": "system", "content": _system(t)},
                 {"role": "user", "content": prompt(t, cx)},
                 {"role": "assistant", "content": json.dumps(resp, ensure_ascii=False)}]}
-            sft["val" if _fracao(r["grupo"]) < VALIDACAO else "train"].append(linha)
+            sft["val" if _fraction(r["grupo"]) < VALIDATION else "train"].append(linha)
         dpo = _dpo(t)
         for nome, linhas in (("sft/" + t + ".train.jsonl", sft["train"]), ("sft/" + t + ".val.jsonl", sft["val"]),
                              ("dpo/" + t + ".jsonl", dpo), ("eval/" + t + ".jsonl", avaliacao)):
@@ -217,11 +217,11 @@ def exportar(tarefas=None) -> dict:
     return resumo
 
 
-def ultima() -> Path | None:
-    base = _pastas()[0]
+def last() -> Path | None:
+    base = _folders()[0]
     pastas = sorted(base.glob("*/manifesto.json")) if base.exists() else []
     return pastas[-1].parent if pastas else None
 
 
-def hash_exportacao(pasta: Path) -> str:
+def hash_export(pasta: Path) -> str:
     return hashlib.sha256((Path(pasta) / "manifesto.json").read_bytes()).hexdigest()[:16]

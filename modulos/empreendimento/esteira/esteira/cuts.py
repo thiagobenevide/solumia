@@ -15,14 +15,14 @@ import re
 import unicodedata
 from difflib import SequenceMatcher
 
-IGUAL, PARECIDA, TROCA, FALTA, SOBRA = 1.0, 0.7, -0.6, -0.7, -0.25
-BOA, REFORMULADA = 0.62, 0.35     # nota mínima (por palavra do roteiro) de uma tomada / de uma reformulação
-QUASE_MELHOR = 0.12              # entre tomadas com nota até isto abaixo da melhor, fica a mais tardia
-MAX_RECUO = 90                   # s: a tomada de uma frase não pode estar mais longe que isto da seguinte
-PAUSA_FALA = 0.55                # s: pausa que separa duas falas no que sobra entre tomadas
-NUMEROS = dict(zip("0 1 2 3 4 5 6 7 8 9 10".split(),
+EQUAL, SIMILAR, SWAP, MISSING, LEFTOVER = 1.0, 0.7, -0.6, -0.7, -0.25
+GOOD, REPHRASED = 0.62, 0.35     # nota mínima (por palavra do roteiro) de uma tomada / de uma reformulação
+ALMOST_BEST = 0.12              # entre tomadas com nota até isto abaixo da melhor, fica a mais tardia
+MAX_BACKOFF = 90                   # s: a tomada de uma frase não pode estar mais longe que isto da seguinte
+PAUSE_SPEECH = 0.55                # s: pausa que separa duas falas no que sobra entre tomadas
+NUMBERS = dict(zip("0 1 2 3 4 5 6 7 8 9 10".split(),
                    "zero um dois tres quatro cinco seis sete oito nove dez".split()))
-RE_BASTIDOR = re.compile(
+RE_BACKSTAGE = re.compile(
     r"\b(vamos (fazer|gravar|de novo|la)|nova gravacao|de novo|gravando|repet\w*|errei|desculp\w*|"
     r"eita|opa|pera(i)?|agua|ok\b|beleza|deixa eu|pronto|tá bom|ta bom|hum+|ah+|eh+|"
     r"droga|merda|porra|caramba|putz|corta|cortar|perai|nao foi|ficou ruim)\b")
@@ -31,15 +31,15 @@ RE_BASTIDOR = re.compile(
 def norm(p):
     s = unicodedata.normalize("NFKD", p.lower())
     s = re.sub(r"[^\w]", "", "".join(c for c in s if not unicodedata.combining(c)))
-    return NUMEROS.get(s, s)
+    return NUMBERS.get(s, s)
 
 
-def _radical(palavra):
+def _stem(palavra):
     """Compara pelo começo da palavra: "começa" = "começar", "ganha" = "ganhar", "2" = "dois"."""
     return norm(palavra)[:5]
 
 
-def frases_do_roteiro(texto):
+def sentences_of_script(texto):
     frases = []
     for linha in texto.splitlines():
         linha = linha.strip()
@@ -47,7 +47,7 @@ def frases_do_roteiro(texto):
             continue
         linha = re.sub(r"\[[^\]]*\]", "", linha).replace("*", "")
         for f in re.split(r"(?<=[.?!:;])\s+", linha):
-            palavras = [_radical(w) for w in f.split()]
+            palavras = [_stem(w) for w in f.split()]
             palavras = [w for w in palavras if w]
             if palavras:
                 frases.append({"texto": f.strip(), "norm": palavras})
@@ -66,7 +66,7 @@ class _Tok:
 
 
 _cache = {}
-RE_FRAGMENTO = re.compile(r"^[.,]\d")
+RE_FRAGMENT = re.compile(r"^[.,]\d")
 
 
 def _tokens(palavras):
@@ -75,7 +75,7 @@ def _tokens(palavras):
     Sem isso o número não casa com o roteiro e a tomada começa depois dele (o número era cortado)."""
     toks = [_Tok(p["p"]) for p in palavras]
     for k in range(1, len(toks)):
-        if RE_FRAGMENTO.match(palavras[k]["p"].strip()) and toks[k - 1].n[-1:].isdigit():
+        if RE_FRAGMENT.match(palavras[k]["p"].strip()) and toks[k - 1].n[-1:].isdigit():
             toks[k - 1].n += re.sub(r"\D", "", palavras[k]["p"])  # dígitos crus ("5", não "cinco")
             toks[k - 1].r = toks[k - 1].n[:5]
             toks[k].n = toks[k].r = ""
@@ -91,17 +91,17 @@ def _sim(a, b):
     return 0.7 if _cache[k] else 0.0
 
 
-def alinhar(frase, trans, ini, fim):
+def align(frase, trans, ini, fim):
     """Frase inteira × trecho trans[ini:fim] com início/fim livres no trecho. → (nota, i, j, casadas)."""
     n, m = len(frase), fim - ini
     ant = [0.0] * (m + 1)  # linha 0: começar em qualquer ponto do trecho é grátis
     orig = list(range(m + 1))  # onde começou o alinhamento que chega em (i, j)
     for i in range(1, n + 1):
-        cur, cori = [FALTA * i] + [0.0] * m, [0] + [0] * m
+        cur, cori = [MISSING * i] + [0.0] * m, [0] + [0] * m
         for j in range(1, m + 1):
             s = _sim(frase[i - 1], trans[ini + j - 1])
-            diag = ant[j - 1] + (IGUAL if s == 1 else PARECIDA if s else TROCA)
-            cima, esq = ant[j] + FALTA, cur[j - 1] + (SOBRA if trans[ini + j - 1].n else 0)
+            diag = ant[j - 1] + (EQUAL if s == 1 else SIMILAR if s else SWAP)
+            cima, esq = ant[j] + MISSING, cur[j - 1] + (LEFTOVER if trans[ini + j - 1].n else 0)
             if diag >= cima and diag >= esq:
                 cur[j], cori[j] = diag, orig[j - 1]
             elif cima >= esq:
@@ -113,7 +113,7 @@ def alinhar(frase, trans, ini, fim):
     return ant[j] / n, ini + orig[j], ini + j
 
 
-def candidatos(frase, trans, ate):
+def candidates(frase, trans, ate):
     """Tomadas possíveis da frase antes do índice `ate`: [(nota, i, j)] sem repetição."""
     n = len(frase)
     inicios = {f.n for f in frase[:3]}
@@ -122,25 +122,25 @@ def candidatos(frase, trans, ate):
         if trans[i].n not in inicios and not any(_sim(trans[i], f) for f in frase[:3]):
             continue
         fim = min(ate, i + int(n * 1.6) + 4)
-        nota, a, b = alinhar(frase, trans, i, fim)
-        if b > a and (a, b) not in vistos and nota >= REFORMULADA:
+        nota, a, b = align(frase, trans, i, fim)
+        if b > a and (a, b) not in vistos and nota >= REPHRASED:
             vistos.add((a, b))
             saida.append((nota, a, b))
     return saida
 
 
-def _ultimo_reinicio(frase, trans, i, j, nota):
+def _last_restart(frase, trans, i, j, nota):
     """Tomada que contém um recomeço ("Em 2012, os pesquisadores… Em 2012, os pesquisadores David…")
     passa a começar no último recomeço que mantém a nota."""
     for s in range(i + 1, j):
         if any(_sim(trans[s], f) == 1 for f in frase[:2]):
-            n2, a, b = alinhar(frase, trans, s, j)
+            n2, a, b = align(frase, trans, s, j)
             if n2 >= nota - 0.05 and b - a >= len(frase) * 0.6:
                 i, j, nota = a, b, n2
     return i, j, nota
 
 
-def escolher(frases, palavras):
+def choose(frases, palavras):
     """[(i, j, nota, tipo)] por frase do roteiro (None se não achou)."""
     trans = _tokens(palavras)
     toks = [[t for t in map(_Tok, f["texto"].split()) if t] for f in frases]
@@ -149,27 +149,27 @@ def escolher(frases, palavras):
     for k in range(len(frases) - 1, -1, -1):
         if not toks[k]:
             continue
-        cands = candidatos(toks[k], trans, limite)
+        cands = candidates(toks[k], trans, limite)
         if limite < len(palavras):
-            cands = [c for c in cands if palavras[limite]["ini"] - palavras[c[2] - 1]["fim"] <= MAX_RECUO]
+            cands = [c for c in cands if palavras[limite]["ini"] - palavras[c[2] - 1]["fim"] <= MAX_BACKOFF]
         if not cands:
             continue
         melhor = max(c[0] for c in cands)
-        piso = max(melhor - QUASE_MELHOR, BOA if melhor >= BOA else REFORMULADA)
+        piso = max(melhor - ALMOST_BEST, GOOD if melhor >= GOOD else REPHRASED)
         nota, i, j = max((c for c in cands if c[0] >= piso), key=lambda c: c[2])
-        i, j, nota = _ultimo_reinicio(toks[k], trans, i, j, nota)
+        i, j, nota = _last_restart(toks[k], trans, i, j, nota)
         while j < min(len(palavras), limite) and not trans[j] and palavras[j]["ini"] - palavras[j - 1]["fim"] < 0.4:
             j += 1  # o pedaço do número que foi juntado (",7%") vai junto com a tomada
-        escolhas[k] = (i, j, round(nota, 3), "tomada" if nota >= BOA else "reformulada")
+        escolhas[k] = (i, j, round(nota, 3), "tomada" if nota >= GOOD else "reformulada")
         limite = i
     return escolhas, trans, toks
 
 
-def _falas(palavras, ini, fim):
+def _speeches(palavras, ini, fim):
     """Divide palavras[ini:fim] em falas pelas pausas e pela pontuação do Whisper."""
     falas, atual = [], []
     for k in range(ini, fim):
-        if atual and (palavras[k]["ini"] - palavras[k - 1]["fim"] > PAUSA_FALA
+        if atual and (palavras[k]["ini"] - palavras[k - 1]["fim"] > PAUSE_SPEECH
                       or palavras[k - 1]["p"].rstrip()[-1:] in ".?!"):
             falas.append(atual)
             atual = []
@@ -177,7 +177,7 @@ def _falas(palavras, ini, fim):
     return falas + ([atual] if atual else [])
 
 
-def _partir_retakes(falas, viz, trans):
+def _split_retakes(falas, viz, trans):
     """Fala longa com uma frase do roteiro inteira dentro (retake que o Whisper juntou a outra fala) é
     partida: o pedaço que repete a frase vira uma fala própria (que a cobertura depois marca como retake)."""
     saida = []
@@ -187,8 +187,8 @@ def _partir_retakes(falas, viz, trans):
             for f in viz:
                 if len(f) < 4:
                     continue
-                nota, a, b = alinhar(f, trans, ini, fala[-1] + 1)
-                if nota >= BOA and b - a >= 3:
+                nota, a, b = align(f, trans, ini, fala[-1] + 1)
+                if nota >= GOOD and b - a >= 3:
                     pedacos += [list(range(ini, a)), list(range(a, b))]
                     ini = b
         pedacos.append(list(range(ini, fala[-1] + 1)))
@@ -196,7 +196,7 @@ def _partir_retakes(falas, viz, trans):
     return saida
 
 
-def _cobertura(fala, toks_vizinhas, trans):
+def _coverage(fala, toks_vizinhas, trans):
     """Fração das palavras da fala que repetem alguma frase vizinha (retake/começo falso)."""
     fala = [k for k in fala if trans[k]]
     if not fala:
@@ -208,19 +208,19 @@ def _cobertura(fala, toks_vizinhas, trans):
     return melhor
 
 
-def _dedup_improvisos(sobras, trans, janela=120):
+def _dedup_improvisations(sobras, trans, janela=120):
     """Improviso regravado: a versão anterior cobre-se pela seguinte (até `janela` s depois) e sai."""
     imp = [s for s in sobras if s["tipo"] == "improviso"]
     for a in imp:
         depois = [[trans[k] for k in range(b["i"], b["j"]) if trans[k]] for b in imp
                   if b is not a and a["fim"] <= b["ini"] <= a["fim"] + janela]
-        cob = _cobertura(list(range(a["i"], a["j"])), depois, trans) if depois else 0
+        cob = _coverage(list(range(a["i"], a["j"])), depois, trans) if depois else 0
         if cob >= 0.6:
             a.update(manter=False, tipo="retake", confianca=round(min(0.9, cob), 2),
                      motivo="improviso regravado logo depois")
 
 
-def classificar_sobras(frases, palavras, escolhas, trans, toks):
+def classify_leftovers(frases, palavras, escolhas, trans, toks):
     """Trechos fora das tomadas escolhidas, com decisão provisória."""
     usados = [(e[0], e[1], k) for k, e in enumerate(escolhas) if e]
     usados.sort()
@@ -230,11 +230,11 @@ def classificar_sobras(frases, palavras, escolhas, trans, toks):
         if b <= a:
             continue
         viz = [toks[k] for k in range(max(ka - 3, 0), min(kb + 4, len(frases))) if toks[k]]
-        for fala in _partir_retakes(_falas(palavras, a, b), viz, trans):
+        for fala in _split_retakes(_speeches(palavras, a, b), viz, trans):
             texto = " ".join(palavras[k]["p"] for k in fala).strip()
-            t = norm_texto(texto)
-            cob = _cobertura(fala, viz, trans)
-            if RE_BASTIDOR.search(t) and len(fala) <= 12:
+            t = norm_text(texto)
+            cob = _coverage(fala, viz, trans)
+            if RE_BACKSTAGE.search(t) and len(fala) <= 12:
                 tipo, manter, conf, motivo = "bastidor", False, 0.9, "fala de bastidor"
             elif cob >= 0.6:
                 tipo, manter, conf, motivo = "retake", False, round(min(0.95, cob), 2), "repete frase vizinha"
@@ -249,11 +249,11 @@ def classificar_sobras(frases, palavras, escolhas, trans, toks):
     return saida
 
 
-def norm_texto(t):
+def norm_text(t):
     return " ".join(norm(w) for w in t.split())
 
 
-def _duplicados(trechos, trans, janela=75):
+def _duplicates(trechos, trans, janela=75):
     """Improviso/reformulação mantido cujas palavras de conteúdo já estão nas tomadas mantidas por perto
     (antes ou depois, somadas) sai: a mesma ideia dita duas vezes na edição final."""
     tomadas = [t for t in trechos if t["tipo"] == "tomada" and t["manter"]]
@@ -277,7 +277,7 @@ def _duplicados(trechos, trans, janela=75):
                      motivo="repete uma tomada mantida", por="regra")
 
 
-def _continuacoes(trechos, palavras):
+def _continuations(trechos, palavras):
     """Fala curta colada no fim de um trecho mantido (ex.: "fecha aspas") continua a frase."""
     for a, b in zip(trechos, trechos[1:]):
         if (a["manter"] and not b["manter"] and b["tipo"] == "improviso"
@@ -285,31 +285,31 @@ def _continuacoes(trechos, palavras):
             b.update(manter=True, tipo="continuacao", confianca=0.6, motivo="colada no fim da frase anterior")
 
 
-def _conteudo(texto):
+def _content(texto):
     return {norm(w)[:5] for w in texto.split() if len(norm(w)) >= 4}
 
 
-def _reformuladas(frases, escolhas, sobras):
+def _rephrased(frases, escolhas, sobras):
     """Frase do roteiro sem tomada: um improviso entre as frases vizinhas que divide as palavras de
     conteúdo com ela é a versão reformulada (o LLM confirma depois)."""
     for k, e in enumerate(escolhas):
         if e:
             continue
-        alvo = _conteudo(frases[k]["texto"])
+        alvo = _content(frases[k]["texto"])
         if not alvo:
             continue
         for s in sobras:
             if s["tipo"] in ("improviso", "retake") and s["motivo"] != "fala de bastidor" and s["entre"][0] < k < s["entre"][1]:
-                comum = len(alvo & _conteudo(s["texto"])) / len(alvo)
+                comum = len(alvo & _content(s["texto"])) / len(alvo)
                 # frase curta que o Whisper ouviu errado ("inadimplente" → "E nada implante"): compara as letras
-                letras = SequenceMatcher(None, norm_texto(frases[k]["texto"]).replace(" ", ""),
-                                         norm_texto(s["texto"]).replace(" ", "")).ratio()
+                letras = SequenceMatcher(None, norm_text(frases[k]["texto"]).replace(" ", ""),
+                                         norm_text(s["texto"]).replace(" ", "")).ratio()
                 if comum >= 0.5 or (len(frases[k]["norm"]) <= 4 and letras >= 0.7):
                     s.update(manter=True, tipo="reformulada", confianca=0.45, frase=k,
                              motivo=f"versão própria de: {frases[k]['texto'][:60]}")
 
 
-def _gaguejos(trechos, palavras, trans, frases):
+def _stutters(trechos, palavras, trans, frases):
     """Palavra repetida colada dentro de uma tomada ("eram Eram 81", "é é de longe", "um um método") que o roteiro
     não repete: a primeira sai (vira um trecho próprio, cortado no ponto menos audível)."""
     saida = []
@@ -317,7 +317,7 @@ def _gaguejos(trechos, palavras, trans, frases):
         if not (t["manter"] and t["tipo"] in ("tomada", "reformulada")):
             saida.append(t)
             continue
-        rot = norm_texto(frases[t["frase"]]["texto"]) if t.get("frase") is not None else ""
+        rot = norm_text(frases[t["frase"]]["texto"]) if t.get("frase") is not None else ""
         cortes, k = [], t["i"]  # [(início, fim)] da 1ª cópia de 1–3 palavras repetidas em seguida
         while k < t["j"] - 1:
             for n in (3, 2, 1):
@@ -343,8 +343,8 @@ def _gaguejos(trechos, palavras, trans, frases):
     return saida
 
 
-def decidir(frases, palavras):
-    escolhas, trans, toks = escolher(frases, palavras)
+def decide(frases, palavras):
+    escolhas, trans, toks = choose(frases, palavras)
     trechos = []
     for k, e in enumerate(escolhas):
         if e:
@@ -352,30 +352,30 @@ def decidir(frases, palavras):
             trechos.append({"ini": palavras[i]["ini"], "fim": palavras[j - 1]["fim"], "i": i, "j": j,
                             "manter": True, "tipo": tipo, "motivo": f"frase {k + 1} ({nota:.2f})",
                             "confianca": nota, "frase": k, "texto": " ".join(p["p"] for p in palavras[i:j])})
-    sobras = classificar_sobras(frases, palavras, escolhas, trans, toks)
-    _dedup_improvisos(sobras, trans)
-    _reformuladas(frases, escolhas, sobras)
-    trechos = _gaguejos(trechos, palavras, trans, frases) + sobras
+    sobras = classify_leftovers(frases, palavras, escolhas, trans, toks)
+    _dedup_improvisations(sobras, trans)
+    _rephrased(frases, escolhas, sobras)
+    trechos = _stutters(trechos, palavras, trans, frases) + sobras
     trechos.sort(key=lambda t: t["i"])
-    _continuacoes(trechos, palavras)
-    _duplicados(trechos, trans)
+    _continuations(trechos, palavras)
+    _duplicates(trechos, trans)
     achadas = {t.get("frase") for t in trechos if t["manter"]}
     faltando = [f["texto"] for k, f in enumerate(frases) if k not in achadas]
     return trechos, faltando
 
 
-def _comecos_abandonados(trechos):
+def _starts_abandoned(trechos):
     """Fala que sai e é recomeçada logo depois ("Ou seja, os dados não surgiram com a..." → "Ou seja, os dados
     não sugeriram…"): as primeiras palavras repetem o começo do próximo trecho mantido, ou a fala termina em
     reticências. É retake com certeza; não vai para o LLM (que tendia a achar que "completa a frase seguinte")."""
     for k, t in enumerate(trechos):
         if t["manter"] and t["tipo"] not in ("improviso", "retake", "continuacao") or t.get("por") == "claquete":
             continue
-        meu = [w for w in norm_texto(t["texto"]).split() if w]
+        meu = [w for w in norm_text(t["texto"]).split() if w]
         prox = next((x for x in trechos[k + 1:] if x["manter"] and x["tipo"] != "continuacao"), None)
         if not meu or not prox or prox["ini"] - t["fim"] > 20:
             continue
-        seguinte = [w for w in norm_texto(" ".join(x["texto"] for x in trechos[trechos.index(prox):][:2])).split() if w]
+        seguinte = [w for w in norm_text(" ".join(x["texto"] for x in trechos[trechos.index(prox):][:2])).split() if w]
         n = min(3, len(meu))
         recomeca = len(meu) >= 2 and meu[:n] == seguinte[:n] and len(meu) <= len(seguinte) + 2
         apos = trechos[k + 1] if k + 1 < len(trechos) else None
@@ -387,10 +387,10 @@ def _comecos_abandonados(trechos):
                      "fala interrompida (...)" if cortada else "seguida de bastidor (\"droga\")")
 
 
-DUVIDA = 0.7  # trechos com confiança abaixo disto (fora tomadas e bastidor) vão para o LLM local
+DOUBT = 0.7  # trechos com confiança abaixo disto (fora tomadas e bastidor) vão para o LLM local
 
 
-def _leitura_unica(trechos):
+def _reading_single(trechos):
     """A LLM tira a versão do narrador como "tentativa abandonada" mesmo sem outra leitura da frase, e a frase some do
     vídeo. Reformulada que é a única leitura de uma frase do roteiro fica (a última, se houver duas), com a fala
     que a completa logo depois; só sai a que é gaguejo de verdade ("uma matéria que é uma matéria que é...")."""
@@ -413,7 +413,7 @@ def _leitura_unica(trechos):
                             motivo=seguinte["motivo"] + " → completa a frase anterior: fica")
 
 
-def _outra_tomada(t, palavras):
+def _other_take(t, palavras):
     """Retake só existe com outra leitura: a mesma fala de `t` por perto na narração editada ("Um estudo com dados de"
     numa frase e, minutos depois, "um estudo do México, com dados de" são falas diferentes)."""
     alvo = {x for x in (norm(w) for w in t["texto"].split()) if x}
@@ -422,7 +422,7 @@ def _outra_tomada(t, palavras):
     return any(len(alvo & set(fora[i:i + n])) >= 0.7 * len(alvo) for i in range(max(len(fora) - n + 1, 1)))
 
 
-def revisar_com_llm(trechos, frases):
+def review_with_llm(trechos, frases):
     """O LLM local confirma ou inverte as decisões incertas. Sem LLM, fica a regra."""
     from pydantic import BaseModel, Field
 
@@ -455,9 +455,9 @@ def revisar_com_llm(trechos, frases):
             t.update(manter=r.fica in ("B", "ambos"), por="llm", confianca=round(r.confianca, 2),
                      motivo=t["motivo"] + f" → LLM (par): fica {r.fica}, {r.motivo}")
             t.pop("par")
-    _comecos_abandonados(trechos)
+    _starts_abandoned(trechos)
     duvidas = [t for t in trechos if t["tipo"] in ("improviso", "continuacao", "reformulada", "retake")
-               and t["confianca"] < DUVIDA and t.get("por") != "llm"]
+               and t["confianca"] < DOUBT and t.get("por") != "llm"]
     for n, t in enumerate(duvidas, 1):
         events.progress(n, len(duvidas), t["texto"][:40])
         k = trechos.index(t)
@@ -477,11 +477,11 @@ def revisar_com_llm(trechos, frases):
             continue
         t.update(manter=d.manter, confianca=round(d.confianca, 2), por="llm",
                  motivo=f"{t['motivo']} → LLM: {d.motivo}")
-    _leitura_unica(trechos)
+    _reading_single(trechos)
     return duvidas
 
 
-def escalar_ao_claude(trechos, projeto):
+def escalate_to_claude(trechos, projeto):
     """Uma chamada em lote com o que o LLM local deixou incerto (confiança < 0.5 ou sem LLM)."""
     from pydantic import BaseModel
 
@@ -523,12 +523,12 @@ def escalar_ao_claude(trechos, projeto):
     return len(r.decisoes)
 
 
-PAD_INI, PAD_FIM = 0.08, 0.22   # folga antes/depois de cada trecho (o Whisper marca o fim cedo)
-MAX_PAUSA = 1.2                 # s: pausa maior dentro de um trecho mantido é encurtada
-JUNTAR = 0.7                    # pausas naturais menores que isto entre trechos ficam como estão
+PAD_START, PAD_END = 0.08, 0.22   # folga antes/depois de cada trecho (o Whisper marca o fim cedo)
+MAX_PAUSE = 1.2                 # s: pausa maior dentro de um trecho mantido é encurtada
+JOIN = 0.7                    # pausas naturais menores que isto entre trechos ficam como estão
 
 
-def repeticoes(palavras, frases, janela=20, maximo=15):
+def repetitions(palavras, frases, janela=20, maximo=15):
     """Na narração já editada: a mesma sequência de 4+ palavras dita duas vezes em até `janela` s ("Segundo
     motivo, entender o crédito é difícil. Segundo motivo, entender o crédito…") sem que o roteiro a repita
     é um retake que passou. Sai a tentativa anterior (até `maximo` s), fica a última."""
@@ -560,7 +560,7 @@ def repeticoes(palavras, frases, janela=20, maximo=15):
     return saida
 
 
-def _subtrair(intervalos, excluir):
+def _subtract(intervalos, excluir):
     for x0, x1 in excluir:
         novo = []
         for a, b in intervalos:
@@ -575,7 +575,7 @@ def _subtrair(intervalos, excluir):
     return intervalos
 
 
-def _para_bruto(t, intervalos):
+def _to_raw(t, intervalos):
     """Instante na narração editada → instante na gravação bruta."""
     acc = 0.0
     for a, b in intervalos:
@@ -591,9 +591,9 @@ def _para_bruto(t, intervalos):
 # gravação, o silêncio real perto da palavra (técnica de edição de diálogo: cortar só em silêncio, com fade
 # curto) e deixa nele uma pausa natural conforme a pontuação (fim de frase > vírgula > meio de frase).
 Q = 0.01                                  # s por quadro do envelope
-SILENCIO_MIN = 0.12                       # s abaixo do limiar para contar como pausa (fecho de "p/t/k" é mais curto)
-ESTENDE_FIM, ESTENDE_INI = 0.5, 0.3       # quanto a borda pode passar do tempo do Whisper procurando o silêncio
-PAUSAS = {"frase": 0.45, "virgula": 0.28, "meio": 0.14}   # pausa total que fica numa junção
+SILENCE_MIN = 0.12                       # s abaixo do limiar para contar como pausa (fecho de "p/t/k" é mais curto)
+EXTENDS_END, EXTENDS_START = 0.5, 0.3       # quanto a borda pode passar do tempo do Whisper procurando o silêncio
+PAUSES = {"frase": 0.45, "virgula": 0.28, "meio": 0.14}   # pausa total que fica numa junção
 
 
 def envelope(arq):
@@ -603,31 +603,31 @@ def envelope(arq):
     import numpy as np
 
     from esteira import edges
-    from esteira.transcribe import _decodificar
-    x = _decodificar(arq)
+    from esteira.transcribe import _decode
+    x = _decode(arq)
     n = len(x) // 160
     db = 10 * np.log10((x[:n * 160].reshape(n, 160) ** 2).mean(axis=1) + 1e-10)
     validos = db > -95
-    lim = edges.piso(db, 60, validos=validos) - 28 if validos.any() else np.full(n, -50.0)
+    lim = edges.floor(db, 60, validos=validos) - 28 if validos.any() else np.full(n, -50.0)
     return {"db": db, "lim": lim}
 
 
-def _lim(env):
+def _limit(env):
     import numpy as np
     return np.broadcast_to(env["lim"], env["db"].shape)
 
 
-def _pausa(palavra):
+def _pause(palavra):
     p = palavra.rstrip()[-1:]
-    return PAUSAS["frase"] if p in ".?!…" else PAUSAS["virgula"] if p in ",;:" else PAUSAS["meio"]
+    return PAUSES["frase"] if p in ".?!…" else PAUSES["virgula"] if p in ",;:" else PAUSES["meio"]
 
 
-def _silencio(env, t, limite):
+def _silence(env, t, limite):
     """Primeira pausa (≥ SILENCIO_MIN) andando de t até limite (para trás se limite < t) → (ini, fim) ou None."""
-    db, lim, n = env["db"], _lim(env), len(env["db"])
+    db, lim, n = env["db"], _limit(env), len(env["db"])
     passo = 1 if limite >= t else -1
     k, fim_k, corrida = int(t / Q), int(limite / Q), 0
-    precisa = int(SILENCIO_MIN / Q)
+    precisa = int(SILENCE_MIN / Q)
     while 0 <= k < n and (k <= fim_k if passo > 0 else k >= fim_k):
         corrida = corrida + 1 if db[k] < lim[k] else 0
         if corrida >= precisa:
@@ -641,26 +641,26 @@ def _silencio(env, t, limite):
     return None
 
 
-def _vale(env, a, b):
+def _applies(env, a, b):
     """Instante de menor energia entre a e b (sem pausa à vista: o ponto menos audível para cortar)."""
     db = env["db"]
     i, f = max(int(a / Q), 0), min(int(b / Q) + 1, len(db))
     return (i + int(db[i:f].argmin())) * Q if f > i else a
 
 
-def _borda_fim(env, fim_w, prox_ini, folga):
-    limite = min(fim_w + ESTENDE_FIM, max(prox_ini, fim_w + 0.05))
-    s = _silencio(env, fim_w, limite)
-    return s[0] + min(folga, s[1] - s[0]) if s else _vale(env, fim_w, limite)
+def _edge_end(env, fim_w, prox_ini, folga):
+    limite = min(fim_w + EXTENDS_END, max(prox_ini, fim_w + 0.05))
+    s = _silence(env, fim_w, limite)
+    return s[0] + min(folga, s[1] - s[0]) if s else _applies(env, fim_w, limite)
 
 
-def _borda_ini(env, ini_w, ant_fim, folga):
-    limite = max(ini_w - ESTENDE_INI, min(ant_fim, ini_w - 0.05))
-    s = _silencio(env, ini_w, limite)  # começar dentro da palavra lia um "s" inicial fraco como pausa
-    return s[1] - min(folga, s[1] - s[0]) if s else _vale(env, limite, ini_w)
+def _edge_start(env, ini_w, ant_fim, folga):
+    limite = max(ini_w - EXTENDS_START, min(ant_fim, ini_w - 0.05))
+    s = _silence(env, ini_w, limite)  # começar dentro da palavra lia um "s" inicial fraco como pausa
+    return s[1] - min(folga, s[1] - s[0]) if s else _applies(env, limite, ini_w)
 
 
-def _intervalos(trechos, palavras, excluir=(), env=None):
+def _intervals(trechos, palavras, excluir=(), env=None):
     """Trechos mantidos → intervalos de áudio (s) na gravação, sem pausas longas. Com `env` (envelope da
     gravação), cada borda cai no silêncio real; sem ele, folga fixa em volta do tempo do Whisper."""
     blocos = []  # [primeira, última] palavra de cada pedaço contínuo mantido
@@ -668,47 +668,47 @@ def _intervalos(trechos, palavras, excluir=(), env=None):
         for k in range(t["i"], t["j"]):
             # só emenda palavras vizinhas: uma palavra cortada no meio nunca entra por estar perto
             if (blocos and k == blocos[-1][1] + 1
-                    and palavras[k]["ini"] - palavras[k - 1]["fim"] <= (JUNTAR if k == t["i"] else MAX_PAUSA)):
+                    and palavras[k]["ini"] - palavras[k - 1]["fim"] <= (JOIN if k == t["i"] else MAX_PAUSE)):
                 blocos[-1][1] = k
             else:
                 blocos.append([k, k])
     saida = []
     for n, (ki, kf) in enumerate(blocos):
         if env is None:
-            saida.append([max(palavras[ki]["ini"] - PAD_INI, 0.0), palavras[kf]["fim"] + PAD_FIM])
+            saida.append([max(palavras[ki]["ini"] - PAD_START, 0.0), palavras[kf]["fim"] + PAD_END])
             continue
         prox = palavras[kf + 1]["ini"] if kf + 1 < len(palavras) else palavras[kf]["fim"] + 2
         ant = palavras[ki - 1]["fim"] if ki else 0.0
-        pausa_ant = _pausa(palavras[blocos[n - 1][1]]["p"]) if n else PAUSAS["frase"]
-        a = _borda_ini(env, palavras[ki]["ini"], ant, pausa_ant * 0.4)
-        b = _borda_fim(env, palavras[kf]["fim"], prox, _pausa(palavras[kf]["p"]) * 0.6)
+        pausa_ant = _pause(palavras[blocos[n - 1][1]]["p"]) if n else PAUSES["frase"]
+        a = _edge_start(env, palavras[ki]["ini"], ant, pausa_ant * 0.4)
+        b = _edge_end(env, palavras[kf]["fim"], prox, _pause(palavras[kf]["p"]) * 0.6)
         saida.append([max(a, 0.0), max(b, a + 0.05)])
     for x, y in zip(saida, saida[1:]):
         x[1] = min(x[1], y[0])
     if env is None:
-        return _subtrair(saida, excluir)
+        return _subtract(saida, excluir)
     # exclusões (retakes achados na narração editada) também cortam no ponto menos audível
-    excluir = [[_vale(env, x0 - 0.25, x0 + 0.1), _vale(env, x1 - 0.1, x1 + 0.25)] for x0, x1 in excluir]
-    saida = _subtrair(saida, excluir)
+    excluir = [[_applies(env, x0 - 0.25, x0 + 0.1), _applies(env, x1 - 0.1, x1 + 0.25)] for x0, x1 in excluir]
+    saida = _subtract(saida, excluir)
     # regra de ouro (esteira/edges.py): nenhuma borda dentro do núcleo de uma palavra mantida
     from esteira import edges
-    som = env["db"] >= _lim(env)
+    som = env["db"] >= _limit(env)
     fica = [(palavras[k]["ini"], palavras[k]["fim"]) for ki, kf in blocos for k in range(ki, kf + 1)]
     fica = [(a, b) for a, b in fica
             if sum(max(0.0, min(b, y) - max(a, x)) for x, y in excluir) < 0.5 * max(b - a, 1e-3)]
     todas = [(w["ini"], w["fim"]) for w in palavras]
-    return edges.validar(saida, edges.nucleos(fica, som, todas), len(env["db"]) * Q)
+    return edges.validate(saida, edges.cores(fica, som, todas), len(env["db"]) * Q)
 
 
-def _alinhadas(projeto, bruta, palavras):
+def _aligned(projeto, bruta, palavras):
     """Palavras da bruta com ini/fim do alinhamento forçado (`esteira/alignment.py`); sem ele, as do Whisper."""
     from esteira import alignment
     lista = [[w["ini"], w["fim"], w["p"]] for w in palavras]
-    al = alignment.refinar(bruta, lista, projeto.caminho("bordas_palavras.json"), projeto.cfg)
+    al = alignment.refine(bruta, lista, projeto.caminho("bordas_palavras.json"), projeto.cfg)
     return [{**w, "ini": a, "fim": b} for w, (a, b, _) in zip(palavras, al, strict=True)]
 
 
-def renderizar_audio(entrada, intervalos, destino, pasta_tmp):
+def render_audio(entrada, intervalos, destino, pasta_tmp):
     filtros = [f"[0:a]atrim={a:.3f}:{b:.3f},asetpts=PTS-STARTPTS,"
                f"afade=t=in:d=0.01,afade=t=out:st={b - a - 0.015:.3f}:d=0.015[s{n}]"
                for n, (a, b) in enumerate(intervalos)]
@@ -721,7 +721,7 @@ def renderizar_audio(entrada, intervalos, destino, pasta_tmp):
     script.unlink()
 
 
-def relatorio(trechos, faltando, destino, dur_bruta, dur_final, avisos=()):
+def report(trechos, faltando, destino, dur_bruta, dur_final, avisos=()):
     marca = {"tomada": "  ", "reformulada": "R ", "continuacao": "C ", "improviso": "I ", "retake": "↺ ",
              "bastidor": "B ", "fora": "F ", "descartado": "X ", "marcador": "M "}
     with open(destino, "w") as f:
@@ -743,7 +743,7 @@ def relatorio(trechos, faltando, destino, dur_bruta, dur_final, avisos=()):
                     f"{t['texto'][:110]}\n          {t['motivo'][:150]}\n")
 
 
-def _gravacao_nova(projeto):
+def _recording_new(projeto):
     """Narração nova posta na pasta (narracao.*) depois de um limpar: não é a editada que a esteira gerou.
     A gravação bruta anterior e as decisões dela vão para gravacoes_anteriores/<data>/."""
     from datetime import datetime
@@ -782,18 +782,18 @@ def aplicar(projeto, refazer=False):
     """Etapa limpar: gravação bruta → narracao.wav + cortes.json/cortes.txt + transcricao.json."""
     from esteira.core import events
     from esteira.sources import recordings
-    from esteira.sources.importer import atualizar_roteiro
-    from esteira.transcribe import transcrever
-    if atualizar_roteiro(projeto):  # o narrador lê o roteiro do vault: tem de ser o mesmo texto
+    from esteira.sources.importer import update_script
+    from esteira.transcribe import transcribe
+    if update_script(projeto):  # o narrador lê o roteiro do vault: tem de ser o mesmo texto
         print("  roteiro atualizado do vault")
         events.warning("roteiro mudou no vault desde a importação: reimportado")
         refazer = True
-    puxado = recordings.atualizar(projeto)  # WAV mais novo do episódio em ~/Music/Youtube/<Canal>/
+    puxado = recordings.update(projeto)  # WAV mais novo do episódio em ~/Music/Youtube/<Canal>/
     if puxado:
         print(f"  gravação nova encontrada: {puxado}")
         events.warning(f"gravação nova puxada de {puxado}")
     bruta = next(iter(sorted(projeto.pasta.glob("narracao_bruta.*"))), None)
-    if bruta and _gravacao_nova(projeto):
+    if bruta and _recording_new(projeto):
         bruta = None  # a anterior foi para gravacoes_anteriores/; cortes decididos do zero
         refazer = True
     if not bruta:
@@ -805,11 +805,11 @@ def aplicar(projeto, refazer=False):
     tb = projeto.caminho("transcricao_bruta.json")
     # transcrição anterior à retranscrição das palavras esticadas (retakes escondidos): refaz com --refazer
     if not tb.exists() or (refazer and not projeto.carregar_json("transcricao_bruta.json").get("refinada")):
-        transcrever(projeto, projeto.cfg, audio=bruta, saida_json="transcricao_bruta.json")
+        transcribe(projeto, projeto.cfg, audio=bruta, saida_json="transcricao_bruta.json")
     transc = projeto.carregar_json("transcricao_bruta.json")
     from esteira import clapper
-    frases = frases_do_roteiro(projeto.roteiro().read_text())
-    partes = clapper.do_projeto(projeto)
+    frases = sentences_of_script(projeto.roteiro().read_text())
+    partes = clapper.of_project(projeto)
     palavras = transc["palavras"]
     avisos = []
 
@@ -819,7 +819,7 @@ def aplicar(projeto, refazer=False):
         trechos, faltando, avisos = dados["trechos"], dados["faltando"], dados.get("avisos", [])
         print(f"  usando cortes.json existente ({len(trechos)} trechos); --refazer para decidir de novo")
     else:
-        r = clapper.decidir(partes, palavras)
+        r = clapper.decide(partes, palavras)
         if r:  # gravação com "corte/cancela parte N": a escolha das tomadas é do narrador
             trechos, faltando, avisos = r
             n = sum(1 for t in trechos if t["tipo"] == "marcador")
@@ -827,11 +827,11 @@ def aplicar(projeto, refazer=False):
             for a in avisos:
                 events.warning(a)
         else:
-            trechos, faltando = decidir(frases, palavras)
-        duvidas = revisar_com_llm(trechos, frases)
+            trechos, faltando = decide(frases, palavras)
+        duvidas = review_with_llm(trechos, frases)
         print(f"  {len(trechos)} trechos; {len(duvidas)} dúvidas revisadas pelo LLM local")
-        _duplicados(trechos, _tokens(palavras))
-        n = escalar_ao_claude(trechos, projeto)
+        _duplicates(trechos, _tokens(palavras))
+        n = escalate_to_claude(trechos, projeto)
         if n:
             print(f"  {n} trechos decididos pelo Claude")
         arq.write_text(json.dumps({"trechos": trechos, "faltando": faltando, "avisos": avisos},
@@ -841,21 +841,21 @@ def aplicar(projeto, refazer=False):
     excluir = dados.get("excluir", []) if arq.exists() and not refazer else []
     destino = projeto.caminho("narracao.wav")
     env = envelope(bruta)  # energia da gravação: as bordas dos cortes caem no silêncio
-    palavras = _alinhadas(projeto, bruta, palavras)  # tempos certos só para as bordas (decisões já tomadas)
+    palavras = _aligned(projeto, bruta, palavras)  # tempos certos só para as bordas (decisões já tomadas)
     # Passadas: renderiza, transcreve a narração editada e procura retakes que o Whisper escondeu na
     # gravação bruta (palavras "esticadas" sobre um retake). Cada um achado volta para o tempo da bruta
     # como exclusão em cortes.json e o áudio é refeito.
     for passada in range(1, 5):
-        intervalos = _intervalos(trechos, palavras, excluir, env)
-        renderizar_audio(bruta, intervalos, destino, projeto.pasta)
+        intervalos = _intervals(trechos, palavras, excluir, env)
+        render_audio(bruta, intervalos, destino, projeto.pasta)
         st = destino.stat()
         projeto.caminho("narracao.render.json").write_text(json.dumps([st.st_size, st.st_mtime_ns]))
-        novo = transcrever(projeto, projeto.cfg)  # transcricao.json passa a ser da narração editada
-        t2, falta_editada = decidir(frases, novo["palavras"])
+        novo = transcribe(projeto, projeto.cfg)  # transcricao.json passa a ser da narração editada
+        t2, falta_editada = decide(frases, novo["palavras"])
         ocultos = [t for t in t2 if t["tipo"] == "retake" and t["confianca"] >= 0.8 and t["j"] - t["i"] >= 3]
-        ocultos += [r for r in repeticoes(novo["palavras"], frases)
+        ocultos += [r for r in repetitions(novo["palavras"], frases)
                     if not any(o["ini"] < r["fim"] and r["ini"] < o["fim"] for o in ocultos)]
-        falsos = [t for t in ocultos if not _outra_tomada(t, novo["palavras"])]
+        falsos = [t for t in ocultos if not _other_take(t, novo["palavras"])]
         for t in falsos:
             events.debug("retake sem outra tomada: fica", editado=t["ini"], texto=t["texto"][:80])
         ocultos = [t for t in ocultos if t not in falsos]
@@ -864,8 +864,8 @@ def aplicar(projeto, refazer=False):
                 events.warning(f"possível retake na narração editada em {t['ini']:.1f}s: {t['texto'][:70]}")
             break
         for t in ocultos:
-            excluir.append([round(_para_bruto(t["ini"] - 0.05, intervalos), 3),
-                            round(_para_bruto(t["fim"] + 0.15, intervalos), 3)])
+            excluir.append([round(_to_raw(t["ini"] - 0.05, intervalos), 3),
+                            round(_to_raw(t["fim"] + 0.15, intervalos), 3)])
             events.debug("retake oculto", editado=t["ini"], bruto=excluir[-1], texto=t["texto"][:80])
         print(f"  passada {passada}: {len(ocultos)} retakes ocultos achados; refazendo o áudio")
         arq.write_text(json.dumps({"trechos": trechos, "faltando": faltando, "excluir": excluir},
@@ -875,7 +875,7 @@ def aplicar(projeto, refazer=False):
     atual.update(trechos=trechos, faltando=faltando, excluir=excluir, avisos=avisos,
                  intervalos=[[round(a, 4), round(b, 4)] for a, b in intervalos])
     arq.write_text(json.dumps(atual, ensure_ascii=False, indent=1))
-    relatorio(trechos, faltando, projeto.caminho("cortes.txt"), transc["duracao"], novo["duracao"], avisos)
+    report(trechos, faltando, projeto.caminho("cortes.txt"), transc["duracao"], novo["duracao"], avisos)
     # conferência: frases do roteiro que não estão inteiras na narração editada (palavra ou número cortado)
     quebradas = [t for t in t2 if t["tipo"] in ("tomada", "reformulada") and t["confianca"] < 0.75]
     with open(projeto.caminho("cortes.txt"), "a") as f:
@@ -890,7 +890,7 @@ def aplicar(projeto, refazer=False):
     fica = [(palavras[k]["ini"], palavras[k]["fim"], palavras[k]["p"]) for t in trechos if t["manter"]
             for k in range(t["i"], t["j"])]
     fica = [w for w in fica if sum(max(0.0, min(w[1], y) - max(w[0], x)) for x, y in excluir) < 0.5 * (w[1] - w[0])]
-    cortadas = edges.perdas([w[:2] for w in fica], intervalos, [w[2] for w in fica])
+    cortadas = edges.losses([w[:2] for w in fica], intervalos, [w[2] for w in fica])
     with open(projeto.caminho("cortes.txt"), "a") as f:
         for c in cortadas:
             f.write(f"  {c['t']:7.1f}s (bruta) palavra cortada ({c['perdeu']:.0%} fora): {c['texto']}\n")

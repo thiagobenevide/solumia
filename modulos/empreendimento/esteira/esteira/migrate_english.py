@@ -10,7 +10,7 @@ unit of the migration adds its files and values here.
 import argparse
 import json
 
-from esteira.project import CACHE, PROJETOS
+from esteira.project import CACHE, PROJECTS
 
 EVENT_KEYS = {"etapa": "stage", "tipo": "kind", "msg": "message", "dur": "duration", "resta": "remaining",
               "custo": "cost", "seg": "seconds"}
@@ -225,7 +225,7 @@ def main():
     done += migrate_jsonl(CACHE / "rastro.jsonl", CACHE / "trace.jsonl", _trace, args.dry_run)
     logs = set()
     for name in ("eventos.jsonl", "events.jsonl"):
-        for path in PROJETOS.glob(f"*/*/log/{name}"):
+        for path in PROJECTS.glob(f"*/*/log/{name}"):
             logs.add(path.parent)
     for folder in sorted(logs):
         done += migrate_jsonl(folder / "eventos.jsonl", folder / "events.jsonl", _event, args.dry_run)

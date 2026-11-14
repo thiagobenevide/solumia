@@ -13,7 +13,7 @@ def ticks(segundos):
     return int(round(segundos * TICKS))
 
 
-class ErroFilmCraft(RuntimeError):
+class ErrorFilmCraft(RuntimeError):
     pass
 
 
@@ -38,18 +38,18 @@ class FilmCraft:
         while True:
             linha = self.proc.stdout.readline()
             if not linha:
-                raise ErroFilmCraft("o processo filmcraft-cli mcp terminou")
+                raise ErrorFilmCraft("o processo filmcraft-cli mcp terminou")
             msg = json.loads(linha)
             if msg.get("id") == self._id:
                 if "error" in msg:
-                    raise ErroFilmCraft(msg["error"])
+                    raise ErrorFilmCraft(msg["error"])
                 return msg["result"]
 
     def tool(self, nome, **args):
         res = self._rpc("tools/call", {"name": nome, "arguments": args})
         texto = "".join(c.get("text", "") for c in res.get("content", []))
         if res.get("isError"):
-            raise ErroFilmCraft(f"{nome} {args.get('id', '')}: {texto}")
+            raise ErrorFilmCraft(f"{nome} {args.get('id', '')}: {texto}")
         try:
             return json.loads(texto)
         except ValueError:
@@ -59,7 +59,7 @@ class FilmCraft:
         t = time.monotonic()
         try:
             res = self.tool("command_run", id=cmd_id, params=params)
-        except ErroFilmCraft as e:
+        except ErrorFilmCraft as e:
             events.debug(f"fc {cmd_id} falhou", params=str(params)[:300], erro=str(e)[:300])
             raise
         events.debug(f"fc {cmd_id}", ms=round((time.monotonic() - t) * 1000))

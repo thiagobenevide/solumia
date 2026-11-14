@@ -16,25 +16,25 @@ from collections.abc import Iterator
 from pathlib import Path
 
 
-_SEM_COMPRIMIR = {".mov", ".mp4", ".mkv", ".webm", ".png", ".jpg", ".jpeg", ".webp", ".mp3", ".m4a", ".zst"}
+_SEM_COMPRESS = {".mov", ".mp4", ".mkv", ".webm", ".png", ".jpg", ".jpeg", ".webp", ".mp3", ".m4a", ".zst"}
 
 
-def _nos_com_caminho(no):
+def _nodes_with_path(no):
     """Dicionários com `"path"` (string) em qualquer nível do JSON."""
     if isinstance(no, dict):
         if isinstance(no.get("path"), str):
             yield no
         for v in no.values():
-            yield from _nos_com_caminho(v)
+            yield from _nodes_with_path(v)
     elif isinstance(no, list):
         for v in no:
-            yield from _nos_com_caminho(v)
+            yield from _nodes_with_path(v)
 
 
-def _relativizar(dados, arquivo: Path, pasta: Path):
+def _relativize(dados, arquivo: Path, pasta: Path):
     """Troca os caminhos da mídia dentro do episódio por relativos a `arquivo`; devolve a mídia a empacotar."""
     midia = {}
-    for no in _nos_com_caminho(dados):
+    for no in _nodes_with_path(dados):
         c = Path(no["path"])
         if c.is_absolute() and c.is_file() and c.is_relative_to(pasta):
             no["path"] = os.path.relpath(c, arquivo.parent)
@@ -42,7 +42,7 @@ def _relativizar(dados, arquivo: Path, pasta: Path):
     return midia
 
 
-class _Saida(io.RawIOBase):
+class _Output(io.RawIOBase):
     """Destino não-seekable do zip: acumula o que o zipfile escreve até o gerador entregar."""
 
     def __init__(self):
@@ -65,21 +65,21 @@ class _Saida(io.RawIOBase):
         return dados
 
 
-def empacotar(arquivo: Path, pasta: Path, nome: str) -> Iterator[bytes]:
+def pack(arquivo: Path, pasta: Path, nome: str) -> Iterator[bytes]:
     """Zip em fluxo `nome/<caminho no episódio>` com o arquivo (caminhos relativos) e a mídia que ele usa.
 
     Em fluxo porque o pacote do FilmCraft passa de 1 GB e a Cloudflare corta resposta que demora a começar.
     """
     arquivo = Path(arquivo)
     dados = json.loads(arquivo.read_text())
-    midia = _relativizar(dados, arquivo, pasta)
-    saida = _Saida()
+    midia = _relativize(dados, arquivo, pasta)
+    saida = _Output()
     with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as z:
         z.writestr(f"{nome}/{arquivo.relative_to(pasta)}", json.dumps(dados, ensure_ascii=False, indent=1))
         yield saida.tirar()
         for origem, rel in sorted(midia.items()):
             info = zipfile.ZipInfo.from_file(origem, f"{nome}/{rel}")
-            info.compress_type = zipfile.ZIP_STORED if origem.suffix.lower() in _SEM_COMPRIMIR else zipfile.ZIP_DEFLATED
+            info.compress_type = zipfile.ZIP_STORED if origem.suffix.lower() in _SEM_COMPRESS else zipfile.ZIP_DEFLATED
             with open(origem, "rb") as ent, z.open(info, "w", force_zip64=True) as sai:
                 while bloco := ent.read(1 << 20):
                     sai.write(bloco)
@@ -87,12 +87,12 @@ def empacotar(arquivo: Path, pasta: Path, nome: str) -> Iterator[bytes]:
     yield saida.tirar()
 
 
-def _religar(dados, destino: Path, pasta: Path):
+def _reconnect(dados, destino: Path, pasta: Path):
     """Volta os caminhos para a pasta do episódio; devolve quantos não foram achados."""
     marca = f"/{pasta.parent.name}/{pasta.name}/"
     nomes = None
     faltando = 0
-    for no in _nos_com_caminho(dados):
+    for no in _nodes_with_path(dados):
         bruto = no["path"].replace("\\", "/")  # caminho do Windows também
         c = Path(bruto)
         if c.is_absolute() and c.is_file():
@@ -116,7 +116,7 @@ def _religar(dados, destino: Path, pasta: Path):
     return faltando
 
 
-def _extrair(conteudo: bytes, sufixo: str) -> bytes:
+def _extract(conteudo: bytes, sufixo: str) -> bytes:
     """Aceita o próprio arquivo ou um zip que o contenha (o pacote baixado, recompactado)."""
     if not zipfile.is_zipfile(io.BytesIO(conteudo)):
         return conteudo
@@ -130,10 +130,10 @@ def _extrair(conteudo: bytes, sufixo: str) -> bytes:
         return z.read(alvo[0])
 
 
-def receber(conteudo: bytes, destino: Path, pasta: Path) -> dict:
+def receive(conteudo: bytes, destino: Path, pasta: Path) -> dict:
     """Grava a edição enviada no lugar de `destino` (guardando o anterior); devolve mídia não achada."""
     destino = Path(destino)
-    conteudo = _extrair(conteudo, destino.suffix)
+    conteudo = _extract(conteudo, destino.suffix)
     faltando = 0
     if destino.suffix == ".pcraft":
         if not zipfile.is_zipfile(io.BytesIO(conteudo)) or \
@@ -144,7 +144,7 @@ def receber(conteudo: bytes, destino: Path, pasta: Path) -> dict:
             dados = json.loads(conteudo)
         except ValueError as e:
             raise ValueError(f"não é um {destino.suffix} válido") from e
-        faltando = _religar(dados, destino, pasta)
+        faltando = _reconnect(dados, destino, pasta)
         conteudo = json.dumps(dados, ensure_ascii=False, indent=1).encode()
     if destino.exists():
         guarda = pasta / "log" / "envios"

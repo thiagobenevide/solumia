@@ -13,30 +13,30 @@ import subprocess
 from pydantic import BaseModel, Field
 
 from esteira.studio import style as E
-from esteira.project import DADOS
+from esteira.project import DATA
 
-REFS = DADOS / "estudio" / "referencias"
+REFS = DATA / "estudio" / "referencias"
 
 
-class Proposta(BaseModel):
-    pele: E.Pele
+class Proposal(BaseModel):
+    pele: E.Skin
     guia: str = Field(max_length=1200)
-    exemplos: list[E.Exemplo] = Field(max_length=10)
+    exemplos: list[E.Example] = Field(max_length=10)
     cenas: list[str]
     takeover_max: float = Field(ge=0.2, le=0.8)
     sfx: dict[str, str]
     visual: E.Visual
 
 
-def pasta_refs(id_):
+def folder_refs(id_):
     p = REFS / id_
     p.mkdir(parents=True, exist_ok=True)
     return p
 
 
-def _folha(id_):
+def _sheet(id_):
     """Até 12 referências numa grade 4×N de quadros 480×270 (uma imagem só para o Claude ler)."""
-    imgs = sorted(f for f in pasta_refs(id_).iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"))[:12]
+    imgs = sorted(f for f in folder_refs(id_).iterdir() if f.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"))[:12]
     if not imgs:
         return None
     destino = REFS / f"{id_}-folha.jpg"
@@ -53,20 +53,20 @@ def _folha(id_):
     return destino
 
 
-def propor(id_, nicho=""):
+def propose(id_, nicho=""):
     """Pede ao Claude a identidade do estilo a partir das referências; grava a versão nova e devolve o estilo."""
     from esteira.studio import fonts
     from esteira.ai import claude
-    atual = E.carregar(id_)
-    folha = _folha(id_)
+    atual = E.load(id_)
+    folha = _sheet(id_)
     dossie = (
         "Você é diretor de arte de um canal do YouTube. Proponha a IDENTIDADE VISUAL e o GUIA de edição deste estilo, "
         "para uma IA local menor seguir depois em cada vídeo (ela só escolhe cenas de um cardápio, então o guia tem "
         "que ser concreto: quando usar cada cena, tom, o que destacar).\n"
         f"Canal: {atual.canal} · modo {atual.modo} · nicho: {nicho or atual.guia}\n"
         f"Estilo atual (JSON): {atual.model_dump_json()}\n"
-        f"Cenas possíveis: {', '.join(E.CENAS)}. Sons possíveis: {', '.join(E.SONS)}.\n"
-        f"Fontes (use só estas): {', '.join(fonts.CATALOGO)}; fonte_editorial é a serifa dos capítulos e citações.\n"
+        f"Cenas possíveis: {', '.join(E.SCENES)}. Sons possíveis: {', '.join(E.SOUNDS)}.\n"
+        f"Fontes (use só estas): {', '.join(fonts.CATALOG)}; fonte_editorial é a serifa dos capítulos e citações.\n"
         "Variações do kit ('visual'): entradas (desfoque, deslizar, revelar, escala; o código alterna), fundo das "
         "cenas de motion (veu, solido, gradiente), alinhamento (centro, esquerda), cartao (vidro, contorno, solido), "
         "cantos 0–3. Responda só com dados; não escreva código.\n"
@@ -74,15 +74,15 @@ def propor(id_, nicho=""):
            if folha else "Sem referências visuais: proponha a partir do nicho.\n")
         + "Regras: cores em #rrggbb com contraste alto entre texto e fundo; 'destaque' é a cor de ênfase; 5 a 8 "
         "exemplos frase→cena típicos do nicho; takeover_max entre 0,35 e 0,65 (muito motion graphics, mas com respiro).")
-    r = claude.query(dossie, Proposta, {"claude": {}}, f"estilo:{id_}", "estudio_identidade",
+    r = claude.query(dossie, Proposal, {"claude": {}}, f"estilo:{id_}", "estudio_identidade",
                          image=str(folha) if folha else None)
     if not r:
         raise RuntimeError("o Claude não respondeu (teto de custo ou erro); tente de novo")
     novo = atual.model_copy(update={
-        "pele": r.pele.model_copy(update={k: fonts.resolver(v) for k, v in r.pele if k.startswith("fonte_")}),
+        "pele": r.pele.model_copy(update={k: fonts.resolve(v) for k, v in r.pele if k.startswith("fonte_")}),
         "guia": r.guia, "exemplos": r.exemplos, "travado": False,
         "regras": atual.regras.model_copy(update={"visual": r.visual,
-            "filtro": [c for c in E.CENAS if c not in r.cenas] if any(c in E.CENAS for c in r.cenas)
+            "filtro": [c for c in E.SCENES if c not in r.cenas] if any(c in E.SCENES for c in r.cenas)
             else atual.regras.filtro, "takeover_max": r.takeover_max,
-            "sfx": {k: v for k, v in r.sfx.items() if k in E.CENAS and v in E.SONS} or atual.regras.sfx})})
-    return E.salvar(novo, forcar=True)
+            "sfx": {k: v for k, v in r.sfx.items() if k in E.SCENES and v in E.SOUNDS} or atual.regras.sfx})})
+    return E.save(novo, forcar=True)

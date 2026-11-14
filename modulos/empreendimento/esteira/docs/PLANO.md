@@ -114,7 +114,7 @@ tests/             casos dourados (cortes do ep003)
   `citation_pdf_url` → `Referências/Artigos/` + `indice.json`; `trechos`; `citar` gera o bloco `[!cite]` com o
   trecho exatamente como está na página; `checar` confere o roteiro). Skill `roteiro` e agente `roteirista`
   (um vídeo por subagente, lotes de até 4) para "faça os 10 roteiros".
-- Esteira: `obsidian.converter` lê os `[!cite]` → `roteiro.json["citacoes"]` (conferidos no `importar`);
+- Esteira: `obsidian.convert` lê os `[!cite]` → `roteiro.json["citacoes"]` (conferidos no `importar`);
   `graficos` usa a citação marcada (sem LLM) e só tenta adivinhar as fontes que o roteiro não marcou.
 - Formato 9:16: `[video] formato`, sobrescritas `[vertical.*]` (cenas mais curtas, legenda queimada, sem
   cartelas de capítulo nem thumbs), mídia em retrato, layout vertical em todos os modelos gráficos.

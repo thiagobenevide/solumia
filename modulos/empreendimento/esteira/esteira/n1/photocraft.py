@@ -13,11 +13,11 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 
 APP = "photocraft"
-VERSAO = 1
+VERSION = 1
 
-Cor = Annotated[str, Field(pattern=r"^(texto|destaque|alerta|preto|#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?)$")]
-FONTES = {"corpo": "InterVar", "serifa": "Playfair Display", "mono": "JetBrains Mono"}
-PESOS = {100: "Thin", 200: "ExtraLight", 300: "Light", 400: "Regular", 500: "Medium", 600: "SemiBold",
+Color = Annotated[str, Field(pattern=r"^(texto|destaque|alerta|preto|#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?)$")]
+SOURCES = {"corpo": "InterVar", "serifa": "Playfair Display", "mono": "JetBrains Mono"}
+WEIGHTS = {100: "Thin", 200: "ExtraLight", 300: "Light", 400: "Regular", 500: "Medium", 600: "SemiBold",
          700: "Bold", 800: "ExtraBold", 900: "Black"}
 LUTS = Literal["warm", "cool", "tealOrange", "bleachBypass", "fadedFilm", "dayForNight", "monoContrast",
                "crossProcess"]
@@ -27,20 +27,20 @@ class _El(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-class Documento(_El):
+class Document(_El):
     uso: Literal["thumb", "vertical", "foto"] = "thumb"
     largura: int = 1280
     altura: int = 720
 
 
-class Imagem(_El):
+class Image(_El):
     tipo: Literal["imagem"]
     nome: str = "Fundo"
     midia: str
     ajuste: Literal["cobrir", "conter"] = "cobrir"
 
 
-class Ajuste(_El):
+class Adjustment(_El):
     tipo: Literal["ajuste"]
     ajuste: Literal["brilho_contraste", "saturacao", "lut"]
     brilho: float = 0
@@ -55,29 +55,29 @@ class Vinheta(_El):
     bordas: bool = True
 
 
-class Seta(_El):
+class Arrow(_El):
     tipo: Literal["seta"]
     lado: Literal["esquerda", "direita"] = Field(description="lado do texto; a seta aponta para o centro")
-    cor: Cor = "alerta"
+    cor: Color = "alerta"
 
 
-class Titulo(_El):
+class Title(_El):
     tipo: Literal["titulo"]
     conteudo: str = Field(description="palavras em *destaque* entre asteriscos")
     tamanho: float = Field(gt=0, le=0.5, description="fração da altura")
     largura: float = Field(0.5, gt=0, le=1, description="fração da largura")
     lado: Literal["esquerda", "direita"] = "esquerda"
-    cor: Cor = "texto"
-    destaque: Cor = "destaque"
+    cor: Color = "texto"
+    destaque: Color = "destaque"
 
 
-class Selo(_El):
+class Badge(_El):
     tipo: Literal["selo"]
     conteudo: str = Field(max_length=24)
-    fundo: Cor = "alerta"
+    fundo: Color = "alerta"
 
 
-class Caixa(_El):
+class Box(_El):
     tipo: Literal["caixa"]
     conteudo: str
     pos: tuple[float, float] = Field(description="canto superior esquerdo em frações")
@@ -85,72 +85,72 @@ class Caixa(_El):
     tamanho: float = Field(gt=0, le=0.5, description="fração da altura")
     fonte: Literal["corpo", "serifa", "mono"] = "corpo"
     peso: int = Field(800, ge=100, le=900)
-    cor: Cor = "#f4f1ea"
-    destaque: Cor | None = None
+    cor: Color = "#f4f1ea"
+    destaque: Color | None = None
     maiusculas: bool = False
     alinhar: Literal["esquerda", "centro", "direita"] = "esquerda"
     fundo: Literal["nenhum", "contorno", "solido", "vidro", "tarja"] = "nenhum"
-    cor_fundo: Cor = "#0a1122"
+    cor_fundo: Color = "#0a1122"
 
 
 # Tratamento de foto (receita do canal)
-class RecortarSujeito(_El):
+class CropSubject(_El):
     tipo: Literal["recortar_sujeito"]
 
 
-class Reenquadrar(_El):
+class Reframe(_El):
     tipo: Literal["reenquadrar"]
     formato: Literal["16:9", "9:16", "1:1"]
     foco: tuple[float, float] = (0.5, 0.5)
 
 
-class Nitidez(_El):
+class Sharpness(_El):
     tipo: Literal["nitidez"]
     intensidade: float = Field(0.3, ge=0, le=1)
 
 
-class Grao(_El):
+class Grain(_El):
     tipo: Literal["grao"]
     intensidade: float = Field(0.15, ge=0, le=1)
 
 
-class DesfocarFundo(_El):
+class BlurBackground(_El):
     tipo: Literal["desfocar_fundo"]
     intensidade: float = Field(0.3, ge=0, le=1)
 
 
-Elemento = Annotated[Imagem | Ajuste | Vinheta | Seta | Titulo | Selo | Caixa | RecortarSujeito | Reenquadrar
-                     | Nitidez | Grao | DesfocarFundo, Field(discriminator="tipo")]
+Element = Annotated[Image | Adjustment | Vinheta | Arrow | Title | Badge | Box | CropSubject | Reframe
+                     | Sharpness | Grain | BlurBackground, Field(discriminator="tipo")]
 
 
-class Variante(_El):
+class Variant(_El):
     nome: str
     titulo: str | None = None
     selo: str | None = None
 
 
-class Composicao(BaseModel):
+class Composition(BaseModel):
     versao: Literal[1] = 1
-    documento: Documento = Documento()
-    elementos: list[Elemento]
-    variantes: list[Variante] = Field(default_factory=list)
+    documento: Document = Document()
+    elementos: list[Element]
+    variantes: list[Variant] = Field(default_factory=list)
 
 
-DOCUMENTO = Composicao
+DOCUMENT = Composition
 
 
-class FotoDecisao(BaseModel):
+class PhotoDecision(BaseModel):
     """N2 da tarefa `foto_tratar`: o que o modelo decide; o resto é a receita do canal."""
     foco: tuple[float, float] = (0.5, 0.5)
     recortar: bool = False
     separar_planos: bool = False
 
 
-class ErroN1(ValueError):
+class ErrorN1(ValueError):
     pass
 
 
-def _destaques(s, cor):
+def _highlights(s, cor):
     """*destaque* → (texto sem marcas, runs com a cor)."""
     out, runs, ini = "", [], None
     for ch in s:
@@ -182,22 +182,22 @@ class Executor:
     def cor(self, c):
         return c if c.startswith("#") else self.cores[c]
 
-    def executar(self, doc: Composicao | dict, destino: Path) -> Path:
-        doc = doc if isinstance(doc, Composicao) else Composicao.model_validate(doc)
+    def executar(self, doc: Composition | dict, destino: Path) -> Path:
+        doc = doc if isinstance(doc, Composition) else Composition.model_validate(doc)
         w, h = doc.documento.largura, doc.documento.altura
         els = doc.elementos
-        tit = next((e for e in els if isinstance(e, Titulo)), None)
-        selo = next((e for e in els if isinstance(e, Selo)), None)
+        tit = next((e for e in els if isinstance(e, Title)), None)
+        selo = next((e for e in els if isinstance(e, Badge)), None)
         passos, camadas, x_tit = [], {}, 56
         for e in els:
-            if isinstance(e, Imagem):
+            if isinstance(e, Image):
                 caminho = str(self.midias[e.midia]).replace("file://", "")
                 iw, ih = self.tamanho_imagem(caminho)
                 f = max(w / iw, h / ih) if e.ajuste == "cobrir" else min(w / iw, h / ih)
                 passos += [("file.placeEmbedded", {"path": caminho, "fit": False, "scale": round(f * 100, 3),
                                                    "center": [w / 2, h / 2]}),
                            ("layer.renameLayer", {"name": e.nome})]
-            elif isinstance(e, Ajuste):
+            elif isinstance(e, Adjustment):
                 if e.ajuste == "brilho_contraste":
                     passos += [("layer.newAdjustmentLayer.brightnessContrast",
                                 {"brightness": e.brilho, "contrast": e.contraste}),
@@ -219,7 +219,7 @@ class Executor:
                                                  "stroke": None, "fill": {"gradient": {
                                                      "stops": [[0.3, "#00000000"], [1, "#000000c7"]], "scale": 150,
                                                      "style": "radial"}}})]
-            elif isinstance(e, Seta):
+            elif isinstance(e, Arrow):
                 esq = e.lado == "direita"  # texto à direita: rosto à esquerda, seta espelhada
                 x0 = w - 660 - 220 if esq else 660
                 sx = -1.1 if esq else 1.1
@@ -234,11 +234,11 @@ class Executor:
                                                      {"anchor": pt(20, 30), "out": pt(90, 40), "in": pt(20, 30)},
                                                      {"anchor": pt(150, 150), "in": pt(130, 80), "out": pt(150, 150)}]},
                                                  {"closed": False, "knots": [pt(118, 140), pt(152, 160), pt(166, 118)]}]}})]
-            elif isinstance(e, Titulo):
+            elif isinstance(e, Title):
                 tam = round(e.tamanho * h)
                 larg = round(e.largura * w)
                 x_tit = w - 56 - larg if e.lado == "direita" else 56
-                texto, runs = _destaques(e.conteudo, self.cor(e.destaque))
+                texto, runs = _highlights(e.conteudo, self.cor(e.destaque))
                 if not texto:
                     continue
                 passos += [("type.create", {"box": [x_tit, 0, larg, h], "text": texto, "name": "Título",
@@ -255,23 +255,23 @@ class Executor:
                                                            "size": 60, "add": True}),
                            ("type.info", {})]
                 camadas["titulo"] = len(passos) - 1
-            elif isinstance(e, Selo):
+            elif isinstance(e, Badge):
                 x_selo = (w - 56 - round(tit.largura * w) if tit.lado == "direita" else 56) if tit else 56
                 passos += [("type.create", {"x": x_selo + 18, "y": 100, "text": e.conteudo, "name": "Selo (texto)",
                                             "font": "InterVar", "fontStyle": "Black", "size": 44, "color": "#000000",
                                             "tracking": -20}),
                            ("type.info", {})]
                 camadas["selo"] = len(passos) - 1
-            elif isinstance(e, Caixa):
+            elif isinstance(e, Box):
                 k = sum(1 for c in camadas if c.startswith("caixa"))
-                t, rs = _destaques(e.conteudo, self.cor(e.destaque or "destaque"))
+                t, rs = _highlights(e.conteudo, self.cor(e.destaque or "destaque"))
                 if e.maiusculas:
                     t = t.upper()
                 tam = round(e.tamanho * h)
                 cx, cy, cw = w * e.pos[0], h * e.pos[1], w * e.largura
                 passos += [("type.create", {"box": [round(cx), round(cy), round(cw), h], "text": t or " ",
-                                            "name": f"Caixa {k + 1}", "font": FONTES[e.fonte],
-                                            "fontStyle": PESOS.get(e.peso, "ExtraBold"), "size": tam,
+                                            "name": f"Caixa {k + 1}", "font": SOURCES[e.fonte],
+                                            "fontStyle": WEIGHTS.get(e.peso, "ExtraBold"), "size": tam,
                                             "color": self.cor(e.cor), "leading": round(tam * 1.12),
                                             "align": {"centro": "center", "direita": "right"}.get(e.alinhar, "left")})]
                 if rs:
@@ -337,7 +337,7 @@ class Executor:
         passos = []
         for v in doc.variantes:
             if v.titulo is not None and "titulo" in camadas:
-                t, runs = _destaques(v.titulo, self.cor("destaque"))
+                t, runs = _highlights(v.titulo, self.cor("destaque"))
                 passos += [("type.edit", {"layer": res[camadas["titulo"]]["layer"], "text": t, "runs": runs})]
             if v.selo is not None and "selo" in camadas:
                 passos += [("type.edit", {"layer": res[camadas["selo"]]["layer"], "text": v.selo})]
@@ -345,29 +345,29 @@ class Executor:
         return passos + [("layerComp.apply", {"comp": "A"})]
 
     def _tratamento(self, e, w, h):
-        if isinstance(e, RecortarSujeito):
+        if isinstance(e, CropSubject):
             return [("layer.removeBackground", {"refine": True})]
-        if isinstance(e, Reenquadrar):
+        if isinstance(e, Reframe):
             rw, rh = {"16:9": (16, 9), "9:16": (9, 16), "1:1": (1, 1)}[e.formato]
             cw, ch = (w, round(w * rh / rw)) if w * rh / rw <= h else (round(h * rw / rh), h)
             x = min(max(round(e.foco[0] * w - cw / 2), 0), w - cw)
             y = min(max(round(e.foco[1] * h - ch / 2), 0), h - ch)
             return [("image.crop", {"x": x, "y": y, "width": cw, "height": ch})]
-        if isinstance(e, Nitidez):
+        if isinstance(e, Sharpness):
             return [("filter.sharpen.smartSharpen", {"amount": round(40 + 160 * e.intensidade), "radius": 1,
                                                      "reduceNoise": 10})]
-        if isinstance(e, Grao):
+        if isinstance(e, Grain):
             return [("filter.gallery.grain", {"intensity": round(100 * e.intensidade), "contrast": 50,
                                               "grainType": "soft"})]
-        if isinstance(e, DesfocarFundo):
+        if isinstance(e, BlurBackground):
             return [("select.subject", {}), ("select.inverse", {}),
                     ("filter.blur.smartBlur", {"radius": round(2 + 30 * e.intensidade, 1), "threshold": 25,
                                                "quality": "high", "mode": "normal"})]
-        raise ErroN1(f"elemento sem executor: {e.tipo}")
+        raise ErrorN1(f"elemento sem executor: {e.tipo}")
 
 
-def de_dados_thumb(d: dict, w: int, h: int) -> Composicao:
-    """Dados do modelo `thumb` (`thumbs.dados_thumb`) → N1. Ponte do formato antigo do editor/etapa."""
+def of_data_thumb(d: dict, w: int, h: int) -> Composition:
+    """Dados do modelo `thumb` (`thumbs.data_thumb`) → N1. Ponte do formato antigo do editor/etapa."""
     esq = d["layout"] == "rosto_esquerda"
     lado = "direita" if esq else "esquerda"
     els: list[dict] = [
@@ -392,10 +392,10 @@ def de_dados_thumb(d: dict, w: int, h: int) -> Composicao:
                     "maiusculas": bool(c.get("maiusculas")),
                     "alinhar": {"center": "centro", "right": "direita"}.get(c.get("alinhar"), "esquerda"),
                     "fundo": c.get("fundo", "nenhum"), "cor_fundo": c.get("cor_fundo", "#0a1122")})
-    return Composicao.model_validate({"documento": {"uso": "thumb", "largura": w, "altura": h}, "elementos": els})
+    return Composition.model_validate({"documento": {"uso": "thumb", "largura": w, "altura": h}, "elementos": els})
 
 
-def tratamento(receita: dict, decisao: FotoDecisao, formato: str, w: int, h: int) -> Composicao:
+def treatment(receita: dict, decisao: PhotoDecision, formato: str, w: int, h: int) -> Composition:
     """Receita fixa do canal (`[foto]` do perfil) + decisão N2 → composição de tratamento da foto."""
     els: list[dict] = [{"tipo": "imagem", "nome": "Foto", "midia": "foto", "ajuste": "conter"}]
     if receita.get("reenquadrar", True):
@@ -415,4 +415,4 @@ def tratamento(receita: dict, decisao: FotoDecisao, formato: str, w: int, h: int
         els.append({"tipo": "desfocar_fundo", "intensidade": receita["desfoque_fundo"]})
     if decisao.recortar:
         els.append({"tipo": "recortar_sujeito"})
-    return Composicao.model_validate({"documento": {"uso": "foto", "largura": w, "altura": h}, "elementos": els})
+    return Composition.model_validate({"documento": {"uso": "foto", "largura": w, "altura": h}, "elementos": els})

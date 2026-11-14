@@ -16,13 +16,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from esteira.project import DADOS
+from esteira.project import DATA
 
-SEMENTES = Path(__file__).parent / "ritmos"
-PASTA = DADOS / "estudio" / "ritmos"
+SEEDS = Path(__file__).parent / "ritmos"
+FOLDER = DATA / "estudio" / "ritmos"
 
 
-class Perfil(BaseModel):
+class Profile(BaseModel):
     id: Literal["longo", "curto"]
     nome: str
     descricao: str = ""
@@ -40,26 +40,26 @@ class Perfil(BaseModel):
     legenda: dict[str, float | int | str] = Field(default_factory=dict)
 
 
-def carregar(id_):
-    arq = PASTA / f"{id_}.json"
+def load(id_):
+    arq = FOLDER / f"{id_}.json"
     if not arq.exists():
-        arq = SEMENTES / f"{id_}.json"
+        arq = SEEDS / f"{id_}.json"
     if not arq.exists():
         raise KeyError(f"perfil de ritmo inexistente: {id_}")
-    return Perfil.model_validate_json(arq.read_text())
+    return Profile.model_validate_json(arq.read_text())
 
 
-def listar():
-    return [carregar(a.stem) for a in sorted(SEMENTES.glob("*.json"))]
+def list_all():
+    return [load(a.stem) for a in sorted(SEEDS.glob("*.json"))]
 
 
-def salvar(perfil: Perfil):
-    PASTA.mkdir(parents=True, exist_ok=True)
-    (PASTA / f"{perfil.id}.json").write_text(perfil.model_dump_json(indent=1))
+def save(perfil: Profile):
+    FOLDER.mkdir(parents=True, exist_ok=True)
+    (FOLDER / f"{perfil.id}.json").write_text(perfil.model_dump_json(indent=1))
     return perfil
 
 
-def do_roteiro(projeto):
+def of_script(projeto):
     """`ritmo:` do frontmatter do roteiro (longo | curto) ou None."""
     arq = projeto.pasta / "roteiro_original.md"
     if not arq.exists():
@@ -69,20 +69,20 @@ def do_roteiro(projeto):
     return r.group(1) if r else None
 
 
-def id_do(projeto):
+def id_of(projeto):
     """Perfil do vídeo: o do roteiro, senão curto para o Short e longo para o resto."""
-    if r := do_roteiro(projeto):
+    if r := of_script(projeto):
         return r
     arq = projeto.pasta / "roteiro.json"
     short = bool(json.loads(arq.read_text()).get("short")) if arq.exists() else False
     return "curto" if short or projeto.vertical else "longo"
 
 
-def perfil_do(projeto):
-    return carregar(id_do(projeto))
+def profile_of(projeto):
+    return load(id_of(projeto))
 
 
-def aplicar(estilo, perfil: Perfil):
+def aplicar(estilo, perfil: Profile):
     """Cópia do estilo para a produção com o ritmo do perfil (o estilo salvo não muda)."""
     rg = estilo.regras.model_dump()
     rg.update(perfil.regras)
@@ -97,7 +97,7 @@ def aplicar(estilo, perfil: Perfil):
 
 # ---------------------------------------------------------------- direção e conferência
 
-def gancho(cenas, perfil: Perfil, frases):
+def hook(cenas, perfil: Profile, frases):
     """Curto: se nenhuma peça começa nos primeiros `gancho_s`, a primeira frase ganha uma frase de impacto (o
     espectador decide nos 2 primeiros segundos). Devolve as cenas (a nova marcada `por: "ritmo"`)."""
     if not perfil.gancho_s or not frases:
@@ -111,11 +111,11 @@ def gancho(cenas, perfil: Perfil, frases):
     if fim - 0.0 < perfil.peca_s[0]:
         return cenas
     nova = {"frase_i": 0, "frase": f["texto"], "cena": "frase_destaque", "t": 0.0, "ate": round(fim, 3),
-            "titulo": _curta(f["texto"]), "ancora": "", "valores": [], "por": "ritmo", "takeover": False}
+            "titulo": _short(f["texto"]), "ancora": "", "valores": [], "por": "ritmo", "takeover": False}
     return [nova] + cenas
 
 
-def _curta(texto, n=6):
+def _short(texto, n=6):
     """As primeiras palavras da frase (frase de impacto do gancho), com a última em destaque."""
     ws = re.sub(r"[.!?…]+$", "", texto.strip()).split()[:n]
     if len(ws) > 1:
@@ -124,13 +124,13 @@ def _curta(texto, n=6):
 
 
 # peça parecida para trocar na repetição (a alternativa precisa estar no cardápio do canal)
-TROCAS = {"frase_destaque": "lettering", "lettering": "frase_destaque", "contador": "anel_percentual",
+SWAPS = {"frase_destaque": "lettering", "lettering": "frase_destaque", "contador": "anel_percentual",
           "anel_percentual": "contador", "barras_comparacao": "ranking", "ranking": "barras_comparacao",
           "conceito_icone": "termo_tecnico", "termo_tecnico": "conceito_icone", "pergunta_destaque": "frase_destaque",
           "alerta": "carimbo", "carimbo": "alerta", "passo_a_passo": "lista_itens"}
 
 
-def sem_capitulos(cenas, perfil: Perfil):
+def without_chapters(cenas, perfil: Profile):
     """Perfil sem capítulos (curto): cartela de capítulo vira frase de impacto sobre a mídia."""
     if not perfil.capitulos:
         for c in cenas:
@@ -139,7 +139,7 @@ def sem_capitulos(cenas, perfil: Perfil):
     return cenas
 
 
-def anti_repeticao(cenas, perfil: Perfil, trocas=None):
+def anti_repetition(cenas, perfil: Profile, trocas=None):
     """A mesma peça dentro de `anti_repeticao_s` troca pela parecida (`trocas[peça]`, se o canal tiver); sem
     alternativa, só vira mídia quando repete colada na anterior e não leva dado (número, itens); senão fica e a
     conferência avisa. Cenas da pessoa (`por: "voce"`) e de gatilho ficam. A IA tende a repetir o que funcionou: a
@@ -162,7 +162,7 @@ def anti_repeticao(cenas, perfil: Perfil, trocas=None):
     return cenas
 
 
-def conferir(cenas, midia, duracao, perfil: Perfil):
+def cross_check(cenas, midia, duracao, perfil: Profile):
     """Conferência de ritmo do mapa: trechos sem virada visual (nenhuma peça entrando nem mídia trocando) maiores
     que `virada_s[1]`, gancho do curto, peças fora de `peca_s` e duração do vídeo fora do perfil → avisos."""
     avisos = []

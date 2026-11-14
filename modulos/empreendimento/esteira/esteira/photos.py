@@ -10,18 +10,18 @@ from pathlib import Path
 from esteira.core import events
 
 
-def receita(cfg):
+def recipe(cfg):
     return cfg.get("foto", {})
 
 
-def tratar(projeto, cenas):
+def treat(projeto, cenas):
     """Trata as fotos de `cenas` (as de vídeo ficam como estão). → cenas com `midia` apontando para a tratada."""
-    r = receita(projeto.cfg)
+    r = recipe(projeto.cfg)
     if not r.get("ativo"):
         return cenas
     from esteira import photocraft
     from esteira.n1 import photocraft as N1
-    if not photocraft.disponivel():
+    if not photocraft.available():
         events.warning("fotos: PhotoCraft ausente; seguindo com as originais")
         return cenas
     pasta = projeto.caminho("midia/tratadas")
@@ -36,13 +36,13 @@ def tratar(projeto, cenas):
         destino = pasta / f"{Path(c['midia']).stem}.pcraft"
         png = destino.with_suffix(".png")
         if not png.exists() or png.stat().st_mtime < origem.stat().st_mtime:
-            w, h = photocraft._tamanho_imagem(origem)
-            decisao = N1.FotoDecisao()
-            doc = N1.tratamento(r, decisao, formato, w, h)
-            ex = N1.Executor(photocraft._run, {"foto": origem}, {}, photocraft._tamanho_imagem)
+            w, h = photocraft._size_image(origem)
+            decisao = N1.PhotoDecision()
+            doc = N1.treatment(r, decisao, formato, w, h)
+            ex = N1.Executor(photocraft._run, {"foto": origem}, {}, photocraft._size_image)
             try:
                 ex.executar(doc, destino)
-                photocraft.exportar(destino, png)
+                photocraft.export(destino, png)
             except RuntimeError as e:
                 events.warning(f"fotos: cena {c['id']} sem tratamento ({e})")
                 saida.append(c)
@@ -55,7 +55,7 @@ def tratar(projeto, cenas):
 def _dataset(projeto, cena, r, decisao, formato, rastro):
     try:
         from esteira.dataset import registry as R
-        R.gravar("foto_tratar", grupo=f"foto:{cena.get('midia_id') or cena['midia']}", origem="receita",
+        R.write("foto_tratar", grupo=f"foto:{cena.get('midia_id') or cena['midia']}", origem="receita",
                  contexto={"canal": getattr(projeto, "canal", "") or "", "formato": formato,
                            "descricao": cena.get("descricao") or cena.get("busca_en") or cena.get("busca"),
                            "uso": "camera" if cena.get("camera") else "broll", "receita": r},

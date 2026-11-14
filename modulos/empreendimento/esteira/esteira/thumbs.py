@@ -18,15 +18,15 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from esteira.core import events
-from esteira.curation import ESTILOS
+from esteira.curation import STYLES
 from esteira.graphics import render
 from esteira.ai import local
-from esteira.project import RAIZ
+from esteira.project import ROOT
 
-PY_IMG = RAIZ / ".venv-img" / "bin" / "python"
+PY_IMG = ROOT / ".venv-img" / "bin" / "python"
 
 
-class Conceito(BaseModel):
+class Concept(BaseModel):
     emocao: str = Field(max_length=20)
     gatilho: str = Field(max_length=120)
     texto: str = Field(max_length=40)
@@ -36,17 +36,17 @@ class Conceito(BaseModel):
     seta: bool = False
 
 
-class Conceitos(BaseModel):
-    conceitos: list[Conceito] = Field(max_length=10)
+class Concepts(BaseModel):
+    conceitos: list[Concept] = Field(max_length=10)
 
 
-class Impacto(BaseModel):
+class Impact(BaseModel):
     impacto: int = Field(ge=1, le=10)
     legivel: bool
     problema: str = Field("", max_length=80)
 
 
-def _contexto(projeto):
+def _context(projeto):
     rot = json.loads(projeto.caminho("roteiro.json").read_text()) if projeto.caminho("roteiro.json").exists() else {}
     md = projeto.caminho("roteiro_original.md")
     promessa = ""
@@ -60,14 +60,14 @@ def _contexto(projeto):
             "gancho": " ".join(falas[:3])[:500].replace("*", ""), "numeros": ", ".join(numeros) or "nenhum"}
 
 
-def _palavras(texto, destaque):
+def _words(texto, destaque):
     """Palavras em maiúsculas; a de destaque (ou o número, ou a última) vai na cor de alerta."""
     ps = texto.upper().split()
     alvo = {w for w in destaque.upper().split()} & set(ps) or {next((w for w in ps if re.search(r"\d", w)), ps[-1])}
     return [{"t": p, "d": p in alvo} for p in ps]
 
 
-def _valido(c, roteiro):
+def _valid(c, roteiro):
     """Até 4 palavras (sem contar "R$") e todo número do texto presente no roteiro (nada de "R$ 400%")."""
     palavras = [w for w in c.texto.split() if w.upper() != "R$"]
     if len(palavras) > 4:
@@ -81,11 +81,11 @@ def _valido(c, roteiro):
     return not ("%" in c.texto and "R$" in c.texto.upper())
 
 
-def dados_thumb(e, fundo_uri, cfg):
+def data_thumb(e, fundo_uri, cfg):
     """Dados do modelo `thumb` a partir dos campos editáveis `e` (texto, destaque, layout, seta e, opcionais,
     selo, tamanho, cor_d, alerta, caixas). Usado pela etapa e pelo editor do painel."""
     t = cfg.get("thumb", {})
-    palavras = _palavras(e["texto"], e.get("destaque") or "") if e.get("texto", "").strip() else []
+    palavras = _words(e["texto"], e.get("destaque") or "") if e.get("texto", "").strip() else []
     numero = e["layout"] == "numero"
     n = len(palavras)
     tamanho = e.get("tamanho") or (230 if numero and n <= 2 else 150 if n <= 2 else 132 if n == 3 else 112)
@@ -97,31 +97,31 @@ def dados_thumb(e, fundo_uri, cfg):
                 caixas=e.get("caixas") or [])
 
 
-def compor_arquivo(e, fundo, destino, cfg):
+def compose_file(e, fundo, destino, cfg):
     """Campos editáveis `e` → `destino` (.png). Com o PhotoCraft (`[thumb] motor`, padrão), grava também o
     `.pcraft` em camadas ao lado do PNG, para edição manual."""
     from esteira import photocraft
     t = cfg.get("thumb", {})
     w, h = t.get("largura", 1280), t.get("altura", 720)
-    dados = dados_thumb(e, Path(fundo).resolve().as_uri(), cfg)
-    if t.get("motor", "photocraft") == "photocraft" and photocraft.disponivel():
-        photocraft.compor(dados, Path(destino).with_suffix(".pcraft"), w, h)
+    dados = data_thumb(e, Path(fundo).resolve().as_uri(), cfg)
+    if t.get("motor", "photocraft") == "photocraft" and photocraft.available():
+        photocraft.compose(dados, Path(destino).with_suffix(".pcraft"), w, h)
     else:
-        render.imagem("thumb", dados, destino, w, h)
+        render.image("thumb", dados, destino, w, h)
     return destino
 
 
-def _compor(c, fundo, destino, cfg):
-    return compor_arquivo(c.model_dump(), fundo, destino, cfg)
+def _compose(c, fundo, destino, cfg):
+    return compose_file(c.model_dump(), fundo, destino, cfg)
 
 
-def _gerar_fundos(pedidos):
+def _generate_backgrounds(pedidos):
     if not PY_IMG.exists():
         raise SystemExit("geração de imagem não instalada (.venv-img); veja docs/PLANO.md")
     local.free_gpu()
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(pedidos, f)
-    p = subprocess.Popen([str(PY_IMG), str(RAIZ / "esteira/image/generate_sdxl.py"), f.name],
+    p = subprocess.Popen([str(PY_IMG), str(ROOT / "esteira/image/generate_sdxl.py"), f.name],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     n = 0
     for linha in p.stdout:
@@ -132,7 +132,7 @@ def _gerar_fundos(pedidos):
         raise RuntimeError(f"gerar_sdxl falhou: {p.stderr.read()[-600:]}")
 
 
-def _avaliar(arq, c, ctx):
+def _evaluate(arq, c, ctx):
     """Visão local vê a thumb pequena (como no feed do celular) e dá o impacto."""
     pequena = arq.with_name(f".peq_{arq.stem}.jpg")
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-i", arq, "-vf",
@@ -142,14 +142,14 @@ def _avaliar(arq, c, ctx):
         f'Texto da thumb: "{c.texto}". De 1 a 10, quanto ela faz a pessoa sentir {c.emocao} e precisar clicar '
         f'AGORA (ponto focal claro, emoção forte, contraste)? O texto é legível nesse tamanho? '
         f'Responda em JSON: {{"impacto": 1-10, "legivel": true|false, "problema": "até 10 palavras"}}',
-        Impacto, model=local.VISION, images=[pequena], max_tokens=100)
+        Impact, model=local.VISION, images=[pequena], max_tokens=100)
     pequena.unlink(missing_ok=True)
     return r
 
 
-def _escolher_com_claude(projeto, ranking, ctx):
+def _choose_with_claude(projeto, ranking, ctx):
     from esteira.ai import claude
-    from esteira.media import folha
+    from esteira.media import sheet
 
     class Escolha(BaseModel):
         escolhidas: list[int] = Field(min_length=1, max_length=3)
@@ -157,7 +157,7 @@ def _escolher_com_claude(projeto, ranking, ctx):
 
     top = ranking[:6]
     destino = projeto.caminho("thumbs/folha_escolha.jpg")
-    folha(projeto, [(r["arquivo"], None, str(k)) for k, r in enumerate(top)], destino, colunas=3, w=512, h=288)
+    sheet(projeto, [(r["arquivo"], None, str(k)) for k, r in enumerate(top)], destino, colunas=3, w=512, h=288)
     roteiro = projeto.roteiro().read_text()
 
     def contexto(texto):
@@ -192,12 +192,12 @@ def _dataset(projeto, ctx, ranking, escolhidas):
         ordem = [e["arquivo"].name for e in escolhidas]
         for x in ranking:
             nome = x["arquivo"].name
-            doc = photocraft.ULTIMOS.get(str(x["arquivo"]))
-            R.gravar("thumb_compor", grupo=f"thumb:{projeto.ep}", origem="local:thumb_conceitos",
+            doc = photocraft.LAST.get(str(x["arquivo"]))
+            R.write("thumb_compor", grupo=f"thumb:{projeto.ep}", origem="local:thumb_conceitos",
                      contexto={**ctx, "canal": getattr(projeto, "canal", "") or "", "fundo": x["fundo"],
                                "cena_en": x["conceito"].get("cena_en")},
                      saida=doc.model_dump(mode="json") if doc else {"conceito": x["conceito"]},
-                     versoes={"n1": N1.VERSAO if doc else None, "app": "photocraft"},
+                     versoes={"n1": N1.VERSION if doc else None, "app": "photocraft"},
                      metricas={"nota_visao": x["nota"], "problema": x["problema"],
                                "ordem_claude": ordem.index(nome) + 1 if nome in ordem else None},
                      extra={"episodio": projeto.ep, "arquivo": nome})
@@ -211,22 +211,22 @@ def thumbs(projeto, n=8):
         return
     for velho in projeto.caminho("thumbs").glob("thumb_*.png") if projeto.caminho("thumbs").exists() else []:
         velho.unlink()
-    ctx = _contexto(projeto)
+    ctx = _context(projeto)
     canal = getattr(projeto, "canal", "") or ""
     roteiro = projeto.roteiro().read_text()
     prompt = local.prompt("thumb_conceitos", canal=canal or "documentário",
-                          estilo=ESTILOS.get(canal, "documentário dark"), n_pedidos=n + 4, **ctx)
+                          estilo=STYLES.get(canal, "documentário dark"), n_pedidos=n + 4, **ctx)
     # o LLM às vezes ignora o limite de palavras: pede de novo até ter ao menos 3 válidos
     conceitos, descartados, vistos = [], 0, set()
     for tentativa in range(3):
         aviso = "" if not tentativa else ("\n\nATENÇÃO: na resposta anterior quase todos os textos tinham mais de 4 "
                                           "palavras ou números que não estão no roteiro. Use NO MÁXIMO 4 palavras.")
-        r = local.ask(prompt + aviso, Conceitos, temperature=0.8 + 0.1 * tentativa, max_tokens=3000)
+        r = local.ask(prompt + aviso, Concepts, temperature=0.8 + 0.1 * tentativa, max_tokens=3000)
         for c in (r.conceitos if r else []):
             if c.texto.upper() in vistos:
                 continue
             vistos.add(c.texto.upper())
-            if _valido(c, roteiro):
+            if _valid(c, roteiro):
                 conceitos.append(c)
             else:
                 descartados += 1
@@ -246,18 +246,18 @@ def thumbs(projeto, n=8):
     pedidos = [{"prompt": c.cena_en + estilo, "semente": 1000 + k, "saida": str(f)}
                for k, (c, f) in enumerate(zip(conceitos, fundos)) if not f.exists()]
     if pedidos:
-        _gerar_fundos(pedidos)
+        _generate_backgrounds(pedidos)
 
     ranking = []
     for k, c in enumerate(conceitos):
-        arq = _compor(c, fundos[k], pasta / f"thumb_{k}.png", projeto.cfg)
-        av = _avaliar(arq, c, ctx)
+        arq = _compose(c, fundos[k], pasta / f"thumb_{k}.png", projeto.cfg)
+        av = _evaluate(arq, c, ctx)
         nota = (av.impacto if av else 5) - (3 if av and not av.legivel else 0)
         ranking.append({"arquivo": arq, "nota": nota, "conceito": c.model_dump(), "fundo": fundos[k].name,
                         "problema": av.problema if av else ""})
         events.debug(f"thumb {k}: {c.texto}", nota=nota, problema=av.problema if av else "")
     ranking.sort(key=lambda x: -x["nota"])
-    escolhidas = _escolher_com_claude(projeto, ranking, ctx)
+    escolhidas = _choose_with_claude(projeto, ranking, ctx)
     for k, e in enumerate(escolhidas, 1):
         shutil.copy2(e["arquivo"], projeto.caminho(f"thumb_{k}.png"))
     shutil.copy2(escolhidas[0]["arquivo"], projeto.caminho("thumb.png"))

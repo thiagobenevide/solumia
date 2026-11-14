@@ -13,9 +13,9 @@ from pathlib import Path
 
 from esteira.dataset import registry as R
 from esteira.filmcraft import TICKS
-from esteira.project import Projeto, episodios
+from esteira.project import Project, episodes
 
-TRILHAS = {"Video 1": "base", "Video 2": "apoio", "Video 3": "texto", "Video 4": "grafismo", "Audio 1": "narracao",
+TRACKS = {"Video 1": "base", "Video 2": "apoio", "Video 3": "texto", "Video 4": "grafismo", "Audio 1": "narracao",
            "Audio 2": "musica", "Audio 3": "sfx"}
 TOL = 1 / 60  # s: diferença abaixo de meio quadro não é edição
 
@@ -24,19 +24,19 @@ def _sha(arq: Path) -> str:
     return hashlib.sha1(arq.read_bytes()).hexdigest()
 
 
-def _ja_registrado(sha: str) -> bool:
-    return any((r.get("extra") or {}).get("sha") == sha for r in R.registros())
+def _already_registered(sha: str) -> bool:
+    return any((r.get("extra") or {}).get("sha") == sha for r in R.records())
 
 
 # ---------- FilmCraft ----------
 
-def clipes_fcproj(arq: Path) -> list[dict]:
+def clips_fcproj(arq: Path) -> list[dict]:
     d = json.loads(Path(arq).read_text())
     itens = d["project"]["items"]
     seq = next(x["kind"]["Sequence"] for x in itens.values() if "Sequence" in x["kind"])
     saida = []
     for t in [*seq["video_tracks"], *seq.get("audio_tracks", [])]:
-        trilha = TRILHAS.get(t["name"])
+        trilha = TRACKS.get(t["name"])
         if not trilha:
             continue
         for c in t["items"]:
@@ -49,7 +49,7 @@ def clipes_fcproj(arq: Path) -> list[dict]:
     return saida
 
 
-def clipes_n1(doc: dict, midias: dict) -> list[dict]:
+def clips_n1(doc: dict, midias: dict) -> list[dict]:
     saida = []
     for o in doc["ops"]:
         if o["op"] == "colocar":
@@ -61,9 +61,9 @@ def clipes_n1(doc: dict, midias: dict) -> list[dict]:
     return saida
 
 
-def levantar_fc(doc: dict, midias: dict, editado: Path) -> tuple[list[dict], list[dict]]:
+def lift_fc(doc: dict, midias: dict, editado: Path) -> tuple[list[dict], list[dict]]:
     """Diferença N1 gerado × `.fcproj` editado → (operações N1 de correção, brutos)."""
-    antes, depois = clipes_n1(doc, midias), clipes_fcproj(editado)
+    antes, depois = clips_n1(doc, midias), clips_fcproj(editado)
     ops, brutos, usados = [], [], set()
     for a in antes:
         cands = [(abs(b["em"] - a["em"]), k) for k, b in enumerate(depois) if k not in usados
@@ -97,26 +97,26 @@ def levantar_fc(doc: dict, midias: dict, editado: Path) -> tuple[list[dict], lis
     return ops, brutos
 
 
-def fcproj_editado(projeto: Projeto, editado: Path) -> str | None:
+def fcproj_edited(projeto: Project, editado: Path) -> str | None:
     """Registra `corrigir_montagem` para um `.fcproj` salvo à mão. → id do registro (None se já estava)."""
     sha = _sha(editado)
-    if _ja_registrado(sha):
+    if _already_registered(sha):
         return None
     # a base tem de ser a montagem que a app executou ANTES da edição (com o rastro N0); uma tradução feita
     # depois, pelo plano atual, misturaria replanejamento com edição humana
-    base = R.ultimo(f"ep:{projeto.ep}", "montar")
+    base = R.last(f"ep:{projeto.ep}", "montar")
     quando = __import__("datetime").datetime.fromtimestamp(editado.stat().st_mtime).strftime("%Y-%m-%dT%H:%M:%S")
     if not base or base.get("n0") is None or base["t"] > quando or not (base.get("extra") or {}).get("midias"):
         raise ValueError("sem a montagem executada antes da edição (edição anterior ao registro)")
-    doc = R.ler_artefato(base["saida"]["n1"])
-    ops, brutos = levantar_fc(doc, base["extra"]["midias"], editado)
+    doc = R.read_artifact(base["saida"]["n1"])
+    ops, brutos = lift_fc(doc, base["extra"]["midias"], editado)
     if not ops and not brutos:
         return None
-    return R.gravar("corrigir_montagem", grupo=f"ep:{projeto.ep}", pai=base["id"], origem="humano",
+    return R.write("corrigir_montagem", grupo=f"ep:{projeto.ep}", pai=base["id"], origem="humano",
                     contexto={"montagem": base["saida"]["n1"], "episodio": projeto.ep,
                               "formato": base["contexto"].get("formato"), "modo": base["contexto"].get("modo")},
                     saida={"versao": 1, "ops": ops}, humano={"veredito": "editada", "nota": None, "motivo": None,
-                                                              "comentario": None, "em": R._agora()},
+                                                              "comentario": None, "em": R._now()},
                     versoes={"n1": 1, "app": "filmcraft"},
                     extra={"episodio": projeto.ep, "arquivo": editado.name, "sha": sha, "brutos": brutos[:50]})
 
@@ -130,7 +130,7 @@ def _info(pcraft: Path) -> dict:
     return json.loads(r.stdout)
 
 
-def levantar_pc(doc: dict, info: dict) -> tuple[dict, list[dict]]:
+def lift_pc(doc: dict, info: dict) -> tuple[dict, list[dict]]:
     """Composição N1 + árvore de camadas do `.pcraft` editado → (composição com os textos editados, brutos)."""
     camadas = {lay["name"]: lay for lay in info.get("layers", [])}
     novo, brutos = json.loads(json.dumps(doc)), []
@@ -161,44 +161,44 @@ def levantar_pc(doc: dict, info: dict) -> tuple[dict, list[dict]]:
     return novo, brutos
 
 
-def pcraft_editado(projeto: Projeto, pcraft: Path) -> str | None:
+def pcraft_edited(projeto: Project, pcraft: Path) -> str | None:
     sha = _sha(pcraft)
-    if _ja_registrado(sha):
+    if _already_registered(sha):
         return None
-    base = R.ultimo(f"thumb:{projeto.ep}", "thumb_compor", arquivo=pcraft.with_suffix(".png").name)
-    if not base or "elementos" not in (R.ler_artefato(base["saida"]["n1"]) or {}):
+    base = R.last(f"thumb:{projeto.ep}", "thumb_compor", arquivo=pcraft.with_suffix(".png").name)
+    if not base or "elementos" not in (R.read_artifact(base["saida"]["n1"]) or {}):
         return None
-    doc = R.ler_artefato(base["saida"]["n1"])
-    novo, brutos = levantar_pc(doc, _info(pcraft))
+    doc = R.read_artifact(base["saida"]["n1"])
+    novo, brutos = lift_pc(doc, _info(pcraft))
     if novo == doc and not brutos:
         return None
-    return R.gravar("thumb_compor", grupo=f"thumb:{projeto.ep}", pai=base["id"], origem="humano",
+    return R.write("thumb_compor", grupo=f"thumb:{projeto.ep}", pai=base["id"], origem="humano",
                     contexto=base["contexto"], saida=novo,
-                    humano={"veredito": "editada", "nota": None, "motivo": None, "comentario": None, "em": R._agora()},
+                    humano={"veredito": "editada", "nota": None, "motivo": None, "comentario": None, "em": R._now()},
                     versoes={"n1": 1, "app": "photocraft"},
                     extra={"episodio": projeto.ep, "arquivo": pcraft.with_suffix(".png").name, "sha": sha,
                            "brutos": brutos[:50]})
 
 
-def varrer() -> list[str]:
+def sweep() -> list[str]:
     """Procura edições à mão ainda não registradas em todos os episódios. → linhas de relatório."""
     from esteira import photocraft
     saida = []
-    for pasta in episodios():
+    for pasta in episodes():
         try:
-            p = Projeto(pasta)
+            p = Project(pasta)
         except SystemExit:
             continue
         for arq in sorted(p.pasta.glob("projeto.manual-*.fcproj")):
             try:
-                if rg := fcproj_editado(p, arq):
+                if rg := fcproj_edited(p, arq):
                     saida.append(f"{p.ep}: {arq.name} → {rg}")
             except (KeyError, ValueError, StopIteration) as e:
                 saida.append(f"{p.ep}: {arq.name} não levantado ({e})")
         for pc in sorted(p.caminho("thumbs").glob("*.pcraft")) if p.caminho("thumbs").exists() else []:
-            if photocraft.editado(pc):
+            if photocraft.edited(pc):
                 try:
-                    if rg := pcraft_editado(p, pc):
+                    if rg := pcraft_edited(p, pc):
                         saida.append(f"{p.ep}: {pc.name} → {rg}")
                 except (RuntimeError, KeyError, ValueError) as e:
                     saida.append(f"{p.ep}: {pc.name} não levantado ({e})")

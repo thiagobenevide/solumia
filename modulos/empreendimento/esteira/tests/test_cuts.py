@@ -11,9 +11,9 @@ DADOS = Path(__file__).parent / "dados"
 
 @pytest.fixture(scope="module")
 def resultado():
-    frases = C.frases_do_roteiro((DADOS / "ep003_roteiro.txt").read_text())
+    frases = C.sentences_of_script((DADOS / "ep003_roteiro.txt").read_text())
     pal = json.loads((DADOS / "ep003_transcricao_bruta.json").read_text())["palavras"]
-    trechos, faltando = C.decidir(frases, pal)
+    trechos, faltando = C.decide(frases, pal)
     return trechos, faltando
 
 

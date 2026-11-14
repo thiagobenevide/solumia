@@ -11,21 +11,21 @@ import urllib.request
 from datetime import date, datetime
 from pathlib import Path
 
-from esteira.project import CACHE, PROJETOS, RAIZ
+from esteira.project import CACHE, PROJECTS, ROOT
 
-PROMPTS = RAIZ / "esteira" / "ai" / "prompts"
-PROMPTS_DO_NO = {
+PROMPTS = ROOT / "esteira" / "ai" / "prompts"
+PROMPTS_DO_NODE = {
     "r_fatos": ["roteiro_trechos"], "r_partes": ["roteiro_parte"], "clean": ["corte", "corte_par"],
     "curate": ["curadoria"], "evaluate": ["avaliar"], "graphics": ["grafico_numero", "grafico_nota", "grafico_citacao", "termos_en"],
     "thumb": ["thumb_conceitos"],
 }
-MODELOS = {"qwen3": "qwen3-14b", "qwen_vl": "qwen2.5vl-7b"}  # ids no llama.cpp
-ANTIGOS = {"qwen3-14b": "qwen3:14b", "qwen2.5vl-7b": "qwen2.5vl:7b"}  # mesmo modelo no tempo do Ollama
-ETAPAS = {"transcribe", "clean", "scenes", "curate", "fetch", "evaluate", "graphics", "assemble", "thumb"}
+MODELS = {"qwen3": "qwen3-14b", "qwen_vl": "qwen2.5vl-7b"}  # ids no llama.cpp
+OLD = {"qwen3-14b": "qwen3:14b", "qwen2.5vl-7b": "qwen2.5vl:7b"}  # mesmo modelo no tempo do Ollama
+STAGES = {"transcribe", "clean", "scenes", "curate", "fetch", "evaluate", "graphics", "assemble", "thumb"}
 _memo = {}
 
 
-def _guardado(chave, seg, f):
+def _stored(chave, seg, f):
     v = _memo.get(chave)
     if v and time.time() - v[0] < seg:
         return v[1]
@@ -35,10 +35,10 @@ def _guardado(chave, seg, f):
 
 
 def _cfg():
-    return tomllib.loads((RAIZ / "config.toml").read_text())
+    return tomllib.loads((ROOT / "config.toml").read_text())
 
 
-def _cauda(arq, n_bytes=400_000):
+def _tail(arq, n_bytes=400_000):
     with open(arq, "rb") as f:
         f.seek(max(0, arq.stat().st_size - n_bytes))
         linhas = f.read().decode("utf-8", "replace").splitlines()[1:]
@@ -56,7 +56,7 @@ def _pct(vals, p):
 
 # ---------- chamadas de LLM ----------
 
-def estatisticas(chamadas, hist_monitor=()):
+def call_statistics(chamadas, hist_monitor=()):
     """Resumo das chamadas do rastro + energia estimada pela potência da GPU durante cada chamada."""
     if not chamadas:
         return None
@@ -93,7 +93,7 @@ def estatisticas(chamadas, hist_monitor=()):
     }
 
 
-def ficha_modelo(nome):
+def card_model(nome):
     """Metadados do GGUF pelo llama-server (`/props`; só com o modelo carregado) e o tamanho em disco."""
     def ler():
         from esteira.ai import llama
@@ -112,16 +112,16 @@ def ficha_modelo(nome):
             except (OSError, ValueError):
                 pass
         return ficha
-    return _guardado(f"ficha:{nome}", 600, ler)
+    return _stored(f"ficha:{nome}", 600, ler)
 
 
-def historico_eventos_llm(modelo):
+def history_events_llm(modelo):
     """Chamadas antigas (antes do rastro) gravadas como eventos `llm` nos episódios: ms e tokens gerados."""
     def ler():
         regs = []
-        for arq in PROJETOS.glob("*/*/log/events.jsonl"):
-            for e in _cauda(arq, 800_000):
-                if e.get("message") == "llm" and e.get("modelo") in (modelo, ANTIGOS.get(modelo)):
+        for arq in PROJECTS.glob("*/*/log/events.jsonl"):
+            for e in _tail(arq, 800_000):
+                if e.get("message") == "llm" and e.get("modelo") in (modelo, OLD.get(modelo)):
                     regs.append({"ms": e.get("ms"), "tokens": e.get("tokens"), "etapa": e.get("stage"), "ep": e.get("ep")})
         if not regs:
             return None
@@ -133,7 +133,7 @@ def historico_eventos_llm(modelo):
         return {"n": len(regs), "lat_p50": _pct([m / 1000 for m in ms], .5), "lat_p95": _pct([m / 1000 for m in ms], .95),
                 "tokens_saida": sum(tk), "tok_s_aprox": round(sum(tk) / (sum(ms) / 1000), 1) if ms and tk else None,
                 "por_etapa": sorted(por.items(), key=lambda x: -x[1])}
-    return _guardado(f"evllm:{modelo}", 15, ler)
+    return _stored(f"evllm:{modelo}", 15, ler)
 
 
 def cache_llm():
@@ -144,12 +144,12 @@ def cache_llm():
         with open(arq, "rb") as f:
             n = sum(1 for _ in f)
         return {"respostas": n, "mb": round(arq.stat().st_size / 2**20, 1)}
-    return _guardado("cache_llm", 30, ler)
+    return _stored("cache_llm", 30, ler)
 
 
 def prompts(id_no):
     saida = []
-    for nome in PROMPTS_DO_NO.get(id_no, []):
+    for nome in PROMPTS_DO_NODE.get(id_no, []):
         p = PROMPTS / f"{nome}.md"
         if p.exists():
             saida.append({"nome": nome, "texto": p.read_text()[:6000]})
@@ -161,7 +161,7 @@ def prompts(id_no):
 def claude():
     def ler():
         arq = CACHE / "claude.jsonl"
-        regs = list(_cauda(arq, 2_000_000)) if arq.exists() else []
+        regs = list(_tail(arq, 2_000_000)) if arq.exists() else []
         hoje, mes = date.today().isoformat(), date.today().isoformat()[:7]
         c = _cfg().get("claude", {})
         por = {}
@@ -177,18 +177,18 @@ def claude():
                 "modelo": c.get("modelo"), "ativo": c.get("ativo", True),
                 "por_motivo": sorted(({"motivo": k, "n": v["n"], "custo": round(v["custo"], 4)} for k, v in por.items()), key=lambda x: -x["custo"])[:8],
                 "ultimas": [{"t": r["t"], "ep": r.get("ep"), "motivo": r.get("motivo"), "custo": r.get("custo"), "ok": r.get("resposta") is not None} for r in regs[-8:][::-1]]}
-    return _guardado("claude", 15, ler)
+    return _stored("claude", 15, ler)
 
 
 # ---------- etapas dos episódios ----------
 
-def execucoes(etapa):
+def executions(etapa):
     """Últimas execuções da etapa em todos os episódios + mensagens, avisos e chamadas registradas nelas."""
     def ler():
         runs, msgs, n_llm, n_claude = [], [], 0, 0
-        for arq in PROJETOS.glob("*/*/log/events.jsonl"):
+        for arq in PROJECTS.glob("*/*/log/events.jsonl"):
             atual = None
-            for e in _cauda(arq, 800_000):
+            for e in _tail(arq, 800_000):
                 if e.get("stage") != etapa:
                     continue
                 tipo = e.get("kind")
@@ -216,7 +216,7 @@ def execucoes(etapa):
                 "erros": sum(r["status"] == "erro" for r in runs), "dur_media": round(statistics.mean(durs)) if durs else None,
                 "chamadas_llm": n_llm, "chamadas_claude": n_claude,
                 "mensagens": sorted(msgs, key=lambda m: m["t"])[-12:][::-1]}
-    return _guardado(f"exec:{etapa}", 15, ler)
+    return _stored(f"exec:{etapa}", 15, ler)
 
 
 # ---------- arquivos produzidos ----------
@@ -225,11 +225,11 @@ def _vault():
     return Path(_cfg().get("fontes", {}).get("vault", "~/Documents/github/obsidian")).expanduser()
 
 
-def _quando(ts):
+def _when(ts):
     return datetime.fromtimestamp(ts).strftime("%d/%m %H:%M")
 
 
-def arquivos(id_no):
+def files(id_no):
     v = _vault()
     if id_no in ("r_pdf", "openalex", "r_trechos", "r_citar"):
         def pdfs():
@@ -242,9 +242,9 @@ def arquivos(id_no):
                     itens.append((p.stat().st_mtime, r))
             itens.sort(key=lambda x: -x[0])
             return {"titulo": f"PDFs no índice ({len(d)} no total)", "itens": [
-                {"quando": _quando(m), "nome": f"{r.get('autores', '?').split(',')[0]} ({r.get('ano', '?')}) · {r.get('titulo', '')[:90]}",
+                {"quando": _when(m), "nome": f"{r.get('autores', '?').split(',')[0]} ({r.get('ano', '?')}) · {r.get('titulo', '')[:90]}",
                  "extra": f"{r.get('paginas', '?')} p. · {r.get('revista', '')[:40]}"} for m, r in itens[:10]]}
-        return _guardado("arq:pdfs", 15, pdfs)
+        return _stored("arq:pdfs", 15, pdfs)
     if id_no in ("r_montar", "r_checar", "r_partes", "r_validar", "r_plano"):
         def roteiros():
             fs = sorted(v.glob("Notas/Empreendimento/YouTube/*/Roteiros/Roteiro — *.md"), key=lambda p: -p.stat().st_mtime)[:10]
@@ -252,54 +252,54 @@ def arquivos(id_no):
             for f in fs:
                 txt = f.read_text()
                 status = next((l.split(":", 1)[1].strip() for l in txt.splitlines()[:20] if l.startswith("status:")), "?")
-                itens.append({"quando": _quando(f.stat().st_mtime), "nome": f.stem.replace("Roteiro — ", ""),
+                itens.append({"quando": _when(f.stat().st_mtime), "nome": f.stem.replace("Roteiro — ", ""),
                               "extra": f"{status} · {txt.count('[!cite]')} citações · {len(txt.split())} palavras · {f.parent.parent.name}"})
             return {"titulo": "Roteiros mais recentes no vault", "itens": itens}
-        return _guardado("arq:roteiros", 15, roteiros)
+        return _stored("arq:roteiros", 15, roteiros)
     if id_no in ("graficos", "chromium"):
-        fs = sorted(PROJETOS.glob("*/*/graficos/*.mov"), key=lambda p: -p.stat().st_mtime)[:10]
-        return {"titulo": "Gráficos renderizados", "itens": [{"quando": _quando(f.stat().st_mtime), "nome": f.name,
+        fs = sorted(PROJECTS.glob("*/*/graficos/*.mov"), key=lambda p: -p.stat().st_mtime)[:10]
+        return {"titulo": "Gráficos renderizados", "itens": [{"quando": _when(f.stat().st_mtime), "nome": f.name,
                 "extra": f"{f.parent.parent.parent.name}-{f.parent.parent.name} · {f.stat().st_size / 2**20:.0f} MB"} for f in fs]}
     if id_no in ("thumb", "sdxl"):
-        fs = sorted(PROJETOS.glob("*/*/thumbs/*.png"), key=lambda p: -p.stat().st_mtime)[:10]
-        return {"titulo": "Thumbs e fundos gerados", "itens": [{"quando": _quando(f.stat().st_mtime), "nome": f.name,
+        fs = sorted(PROJECTS.glob("*/*/thumbs/*.png"), key=lambda p: -p.stat().st_mtime)[:10]
+        return {"titulo": "Thumbs e fundos gerados", "itens": [{"quando": _when(f.stat().st_mtime), "nome": f.name,
                 "extra": f"{f.parent.parent.parent.name}-{f.parent.parent.name}"} for f in fs]}
     if id_no in ("buscar", "bancos", "avaliar", "qwen_vl"):
         try:
             from esteira import library
-            e = library.estatisticas()
+            e = library.call_statistics()
             return {"titulo": "Acervo de mídia", "itens": [{"quando": "", "nome": f"{e['itens']} itens · {e['videos']} vídeos · {e['imagens']} imagens",
                     "extra": f"{e['descritos']} descritos pelo modelo de visão · {e['usos']} usos · {e['gb']:.2f} GB"}]}
         except Exception:
             return None
     if id_no in ("montar", "filmcraft"):
-        fs = sorted(PROJETOS.glob("*/*/final.mp4"), key=lambda p: -p.stat().st_mtime)[:10]
-        return {"titulo": "Vídeos exportados", "itens": [{"quando": _quando(f.stat().st_mtime), "nome": f"{f.parent.parent.name}-{f.parent.name}",
+        fs = sorted(PROJECTS.glob("*/*/final.mp4"), key=lambda p: -p.stat().st_mtime)[:10]
+        return {"titulo": "Vídeos exportados", "itens": [{"quando": _when(f.stat().st_mtime), "nome": f"{f.parent.parent.name}-{f.parent.name}",
                 "extra": f"{f.stat().st_size / 2**20:.0f} MB"} for f in fs]}
     if id_no in ("transcrever", "whisper"):
-        fs = sorted(PROJETOS.glob("*/*/transcricao.json"), key=lambda p: -p.stat().st_mtime)[:10]
-        return {"titulo": "Transcrições", "itens": [{"quando": _quando(f.stat().st_mtime), "nome": f"{f.parent.parent.name}-{f.parent.name}",
+        fs = sorted(PROJECTS.glob("*/*/transcricao.json"), key=lambda p: -p.stat().st_mtime)[:10]
+        return {"titulo": "Transcrições", "itens": [{"quando": _when(f.stat().st_mtime), "nome": f"{f.parent.parent.name}-{f.parent.name}",
                 "extra": f"{f.stat().st_size / 1024:.0f} KB"} for f in fs]}
     return None
 
 
 def openalex():
-    env = RAIZ / ".env"
+    env = ROOT / ".env"
     tem = env.exists() and any(l.startswith("OPENALEX_API_KEY=") and l.strip() != "OPENALEX_API_KEY=" for l in env.read_text().splitlines())
     return {"chave": tem}
 
 
 def extras(id_no, chamadas, hist_monitor):
     """Tudo o que a gaveta mostra além do básico, conforme o tipo do nó."""
-    e = {"estat": estatisticas(chamadas, hist_monitor), "prompts": prompts(id_no), "arquivos": arquivos(id_no)}
-    if id_no in MODELOS:
-        e["ficha"] = ficha_modelo(MODELOS[id_no])
-        e["antigo"] = historico_eventos_llm(MODELOS[id_no])
+    e = {"estat": call_statistics(chamadas, hist_monitor), "prompts": prompts(id_no), "arquivos": files(id_no)}
+    if id_no in MODELS:
+        e["ficha"] = card_model(MODELS[id_no])
+        e["antigo"] = history_events_llm(MODELS[id_no])
         e["cache"] = cache_llm()
     if id_no == "claude" or id_no == "editor":
         e["claude"] = claude()
-    if id_no in ETAPAS:
-        e["execucoes"] = execucoes(id_no)
+    if id_no in STAGES:
+        e["execucoes"] = executions(id_no)
     if id_no in ("openalex", "r_openalex"):
         e["openalex"] = openalex()
     return e

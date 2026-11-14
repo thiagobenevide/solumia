@@ -13,13 +13,13 @@ from esteira.core import events
 from esteira.ai import local
 
 
-class Nota(BaseModel):
+class Note(BaseModel):
     nota: int = Field(ge=1, le=5)
     problema: str = Field("", max_length=80)
     sugestao_en: str = Field("", max_length=60)
 
 
-def _quadro(projeto, cena):
+def _frame(projeto, cena):
     """Imagem que representa a mídia: a própria foto ou o quadro do meio do vídeo (512 px)."""
     arq = projeto.pasta / cena["midia"]
     destino = projeto.pasta / "midia" / f".aval_{cena['id']:03d}.jpg"
@@ -32,21 +32,21 @@ def _quadro(projeto, cena):
     return destino
 
 
-def _avaliar(projeto, cenas):
+def _evaluate(projeto, cenas):
     """Nota de cada mídia para a sua cena. A nota já dada no acervo para a mesma mídia e o mesmo termo é
     reaproveitada (sem chamar o modelo de visão); as novas vão para o acervo."""
     notas, reusadas = {}, 0
     for n, c in enumerate(cenas, 1):
         events.progress(n, len(cenas), f"cena {c['id']}")
         termo = c.get("busca_en") or c["busca"]
-        antes = library.avaliacao(c["midia_id"], termo) if c.get("midia_id") else None
+        antes = library.evaluation(c["midia_id"], termo) if c.get("midia_id") else None
         if antes:
-            r, reusadas = Nota(nota=antes["nota"], problema=antes["problema"] or ""), reusadas + 1
+            r, reusadas = Note(nota=antes["nota"], problema=antes["problema"] or ""), reusadas + 1
         else:
             r = local.ask(local.prompt("avaliar", texto=c["texto"], busca=termo),
-                                Nota, model=local.VISION, images=[_quadro(projeto, c)], max_tokens=120)
+                                Note, model=local.VISION, images=[_frame(projeto, c)], max_tokens=120)
             if r and c.get("midia_id"):
-                library.salvar_avaliacao(c["midia_id"], termo, r.nota, r.problema)
+                library.save_evaluation(c["midia_id"], termo, r.nota, r.problema)
         if r:
             c.update(nota_midia=r.nota, problema_midia=r.problema)
             notas[c["id"]] = r
@@ -58,7 +58,7 @@ def _avaliar(projeto, cenas):
 def _claude(projeto, plano, fracas):
     """Cenas que o modelo local não resolveu: uma folha com todas para o Claude sugerir novos termos."""
     from esteira.ai import claude
-    from esteira.media import folha
+    from esteira.media import sheet
 
     class Troca(BaseModel):
         id: int
@@ -72,7 +72,7 @@ def _claude(projeto, plano, fracas):
     quadros = [(projeto.pasta / c["midia"], (c["fim"] - c["inicio"]) / 2 if c.get("midia_tipo") == "video" else None,
                 f"{c['id']}") for c in fracas]
     destino = projeto.caminho("avaliar_claude.jpg")
-    folha(projeto, quadros, destino)
+    sheet(projeto, quadros, destino)
     linhas = "\n".join(f"{c['id']}: fala \"{c['texto'][:140]}\" | busca atual \"{c.get('busca_en')}\" | "
                        f"problema: {c.get('problema_midia', '')}" for c in fracas)
     canal = getattr(projeto, "canal", "") or "documentário"
@@ -93,12 +93,12 @@ def _claude(projeto, plano, fracas):
     return True
 
 
-def avaliar(projeto, rodadas=2, minimo=3):
-    from esteira.media import buscar
+def evaluate(projeto, rodadas=2, minimo=3):
+    from esteira.media import fetch
     plano = projeto.carregar_json("plano.json")
     alvo = [c for c in plano["cenas"] if c.get("midia") and "nota_midia" not in c]
     for rodada in range(1, rodadas + 2):
-        notas = _avaliar(projeto, alvo)
+        notas = _evaluate(projeto, alvo)
         projeto.salvar_json("plano.json", plano)
         fracas = [c for c in alvo if c["id"] in notas and notas[c["id"]].nota < minimo]
         print(f"  rodada {rodada}: {len(notas)} avaliadas, {len(fracas)} fracas"
@@ -112,16 +112,16 @@ def avaliar(projeto, rodadas=2, minimo=3):
             c.pop("nota_midia", None)
         projeto.salvar_json("plano.json", plano)
         local.free_gpu()
-        buscar(projeto, refazer=True, cenas=[c["id"] for c in fracas])
+        fetch(projeto, refazer=True, cenas=[c["id"] for c in fracas])
         plano = projeto.carregar_json("plano.json")
         ids = {c["id"] for c in fracas}
         alvo = [c for c in plano["cenas"] if c["id"] in ids and c.get("midia")]
     fracas = [c for c in plano["cenas"] if c.get("nota_midia", 5) < minimo]
     if fracas and _claude(projeto, plano, fracas):
-        buscar(projeto, refazer=True, cenas=[c["id"] for c in fracas])
+        fetch(projeto, refazer=True, cenas=[c["id"] for c in fracas])
         plano = projeto.carregar_json("plano.json")
         ids = {c["id"] for c in fracas}
-        _avaliar(projeto, [c for c in plano["cenas"] if c["id"] in ids and c.get("midia")])
+        _evaluate(projeto, [c for c in plano["cenas"] if c["id"] in ids and c.get("midia")])
         projeto.salvar_json("plano.json", plano)
     todas = [c.get("nota_midia") for c in plano["cenas"] if c.get("nota_midia")]
     if todas:

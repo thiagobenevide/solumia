@@ -15,16 +15,16 @@ from pathlib import Path
 import psutil
 
 from esteira import library
-from esteira.project import CACHE, PROJETOS
+from esteira.project import CACHE, PROJECTS
 
-INTERVALO = 2.0
+INTERVAL = 2.0
 HIST = deque(maxlen=300)
-_estado = {"atual": {}, "arquivos": [], "energia_wh": {"gpu": 0.0, "cpu": 0.0}, "desde": time.time()}
-_trava = threading.Lock()
+_state = {"atual": {}, "arquivos": [], "energia_wh": {"gpu": 0.0, "cpu": 0.0}, "desde": time.time()}
+_lock = threading.Lock()
 RAPL = Path("/sys/class/powercap/intel-rapl:0")
 
 # Processo → (rótulo, motor). O motor diz quem trabalha: Python, LLM local, GPU (outro modelo) ou Claude.
-CATEGORIAS = [
+CATEGORIES = [
     ("llama-server", "llama.cpp (LLM local)", "local"),
     ("esteira.py", "Esteira", "py"), ("artigo.py", "artigo (PDFs)", "py"),
     ("filmcraft", "FilmCraft", "py"), ("effectcraft", "EffectCraft", "py"), ("photocraft", "PhotoCraft", "py"), ("ffmpeg", "ffmpeg", "py"),
@@ -73,7 +73,7 @@ def _ollama():
     return [{"modelo": m["id"], "vram_gb": llama.gb(m["id"])} for m in ms if m["status"]["value"] == "loaded"]
 
 
-def _saida_de(pid):
+def _output_of(pid):
     """Últimas linhas do arquivo para onde o processo escreve (stdout redirecionado para arquivo)."""
     try:
         alvo = os.readlink(f"/proc/{pid}/fd/1")
@@ -91,7 +91,7 @@ def _saida_de(pid):
     return alvo, [l for l in linhas if l.strip()][-6:]
 
 
-def _processos(vram):
+def _processes(vram):
     saida, grupos = [], {}
     for p in psutil.process_iter(["pid", "name", "cmdline", "create_time", "cpu_percent", "memory_info"]):
         args = p.info["cmdline"] or []
@@ -103,7 +103,7 @@ def _processos(vram):
         if p.info["name"] == "claude" and "-p" in args and "--json-schema" in args:
             cat = ("Claude (consulta da esteira)", "claude")
         else:
-            cat = next(((r, m) for chave, r, m in CATEGORIAS if any(chave in a for a in cabeca)), None)
+            cat = next(((r, m) for chave, r, m in CATEGORIES if any(chave in a for a in cabeca)), None)
         if not cat:
             continue
         rot, motor = cat
@@ -113,7 +113,7 @@ def _processos(vram):
         if rot == "Esteira" or rot.startswith(("artigo", "Claude")):
             args = (cmd.split("esteira.py", 1)[-1].strip() if "esteira.py" in cmd else
                     "artigo " + cmd.split("artigo.py", 1)[-1].strip() if "artigo.py" in cmd else cmd[-120:])
-            arq, linhas = _saida_de(p.info["pid"])
+            arq, linhas = _output_of(p.info["pid"])
             saida.append(dict(info, comando=args[:160], log=arq, linhas=linhas))
         else:
             g = grupos.setdefault(rot, dict(info, n=0, cpu=0.0, ram_mb=0, vram_mb=0))
@@ -124,7 +124,7 @@ def _processos(vram):
     return sorted(saida, key=lambda x: x["desde"]), sorted(grupos.values(), key=lambda g: -g["cpu"])
 
 
-def _arquivos_recentes(raizes, minutos=15, limite=25):
+def _files_recent(raizes, minutos=15, limite=25):
     """Arquivos alterados nos últimos `minutos` (profundidade limitada; ignora mídia pesada e caches)."""
     agora, achados = time.time(), []
     for raiz, prof in raizes:
@@ -147,13 +147,13 @@ def _arquivos_recentes(raizes, minutos=15, limite=25):
     return sorted(achados, key=lambda x: x["seg"])[:limite]
 
 
-def _amostrar(raizes):
+def _sample(raizes):
     psutil.cpu_percent()
     for p in psutil.process_iter(["cpu_percent"]):
         pass
     r0, t0, n = _rapl(), time.time(), 0
     while True:
-        time.sleep(INTERVALO)
+        time.sleep(INTERVAL)
         try:
             g = _gpu()
             r1, t1 = _rapl(), time.time()
@@ -164,44 +164,44 @@ def _amostrar(raizes):
                 cpu_w = round(d / 1e6 / dt, 1)
             r0, t0 = r1, t1
             mem = psutil.virtual_memory()
-            esteira, grupos = _processos(g["por_pid"] if g else {})
+            esteira, grupos = _processes(g["por_pid"] if g else {})
             atual = {"t": t1, "gpu": {k: v for k, v in (g or {}).items() if k != "por_pid"} or None,
                      "cpu": {"uso": psutil.cpu_percent(), "temp": _temp_cpu(), "watts": cpu_w,
                              "nucleos": psutil.cpu_count()},
                      "ram": {"usada_gb": round(mem.used / 2**30, 1), "total_gb": round(mem.total / 2**30, 1)},
                      "ollama": _ollama(), "esteira": esteira, "grupos": grupos}
-            with _trava:
-                e = _estado["energia_wh"]
+            with _lock:
+                e = _state["energia_wh"]
                 if g and g["watts"]:
                     e["gpu"] += g["watts"] * dt / 3600
                 if cpu_w:
                     e["cpu"] += cpu_w * dt / 3600
-                _estado["atual"] = atual
+                _state["atual"] = atual
                 HIST.append({"t": round(t1), "gpu_uso": g and g["uso"], "gpu_w": g and g["watts"],
                              "gpu_temp": g and g["temp"], "cpu_uso": atual["cpu"]["uso"], "cpu_w": cpu_w,
                              "cpu_temp": atual["cpu"]["temp"]})
             if n % 5 == 0:  # arquivos a cada ~10 s
-                arqs = _arquivos_recentes(raizes)
-                with _trava:
-                    _estado["arquivos"] = arqs
+                arqs = _files_recent(raizes)
+                with _lock:
+                    _state["arquivos"] = arqs
             n += 1
         except Exception as ex:  # o monitor nunca derruba o painel
-            with _trava:
-                _estado["erro"] = str(ex)[:200]
+            with _lock:
+                _state["erro"] = str(ex)[:200]
 
 
-def iniciar(cfg):
+def start(cfg):
     f = cfg.get("fontes", {})
     vault = Path(f.get("vault", "~/Documents/github/obsidian")).expanduser()
-    raizes = [(PROJETOS, 3), (vault / "Notas" / "Empreendimento" / "YouTube", 3),
+    raizes = [(PROJECTS, 3), (vault / "Notas" / "Empreendimento" / "YouTube", 3),
               (Path(f.get("artigos", vault / "Referências" / "Artigos")).expanduser(), 1), (CACHE, 1),
-              (library.pasta(), 1)]
-    threading.Thread(target=_amostrar, args=(raizes,), daemon=True).start()
+              (library.folder(), 1)]
+    threading.Thread(target=_sample, args=(raizes,), daemon=True).start()
 
 
-def estado(tarifa_kwh):
-    with _trava:
-        e = dict(_estado)
+def state(tarifa_kwh):
+    with _lock:
+        e = dict(_state)
         kwh = (e["energia_wh"]["gpu"] + e["energia_wh"]["cpu"]) / 1000
         e["energia"] = {"gpu_wh": round(e["energia_wh"]["gpu"], 1), "cpu_wh": round(e["energia_wh"]["cpu"], 1),
                         "kwh": round(kwh, 3), "reais": round(kwh * tarifa_kwh, 2), "tarifa": tarifa_kwh,

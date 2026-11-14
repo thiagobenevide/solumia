@@ -45,7 +45,7 @@ def test_variantes_viram_layer_comps():
 
 def test_tratamento_pela_receita_e_decisao():
     receita = {"lut": "tealOrange", "nitidez": 0.25, "grao": 0.1, "desfoque_fundo": 0.4}
-    doc = N1.tratamento(receita, N1.FotoDecisao(foco=(0.9, 0.5), separar_planos=True, recortar=False), "9:16",
+    doc = N1.treatment(receita, N1.PhotoDecision(foco=(0.9, 0.5), separar_planos=True, recortar=False), "9:16",
                         1920, 1080)
     passos = _executar(doc)[0]
     crop = next(p for c, p in passos if c == "image.crop")
@@ -57,7 +57,7 @@ def test_tratamento_pela_receita_e_decisao():
 
 def test_esquema_fechado():
     with pytest.raises(ValidationError):  # cor fora dos papéis e não hex
-        N1.Composicao.model_validate({"elementos": [{"tipo": "titulo", "conteudo": "x", "tamanho": 0.2,
+        N1.Composition.model_validate({"elementos": [{"tipo": "titulo", "conteudo": "x", "tamanho": 0.2,
                                                      "cor": "vermelho"}]})
     with pytest.raises(ValidationError):  # tamanho em pixels não passa
-        N1.Composicao.model_validate({"elementos": [{"tipo": "titulo", "conteudo": "x", "tamanho": 150}]})
+        N1.Composition.model_validate({"elementos": [{"tipo": "titulo", "conteudo": "x", "tamanho": 150}]})

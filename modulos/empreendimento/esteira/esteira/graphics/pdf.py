@@ -15,7 +15,7 @@ def _norm(p):
     return re.sub(r"(?<=[a-z]{2})\d+$", "", p)  # nota de rodapé colada (cash14–16 → cash)
 
 
-def _melhor_janela(alvo, palavras):
+def _best_window(alvo, palavras):
     """Janela de palavras da página mais parecida com o trecho: (nota, i, j)."""
     n, toks = len(alvo), [_norm(w[4]) for w in palavras]
     melhor = (0.0, 0, 0)
@@ -31,7 +31,7 @@ def _melhor_janela(alvo, palavras):
     return melhor
 
 
-def _linhas(palavras):
+def _lines(palavras):
     """Um retângulo por linha (bloco, linha) das palavras do trecho."""
     por_linha = {}
     for w in palavras:
@@ -40,7 +40,7 @@ def _linhas(palavras):
     return list(por_linha.values())
 
 
-def localizar(arquivo, trecho, pagina=None, minimo=0.75):
+def locate(arquivo, trecho, pagina=None, minimo=0.75):
     """{pagina, nota, rects (pt)} do trecho; tolera hifenização, quebras e pequenas diferenças."""
     alvo = [_norm(p) for p in trecho.split() if _norm(p)]
     doc = pymupdf.open(arquivo)
@@ -48,20 +48,20 @@ def localizar(arquivo, trecho, pagina=None, minimo=0.75):
     achado = None
     for k in paginas:
         palavras = doc[k].get_text("words")
-        nota, i, j = _melhor_janela(alvo, palavras)
+        nota, i, j = _best_window(alvo, palavras)
         if nota >= minimo and (not achado or nota > achado["nota"]):
-            achado = {"pagina": k, "nota": round(nota, 3), "rects": _linhas(palavras[i:j])}
+            achado = {"pagina": k, "nota": round(nota, 3), "rects": _lines(palavras[i:j])}
             if nota > 0.97:
                 break
     return achado
 
 
-def metadados(arquivo):
+def metadata(arquivo):
     m = pymupdf.open(arquivo).metadata or {}
     return {"titulo": m.get("title") or "", "autores": m.get("author") or ""}
 
 
-def imagem_da_pagina(arquivo, pagina, destino, rects):
+def image_of_page(arquivo, pagina, destino, rects):
     """Salva a página em PNG e devolve os retângulos convertidos para pixels da imagem."""
     pg = pymupdf.open(arquivo)[pagina]
     pix = pg.get_pixmap(dpi=DPI)

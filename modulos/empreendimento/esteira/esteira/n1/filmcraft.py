@@ -12,27 +12,27 @@ from pydantic import BaseModel, Field
 from esteira.filmcraft import ticks
 
 APP = "filmcraft"
-VERSAO = 1
+VERSION = 1
 
-TRILHAS = {"base": "V1", "apoio": "V2", "texto": "V3", "grafismo": "V4", "narracao": "A1", "musica": "A2",
+TRACKS = {"base": "V1", "apoio": "V2", "texto": "V3", "grafismo": "V4", "narracao": "A1", "musica": "A2",
            "sfx": "A3"}
-Trilha = Literal["base", "apoio", "texto", "grafismo", "narracao", "musica", "sfx"]
-Transicao = Literal["cross_dissolve", "film_dissolve", "dip_to_black", "dip_to_white", "flash", "glitch", "push",
+Track = Literal["base", "apoio", "texto", "grafismo", "narracao", "musica", "sfx"]
+Transition = Literal["cross_dissolve", "film_dissolve", "dip_to_black", "dip_to_white", "flash", "glitch", "push",
                     "slide", "zoom_blur", "light_leak", "light_sweep", "burn_chroma", "cross_zoom", "luma_fade",
                     "blur_dissolve", "morph_cut"]
-Movimento = Literal["zoom_in", "zoom_out", "pan_dir", "pan_esq"]
-Papel = Literal["texto", "destaque", "acento"]
-FORMATOS = {"16:9": (1920, 1080), "9:16": (1080, 1920)}
+Motion = Literal["zoom_in", "zoom_out", "pan_dir", "pan_esq"]
+Role = Literal["texto", "destaque", "acento"]
+FORMATS = {"16:9": (1920, 1080), "9:16": (1080, 1920)}
 
 # Ken Burns: socos de zoom nos instantes ditos (mesmos valores do montar antigo)
-SOCO, SOCO_DUR, SOCOS_MAX = 6, 0.12, 2  # % de zoom de impacto, s que ele leva, máximo por cena
+PUNCH, PUNCH_DURATION, PUNCHES_MAX = 6, 0.12, 2  # % de zoom de impacto, s que ele leva, máximo por cena
 
 
 class _Op(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-class Sequencia(_Op):
+class Sequence(_Op):
     op: Literal["sequencia"]
     nome: str
     formato: Literal["16:9", "9:16"] = "16:9"
@@ -41,18 +41,18 @@ class Sequencia(_Op):
     altura: int | None = None
 
 
-class Colocar(_Op):
+class Place(_Op):
     op: Literal["colocar"]
     id: str = Field(description="nome do clipe para as operações seguintes")
     midia: str
-    trilha: Trilha
+    trilha: Track
     em: float = Field(ge=0, description="segundos na linha do tempo")
     dur: float | None = Field(None, gt=0, description="padrão: a mídia inteira")
     origem: float | None = Field(None, ge=0, description="ponto de entrada na mídia (s)")
     com_audio: bool = False
 
 
-class Enquadrar(_Op):
+class Frame(_Op):
     op: Literal["enquadrar"]
     alvo: str
     zoom: float = Field(gt=0, description="escala em % (100 = original)")
@@ -61,20 +61,20 @@ class Enquadrar(_Op):
 class KenBurns(_Op):
     op: Literal["ken_burns"]
     alvo: str
-    movimento: Movimento
+    movimento: Motion
     zoom: float = Field(ge=0, le=40, description="% de zoom extra no movimento")
     socos: list[float] = Field(default_factory=list, description="instantes (s) de punch-in")
 
 
-class TransicaoOp(_Op):
+class TransitionOp(_Op):
     op: Literal["transicao"]
     alvo: str
-    tipo: Transicao
+    tipo: Transition
     borda: Literal["entrada", "saida"] = "entrada"
     quadros: int = Field(12, ge=1, le=120)
 
 
-class Ajustes(_Op):
+class Adjustments(_Op):
     exposicao: float = 0
     contraste: float = 0
     saturacao: float = 100
@@ -83,15 +83,15 @@ class Ajustes(_Op):
     vinheta: float = 0
 
 
-class Cor(_Op):
+class Color(_Op):
     op: Literal["cor"]
     acima_de: Literal["base", "apoio"] = "base"
     em: float = 0
     dur: float = Field(gt=0)
-    ajustes: Ajustes
+    ajustes: Adjustments
 
 
-class Texto(_Op):
+class Text(_Op):
     op: Literal["texto"]
     id: str
     conteudo: str
@@ -99,11 +99,11 @@ class Texto(_Op):
     dur: float = Field(gt=0)
     tamanho: float = Field(gt=0, le=0.5, description="fração da altura")
     pos: tuple[float, float] = Field(description="centro em frações (x, y)")
-    cor: Papel = "texto"
+    cor: Role = "texto"
     estilo: Literal["surgir", "pop"] = "surgir"
 
 
-class Musica(_Op):
+class Music(_Op):
     op: Literal["musica"]
     midia: str = "musica"
     de: float = 0
@@ -112,13 +112,13 @@ class Musica(_Op):
     ducking: bool = True
 
 
-class TipoAudio(_Op):
+class KindAudio(_Op):
     op: Literal["tipo_audio"]
     alvo: str
     tipo: Literal["dialogo", "musica", "sfx"]
 
 
-class Legendas(_Op):
+class Captions(_Op):
     op: Literal["legendas"]
     arquivo: str = "legendas"
     tamanho: float = Field(0.05, gt=0, le=0.2, description="fração da altura")
@@ -127,19 +127,19 @@ class Legendas(_Op):
 
 
 # Correções (edição de uma montagem já feita)
-class Cortar(_Op):
+class Cut(_Op):
     op: Literal["cortar"]
     em: float = Field(ge=0)
-    trilha: Trilha | None = None
+    trilha: Track | None = None
 
 
-class Remover(_Op):
+class Remove(_Op):
     op: Literal["remover"]
     alvo: str
     fechar: bool = True
 
 
-class Aparar(_Op):
+class Trim(_Op):
     op: Literal["aparar"]
     alvo: str
     borda: Literal["entrada", "saida"]
@@ -147,20 +147,20 @@ class Aparar(_Op):
     fechar: bool = False
 
 
-class Mover(_Op):
+class Move(_Op):
     op: Literal["mover"]
     alvo: str
     para: float = Field(ge=0)
-    trilha: Trilha | None = None
+    trilha: Track | None = None
 
 
-class Velocidade(_Op):
+class Speed(_Op):
     op: Literal["velocidade"]
     alvo: str
     fator: float = Field(gt=0.05, le=20)
 
 
-class Ganho(_Op):
+class Gain(_Op):
     op: Literal["ganho"]
     alvo: str
     db: float = Field(ge=-60, le=20)
@@ -173,32 +173,32 @@ class Fade(_Op):
     saida: float = Field(0, ge=0)
 
 
-class Marcar(_Op):
+class Mark(_Op):
     op: Literal["marcar"]
     em: float = Field(ge=0)
     nome: str
     cor: Literal["vermelho", "amarelo", "verde", "azul"] = "amarelo"
 
 
-Operacao = Annotated[
-    Sequencia | Colocar | Enquadrar | KenBurns | TransicaoOp | Cor | Texto | Musica | TipoAudio | Legendas
-    | Cortar | Remover | Aparar | Mover | Velocidade | Ganho | Fade | Marcar, Field(discriminator="op")]
+Operation = Annotated[
+    Sequence | Place | Frame | KenBurns | TransitionOp | Color | Text | Music | KindAudio | Captions
+    | Cut | Remove | Trim | Move | Speed | Gain | Fade | Mark, Field(discriminator="op")]
 
 
-class Montagem(BaseModel):
+class Assembly(BaseModel):
     versao: Literal[1] = 1
-    ops: list[Operacao]
+    ops: list[Operation]
 
 
-DOCUMENTO = Montagem
+DOCUMENT = Assembly
 
-_CORES_MARCA = {"vermelho": "Red", "amarelo": "Yellow", "verde": "Green", "azul": "Blue"}
-_TIPO_AUDIO = {"dialogo": "dialogue", "musica": "music", "sfx": "sfx"}
+_COLORS_MARK = {"vermelho": "Red", "amarelo": "Yellow", "verde": "Green", "azul": "Blue"}
+_KIND_AUDIO = {"dialogo": "dialogue", "musica": "music", "sfx": "sfx"}
 _LUMETRI = {"exposicao": "exposure", "contraste": "contrast", "saturacao": "saturation", "temperatura": "temperature",
             "filme": "faded_film", "vinheta": "vignette_amount"}
 
 
-class ErroN1(ValueError):
+class ErrorN1(ValueError):
     pass
 
 
@@ -220,10 +220,10 @@ class Executor:
 
     def _clipes(self, nome):
         if nome not in self.clipes:
-            raise ErroN1(f"clipe desconhecido: {nome}")
+            raise ErrorN1(f"clipe desconhecido: {nome}")
         return self.clipes[nome]
 
-    def importar(self, doc: Montagem):
+    def importar(self, doc: Assembly):
         refs = []
         for o in doc.ops:
             ref = getattr(o, "midia", None)
@@ -231,15 +231,15 @@ class Executor:
                 refs.append(ref)
         faltam = [r for r in refs if r not in self.midias]
         if faltam:
-            raise ErroN1(f"mídia sem caminho: {faltam}")
+            raise ErrorN1(f"mídia sem caminho: {faltam}")
         if refs:
             imp = self.run("file.import", paths=[str(self.midias[r]["caminho"]) for r in refs])
             if imp.get("errors"):
-                raise ErroN1(f"erro ao importar: {imp['errors']}")
+                raise ErrorN1(f"erro ao importar: {imp['errors']}")
             self.itens.update(zip(refs, imp["items"]))
 
-    def executar(self, doc: Montagem | dict) -> list[dict]:
-        doc = doc if isinstance(doc, Montagem) else Montagem.model_validate(doc)
+    def executar(self, doc: Assembly | dict) -> list[dict]:
+        doc = doc if isinstance(doc, Assembly) else Assembly.model_validate(doc)
         self._usa_sfx = any(getattr(o, "trilha", None) == "sfx" for o in doc.ops)
         self.importar(doc)
         for o in doc.ops:
@@ -248,15 +248,15 @@ class Executor:
 
     # ---------- operações ----------
 
-    def _sequencia(self, o: Sequencia):
-        self.w, self.h = (o.largura, o.altura) if o.largura and o.altura else FORMATOS[o.formato]
+    def _sequencia(self, o: Sequence):
+        self.w, self.h = (o.largura, o.altura) if o.largura and o.altura else FORMATS[o.formato]
         self.run("file.newSequence", name=o.nome, width=self.w, height=self.h, fps=o.fps, video=4,
                  audio=3 if self._usa_sfx else 2)
 
     _usa_sfx = False
 
-    def _colocar(self, o: Colocar):
-        trilha = TRILHAS[o.trilha]
+    def _colocar(self, o: Place):
+        trilha = TRACKS[o.trilha]
         p = {"item": self.itens[o.midia], "track": trilha, "seconds": o.em, "insert": False}
         if o.origem is not None:
             p["sourceIn"] = ticks(o.origem)
@@ -269,7 +269,7 @@ class Executor:
         self.clipes[o.id] = self.run("timeline.place", **p)["clips"]
         self.inicio[o.id] = (o.em, o.dur or float(self.midias[o.midia].get("dur") or 0))
 
-    def _enquadrar(self, o: Enquadrar):
+    def _enquadrar(self, o: Frame):
         for c in self._clipes(o.alvo):
             self.run("effects.setParam", clip=c, effect="motion", param="scale", value=o.zoom)
 
@@ -285,12 +285,12 @@ class Executor:
         def base(t):
             return a + (b - a) * (t - ini) / max(fim - ini, 0.01)
         chaves, extra = [(ini, a)], 0
-        for tp in sorted(t for t in o.socos if ini + 0.3 < t < fim - 0.6)[:SOCOS_MAX]:
+        for tp in sorted(t for t in o.socos if ini + 0.3 < t < fim - 0.6)[:PUNCHES_MAX]:
             if tp - chaves[-1][0] < 0.5:
                 continue
             chaves.append((tp, base(tp) + extra))
-            extra += SOCO
-            chaves.append((tp + SOCO_DUR, base(tp + SOCO_DUR) + extra))
+            extra += PUNCH
+            chaves.append((tp + PUNCH_DURATION, base(tp + PUNCH_DURATION) + extra))
         chaves.append((fim, b + extra))
         for t, v in chaves:
             self.run("effects.setParam", clip=clip, effect="motion", param="scale", value=round(v, 2), time=ticks(t),
@@ -302,11 +302,11 @@ class Executor:
             self.run("effects.setParam", clip=clip, effect="motion", param="position", value=[cx - sinal * dx, cy],
                      time=ticks(fim), keyframe=True)
 
-    def _transicao(self, o: TransicaoOp):
+    def _transicao(self, o: TransitionOp):
         self.run("sequence.applyVideoTransition", clip=self._clipes(o.alvo)[0], effect=o.tipo,
                  edge="in" if o.borda == "entrada" else "out", frames=o.quadros)
 
-    def _cor(self, o: Cor):
+    def _cor(self, o: Color):
         item = self.run("file.newAdjustmentLayer", seconds=o.dur)
         item = item["item"] if isinstance(item, dict) else item
         trilha = "V2" if o.acima_de == "base" else "V3"
@@ -316,7 +316,7 @@ class Executor:
         for campo, param in _LUMETRI.items():
             self.run("effects.setParam", clip=aj, effect="lumetri", param=param, value=getattr(o.ajustes, campo))
 
-    def _texto(self, o: Texto):
+    def _texto(self, o: Text):
         e = self.estilo
         tam = round(o.tamanho * self.h, 1)
         tam = int(tam) if tam == int(tam) else tam
@@ -349,10 +349,10 @@ class Executor:
         for t, v in ((t0, 0), (tin, 100), (tout, 100), (t1, 0)):
             self.run("effects.setParam", clip=clip, effect="opacity", param="opacity", value=v, time=t, keyframe=True)
 
-    def _musica(self, o: Musica):
+    def _musica(self, o: Music):
         dur_m = float(self.midias[o.midia].get("dur") or 0)
         if dur_m <= 0:
-            raise ErroN1("música sem duração conhecida")
+            raise ErrorN1("música sem duração conhecida")
         t, trilha = o.de, []
         while t < o.ate:
             d = min(dur_m, o.ate - t)
@@ -365,40 +365,40 @@ class Executor:
         if o.ducking:
             self.run("essentialSound.generateDucking", clips=trilha)
 
-    def _tipo_audio(self, o: TipoAudio):
-        self.run("essentialSound.setType", clips=self._clipes(o.alvo), type=_TIPO_AUDIO[o.tipo])
+    def _tipo_audio(self, o: KindAudio):
+        self.run("essentialSound.setType", clips=self._clipes(o.alvo), type=_KIND_AUDIO[o.tipo])
 
-    def _legendas(self, o: Legendas):
+    def _legendas(self, o: Captions):
         e = self.estilo
         self.run("captions.import", path=str(self.midias[o.arquivo]["caminho"]))
         tam = round(o.tamanho * self.h)
         self.run("captions.setStyle", track="C1", font=e["fonte"], size=tam, color=e["cores"]["texto"],
                  background=o.fundo, backgroundColor="#000000aa", anchor="bottom", margin=o.margem)
 
-    def _cortar(self, o: Cortar):
+    def _cortar(self, o: Cut):
         p = {"time": ticks(o.em)}
         if o.trilha:
-            p["track"] = TRILHAS[o.trilha]
+            p["track"] = TRACKS[o.trilha]
         self.run("timeline.razor", **p)
 
-    def _remover(self, o: Remover):
+    def _remover(self, o: Remove):
         self.run("timeline.delete", clips=self._clipes(o.alvo), ripple=o.fechar)
 
-    def _aparar(self, o: Aparar):
+    def _aparar(self, o: Trim):
         for c in self._clipes(o.alvo):
             self.run("timeline.trim", clip=c, edge="in" if o.borda == "entrada" else "out",
                      mode="ripple" if o.fechar else "regular", delta=ticks(o.delta))
 
-    def _mover(self, o: Mover):
-        movs = [{"clip": c, "time": {"seconds": o.para}, **({"track": TRILHAS[o.trilha]} if o.trilha else {})}
+    def _mover(self, o: Move):
+        movs = [{"clip": c, "time": {"seconds": o.para}, **({"track": TRACKS[o.trilha]} if o.trilha else {})}
                 for c in self._clipes(o.alvo)]
         self.run("timeline.move", moves=movs, insert=False)
 
-    def _velocidade(self, o: Velocidade):
+    def _velocidade(self, o: Speed):
         self.run("clip.speedDuration", clips=self._clipes(o.alvo), speed=round(o.fator * 100, 2), reverse=False,
                  ripple=False)
 
-    def _ganho(self, o: Ganho):
+    def _ganho(self, o: Gain):
         self.run("clip.audioGain", clips=self._clipes(o.alvo), mode="set", db=o.db)
 
     def _fade(self, o: Fade):
@@ -409,6 +409,6 @@ class Executor:
                     self.run("sequence.applyAudioTransition", clip=c, effect="constant_power", edge=borda,
                              frames=max(1, round(s * fps)))
 
-    def _marcar(self, o: Marcar):
-        self.run("markers.add", target="program", time=ticks(o.em), name=o.nome, color=_CORES_MARCA[o.cor])
+    def _marcar(self, o: Mark):
+        self.run("markers.add", target="program", time=ticks(o.em), name=o.nome, color=_COLORS_MARK[o.cor])
 

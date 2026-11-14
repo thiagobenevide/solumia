@@ -9,56 +9,56 @@ Arquivo: `<ep>/estudio/apontamentos.json` = {"confirmado", "em", "marcas": {text
 import json
 from datetime import datetime
 
-from esteira.bench import CENAS, normalizar
+from esteira.bench import SCENES, normalize
 
-AUTO, NENHUMA = "auto", "nenhuma"
+AUTO, NONE = "auto", "nenhuma"
 
 
-def _arq(projeto):
+def _file(projeto):
     return projeto.pasta / "estudio" / "apontamentos.json"
 
 
-def carregar(projeto):
-    arq = _arq(projeto)
+def load(projeto):
+    arq = _file(projeto)
     return json.loads(arq.read_text()) if arq.exists() else {"confirmado": False, "marcas": {}}
 
 
-def confirmado(projeto):
-    return carregar(projeto).get("confirmado", False)
+def confirmed(projeto):
+    return load(projeto).get("confirmado", False)
 
 
-def _trechos(projeto, estilo):
+def _spans(projeto, estilo):
     from esteira.studio import cut, director
-    palavras = cut.palavras(projeto)
-    return director.trechos(cut.frases(projeto), palavras, estilo.regras.trecho_max_s)
+    palavras = cut.words(projeto)
+    return director.spans(cut.sentences(projeto), palavras, estilo.regras.trecho_max_s)
 
 
-def marcas(projeto, trechos):
+def marks(projeto, trechos):
     """{índice do trecho: cena marcada} (sem os "auto")."""
-    m = carregar(projeto).get("marcas", {})
-    return {i: m[k] for i, t in enumerate(trechos) if (k := normalizar(t["texto"])) in m and m[k] != AUTO}
+    m = load(projeto).get("marcas", {})
+    return {i: m[k] for i, t in enumerate(trechos) if (k := normalize(t["texto"])) in m and m[k] != AUTO}
 
 
-def roteiro(projeto, estilo):
+def script(projeto, estilo):
     """Trechos com tempo e a marca de cada um, para a tela de apontamento."""
-    trechos = _trechos(projeto, estilo)
-    m = marcas(projeto, trechos)
-    d = carregar(projeto)
+    trechos = _spans(projeto, estilo)
+    m = marks(projeto, trechos)
+    d = load(projeto)
     permitidas = estilo.regras.cardapio()
     return {"confirmado": d.get("confirmado", False), "em": d.get("em"), "cenas": permitidas,
             "trechos": [{"i": i, "texto": t["texto"], "ini": round(t["ini"], 2), "fim": round(t["fim"], 2),
                          "cena": m.get(i, AUTO)} for i, t in enumerate(trechos)]}
 
 
-def salvar(projeto, itens, confirmar=False):
+def save(projeto, itens, confirmar=False):
     """`itens`: [{"texto", "cena"}]; cena fora do cardápio geral é recusada. Mudar as marcas desconfirma."""
-    validas = set(CENAS) | {AUTO, NENHUMA}
+    validas = set(SCENES) | {AUTO, NONE}
     ruins = sorted({x["cena"] for x in itens if x["cena"] not in validas})
     if ruins:
         raise ValueError(f"cena inválida: {', '.join(ruins)}")
-    novas = {normalizar(x["texto"]): x["cena"] for x in itens if x["cena"] != AUTO}
+    novas = {normalize(x["texto"]): x["cena"] for x in itens if x["cena"] != AUTO}
     d = {"confirmado": bool(confirmar), "em": datetime.now().isoformat(timespec="seconds") if confirmar else None,
          "marcas": novas}
-    _arq(projeto).parent.mkdir(exist_ok=True)
-    _arq(projeto).write_text(json.dumps(d, ensure_ascii=False, indent=1))
+    _file(projeto).parent.mkdir(exist_ok=True)
+    _file(projeto).write_text(json.dumps(d, ensure_ascii=False, indent=1))
     return d

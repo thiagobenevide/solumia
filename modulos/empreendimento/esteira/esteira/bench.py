@@ -21,16 +21,16 @@ from pydantic import BaseModel, Field, ValidationError
 
 from esteira.ai import llama
 from esteira.ai.local import _data_url, prompt
-from esteira.project import DADOS, PROJETOS
+from esteira.project import DATA, PROJECTS
 
-PASTA = DADOS / "bancada"
-GABARITO = PASTA / "gabarito"
-RESULTADOS = PASTA / "resultados"
+FOLDER = DATA / "bancada"
+ANSWER_KEY = FOLDER / "gabarito"
+RESULTS = FOLDER / "resultados"
 
-INTENCOES = ("numero", "comparacao", "processo", "lista", "citacao", "conceito", "pergunta", "virada", "cta",
+INTENTS = ("numero", "comparacao", "processo", "lista", "citacao", "conceito", "pergunta", "virada", "cta",
              "emocao")
 # vocabulário de cenas da biblioteca (fase 4); "midia" = só imagem/vídeo de banco, sem peça
-CENAS = {
+SCENES = {
     "contador": "um número dito em destaque, contando até o valor",
     "barras_comparacao": "dois ou mais valores comparados em barras",
     "versus": "duas opções lado a lado (A × B), com ou sem número",
@@ -55,43 +55,43 @@ CENAS = {
     "carimbo": "conclusão curta e firme (pronto, aprovado, proibido) carimbada",
     "midia": "só imagem ou vídeo ilustrativo, sem peça animada",
 }
-NUMERICAS = {"contador", "barras_comparacao", "versus", "linha_do_tempo", "anel_percentual", "grade_proporcao",
+NUMERIC = {"contador", "barras_comparacao", "versus", "linha_do_tempo", "anel_percentual", "grade_proporcao",
              "equacao", "grafico_linha", "ranking"}
 
 
-class Intencao(BaseModel):
-    intencao: Literal[INTENCOES]
+class Intent(BaseModel):
+    intencao: Literal[INTENTS]
 
 
-class Valor(BaseModel):
+class Value(BaseModel):
     rotulo: str = Field(max_length=40)
     valor: str = Field(max_length=20)
 
 
-class Cena(BaseModel):
-    cena: Literal[tuple(CENAS)]
+class Scene(BaseModel):
+    cena: Literal[tuple(SCENES)]
     ancora: str = Field(max_length=60)
     titulo: str = Field(max_length=60)
-    valores: list[Valor] = Field(max_length=4)
+    valores: list[Value] = Field(max_length=4)
 
 
-class Legenda(BaseModel):
+class Caption(BaseModel):
     texto: str = Field(max_length=400)
 
 
-class Decisao(BaseModel):
+class Decision(BaseModel):
     manter: bool
     motivo: str = Field(max_length=120)
     confianca: float = Field(ge=0, le=1)
 
 
-class EscolhaPeca(BaseModel):
+class ChoicePiece(BaseModel):
     """Direção por bloco: 1 das 5 candidatas (prompt `direcao_escolha`)."""
     escolha: str
     motivo: str = ""
 
 
-class Visao(BaseModel):
+class Vision(BaseModel):
     texto_cortado: bool
     sobreposicao: bool
     ilegivel: bool
@@ -100,19 +100,19 @@ class Visao(BaseModel):
 
 # ── avaliação (funções puras, testadas em tests/test_bench.py) ──
 
-def normalizar(s):
+def normalize(s):
     s = unicodedata.normalize("NFKD", s.lower())
     s = "".join(c for c in s if not unicodedata.combining(c))
     return " ".join(re.sub(r"[^\w%]+", " ", s).split())
 
 
-def numeros(s):
+def numbers(s):
     """Números como sequência de dígitos ("81,7%" → "817", "1.200" → "1200")."""
     return {re.sub(r"\D", "", n) for n in re.findall(r"\d[\d.,]*", s)}
 
 
 def wer(a, b):
-    a, b = normalizar(a).split(), normalizar(b).split()
+    a, b = normalize(a).split(), normalize(b).split()
     d = list(range(len(b) + 1))
     for i, x in enumerate(a, 1):
         ant, d[0] = d[0], i
@@ -121,10 +121,10 @@ def wer(a, b):
     return d[len(b)] / max(len(b), 1)
 
 
-def so_trocas(dito, certo):
+def only_swaps(dito, certo):
     """Erro de reconhecimento, não fala diferente do roteiro: só trocas de som parecido (ou número partido),
     sem palavra acrescentada nem omitida pelo narrador."""
-    a, b = normalizar(dito).split(), normalizar(certo).split()
+    a, b = normalize(dito).split(), normalize(certo).split()
     ops = [o for o in SequenceMatcher(None, a, b, autojunk=False).get_opcodes() if o[0] != "equal"]
     if not ops:
         return False
@@ -136,44 +136,44 @@ def so_trocas(dito, certo):
     return True
 
 
-def nota_cena(caso, r):
+def score_scene(caso, r):
     frase = caso["frase"]
     n = 0.5 * (r.cena in caso["aceitas"])
-    n += 0.25 * bool(r.ancora.strip() and normalizar(r.ancora) in normalizar(frase))
-    ditos = numeros(frase)
-    usados = set().union(*[numeros(v.valor) for v in r.valores], numeros(r.titulo))
+    n += 0.25 * bool(r.ancora.strip() and normalize(r.ancora) in normalize(frase))
+    ditos = numbers(frase)
+    usados = set().union(*[numbers(v.valor) for v in r.valores], numbers(r.titulo))
     inventados = usados - ditos
-    if r.cena in NUMERICAS and ditos:
+    if r.cena in NUMERIC and ditos:
         n += 0.25 * bool(usados & ditos and not inventados)
     else:
         n += 0.25 * (not inventados)
     return n
 
 
-def nota_legenda(caso, r):
+def score_caption(caso, r):
     antes, depois = wer(caso["whisper"], caso["certo"]), wer(r.texto, caso["certo"])
     return 1.0 if depois < antes else 0.5 if depois == antes else 0.0
 
 
-def nota_visao(caso, r):
+def score_vision(caso, r):
     certo = caso["certo"]
     return sum(getattr(r, k) == v for k, v in certo.items()) / len(certo)
 
 
 # ── tarefas: caso → (prompt, esquema, imagens) e nota ──
 
-def _catalogo():
-    return "\n".join(f"- {k}: {v}" for k, v in CENAS.items())
+def _catalog():
+    return "\n".join(f"- {k}: {v}" for k, v in SCENES.items())
 
 
 def _prompt_n1(tarefa, caso):
     from esteira.dataset import export, infer
-    return infer.prompt(tarefa, caso["contexto"], fora=export.ouro(tarefa))
+    return infer.prompt(tarefa, caso["contexto"], fora=export.gold(tarefa))
 
 
-def _esquema_n1(tarefa):
+def _schema_n1(tarefa):
     from esteira.dataset import export
-    return export.esquema(tarefa)
+    return export.schema(tarefa)
 
 
 def _f1(a, b):
@@ -183,7 +183,7 @@ def _f1(a, b):
     return 0.0 if not comum else 2 * comum / (sum(ca.values()) + sum(cb.values()))
 
 
-def nota_n1(tarefa, caso, r):
+def score_n1(tarefa, caso, r):
     """Nota estrutural 0–1: metade "roda" (executor/compilador aceita), metade semelhança com a referência."""
     ref, d = caso["referencia"], r.model_dump(mode="json")
     if tarefa == "foto_tratar":
@@ -202,7 +202,7 @@ def nota_n1(tarefa, caso, r):
             FC.Executor(_Falso(), midias, {"fonte": "x", "fonte_estilo": "x",
                                           "cores": {"texto": "#fff", "destaque": "#fff", "acento": "#fff"}}).executar(d)
             roda = 1.0
-        except (FC.ErroN1, KeyError, ValueError):
+        except (FC.ErrorN1, KeyError, ValueError):
             roda = 0.0
         return 0.5 * roda + 0.5 * _f1([chave(o) for o in d["ops"]], [chave(o) for o in ref["ops"]])
     if tarefa == "thumb_compor":
@@ -212,54 +212,54 @@ def nota_n1(tarefa, caso, r):
     if tarefa == "peca_animar":
         from esteira.n1 import effectcraft as EC
         try:
-            EC.compilar(d, {"encaixes": {}, "botoes": {}, "batidas": {}, "t0": 0.3, "dur": 6, "w": 1920, "h": 1080})
+            EC.build(d, {"encaixes": {}, "botoes": {}, "batidas": {}, "t0": 0.3, "dur": 6, "w": 1920, "h": 1080})
             roda = 1.0
-        except (EC.ErroN1, KeyError, ValueError):
+        except (EC.ErrorN1, KeyError, ValueError):
             roda = 0.0
         tipos = lambda x: [e["tipo"] for e in x["elementos"]] + [a["anim"] for a in x.get("animacoes", [])]  # noqa: E731
         return 0.5 * roda + 0.5 * _f1(tipos(d), tipos(ref))
     return 0.0
 
 
-TAREFAS = {
-    "intencao": (lambda c: (prompt("estudio_intencao", frase=c["frase"], antes=c.get("antes", "")), Intencao, None),
+TASKS = {
+    "intencao": (lambda c: (prompt("estudio_intencao", frase=c["frase"], antes=c.get("antes", "")), Intent, None),
                  lambda c, r: float(r.intencao in c["aceitas"])),
-    "cena": (lambda c: (prompt("estudio_cena", frase=c["frase"], antes=c.get("antes", ""), catalogo=_catalogo(),
+    "cena": (lambda c: (prompt("estudio_cena", frase=c["frase"], antes=c.get("antes", ""), catalogo=_catalog(),
                                        guia="", exemplos="(nenhum)"),
-                        Cena, None), nota_cena),
-    "legenda": (lambda c: (prompt("estudio_legenda", texto=c["whisper"], canal=c.get("canal", "")), Legenda, None),
-                nota_legenda),
-    "corte": (lambda c: (prompt("corte", **c["campos"]), Decisao, None),
+                        Scene, None), score_scene),
+    "legenda": (lambda c: (prompt("estudio_legenda", texto=c["whisper"], canal=c.get("canal", "")), Caption, None),
+                score_caption),
+    "corte": (lambda c: (prompt("corte", **c["campos"]), Decision, None),
               lambda c, r: float(r.manter == c["manter"])),
-    "visao": (lambda c: (prompt("estudio_visao"), Visao, [str(GABARITO / c["imagem"])]), nota_visao),
+    "visao": (lambda c: (prompt("estudio_visao"), Vision, [str(ANSWER_KEY / c["imagem"])]), score_vision),
     # direção por bloco: o momento e as 5 candidatas que o código achou → a peça que a pessoa aprovou ou trocou
-    **{f"n1_{t}": (lambda c, t=t: (_prompt_n1(t, c), _esquema_n1(t), None), lambda c, r, t=t: nota_n1(t, c, r))
+    **{f"n1_{t}": (lambda c, t=t: (_prompt_n1(t, c), _schema_n1(t), None), lambda c, r, t=t: score_n1(t, c, r))
        for t in ("peca_animar", "montar", "corrigir_montagem", "thumb_compor", "foto_tratar")},
     "bloco_peca": (lambda c: (prompt("direcao_escolha", texto=c["texto"], intencao=c.get("intencao", ""),
                                      tom=c.get("tom", ""), tratamento=c.get("tratamento", ""),
                                      numeros=c.get("numeros", "") or "nenhum", candidatas=c["candidatas"]),
-                              EscolhaPeca, None),
+                              ChoicePiece, None),
                    lambda c, r: float(r.escolha in c["aceitas"])),
 }
 
 
-def casos(tarefa):
+def cases(tarefa):
     if tarefa.startswith("n1_"):  # tarefas das Craft Apps: o ouro do dataset (docs/PLANO-DATASET.md)
         from esteira.dataset import export
-        return export.casos_eval(tarefa[3:])
-    arq = GABARITO / f"{tarefa}.jsonl"
+        return export.cases_eval(tarefa[3:])
+    arq = ANSWER_KEY / f"{tarefa}.jsonl"
     return [json.loads(linha) for linha in arq.read_text().splitlines() if linha.strip()] if arq.exists() else []
 
 
 # ── gerar corte e legenda a partir dos episódios ──
 
-def gerar(canal="finlumia"):
+def generate(canal="finlumia"):
     """Reescreve corte.jsonl e legenda.jsonl do canal; devolve {tarefa: n}."""
-    rev = json.loads((GABARITO / "revisao.json").read_text()) if (GABARITO / "revisao.json").exists() else {}
+    rev = json.loads((ANSWER_KEY / "revisao.json").read_text()) if (ANSWER_KEY / "revisao.json").exists() else {}
     fora, corrigidos = set(rev.get("excluir", [])), rev.get("manter", {})
     fora_legenda = set(rev.get("excluir_legenda", []))
     corte, legenda = [], []
-    for ep in sorted(p for p in (PROJETOS / canal).iterdir() if (p / "cortes.json").exists()):
+    for ep in sorted(p for p in (PROJECTS / canal).iterdir() if (p / "cortes.json").exists()):
         frases = json.loads((ep / "frases.json").read_text())
         trechos = json.loads((ep / "cortes.json").read_text())["trechos"]
         for k, t in enumerate(trechos):
@@ -278,11 +278,11 @@ def gerar(canal="finlumia"):
         palavras = json.loads((ep / "transcricao.json").read_text())["palavras"]
         for i, f in enumerate(frases):
             dito = " ".join(p["p"] for p in palavras if f["ini"] - 0.05 <= p["ini"] < f["fim"])
-            if dito and so_trocas(dito, f["texto"]) and f"{ep.name}:{i}" not in fora_legenda:
+            if dito and only_swaps(dito, f["texto"]) and f"{ep.name}:{i}" not in fora_legenda:
                 legenda.append({"id": f"{ep.name}:{i}", "whisper": dito, "certo": f["texto"], "canal": canal})
-    GABARITO.mkdir(parents=True, exist_ok=True)
+    ANSWER_KEY.mkdir(parents=True, exist_ok=True)
     for nome, itens in (("corte", corte), ("legenda", legenda)):
-        (GABARITO / f"{nome}.jsonl").write_text("".join(json.dumps(c, ensure_ascii=False) + "\n" for c in itens))
+        (ANSWER_KEY / f"{nome}.jsonl").write_text("".join(json.dumps(c, ensure_ascii=False) + "\n" for c in itens))
     return {"corte": len(corte), "legenda": len(legenda)}
 
 
@@ -297,7 +297,7 @@ def _vram_gb():
         return None
 
 
-def _chamar(modelo, texto, esquema, imagens=None, max_tokens=1200):
+def _call(modelo, texto, esquema, imagens=None, max_tokens=1200):
     msg = {"role": "user", "content": str(texto)}
     if imagens:
         msg["content"] = [{"type": "text", "text": str(texto)}] + [
@@ -313,12 +313,12 @@ def _chamar(modelo, texto, esquema, imagens=None, max_tokens=1200):
     return d["choices"][0]["message"].get("content") or "", time.monotonic() - t, tim.get("predicted_per_second")
 
 
-def rodar(modelos, tarefas=None, n=None, progresso=print):
+def run(modelos, tarefas=None, n=None, progresso=print):
     """Roda cada modelo em cada tarefa; devolve e grava o resultado."""
     if not llama.server():
         raise RuntimeError("llama-server fora do ar")
     disponiveis = {m["id"]: m for m in llama.models() or []}
-    tarefas = tarefas or list(TAREFAS)
+    tarefas = tarefas or list(TASKS)
     res = {"data": datetime.now().isoformat(timespec="seconds"), "modelos": {}}
     for modelo in modelos:
         if modelo not in disponiveis:
@@ -327,7 +327,7 @@ def rodar(modelos, tarefas=None, n=None, progresso=print):
         llama.unload()
         t0 = time.monotonic()
         try:
-            _chamar(modelo, "Responda ok.", Legenda)  # carrega o modelo
+            _call(modelo, "Responda ok.", Caption)  # carrega o modelo
         except requests.RequestException as e:
             progresso(f"{modelo}: não carregou ({str(e)[:120]})")
             continue
@@ -335,15 +335,15 @@ def rodar(modelos, tarefas=None, n=None, progresso=print):
         for tarefa in tarefas:
             if tarefa == "visao" and not llama.vision(disponiveis[modelo]):
                 continue
-            lista = casos(tarefa)[:n]
+            lista = cases(tarefa)[:n]
             if not lista:
                 continue
-            montar, avaliar = TAREFAS[tarefa]
+            montar, avaliar = TASKS[tarefa]
             notas, validos, tempos, tps, respostas = [], 0, [], [], []
             for i, caso in enumerate(lista, 1):
                 texto, esquema, imagens = montar(caso)
                 try:
-                    conteudo, dt, v = _chamar(modelo, texto, esquema, imagens,
+                    conteudo, dt, v = _call(modelo, texto, esquema, imagens,
                                               6000 if tarefa.startswith("n1_") else 1200)
                     r = esquema.model_validate_json(conteudo)
                     validos += 1
@@ -370,15 +370,15 @@ def rodar(modelos, tarefas=None, n=None, progresso=print):
         info["vram_gb"] = max(filter(None, [info["vram_gb"], _vram_gb()]), default=None)
         res["modelos"][modelo] = info
         # grava a cada modelo: uma falha no meio não perde o que já foi medido
-        RESULTADOS.mkdir(parents=True, exist_ok=True)
-        (RESULTADOS / f"{res['data'].replace(':', '-')}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1))
+        RESULTS.mkdir(parents=True, exist_ok=True)
+        (RESULTS / f"{res['data'].replace(':', '-')}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1))
     llama.unload()
     return res
 
 
-def ultimo():
+def last():
     """A medição mais recente de cada modelo (de todas as rodadas), sem as respostas caso a caso; ou None."""
-    arqs = sorted(RESULTADOS.glob("*.json")) if RESULTADOS.exists() else []
+    arqs = sorted(RESULTS.glob("*.json")) if RESULTS.exists() else []
     if not arqs:
         return None
     res = {"data": None, "modelos": {}}
@@ -392,14 +392,14 @@ def ultimo():
     return res
 
 
-def tabela(res=None):
+def table(res=None):
     """Linhas de texto: modelo × tarefa (nota / ms), do resultado dado ou do último gravado."""
     if res is None:
-        arqs = sorted(RESULTADOS.glob("*.json"))
+        arqs = sorted(RESULTS.glob("*.json"))
         if not arqs:
             return ["sem resultados"]
         res = json.loads(arqs[-1].read_text())
-    tarefas = list(TAREFAS)
+    tarefas = list(TASKS)
     linhas = [f"{'modelo':34} {'VRAM':>5} " + " ".join(f"{t:>14}" for t in tarefas)]
     for m, info in res["modelos"].items():
         cel = []

@@ -17,13 +17,13 @@ from esteira.core import events
 from esteira.graphics import articles, pieces, render
 from esteira.ai import local
 
-DUR = {"caixas": 4.0, "capitulo": 3.2, "numero": 4.6, "comparacao": 7.0, "frase": 3.0, "fonte": 5.0}
-PESO = {"capitulo": 10, "citacao": 8, "nota": 5, "numero": 3, "frase": 2, "fonte": 1}
+DURATION = {"caixas": 4.0, "capitulo": 3.2, "numero": 4.6, "comparacao": 7.0, "frase": 3.0, "fonte": 5.0}
+WEIGHT = {"capitulo": 10, "citacao": 8, "nota": 5, "numero": 3, "frase": 2, "fonte": 1}
 RE_NUM = re.compile(r"\d[\d.,]*\s*(%|por cento|mil\b|milh|bilh|vezes|anos?\b|meses|reais)|R\$\s*\d", re.I)
-RE_ESTUDO = re.compile(r"estud|pesquis|artigo|publica|economist|cientist|autores|revista|universidade", re.I)
+RE_STUDY = re.compile(r"estud|pesquis|artigo|publica|economist|cientist|autores|revista|universidade", re.I)
 
 
-class Numero(BaseModel):
+class Number(BaseModel):
     usar: bool
     numero: str = Field("", max_length=16)
     legenda: str = Field("", max_length=90)
@@ -32,7 +32,7 @@ class Numero(BaseModel):
     impacto: int = Field(3, ge=1, le=5)
 
 
-Curto = Field("", max_length=80)
+Short = Field("", max_length=80)
 
 
 class Item(BaseModel):
@@ -41,33 +41,33 @@ class Item(BaseModel):
     detalhe: str = Field("", max_length=60)
 
 
-class Nota(BaseModel):
+class Note(BaseModel):
     tipo: str = Field(pattern="^(lista|numero|comparacao|frase|fonte|nenhum)$")
     impacto: int = Field(3, ge=1, le=5)
-    titulo: str = Curto
-    rotulo: str = Curto
+    titulo: str = Short
+    rotulo: str = Short
     itens: list[Item] = Field([], max_length=4)
     numero: str = Field("", max_length=16)
-    legenda: str = Curto
-    texto: str = Curto
+    legenda: str = Short
+    texto: str = Short
     nome_a: str = Field("", max_length=30)
     itens_a: list[str] = Field([], max_length=3)
     nome_b: str = Field("", max_length=30)
     itens_b: list[str] = Field([], max_length=3)
-    linha1: str = Curto
-    linha2: str = Curto
+    linha1: str = Short
+    linha2: str = Short
 
 
-class Trecho(BaseModel):
+class Span(BaseModel):
     indice: int
     traducao: str = Field("", max_length=260)
 
 
-class Termos(BaseModel):
+class Terms(BaseModel):
     termos: list[str] = Field(max_length=6)
 
 
-def _fala_para_frase(roteiro_txt):
+def _speech_to_sentence(roteiro_txt):
     """Índice da 1ª frase (ler_roteiro) de cada fala (linha) do roteiro.txt."""
     saida, k = [], 0
     for linha in roteiro_txt.splitlines():
@@ -79,7 +79,7 @@ def _fala_para_frase(roteiro_txt):
     return saida
 
 
-def _textos(itens):
+def _texts(itens):
     """O LLM às vezes devolve objetos (JSON ou dict do Python) dentro da lista de textos: vira "valor título"."""
     import ast
     saida = []
@@ -98,26 +98,26 @@ def _textos(itens):
     return [s for s in saida if s][:3]
 
 
-def _digitos(s):
+def _digits(s):
     return re.sub(r"[^\d]", "", s)
 
 
-def _numero_na_fala(numero, fala):
+def _number_in_speech(numero, fala):
     """O número do card tem de estar na fala (o LLM às vezes arredonda: "400%" para "436%")."""
-    d = _digitos(numero)
-    return bool(d) and "/" not in numero and any(d == _digitos(m) for m in re.findall(r"\d[\d.,]*", fala))
+    d = _digits(numero)
+    return bool(d) and "/" not in numero and any(d == _digits(m) for m in re.findall(r"\d[\d.,]*", fala))
 
 
-RE_NUMERO = re.compile(r"(R\$\s*)?\d[\d.,]*(?:\s*(%|por cento|mil(?:hões|hão)?\b|bilh(?:ões|ão)|vezes|anos?\b|"
+RE_NUMBER = re.compile(r"(R\$\s*)?\d[\d.,]*(?:\s*(%|por cento|mil(?:hões|hão)?\b|bilh(?:ões|ão)|vezes|anos?\b|"
                        r"meses|reais))?", re.I)
 
 
-def _numeros_da_frase(texto):
+def _numbers_of_sentence(texto):
     """[(número como vai na tela, legenda)] de cada número com unidade da frase ("48%", "24 milhões",
     "R$ 400"); a legenda são as palavras que vêm depois dele (até 7, sem passar da pontuação nem do próximo
     número)."""
     saida = []
-    for m in RE_NUMERO.finditer(texto):
+    for m in RE_NUMBER.finditer(texto):
         if not (m.group(1) or m.group(2)):
             continue  # número sem unidade (ano, "3 motivos"): fica para o LLM
         numero = re.sub(r"\s+", " ", m.group(0)).strip().replace("por cento", "%").replace(" %", "%")
@@ -126,27 +126,27 @@ def _numeros_da_frase(texto):
     return saida
 
 
-ANTECIPA = 0.35   # s: o gráfico de número começa isto antes da fala (o contador sai do zero quando o número é dito)
+ANTICIPATES = 0.35   # s: o gráfico de número começa isto antes da fala (o contador sai do zero quando o número é dito)
 
 
-def _instante_numero(numero, palavras, t0, t1, perto=None):
+def _instant_number(numero, palavras, t0, t1, perto=None):
     """Instante (narração editada) em que `numero` é falado entre t0 e t1, ou None; com `perto`, a ocorrência mais
     próxima desse instante (senão a primeira). O Whisper parte números ("12", ",5", "%"): junta a palavra com o
     pedaço decimal seguinte antes de comparar."""
     m = re.search(r"\d[\d.,]*", numero)
-    alvo = _digitos(m.group()) if m else ""
+    alvo = _digits(m.group()) if m else ""
     if not alvo:
         return None
     achados = []
     for k, w in enumerate(palavras):
         if not t0 <= w["ini"] <= t1:
             continue
-        d = _digitos(w["p"])
+        d = _digits(w["p"])
         if not d:
             continue
         j = k + 1
         while j < len(palavras) and re.match(r"^[.,]\d", palavras[j]["p"].strip()) and len(d) < len(alvo):
-            d += _digitos(palavras[j]["p"])
+            d += _digits(palavras[j]["p"])
             j += 1
         if d == alvo:
             if perto is None:
@@ -155,7 +155,7 @@ def _instante_numero(numero, palavras, t0, t1, perto=None):
     return min(achados, key=lambda x: abs(x - perto)) if achados else None
 
 
-def _ancorar(c, t, antecipa=ANTECIPA):
+def _anchor(c, t, antecipa=ANTICIPATES):
     c["inicio"], c["ancora"] = round(max(t - antecipa, 0), 2), round(t, 2)
 
 
@@ -163,27 +163,27 @@ def _ref(f):
     return f"{f['autores']} ({f['ano']}), {f['revista']}".strip(", ")
 
 
-def _fonte_citada(texto, fontes):
+def _source_quoted(texto, fontes):
     """Índice da fonte mencionada na frase (sobrenome do 1º autor, revista ou ano + palavra de estudo)."""
     melhor, nota_max = None, 0
     for k, f in enumerate(fontes):
         sobrenome = re.split(r"[ ,]", f["autores"])[0]
         nota = 3 * (len(sobrenome) > 2 and sobrenome.lower() in texto.lower())
         nota += 3 * bool(f["revista"] and f["revista"].lower() in texto.lower())
-        nota += 1 * bool(f["ano"][:4] in texto and RE_ESTUDO.search(texto))
+        nota += 1 * bool(f["ano"][:4] in texto and RE_STUDY.search(texto))
         if nota > nota_max:
             melhor, nota_max = k, nota
     return melhor if nota_max >= 3 or (nota_max == 1 and sum(f["ano"][:4] in texto for f in fontes) == 1) else None
 
 
-def candidatos(projeto):
+def candidates(projeto):
     cfg = projeto.cfg
     rot = json.loads(projeto.caminho("roteiro.json").read_text()) if projeto.caminho("roteiro.json").exists() else {}
     frases = projeto.carregar_json("frases.json")
     transc = projeto.carregar_json("transcricao.json")
     duracao, palavras = transc["duracao"], transc["palavras"]
     fontes = rot.get("fontes", [])
-    mapa = _fala_para_frase(projeto.roteiro().read_text())
+    mapa = _speech_to_sentence(projeto.roteiro().read_text())
 
     def t_fala(k):
         """Instante da 1ª frase com tempo a partir da fala k."""
@@ -209,7 +209,7 @@ def candidatos(projeto):
         t = t_fala(max(cit["fala"], 0))
         if not cit.get("ok") or t is None:
             continue
-        k = _fonte_citada(f"{cit.get('autores', '')} {cit.get('revista', '')}", fontes)
+        k = _source_quoted(f"{cit.get('autores', '')} {cit.get('revista', '')}", fontes)
         if k is not None:
             citadas.add(k)
         f = fontes[k] if k is not None else {}
@@ -224,7 +224,7 @@ def candidatos(projeto):
     for i, f in enumerate(frases):
         if f["ini"] is None:
             continue
-        k = _fonte_citada(f["texto"], fontes)
+        k = _source_quoted(f["texto"], fontes)
         if k is None or k in citadas:
             continue
         citadas.add(k)
@@ -238,29 +238,29 @@ def candidatos(projeto):
         ctx = " ".join(x["texto"] for x in frases[max(i - 1, 0):i + 2])
         r = local.ask(local.prompt("grafico_numero", fala=f["texto"], contexto=ctx,
                                          fontes="; ".join(f"{k}: {_ref(x)}" for k, x in enumerate(fontes)) or "nenhuma"),
-                            Numero)
-        if r and r.usar and r.numero and _numero_na_fala(r.numero, f["texto"]):
+                            Number)
+        if r and r.usar and r.numero and _number_in_speech(r.numero, f["texto"]):
             fonte = _ref(fontes[r.fonte]) if 0 <= r.fonte < len(fontes) else ""
             c.append({"modelo": "numero", "inicio": f["ini"], "origem": "numero", "impacto": r.impacto,
                       "dados": {"texto": r.numero, "legenda": r.legenda, "fonte": fonte, "rotulo": r.rotulo}})
             # entra quando o número é DITO, não no começo da frase
-            t = _instante_numero(r.numero, palavras, f["ini"] - 2, (f.get("fim") or f["ini"] + 20) + 3)
+            t = _instant_number(r.numero, palavras, f["ini"] - 2, (f.get("fim") or f["ini"] + 20) + 3)
             if t is not None:
-                _ancorar(c[-1], t)
+                _anchor(c[-1], t)
             else:
                 events.debug("gráfico de número sem a fala do número", numero=r.numero, frase=f["texto"][:80])
         # todo número dito aparece: os que o LLM não escolheu (ou o 2º número da frase) viram gráfico simples
-        feitos = {_digitos(c[-1]["dados"]["texto"])} if r and r.usar and c and c[-1]["origem"] == "numero" else set()
-        for numero, legenda in _numeros_da_frase(f["texto"]):
-            if _digitos(numero) in feitos:
+        feitos = {_digits(c[-1]["dados"]["texto"])} if r and r.usar and c and c[-1]["origem"] == "numero" else set()
+        for numero, legenda in _numbers_of_sentence(f["texto"]):
+            if _digits(numero) in feitos:
                 continue
-            feitos.add(_digitos(numero))
-            t = _instante_numero(numero, palavras, f["ini"] - 2, (f.get("fim") or f["ini"] + 20) + 3)
+            feitos.add(_digits(numero))
+            t = _instant_number(numero, palavras, f["ini"] - 2, (f.get("fim") or f["ini"] + 20) + 3)
             if t is None:
                 continue
             c.append({"modelo": "numero", "inicio": f["ini"], "origem": "numero", "impacto": 3,
                       "dados": {"texto": numero, "legenda": legenda, "fonte": "", "rotulo": ""}})
-            _ancorar(c[-1], t)
+            _anchor(c[-1], t)
 
     # Notas de cena do roteiro
     for nota in rot.get("notas", []):
@@ -269,13 +269,13 @@ def candidatos(projeto):
             continue
         k0 = mapa[min(nota["antes_da_fala"], len(mapa) - 1)] if mapa else 0
         falas = " ".join(x["texto"] for x in frases[k0:k0 + 3])
-        r = local.ask(local.prompt("grafico_nota", nota=nota["texto"], falas=falas), Nota)
+        r = local.ask(local.prompt("grafico_nota", nota=nota["texto"], falas=falas), Note)
         if not r or r.tipo not in ("lista", "numero", "comparacao", "frase", "fonte"):
             continue
         d = {"lista": lambda: {"itens": [i.model_dump() for i in r.itens], "titulo": r.titulo, "rotulo": r.rotulo},
              "numero": lambda: {"texto": r.numero, "legenda": r.legenda, "rotulo": r.rotulo},
-             "comparacao": lambda: {"nome_a": r.nome_a, "itens_a": _textos(r.itens_a), "nome_b": r.nome_b,
-                                    "itens_b": _textos(r.itens_b)},
+             "comparacao": lambda: {"nome_a": r.nome_a, "itens_a": _texts(r.itens_a), "nome_b": r.nome_b,
+                                    "itens_b": _texts(r.itens_b)},
              "frase": lambda: {"texto": r.texto},
              "fonte": lambda: {"linha1": r.linha1, "linha2": r.linha2}}[r.tipo]()
         if r.tipo == "lista" and len(d["itens"]) < 2 or r.tipo == "numero" and not re.search(r"\d", r.numero):
@@ -286,11 +286,11 @@ def candidatos(projeto):
         c.append({"modelo": r.tipo, "inicio": t, "origem": "nota", "impacto": r.impacto, "dados": d,
                   "nota": nota["texto"][:120]})
         if r.tipo == "numero":
-            tn = _instante_numero(r.numero, palavras, t - 20, t + 25, perto=t)  # a nota pode vir depois da fala
+            tn = _instant_number(r.numero, palavras, t - 20, t + 25, perto=t)  # a nota pode vir depois da fala
             if tn is not None:
-                _ancorar(c[-1], tn)
+                _anchor(c[-1], tn)
         elif r.tipo == "lista":
-            _sincronizar_lista(c[-1], palavras, t)
+            _sync_list(c[-1], palavras, t)
 
     # *Destaques* do roteiro → frase cinética
     for f in frases:
@@ -301,12 +301,12 @@ def candidatos(projeto):
     return c, fontes, duracao
 
 
-def _sincronizar_lista(c, palavras, t):
+def _sync_list(c, palavras, t):
     """Lista de dados "em fila": cada cartão entra quando o valor dele é falado (`tempos`, s desde o início da
     peça). Itens sem valor achado na fala ficam entre os vizinhos."""
     falas, desde = [], t - 5
     for it in c["dados"]["itens"]:
-        ti = _instante_numero(it.get("valor", ""), palavras, desde, t + 60) if it.get("valor") else None
+        ti = _instant_number(it.get("valor", ""), palavras, desde, t + 60) if it.get("valor") else None
         falas.append(ti)
         if ti is not None:
             desde = ti
@@ -318,29 +318,29 @@ def _sincronizar_lista(c, palavras, t):
             ant = max((j for j in conhecidos if j < k), default=None)
             prox = min((j for j in conhecidos if j > k), default=None)
             falas[k] = (falas[ant] + 1.5 if ant is not None else falas[prox] - 1.5)
-    _ancorar(c, falas[0], 0.6)
+    _anchor(c, falas[0], 0.6)
     c["dados"]["tempos"] = [round(max(x - c["inicio"] - 0.15, 0.3), 2) for x in falas]
     c["dur_min"] = round(c["dados"]["tempos"][-1] + 3.2, 2)
 
 
-def _preparar_citacao(cand, fontes, projeto):
+def _prepare_quote(cand, fontes, projeto):
     """Acha PDF + trecho; sem isso, vira tarja de fonte."""
     f = fontes[cand["fonte"]]
     tarja = {"modelo": "fonte", "dados": {"linha1": f"{f['autores']} ({f['ano']})",
                                           "linha2": f"{f['revista']} {f.get('detalhes', '')}".strip(),
                                           "rotulo": "Estudo"}}
-    pdf = articles.achar_pdf(f, projeto.cfg["fontes"].get("artigos"))
+    pdf = articles.find_pdf(f, projeto.cfg["fontes"].get("artigos"))
     if not pdf:
         return tarja
-    cands = articles.candidatos_trecho(pdf, cand["fala"])
+    cands = articles.candidates_span(pdf, cand["fala"])
     if len(cands) < 2:
-        r = local.ask(local.prompt("termos_en", fala=cand["fala"]), Termos)
+        r = local.ask(local.prompt("termos_en", fala=cand["fala"]), Terms)
         if r:
-            cands = articles.candidatos_trecho(pdf, cand["fala"], r.termos)
+            cands = articles.candidates_span(pdf, cand["fala"], r.termos)
     if not cands:
         return tarja
     lista = "\n".join(f"{k}. {t[2][:300]}" for k, t in enumerate(cands))
-    r = local.ask(local.prompt("grafico_citacao", fala=cand["fala"], estudo=_ref(f), trechos=lista), Trecho)
+    r = local.ask(local.prompt("grafico_citacao", fala=cand["fala"], estudo=_ref(f), trechos=lista), Span)
     if not r or not 0 <= r.indice < len(cands):
         return tarja
     _, pagina, trecho = cands[r.indice]
@@ -350,33 +350,33 @@ def _preparar_citacao(cand, fontes, projeto):
                                            "ano": f["ano"][:4], "citacao": r.traducao}}
 
 
-LEITURA = 3.0  # palavras por segundo que dá para ler na tela (EN + PT da citação)
+READING = 3.0  # palavras por segundo que dá para ler na tela (EN + PT da citação)
 
 
-def _duracao(c):
+def _duration(c):
     if c["modelo"] == "citacao":
         # tempo de ler o trecho original (EN) e a tradução (PT) com calma, depois da câmera chegar no trecho
         d = c.get("dados") or {}
         palavras = len((d.get("trecho") or "").split()) + len((d.get("citacao") or "").split())
-        return round(min(max(6.5 + palavras / LEITURA, 13.0), 26.0), 1) if palavras else 15.0
+        return round(min(max(6.5 + palavras / READING, 13.0), 26.0), 1) if palavras else 15.0
     if c["modelo"] == "lista":
         return max(2.4 + 1.1 * len(c["dados"]["itens"]), c.get("dur_min", 0))
-    return DUR[c["modelo"]]
+    return DURATION[c["modelo"]]
 
 
-ADIAR = {"citacao": 12.0, "nota": 5.0, "numero": 3.0}  # s que um gráfico pode atrasar para não colidir
-FILA, DUR_MIN = 0.3, 2.2  # números seguidos: folga entre eles e o mínimo que o anterior fica na tela
+POSTPONE = {"citacao": 12.0, "nota": 5.0, "numero": 3.0}  # s que um gráfico pode atrasar para não colidir
+QUEUE, DURATION_MIN = 0.3, 2.2  # números seguidos: folga entre eles e o mínimo que o anterior fica na tela
 
 
-def agendar(cands, duracao, intervalo=1.5, cobertura_max=0.4, fixos=()):
+def schedule(cands, duracao, intervalo=1.5, cobertura_max=0.4, fixos=()):
     """Escolhe por pontos (tipo + impacto), sem sobrepor (com folga) e até `cobertura_max` do vídeo.
     Em colisão, o gráfico mais fraco é adiado até ADIAR s (continua perto da fala); depois disso, sai.
     `fixos`: gráficos editados à mão no painel; ficam onde estão e os automáticos desviam deles."""
     for c in cands:
-        c["dur"] = _duracao(c)
-        c["pontos"] = PESO.get(c["origem"], PESO.get(c["modelo"], 1)) + c.get("impacto", 3)
+        c["dur"] = _duration(c)
+        c["pontos"] = WEIGHT.get(c["origem"], WEIGHT.get(c["modelo"], 1)) + c.get("impacto", 3)
     escolhidos, usado = list(fixos), sum(c["dur"] for c in fixos)
-    folga = lambda a, b: FILA if a.get("ancora") and b.get("ancora") else intervalo
+    folga = lambda a, b: QUEUE if a.get("ancora") and b.get("ancora") else intervalo
     for c in sorted(cands, key=lambda c: -c["pontos"]):
         ini, fim = c["inicio"], min(c["inicio"] + c["dur"], duracao - 0.2)
         # capítulo e número dito sempre entram (o número tem de aparecer quando é falado)
@@ -384,18 +384,18 @@ def agendar(cands, duracao, intervalo=1.5, cobertura_max=0.4, fixos=()):
                 and not (c["modelo"] == "numero" and c.get("ancora")):
             continue
         # ancorado na fala (número dito): quase não pode atrasar; quem cede é a duração dos vizinhos
-        limite = ini + (0.6 if c.get("ancora") else ADIAR.get(c["origem"], 0))
+        limite = ini + (0.6 if c.get("ancora") else POSTPONE.get(c["origem"], 0))
         while True:
             choque = [e for e in escolhidos if ini < e["inicio"] + e["dur"] + folga(c, e) and e["inicio"] < fim + folga(c, e)]
             if c.get("ancora") and choque:
                 for e in choque:  # dados em fila: o anterior sai mais cedo para o próximo entrar na hora certa
                     if not e.get("ancora") or e.get("manual"):
                         continue
-                    if e["inicio"] < ini and ini - FILA - e["inicio"] >= DUR_MIN:
-                        usado -= e["dur"] - (ini - FILA - e["inicio"])
-                        e["dur"] = round(ini - FILA - e["inicio"], 2)
-                    elif e["inicio"] > ini and e["inicio"] - FILA - ini >= DUR_MIN:
-                        fim = min(fim, e["inicio"] - FILA)
+                    if e["inicio"] < ini and ini - QUEUE - e["inicio"] >= DURATION_MIN:
+                        usado -= e["dur"] - (ini - QUEUE - e["inicio"])
+                        e["dur"] = round(ini - QUEUE - e["inicio"], 2)
+                    elif e["inicio"] > ini and e["inicio"] - QUEUE - ini >= DURATION_MIN:
+                        fim = min(fim, e["inicio"] - QUEUE)
                 choque = [e for e in escolhidos if ini < e["inicio"] + e["dur"] + folga(c, e) and e["inicio"] < fim + folga(c, e)]
             if not choque:
                 break
@@ -412,18 +412,18 @@ def agendar(cands, duracao, intervalo=1.5, cobertura_max=0.4, fixos=()):
     return sorted(escolhidos, key=lambda c: c["inicio"])
 
 
-def planejar(projeto):
-    cands, fontes, duracao = candidatos(projeto)
+def plan(projeto):
+    cands, fontes, duracao = candidates(projeto)
     events.debug("gráficos: candidatos", n=len(cands))
     antigos = projeto.carregar_json("graficos.json") if projeto.caminho("graficos.json").exists() else []
     fixos = [c for c in antigos if c.get("manual")]
-    plano = agendar(cands, duracao, fixos=fixos, **projeto.cfg.get("graficos", {}).get("agenda", {}))
+    plano = schedule(cands, duracao, fixos=fixos, **projeto.cfg.get("graficos", {}).get("agenda", {}))
     if fixos:
         print(f"  {len(fixos)} gráficos editados à mão mantidos")
     for n, c in enumerate(plano, 1):
         events.progress(n, len(plano), f"{c['modelo']} {c['inicio']:.0f}s")
         if c["modelo"] == "citacao" and not c.get("roteiro") and not c.get("manual"):
-            c.update(_preparar_citacao(c, fontes, projeto))
+            c.update(_prepare_quote(c, fontes, projeto))
     projeto.salvar_json("graficos.json", plano)
     por_tipo = {}
     for c in plano:
@@ -432,18 +432,18 @@ def planejar(projeto):
     return plano
 
 
-def _chave(c, cor, w, h):
+def _key(c, cor, w, h):
     extra = [c.get("efeito"), c.get("caixas")] if c.get("efeito") or c.get("caixas") else []
     return hashlib.sha1(json.dumps([c["modelo"], c["dados"], c["dur"], cor] + ([w, h] if h > w else []) + extra,
                                    sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
 
 
-def peca(c, pasta, w, h, pag=None):
+def piece(c, pasta, w, h, pag=None):
     """(modelo, dados) de um item do graficos.json, com efeito e caixas; None se a citação não achar o trecho.
     `pag`: PNG da página do PDF (citação)."""
     d = dict(c["dados"])
     if c["modelo"] == "citacao":
-        p = pieces.citacao(d.pop("arquivo"), d.pop("trecho"), pag or pasta / "pag_previa.png",
+        p = pieces.quote(d.pop("arquivo"), d.pop("trecho"), pag or pasta / "pag_previa.png",
                           pagina=d.pop("pagina"), vertical=h > w, **d)
     else:
         p = getattr(pieces, c["modelo"])(**d)
@@ -452,7 +452,7 @@ def peca(c, pasta, w, h, pag=None):
     return p[0], dict(p[1], efeito=c.get("efeito"), caixas=c.get("caixas"))
 
 
-def renderizar(projeto):
+def render_graphics(projeto):
     """Renderiza o graficos.json. Motor `[graficos] motor`: "effectcraft" (padrão: cada peça também vira um
     `.ecproj` editável) ou "html" (Chromium). Um `.ecproj` salvo à mão no EffectCraft (mais novo que a geração)
     é renderizado como está e a peça vira `manual` (o replanejamento a mantém)."""
@@ -463,7 +463,7 @@ def renderizar(projeto):
     w, h = projeto.cfg["video"]["largura"], projeto.cfg["video"]["altura"]
     fps = projeto.cfg["video"]["fps"]
     motor = g.get("motor", "effectcraft")
-    if motor == "effectcraft" and not effectcraft.disponivel():
+    if motor == "effectcraft" and not effectcraft.available():
         events.warning("effectcraft-cli não encontrado: gráficos pelo Chromium (HTML)")
         motor = "html"
     pasta = projeto.caminho("graficos")
@@ -477,30 +477,30 @@ def renderizar(projeto):
             # editado à mão no EffectCraft: renderiza o projeto como está, com outro nome (o .mov antigo fica)
             mt = ecp.stat().st_mtime
             mov = ecp.with_name(f"{ecp.stem.split('_ec')[0]}_ec{int(mt)}.mov")
-            effectcraft.renderizar(ecp, mov, w=w, h=h)
+            effectcraft.render(ecp, mov, w=w, h=h)
             c.update(arquivo=rel(mov), ec_gerado=mt, manual=True, manual_ec=True)
             editados += 1
             continue
         if c.get("manual_ec") and c.get("arquivo") and (projeto.pasta / c["arquivo"]).exists():
             continue
-        arq = pasta / f"{c['modelo']}_{_chave(c, cor, w, h)}.mov"
+        arq = pasta / f"{c['modelo']}_{_key(c, cor, w, h)}.mov"
         c["arquivo"] = rel(arq)
         ecp = arq.with_suffix(".ecproj")
         precisa_ec = motor == "effectcraft" and not ecp.exists()
         if arq.exists() and not precisa_ec:
             continue
-        pc = peca(c, pasta, w, h, pasta / f"pag_{arq.stem}.png")
+        pc = piece(c, pasta, w, h, pasta / f"pag_{arq.stem}.png")
         if not pc:
             events.warning(f"citação em {c['inicio']:.0f}s: trecho não achado no PDF; gráfico pulado")
             c["arquivo"] = None
             continue
         if motor == "effectcraft":
-            effectcraft.construir(*pc, c["dur"], ecp, w, h, cor, fps)
+            effectcraft.build(*pc, c["dur"], ecp, w, h, cor, fps)
             if not arq.exists():  # um .mov já feito (ex.: pelo HTML) não é refeito só para ganhar o .ecproj
-                effectcraft.renderizar(ecp, arq, w=w, h=h)
+                effectcraft.render(ecp, arq, w=w, h=h)
             c.update(ecproj=rel(ecp), ec_gerado=ecp.stat().st_mtime)
         else:
-            render.renderizar(*pc, c["dur"], arq, cor=cor, paralelo=g.get("paralelo", 6), w=w, h=h, fps=fps)
+            render.render(*pc, c["dur"], arq, cor=cor, paralelo=g.get("paralelo", 6), w=w, h=h, fps=fps)
     projeto.salvar_json("graficos.json", plano)
     if editados:
         print(f"  {editados} gráficos editados à mão no EffectCraft renderizados")

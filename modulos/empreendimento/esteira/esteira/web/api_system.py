@@ -14,7 +14,7 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api/v1", tags=["sistema"])
 
 
-def _corpo(resposta):
+def _body(resposta):
     """Dados de uma rota JSON do painel (`/api/grafo`, `/api/processos/…`), sem repetir a lógica dela."""
     return json.loads(resposta.body)
 
@@ -24,51 +24,51 @@ def _corpo(resposta):
 @router.get("/monitor")
 def monitor():
     from esteira import monitor as m
-    e = m.estado(painel._cfg().get("monitor", {}).get("tarifa_kwh", 0.85))
+    e = m.state(painel._cfg().get("monitor", {}).get("tarifa_kwh", 0.85))
     atual = e.get("atual") or {}
     return {"gpu": atual.get("gpu"), "cpu": atual.get("cpu"), "ram": atual.get("ram"), "ollama": atual.get("ollama"),
             "esteira": atual.get("esteira") or [], "grupos": atual.get("grupos") or [],
             "arquivos": e.get("arquivos") or [], "energia": e.get("energia"), "hist": e.get("hist") or [],
-            "erro": e.get("erro"), "fila": [t for t in queue.listar() if t["estado"] in ("rodando", "na fila")]}
+            "erro": e.get("erro"), "fila": [t for t in queue.list_all() if t["estado"] in ("rodando", "na fila")]}
 
 
 @router.get("/grafo")
-def grafo():
-    return _corpo(painel.api_grafo())
+def graph():
+    return _body(painel.api_graph())
 
 
 @router.get("/grafo/no/{id_no}")
-def grafo_no(id_no: str):
-    return _corpo(painel.api_grafo_no(id_no))
+def graph_node(id_no: str):
+    return _body(painel.api_graph_node(id_no))
 
 
 # ---------- Processos ----------
 
 @router.get("/processos")
-def processos(limite: int = 300):
+def processes(limite: int = 300):
     from esteira.core import locks, processes
     return {"processos": processes.list_recent(limite), "vagas": {v: locks.owner(v) for v in locks.SLOTS}}
 
 
 @router.get("/processos/{pid_id}")
-def processo(pid_id: str):
-    return _corpo(painel.api_processo(pid_id))
+def process(pid_id: str):
+    return _body(painel.api_process(pid_id))
 
 
 @router.post("/processos/{pid_id}/parar")
-def parar(pid_id: str):
+def stop(pid_id: str):
     """Para o processo (e o que ele abriu), venha da fila ou do terminal."""
     from esteira.core import processes
     if not processes.get(pid_id):
         raise HTTPException(404, "processo não encontrado")
-    painel.parar_processo(pid_id)
+    painel.stop_process(pid_id)
     return {"ok": True}
 
 
 # ---------- Opções de IA ----------
 
 @router.get("/opcoes")
-def opcoes():
+def read_options():
     from esteira.core import options
     from esteira.ai import local
     return {"opcoes": options.read(), "claude": options.claude(painel._cfg().get("claude", {})),
@@ -76,7 +76,7 @@ def opcoes():
                           for k, (nome, desc, tipos) in options.OPERATIONS.items()],
             "modelos_claude": [{"id": i, "nome": n, "descricao": d} for i, n, d in options.MODELS],
             "sugestoes": [{"nome": n, "tipo": t, "descricao": d} for n, t, d in options.SUGGESTIONS],
-            "locais": painel._modelos_locais(), "padrao": {"text": local.TEXT, "vision": local.VISION}}
+            "locais": painel._local_models(), "padrao": {"text": local.TEXT, "vision": local.VISION}}
 
 
 class Operation(BaseModel):
@@ -95,7 +95,7 @@ class Options(BaseModel):
 
 
 @router.post("/opcoes")
-def salvar_opcoes(corpo: Options):
+def save_options(corpo: Options):
     from esteira.core import options
     if corpo.engine not in ("local", "claude"):
         raise HTTPException(400, "engine must be local or claude")
@@ -110,35 +110,35 @@ def salvar_opcoes(corpo: Options):
         ops[k] = entry
     options.save(engine=corpo.engine, claude_model=corpo.claude_model or None, episode_cap_usd=corpo.episode_cap_usd,
                  daily_cap_usd=corpo.daily_cap_usd, operations=ops, claude_fallback=corpo.claude_fallback)
-    return opcoes()
+    return read_options()
 
 
-class Baixar(BaseModel):
+class Download(BaseModel):
     nome: str
 
 
 @router.post("/opcoes/baixar")
-def baixar(corpo: Baixar):
+def download(corpo: Download):
     """Baixa um modelo (`usuario/repo:QUANT` do Hugging Face) para o llama.cpp em segundo plano; o andamento
     sai em `/opcoes/baixando`."""
     nome = corpo.nome.strip()
     if not re.fullmatch(r"[\w.\-/]+(:[\w.\-]+)?", nome):
         raise HTTPException(400, "nome de modelo inválido (ex.: unsloth/Qwen3-8B-GGUF:Q4_K_M)")
-    if painel._baixando.get(nome, {}).get("estado") != "baixando":
-        painel._baixando[nome] = {"estado": "baixando", "feito": 0, "total": 0, "msg": "começando"}
-        threading.Thread(target=painel._baixar, args=(nome,), daemon=True).start()
-    return painel._baixando[nome]
+    if painel._downloading.get(nome, {}).get("estado") != "baixando":
+        painel._downloading[nome] = {"estado": "baixando", "feito": 0, "total": 0, "msg": "começando"}
+        threading.Thread(target=painel._download, args=(nome,), daemon=True).start()
+    return painel._downloading[nome]
 
 
 @router.get("/opcoes/baixando")
-def baixando():
-    return painel._baixando
+def downloading():
+    return painel._downloading
 
 
 # ---------- Custos do Claude ----------
 
 @router.get("/custos")
-def custos():
+def costs():
     from esteira.ai import claude
     regs = list(reversed(claude._records()))
     por_ep = {}
@@ -156,10 +156,10 @@ def custos():
 # ---------- Acervo de mídia ----------
 
 @router.get("/acervo")
-def acervo(q: str = "", tipo: str = "", limite: int = 180):
+def library(q: str = "", tipo: str = "", limite: int = 180):
     from esteira import library as A
-    itens = [dict(it, mini=f"/acervo/mini/{it['id']}") for it in A.listar(q, tipo, limite=min(limite, 500))]
-    return {"itens": itens, "estatisticas": A.estatisticas()}
+    itens = [dict(it, mini=f"/acervo/mini/{it['id']}") for it in A.list_all(q, tipo, limite=min(limite, 500))]
+    return {"itens": itens, "estatisticas": A.call_statistics()}
 
 
 # ---------- Backup e dataset das Craft Apps (docs/PLANO-DATASET.md) ----------
@@ -167,8 +167,8 @@ def acervo(q: str = "", tipo: str = "", limite: int = 180):
 @router.get("/backup")
 def backup():
     """Estado do backup no Google Drive (`infra/scripts/backup` grava `plataforma/backup.json`)."""
-    from esteira.project import DADOS
-    arq = DADOS.parent / "plataforma" / "backup.json"
+    from esteira.project import DATA
+    arq = DATA.parent / "plataforma" / "backup.json"
     if not arq.exists():
         return {"configurado": False, "modulos": [], "ultimo": None, "teste": None}
     d = json.loads(arq.read_text())
@@ -190,38 +190,38 @@ def dataset():
     """Por tarefa: registros, exemplos de treino × mínimo; adaptadores (promovido ou não) e a última bancada N1."""
     from esteira import bench
     from esteira.dataset import index, app_training
-    situ = index.situacao()
+    situ = index.status()
     tarefas = [{"tarefa": t, "app": app_training.R.TAREFAS[t], **x} for t, x in situ.items() if t != "peca_html"]
     adaptadores = []
-    pasta = app_training._pasta()
+    pasta = app_training._folder()
     for m in sorted(pasta.glob("*.json")) if pasta.exists() else []:
         try:
             adaptadores.append(json.loads(m.read_text()))
         except ValueError:
             continue
     notas = {}
-    for modelo, info in ((bench.ultimo() or {}).get("modelos") or {}).items():
+    for modelo, info in ((bench.last() or {}).get("modelos") or {}).items():
         for t, x in (info.get("tarefas") or {}).items():
             if t.startswith("n1_"):
                 notas.setdefault(t[3:], {})[modelo] = {"nota": x.get("nota"), "json_ok": x.get("json_ok")}
     return {"tarefas": tarefas, "adaptadores": adaptadores, "bancada": notas,
-            "promovidos": {app: app_training.promovido(app) for app in app_training.TAREFAS_APP}}
+            "promovidos": {app: app_training.promoted(app) for app in app_training.TASKS_APP}}
 
 
-class Veredito(BaseModel):
+class Verdict(BaseModel):
     veredito: str
     comentario: str = ""
 
 
 @router.post("/dataset/montagem/{ep}")
-def veredito_montagem(ep: str, v: Veredito):
+def verdict_assembly(ep: str, v: Verdict):
     """A pessoa aprova (ou não) a montagem gerada de um episódio: veredito no registro `montar` mais recente."""
     from esteira.dataset import registry as R
     if v.veredito not in ("aprovada", "reprovada", "ajuste"):
         raise HTTPException(422, "veredito: aprovada | reprovada | ajuste")
-    r = R.ultimo(f"ep:{ep}", "montar")
+    r = R.last(f"ep:{ep}", "montar")
     if not r:
         raise HTTPException(404, f"sem montagem registrada para {ep}")
-    R.avaliar(r["id"], v.veredito, comentario=v.comentario or None,
+    R.evaluate(r["id"], v.veredito, comentario=v.comentario or None,
               motivo=v.comentario or None if v.veredito == "reprovada" else None)
     return {"ok": True, "registro": r["id"]}

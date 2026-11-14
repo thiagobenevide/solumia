@@ -7,7 +7,7 @@ Dados fora do repositório: `projetos/`, `acervo/` e `cache/` ficam em `$AGENT_D
 Para produzir um episódio, usar a skill `produzir-episodio`. Plano e decisões: `docs/PLANO.md`.
 Craft Apps por N1 (`docs/PLANO-DATASET.md`): `esteira/n1/{filmcraft,photocraft,effectcraft}.py` = esquema (Pydantic → JSON
 Schema/gramática) + executor/compilador N1 → comandos; `assemble` e a thumb geram N1 e executam; peça EC com
-`peca.n1.json` é compilada (`ec.corpo`; guia `pecas/GUIA_N1_EC.md`); fotos pela receita `[foto]` (`esteira/photos.py`).
+`peca.n1.json` é compilada (`ec.body`; guia `pecas/GUIA_N1_EC.md`); fotos pela receita `[foto]` (`esteira/photos.py`).
 Dataset em `$AGENT_DATA/.../dataset/` (`esteira/dataset/`: `registro` JSONL que só cresce, `indice` SQLite, `exportar`,
 `edicoes` (edição à mão → N1), `traduzir`, `inferir`, `treino_app` (LoRA por app, ≤12B, promoção pela bancada
 `n1_*`)); CLI `./dark dataset [status|export|translate|edits|train|promote]`. Os testes usam dataset temporário (`tests/conftest.py`).

@@ -23,17 +23,17 @@ podem poderia fazer feito fez coisa coisas ninguém algo alguém mesma dizem fal
 continua continuam continuavam estava ainda durante naquela naquele única único maior maiores
 """.split())
 
-MOVIMENTOS = ["zoom_in", "pan_dir", "zoom_out", "pan_esq"]
-RE_DIRETIVA = re.compile(r"\[(busca|video|vídeo|imagem)\s*:\s*([^\]]+)\]", re.I)
+MOTIONS = ["zoom_in", "pan_dir", "zoom_out", "pan_esq"]
+RE_DIRECTIVE = re.compile(r"\[(busca|video|vídeo|imagem)\s*:\s*([^\]]+)\]", re.I)
 
 
-def normalizar(palavra):
+def normalize(palavra):
     s = unicodedata.normalize("NFKD", palavra.lower())
     s = "".join(c for c in s if not unicodedata.combining(c))
     return re.sub(r"[^a-z0-9]", "", s)
 
 
-def ler_roteiro(texto):
+def read_script(texto):
     """Devolve (titulo, frases); cada frase: {texto, destaques, busca, tipo}."""
     titulo, frases, pendente = None, [], None
     for linha in texto.splitlines():
@@ -43,10 +43,10 @@ def ler_roteiro(texto):
         if linha.startswith("#"):
             titulo = titulo or linha.lstrip("#").strip()
             continue
-        for m in RE_DIRETIVA.finditer(linha):
+        for m in RE_DIRECTIVE.finditer(linha):
             tipo = {"busca": None, "imagem": "imagem"}.get(m.group(1).lower(), "video")
             pendente = {"busca": m.group(2).strip(), "tipo": tipo}
-        linha = RE_DIRETIVA.sub("", linha).strip()
+        linha = RE_DIRECTIVE.sub("", linha).strip()
         if not linha:
             continue
         for frase in re.split(r"(?<=[.!?…])\s+", linha):
@@ -61,7 +61,7 @@ def ler_roteiro(texto):
     return titulo, frases
 
 
-def frases_da_transcricao(transc):
+def sentences_of_transcript(transc):
     frases, atual = [], []
     for w in transc["palavras"]:
         atual.append(w["p"])
@@ -73,10 +73,10 @@ def frases_da_transcricao(transc):
     return [{"texto": f, "destaques": [], "busca": None, "tipo": None} for f in frases]
 
 
-def alinhar(frases, transc):
+def align(frases, transc):
     """Dá a cada palavra do roteiro um tempo (ini) usando a transcrição; devolve lista por frase."""
     palavras_w = transc["palavras"]
-    norm_w = [normalizar(w["p"]) for w in palavras_w]
+    norm_w = [normalize(w["p"]) for w in palavras_w]
     # número partido pelo Whisper ("12", ",5", "%") vira uma palavra só, como no roteiro ("12,5%" → "125")
     for k in range(1, len(norm_w)):
         if re.match(r"^[.,]\d", palavras_w[k]["p"].strip()) and norm_w[k - 1][-1:].isdigit():
@@ -84,9 +84,9 @@ def alinhar(frases, transc):
     tokens = []  # (indice_frase, texto_original)
     for i, f in enumerate(frases):
         for p in f["texto"].split():
-            if normalizar(p):
+            if normalize(p):
                 tokens.append((i, p))
-    norm_r = [normalizar(p) for _, p in tokens]
+    norm_r = [normalize(p) for _, p in tokens]
 
     tempos = [None] * len(tokens)
     fins = [None] * len(tokens)
@@ -117,13 +117,13 @@ def alinhar(frases, transc):
     return por_frase
 
 
-def _inicio_destaque(palavras, destaque):
+def _start_highlight(palavras, destaque):
     """Momento em que a primeira palavra do destaque é falada, ou None se não está nestas palavras."""
-    alvo = normalizar(destaque.split()[0])
-    return next((p["ini"] for p in palavras if normalizar(p["p"]) == alvo), None)
+    alvo = normalize(destaque.split()[0])
+    return next((p["ini"] for p in palavras if normalize(p["p"]) == alvo), None)
 
 
-def _dividir_longas(blocos, alvo, maximo):
+def _divide_long(blocos, alvo, maximo):
     saida = []
     for b in blocos:
         fila = [b]
@@ -147,13 +147,13 @@ def _dividir_longas(blocos, alvo, maximo):
             a = dict(atual, palavras=ps[:melhor], fim=t)
             b2 = dict(atual, palavras=ps[melhor:], ini=t, busca=None, tipo=None)
             # Cada destaque fica no pedaço que contém a palavra destacada.
-            a["destaques"] = [d for d in atual["destaques"] if _inicio_destaque(a["palavras"], d) is not None]
+            a["destaques"] = [d for d in atual["destaques"] if _start_highlight(a["palavras"], d) is not None]
             b2["destaques"] = [d for d in atual["destaques"] if d not in a["destaques"]]
             fila[:0] = [a, b2]
     return saida
 
 
-def _juntar_curtas(blocos, minimo):
+def _join_short(blocos, minimo):
     saida = []
     for b in blocos:
         if saida and (saida[-1]["fim"] - saida[-1]["ini"]) < minimo:
@@ -173,7 +173,7 @@ def _juntar_curtas(blocos, minimo):
     return saida
 
 
-def palavras_chave(texto, freq, n=2):
+def words_key(texto, freq, n=2):
     """Heurística local: palavras longas, nomes próprios e termos raros no roteiro."""
     candidatos = []
     for pos, bruto in enumerate(texto.split()):
@@ -190,17 +190,17 @@ def palavras_chave(texto, freq, n=2):
     return " ".join(vistos)
 
 
-def gerar_cenas(projeto):
+def generate_scenes(projeto):
     cfg = projeto.cfg["cenas"]
     transc = projeto.carregar_json("transcricao.json")
     arq = projeto.roteiro()
     if arq:
-        titulo, frases = ler_roteiro(arq.read_text())
+        titulo, frases = read_script(arq.read_text())
     else:
         print("  sem roteiro.txt: usando as frases da própria transcrição")
-        titulo, frases = None, frases_da_transcricao(transc)
+        titulo, frases = None, sentences_of_transcript(transc)
 
-    por_frase = alinhar(frases, transc)
+    por_frase = align(frases, transc)
     # Tempo de cada frase do roteiro na narração editada: os gráficos entram no instante em que ela é falada.
     projeto.salvar_json("frases.json", [
         {"texto": f["texto"], "destaques": f["destaques"], "ini": ps[0]["ini"] if ps else None,
@@ -218,8 +218,8 @@ def gerar_cenas(projeto):
     blocos[-1]["fim"] = transc["duracao"]
     blocos[0]["ini"] = 0.0
 
-    blocos = _dividir_longas(blocos, cfg["alvo_segundos"], cfg["max_segundos"])
-    blocos = _juntar_curtas(blocos, cfg["min_segundos"])
+    blocos = _divide_long(blocos, cfg["alvo_segundos"], cfg["max_segundos"])
+    blocos = _join_short(blocos, cfg["min_segundos"])
 
     todo = " ".join(f["texto"] for f in frases).lower()
     freq = {}
@@ -235,11 +235,11 @@ def gerar_cenas(projeto):
             "inicio": round(b["ini"], 3),
             "fim": round(b["fim"], 3),
             "texto": texto,
-            "busca": b["busca"] or palavras_chave(texto, freq),
+            "busca": b["busca"] or words_key(texto, freq),
             "tipo": b["tipo"] or ("video" if (i % 5) < passo_video else "imagem"),
-            "destaques": [{"texto": d, "inicio": round(_inicio_destaque(b["palavras"], d) or b["ini"], 3)}
+            "destaques": [{"texto": d, "inicio": round(_start_highlight(b["palavras"], d) or b["ini"], 3)}
                           for d in b["destaques"]],
-            "movimento": MOVIMENTOS[i % len(MOVIMENTOS)],
+            "movimento": MOTIONS[i % len(MOTIONS)],
             "busca_definida": bool(b["busca"]),
             "midia": None,
         })

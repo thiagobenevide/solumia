@@ -14,24 +14,24 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from esteira.bench import CENAS
+from esteira.bench import SCENES
 from esteira.studio import triggers
-from esteira.studio.triggers import Gatilho
-from esteira.project import DADOS
+from esteira.studio.triggers import Trigger
+from esteira.project import DATA
 
-PASTA = DADOS / "estudio" / "estilos"
-SEMENTES = Path(__file__).parent / "estilos"
-SONS = ("boom", "click", "ding", "glitch", "pop", "riser", "shimmer", "stamp", "swoosh", "tick", "type", "whoosh")
-COR = r"^#[0-9a-fA-F]{6}$"
+FOLDER = DATA / "estudio" / "estilos"
+SEEDS = Path(__file__).parent / "estilos"
+SOUNDS = ("boom", "click", "ding", "glitch", "pop", "riser", "shimmer", "stamp", "swoosh", "tick", "type", "whoosh")
+COLOR = r"^#[0-9a-fA-F]{6}$"
 
 
-class Pele(BaseModel):
-    fundo: str = Field("#0b0b0d", pattern=COR)
-    fundo2: str = Field("#1c1c22", pattern=COR)
-    texto: str = Field("#ffffff", pattern=COR)
-    destaque: str = Field("#f5c518", pattern=COR)
-    apoio: str = Field("#ffe08a", pattern=COR)
-    acento: str = Field("#b8b2a3", pattern=COR)
+class Skin(BaseModel):
+    fundo: str = Field("#0b0b0d", pattern=COLOR)
+    fundo2: str = Field("#1c1c22", pattern=COLOR)
+    texto: str = Field("#ffffff", pattern=COLOR)
+    destaque: str = Field("#f5c518", pattern=COLOR)
+    apoio: str = Field("#ffe08a", pattern=COLOR)
+    acento: str = Field("#b8b2a3", pattern=COLOR)
     fonte_destaque: str = "Plus Jakarta Sans"
     fonte_texto: str = "Plus Jakarta Sans"
     fonte_tecnica: str = "JetBrains Mono"
@@ -39,13 +39,13 @@ class Pele(BaseModel):
     fonte_legenda: str = "Plus Jakarta Sans"
 
 
-class Exemplo(BaseModel):
+class Example(BaseModel):
     frase: str
     cena: str
     titulo: str = ""
 
 
-class Legenda(BaseModel):
+class Caption(BaseModel):
     """Aparência da legenda (liga/desliga por formato fica em `Regras.legenda`; a fonte em `Pele.fonte_legenda`)."""
     tamanho: float = Field(1.0, ge=0.6, le=1.8)  # multiplica o tamanho padrão do formato
     posicao: Literal["baixo", "meio", "rosto"] = "baixo"  # rosto: logo abaixo do queixo (modo apresentador, câmera cheia)
@@ -55,22 +55,22 @@ class Legenda(BaseModel):
     acabamento: Literal["sombra", "contorno", "caixa"] = "sombra"
 
 
-ENTRADAS = ("desfoque", "deslizar", "revelar", "escala")
+INPUTS = ("desfoque", "deslizar", "revelar", "escala")
 
 
 class Visual(BaseModel):
     """Variações das cenas do kit, como dado (nunca código): o compilador passa ao kit e o código alterna as entradas
     ao longo do vídeo. É o que dá cara própria ao estilo sem gerar código por vídeo nem chamar o Claude."""
-    entradas: list[Literal[ENTRADAS]] = Field(default_factory=lambda: ["desfoque", "deslizar"], min_length=1)
+    entradas: list[Literal[INPUTS]] = Field(default_factory=lambda: ["desfoque", "deslizar"], min_length=1)
     fundo: Literal["veu", "solido", "gradiente"] = "veu"  # fundo das cenas só de motion
     alinhamento: Literal["centro", "esquerda"] = "centro"
     cartao: Literal["vidro", "contorno", "solido"] = "vidro"  # etiquetas e cartões
     cantos: float = Field(1.0, ge=0, le=3)  # arredondamento (0 = reto)
 
 
-NIVEL = Literal["baixa", "media", "alta", "personalizado"]
+LEVEL = Literal["baixa", "media", "alta", "personalizado"]
 # o nível preenche os números das regras; "personalizado" = números ajustados à mão no Avançado
-NIVEIS = {
+LEVELS = {
     "sfx": {"baixa": {"sfx_volume": 0.32, "sfx_por_s": 0.35},
             "media": {"sfx_volume": 0.45, "sfx_por_s": 0.8},
             "alta": {"sfx_volume": 0.55, "sfx_por_s": 1.2}},
@@ -82,8 +82,8 @@ NIVEIS = {
                 "alta": {"efeitos": {"flash": 1.6, "zoom": 1.5, "brilho": 1.4, "grade": 1.2}}},
 }
 BROLL = {"baixa": 0.2, "media": 0.3, "alta": 0.35}  # B-roll do apresentador acompanha o motion
-SFX_CHAVE = ("contador", "cta", "titulo_capitulo", "pergunta_destaque")  # sfx baixa: só as entradas principais
-SFX_PADRAO = {"contador": "whoosh", "barras_comparacao": "swoosh", "versus": "whoosh", "passo_a_passo": "pop",
+SFX_KEY = ("contador", "cta", "titulo_capitulo", "pergunta_destaque")  # sfx baixa: só as entradas principais
+SFX_DEFAULT = {"contador": "whoosh", "barras_comparacao": "swoosh", "versus": "whoosh", "passo_a_passo": "pop",
               "lista_itens": "pop", "linha_do_tempo": "swoosh", "citacao_estudo": "click", "conceito_icone": "pop",
               "pergunta_destaque": "ding", "titulo_capitulo": "shimmer", "frase_destaque": "swoosh", "cta": "click",
               "anel_percentual": "whoosh", "grade_proporcao": "tick", "equacao": "click", "grafico_linha": "swoosh",
@@ -91,7 +91,7 @@ SFX_PADRAO = {"contador": "whoosh", "barras_comparacao": "swoosh", "versus": "wh
               "carimbo": "stamp"}
 
 
-class Regras(BaseModel):
+class Rules(BaseModel):
     # o que o canal NÃO usa (cenas do kit, ids de peças do acervo, intenções ou temas das fichas); o cardápio é o
     # resto. A configuração do canal não carrega lista de cenas (docs/PLANO-ACERVO.md, decisão 4)
     filtro: list[str] = Field(default_factory=list)
@@ -104,8 +104,8 @@ class Regras(BaseModel):
     sfx_volume: float = Field(0.45, ge=0, le=1)
     sfx: dict[str, str] = Field(default_factory=dict)  # cena → som (SONS)
     legenda: dict[str, bool] = Field(default_factory=lambda: {"16:9": False, "9:16": True})
-    legenda_visual: Legenda = Field(default_factory=Legenda)
-    niveis: dict[str, NIVEL] = Field(default_factory=lambda: {"sfx": "alta", "motion": "alta", "efeitos": "alta"})
+    legenda_visual: Caption = Field(default_factory=Caption)
+    niveis: dict[str, LEVEL] = Field(default_factory=lambda: {"sfx": "alta", "motion": "alta", "efeitos": "alta"})
     # força de cada efeito visual (0 desliga): flash nas entradas, zoom (movimento da mídia, punch, socos), brilho e
     # grade do fundo das cenas de motion
     efeitos: dict[str, float] = Field(default_factory=lambda: {"flash": 1.0, "zoom": 1.0, "brilho": 1.0, "grade": 1.0})
@@ -124,15 +124,15 @@ class Regras(BaseModel):
         if isinstance(d, dict) and "cenas" in d:
             d = dict(d)
             cenas = d.pop("cenas") or []
-            d.setdefault("filtro", [c for c in CENAS if c not in cenas])
+            d.setdefault("filtro", [c for c in SCENES if c not in cenas])
         return d
 
     def cardapio(self):
         """Cenas do kit que o canal usa (todas menos o filtro)."""
-        return [c for c in CENAS if c not in self.filtro]
+        return [c for c in SCENES if c not in self.filtro]
 
 
-class RegrasCor(BaseModel):
+class RulesColor(BaseModel):
     """Regras que o motor aplica às cores (aba Identidade)."""
     um_destaque: bool = True  # no máximo 1 elemento em destaque por cena
     sem_mistura: bool = True  # nunca destaque, apoio e acento juntos na mesma cena
@@ -140,13 +140,13 @@ class RegrasCor(BaseModel):
     sentido: bool = True  # apoio/acento só quando o dado tiver sentido positivo/negativo
 
 
-CURVAS = {"suave": "power3.out", "firme": "expo.out", "elastica": "back.out(1.6)", "linear": "none"}
-PROIBIVEIS = ("bounce", "shake", "glitch", "flash", "3D", "som de dinheiro", "luz", "particulas")
+CURVES = {"suave": "power3.out", "firme": "expo.out", "elastica": "back.out(1.6)", "linear": "none"}
+FORBIDDABLE = ("bounce", "shake", "glitch", "flash", "3D", "som de dinheiro", "luz", "particulas")
 
 
-class Movimento(BaseModel):
+class Motion(BaseModel):
     """Linguagem de movimento do canal: o kit lê e aplica em todas as peças."""
-    curva: Literal[tuple(CURVAS)] = "suave"
+    curva: Literal[tuple(CURVES)] = "suave"
     ritmo: list[float] = Field(default_factory=lambda: [2.0, 4.0], min_length=2, max_length=2)  # algo muda a cada X–Y s
     entrada: Literal["fade_deslize", "fade", "escala", "revelar", "desfoque", "mascara"] = "fade_deslize"
     entrada_s: float = Field(0.4, ge=0.1, le=2)
@@ -178,14 +178,14 @@ class Layouts(BaseModel):
     selo: str = Field("", max_length=40)  # selo de progresso fixo no canto ("● SELO | 02/05 capítulo"); vazio = sem
 
 
-class Presenca(BaseModel):
+class Presence(BaseModel):
     fora_max_s: float = 6.0  # apresentador fora da tela no máximo
     peca_parada_s: float = 5.0  # peça parada; depois acrescenta detalhe
     mudanca_s: list[float] = Field(default_factory=lambda: [2.0, 4.0], min_length=2, max_length=2)
     mudanca_vertical_s: list[float] = Field(default_factory=lambda: [1.5, 3.0], min_length=2, max_length=2)
 
 
-class Peca(BaseModel):
+class Piece(BaseModel):
     """Ajuste de uma peça (cena do kit) neste estilo: animação relativa à palavra-âncora, fonte e cor. Se a IA pode
     escolher a peça sozinha continua sendo `regras.cenas` (o cardápio)."""
     entrada: str = ""  # vazio = a do Movimento
@@ -197,178 +197,178 @@ class Peca(BaseModel):
     cor: Literal["destaque", "gatilho"] = "gatilho"  # gatilho = a cor que a regra do gatilho escolher
 
 
-class Estilo(BaseModel):
+class Style(BaseModel):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,40}$")
     nome: str
     canal: str
     # só para amostra e teste do estilo: na produção vale o `modo:` do roteiro (producao.modo; decisão 5 do plano)
     modo: Literal["dark", "apresentador", "curso"] = "dark"
     formatos: list[Literal["16:9", "9:16"]] = Field(default_factory=lambda: ["16:9", "9:16"])
-    pele: Pele = Field(default_factory=Pele)
-    regras: Regras = Field(default_factory=Regras)
+    pele: Skin = Field(default_factory=Skin)
+    regras: Rules = Field(default_factory=Rules)
     guia: str = ""  # tom e notas do canal (escrito no Fluxo A), entra no prompt do diretor
-    exemplos: list[Exemplo] = Field(default_factory=list)
-    regras_cor: RegrasCor = Field(default_factory=RegrasCor)
+    exemplos: list[Example] = Field(default_factory=list)
+    regras_cor: RulesColor = Field(default_factory=RulesColor)
     tamanhos: dict[str, list[int]] = Field(default_factory=lambda: {  # px em 1080p por papel de fonte (mín, máx)
         "fonte_destaque": [180, 260], "fonte_texto": [40, 48], "fonte_tecnica": [24, 28], "fonte_legenda": [52, 60],
         "fonte_editorial": [110, 140]})
     bloquear: list[str] = Field(default_factory=lambda: ["URGENTE", "você não vai acreditar", "enriqueça"])
-    movimento: Movimento = Field(default_factory=Movimento)
+    movimento: Motion = Field(default_factory=Motion)
     layouts: Layouts = Field(default_factory=Layouts)
-    presenca: Presenca = Field(default_factory=Presenca)
-    gatilhos: list[Gatilho] = Field(default_factory=triggers.padrao)
-    pecas: dict[str, Peca] = Field(default_factory=dict)  # cena → ajuste (ausente = padrão)
+    presenca: Presence = Field(default_factory=Presence)
+    gatilhos: list[Trigger] = Field(default_factory=triggers.default)
+    pecas: dict[str, Piece] = Field(default_factory=dict)  # cena → ajuste (ausente = padrão)
     versao: int = 1
     travado: bool = False
     rotulo: str = ""  # nome opcional da versão (vazio = nome do estilo)
     salvo_em: str = ""
 
 
-def aplicar_niveis(regras: Regras, niveis=None):
+def aplicar_levels(regras: Rules, niveis=None):
     """Regras com os números dos níveis (os do estilo, ou `niveis` por cima para uma produção só)."""
     nv = {**regras.niveis, **(niveis or {})}
     dados = regras.model_dump()
     for eixo, nivel in nv.items():
-        dados.update(NIVEIS.get(eixo, {}).get(nivel, {}))
+        dados.update(LEVELS.get(eixo, {}).get(nivel, {}))
     if nv.get("motion") in BROLL:
         dados["apresentador"] = {**dados["apresentador"], "broll": BROLL[nv["motion"]]}
     dados["niveis"] = nv
-    return Regras.model_validate(dados)
+    return Rules.model_validate(dados)
 
 
-def com_modo(estilo: "Estilo", modo):
+def with_mode(estilo: "Style", modo):
     """Cópia do estilo para o modo do vídeo (marcado no roteiro); o estilo salvo não muda."""
     return estilo if not modo or modo == estilo.modo else estilo.model_copy(update={"modo": modo})
 
 
-def com_niveis(estilo: "Estilo", niveis=None):
+def with_levels(estilo: "Style", niveis=None):
     """Cópia do estilo para uma produção, com outro nível de som/motion/efeitos (o estilo salvo não muda)."""
-    return estilo.model_copy(update={"regras": aplicar_niveis(estilo.regras, niveis)}) if niveis else estilo
+    return estilo.model_copy(update={"regras": aplicar_levels(estilo.regras, niveis)}) if niveis else estilo
 
 
-def _arq(id_):
-    return PASTA / f"{id_}.json"
+def _file(id_):
+    return FOLDER / f"{id_}.json"
 
 
-def _semear():
-    PASTA.mkdir(parents=True, exist_ok=True)
-    for s in SEMENTES.glob("*.json"):
-        if not (PASTA / s.name).exists():
-            (PASTA / s.name).write_text(s.read_text())
+def _seed():
+    FOLDER.mkdir(parents=True, exist_ok=True)
+    for s in SEEDS.glob("*.json"):
+        if not (FOLDER / s.name).exists():
+            (FOLDER / s.name).write_text(s.read_text())
 
 
-def listar(canal=None):
-    _semear()
-    estilos = [Estilo.model_validate_json(a.read_text()) for a in sorted(PASTA.glob("*.json"))]
+def list_all(canal=None):
+    _seed()
+    estilos = [Style.model_validate_json(a.read_text()) for a in sorted(FOLDER.glob("*.json"))]
     return [e for e in estilos if canal is None or e.canal == canal]
 
 
-def carregar(id_):
+def load(id_):
     """`id` = versão atual; `id@N` = a versão N guardada."""
-    _semear()
+    _seed()
     id_, _, v = id_.partition("@")
-    if not _arq(id_).exists():
+    if not _file(id_).exists():
         raise KeyError(f"estilo inexistente: {id_}")
-    atual = Estilo.model_validate_json(_arq(id_).read_text())
+    atual = Style.model_validate_json(_file(id_).read_text())
     if not v or int(v) == atual.versao:
         return atual
-    arq = _versoes(id_) / f"v{int(v)}.json"
+    arq = _versions(id_) / f"v{int(v)}.json"
     if not arq.exists():
         raise KeyError(f"versão inexistente: {id_}@{v}")
-    return Estilo.model_validate_json(arq.read_text())
+    return Style.model_validate_json(arq.read_text())
 
 
-def _versoes(id_):
-    return PASTA / "versoes" / id_
+def _versions(id_):
+    return FOLDER / "versoes" / id_
 
 
-def _guardar(estilo: Estilo):
-    _versoes(estilo.id).mkdir(parents=True, exist_ok=True)
-    (_versoes(estilo.id) / f"v{estilo.versao}.json").write_text(estilo.model_dump_json(indent=1))
+def _store(estilo: Style):
+    _versions(estilo.id).mkdir(parents=True, exist_ok=True)
+    (_versions(estilo.id) / f"v{estilo.versao}.json").write_text(estilo.model_dump_json(indent=1))
 
 
-def rotulo(estilo: Estilo):
+def label(estilo: Style):
     """Como a versão aparece para escolher: `vN - nome` (nome da versão ou, sem ele, o do estilo)."""
     return f"v{estilo.versao} - {estilo.rotulo.strip() or estilo.nome}"
 
 
-def versoes(id_):
+def versions(id_):
     """Todas as versões guardadas do estilo, da mais nova para a mais antiga."""
-    atual = carregar(id_)
-    pasta = _versoes(id_)
+    atual = load(id_)
+    pasta = _versions(id_)
     todas = {atual.versao: atual}
     if pasta.is_dir():
         for a in pasta.glob("v*.json"):
-            e = Estilo.model_validate_json(a.read_text())
+            e = Style.model_validate_json(a.read_text())
             todas.setdefault(e.versao, e)
     return [todas[v] for v in sorted(todas, reverse=True)]
 
 
-def salvar(estilo: Estilo, forcar=False, nova_versao=True):
+def save(estilo: Style, forcar=False, nova_versao=True):
     """Grava como versão nova (a anterior fica guardada). Estilo travado só muda com `forcar` (destravar é explícito)."""
-    _semear()
-    if _arq(estilo.id).exists():
-        atual = carregar(estilo.id)
+    _seed()
+    if _file(estilo.id).exists():
+        atual = load(estilo.id)
         if atual.travado and not forcar:
             raise PermissionError(f"estilo {estilo.id} travado: destrave antes de mudar")
-        if not (_versoes(atual.id) / f"v{atual.versao}.json").exists():
-            _guardar(atual)
+        if not (_versions(atual.id) / f"v{atual.versao}.json").exists():
+            _store(atual)
         estilo.versao = atual.versao + 1 if nova_versao else atual.versao
     if nova_versao or not estilo.salvo_em:
         estilo.salvo_em = datetime.now().isoformat(timespec="seconds")
-    estilo.regras = aplicar_niveis(estilo.regras)
-    _arq(estilo.id).write_text(estilo.model_dump_json(indent=1))
-    _guardar(estilo)
+    estilo.regras = aplicar_levels(estilo.regras)
+    _file(estilo.id).write_text(estilo.model_dump_json(indent=1))
+    _store(estilo)
     return estilo
 
 
-def novo(canal, modo, formatos, nome=""):
+def new(canal, modo, formatos, nome=""):
     """Template novo do canal pelo tipo (modo + formatos), a partir do estilo do canal mais parecido."""
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,30}", canal):
         raise ValueError("canal: letras minúsculas, números e hífen")
-    do_canal = listar(canal)
-    base = next((e for e in do_canal if e.modo == modo), None) or (do_canal[0] if do_canal else carregar("finlumia-dark"))
+    do_canal = list_all(canal)
+    base = next((e for e in do_canal if e.modo == modo), None) or (do_canal[0] if do_canal else load("finlumia-dark"))
     raiz = f"{canal}-{modo}"
     id_, n = raiz, 2
-    while _arq(id_).exists():
+    while _file(id_).exists():
         id_, n = f"{raiz}-{n}", n + 1
     e = base.model_copy(update={"id": id_, "canal": canal, "modo": modo, "formatos": formatos, "versao": 1,
                                 "travado": False, "rotulo": "", "exemplos": list(base.exemplos),
                                 "nome": nome.strip() or f"{canal.capitalize()} · {modo}" + (f" {n - 1}" if n > 2 else "")})
-    Estilo.model_validate(e.model_dump())
-    return salvar(e)
+    Style.model_validate(e.model_dump())
+    return save(e)
 
 
-def novo_canal(slug, nome, nicho="", cor="#f5c518", modo="dark"):
+def new_channel(slug, nome, nicho="", cor="#f5c518", modo="dark"):
     """Cria o estilo inicial de um canal novo (rede aberta); a identidade fina vem do Fluxo A."""
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,30}", slug):
         raise ValueError("slug: letras minúsculas, números e hífen")
     id_ = f"{slug}-{modo}"
-    if _arq(id_).exists():
+    if _file(id_).exists():
         raise FileExistsError(f"já existe o estilo {id_}")
-    base = carregar("finlumia-dark")
-    e = Estilo(id=id_, nome=f"{nome} · {modo}", canal=slug, modo=modo, pele=base.pele.model_copy(update={"destaque": cor}),
+    base = load("finlumia-dark")
+    e = Style(id=id_, nome=f"{nome} · {modo}", canal=slug, modo=modo, pele=base.pele.model_copy(update={"destaque": cor}),
                regras=base.regras, guia=f"Canal {nome}. Nicho: {nicho}." if nicho else f"Canal {nome}.")
-    return salvar(e)
+    return save(e)
 
 
-def duplicar(origem_id, novo_id, nome):
+def duplicate(origem_id, novo_id, nome):
     """Template novo a partir de um estilo: tudo igual, destravado, versão 1 (o canal pode ser trocado depois)."""
-    if _arq(novo_id).exists():
+    if _file(novo_id).exists():
         raise FileExistsError(f"já existe o estilo {novo_id}")
-    base = carregar(origem_id)
+    base = load(origem_id)
     novo = base.model_copy(update={"id": novo_id, "nome": nome, "versao": 1, "travado": False, "rotulo": ""})
-    Estilo.model_validate(novo.model_dump())  # valida o id
-    return salvar(novo)
+    Style.model_validate(novo.model_dump())  # valida o id
+    return save(novo)
 
 
-def canais():
+def channels():
     """Canais da rede: os perfis da esteira + os que só existem como estilo."""
-    from esteira.project import RAIZ
-    nomes = {p.stem for p in (RAIZ / "perfis").glob("*.toml")}
-    nomes |= {e.canal for e in listar()}
+    from esteira.project import ROOT
+    nomes = {p.stem for p in (ROOT / "perfis").glob("*.toml")}
+    nomes |= {e.canal for e in list_all()}
     return sorted(nomes)
 
 
-def json_pele(estilo: Estilo):
+def json_skin(estilo: Style):
     return json.loads(estilo.pele.model_dump_json())

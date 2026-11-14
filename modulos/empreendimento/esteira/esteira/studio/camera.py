@@ -17,19 +17,19 @@ from esteira import production
 from esteira.studio import cut
 
 FPS = 30
-TELA = ("titulo_capitulo",)        # cenas que podem tirar o apresentador da tela (capítulo)
-IMPACTO = ("frase_destaque", "pergunta_destaque", "lettering", "carimbo")
+SCREEN = ("titulo_capitulo",)        # cenas que podem tirar o apresentador da tela (capítulo)
+IMPACT = ("frase_destaque", "pergunta_destaque", "lettering", "carimbo")
 
 
-def existe(projeto):
+def exists(projeto):
     return production.camera(projeto) is not None
 
 
-def destino(projeto):
-    return cut.pasta(projeto) / "camera.mp4"
+def destination(projeto):
+    return cut.folder(projeto) / "camera.mp4"
 
 
-def _na_camera(trechos, t):
+def _in_camera(trechos, t):
     """Tempo da narração editada → tempo na câmera (pelos intervalos da esteira + offset do WAV)."""
     for ini, cam, dur in trechos:
         if t < ini + dur or (ini, cam, dur) == trechos[-1]:
@@ -37,7 +37,7 @@ def _na_camera(trechos, t):
     return t
 
 
-def _editada(segs, T):
+def _edited(segs, T):
     """Tempo de saída (narração cortada pelo som) → tempo na narração editada; no respiro a câmera segue rodando."""
     t = 0.0
     for a, b, r in segs:
@@ -47,13 +47,13 @@ def _editada(segs, T):
     return segs[-1][1] + (T - t)  # depois do fim da fala a câmera continua rodando
 
 
-def quadros(projeto, duracao):
+def frames(projeto, duracao):
     """[(início na câmera, nº de quadros)]: corridas de quadros contíguos da câmera para a saída."""
-    trechos = production.trechos_camera(projeto)
-    c = cut.carregar(projeto)
+    trechos = production.spans_camera(projeto)
+    c = cut.load(projeto)
     segs = c["segmentos"] if c else [[0.0, duracao, 0.0]]
     n = int(round(duracao * FPS))
-    fontes = [_na_camera(trechos, _editada(segs, k / FPS)) for k in range(n)]
+    fontes = [_in_camera(trechos, _edited(segs, k / FPS)) for k in range(n)]
     corridas = []
     for k, s in enumerate(fontes):
         if corridas and abs(s - (corridas[-1][0] + corridas[-1][1] / FPS)) < 0.5 / FPS:
@@ -63,13 +63,13 @@ def quadros(projeto, duracao):
     return corridas
 
 
-def cortar(projeto, duracao):
+def cut_camera(projeto, duracao):
     """Gera a câmera cortada (sem som; a voz é a narração). Refaz só se o corte ou a câmera mudaram."""
     cam = production.camera(projeto)
     if not cam:
         raise SystemExit("modo apresentador sem câmera: ponha o vídeo como camera.mp4 no episódio")
-    corridas = quadros(projeto, duracao)
-    saida = destino(projeto)
+    corridas = frames(projeto, duracao)
+    saida = destination(projeto)
     saida.parent.mkdir(parents=True, exist_ok=True)
     marca = saida.with_suffix(".json")
     chave = {"corridas": corridas, "camera": str(cam.resolve()), "mtime": cam.resolve().stat().st_mtime_ns}
@@ -90,7 +90,7 @@ def cortar(projeto, duracao):
     return saida
 
 
-def rosto(video, amostras=24):
+def face(video, amostras=24):
     """{"x", "y", "h"} do rosto (frações do quadro: centro e altura), mediana das amostras; centro alto sem rosto."""
     import cv2
     cap = cv2.VideoCapture(str(video))
@@ -115,7 +115,7 @@ def rosto(video, amostras=24):
     return {"x": round(float(x), 3), "y": round(float(y), 3), "h": round(float(h), 3), "achado": True}
 
 
-SEM_APRESENTADOR = ("tela", "solido")  # tiram o apresentador da tela: contam no teto `tela_max`
+SEM_PRESENTER = ("tela", "solido")  # tiram o apresentador da tela: contam no teto `tela_max`
 
 
 def layouts(cenas, midia, regras, duracao, variacoes=("split",)):
@@ -129,13 +129,13 @@ def layouts(cenas, midia, regras, duracao, variacoes=("split",)):
     for c in cenas:
         pedido = c.get("layout_pedido")  # o gatilho do estilo escolheu o layout
         cabe = tela + (c["ate"] - c["t"]) <= tela_max * duracao
-        if pedido in ("full", "split", "broll", "lateral", "flutuante", "galeria") or (pedido in SEM_APRESENTADOR and cabe):
+        if pedido in ("full", "split", "broll", "lateral", "flutuante", "galeria") or (pedido in SEM_PRESENTER and cabe):
             c["layout"] = pedido
-            tela += (c["ate"] - c["t"]) if pedido in SEM_APRESENTADOR else 0
+            tela += (c["ate"] - c["t"]) if pedido in SEM_PRESENTER else 0
         elif pedido == "solido":
             c["layout"] = "flutuante"  # sem orçamento para tirar o apresentador: o card flutua sobre a câmera
         elif c.get("takeover"):
-            pode = c["cena"] in TELA and cabe
+            pode = c["cena"] in SCREEN and cabe
             if pode:
                 c["layout"] = "tela"
             else:
@@ -146,7 +146,7 @@ def layouts(cenas, midia, regras, duracao, variacoes=("split",)):
             tela += (c["ate"] - c["t"]) if pode else 0
         else:
             c["layout"] = "full"
-        marcas.append({"t": c["t"], "ate": c["ate"], "layout": c["layout"], "punch": c["cena"] in IMPACTO})
+        marcas.append({"t": c["t"], "ate": c["ate"], "layout": c["layout"], "punch": c["cena"] in IMPACT})
     # B-roll: itens de mídia longos fora das cenas de motion, um sim um não, até o teto
     broll, alterna = 0.0, False
     for m in midia:
@@ -174,6 +174,6 @@ def layouts(cenas, midia, regras, duracao, variacoes=("split",)):
     return segs
 
 
-def resumo(segs, duracao):
+def summary(segs, duracao):
     return {k: round(sum(s["ate"] - s["t"] for s in segs if s["layout"] == k) / max(duracao, 1), 2)
             for k in ("full", "split", "broll", "tela", "lateral", "flutuante", "solido", "galeria")}

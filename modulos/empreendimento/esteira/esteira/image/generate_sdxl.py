@@ -12,14 +12,14 @@ import time
 import torch
 from diffusers import DPMSolverMultistepScheduler, StableDiffusionXLPipeline
 
-MODELO = "SG161222/RealVisXL_V5.0"
-NEGATIVO = ("text, watermark, logo, signature, letters, caption, cartoon, anime, illustration, 3d render, "
+MODEL = "SG161222/RealVisXL_V5.0"
+NEGATIVE = ("text, watermark, logo, signature, letters, caption, cartoon, anime, illustration, 3d render, "
             "deformed, disfigured, extra fingers, bad hands, blurry, lowres, jpeg artifacts, oversaturated")
 
 
 def main(arq):
     pedidos = json.load(open(arq))
-    pipe = StableDiffusionXLPipeline.from_pretrained(MODELO, torch_dtype=torch.float16, variant="fp16",
+    pipe = StableDiffusionXLPipeline.from_pretrained(MODEL, torch_dtype=torch.float16, variant="fp16",
                                                      use_safetensors=True)
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config, use_karras_sigmas=True)
     pipe.to("cuda")
@@ -27,7 +27,7 @@ def main(arq):
     for p in pedidos:
         t = time.time()
         g = torch.Generator("cuda").manual_seed(p.get("semente", 0))
-        img = pipe(prompt=p["prompt"], negative_prompt=p.get("negativo", NEGATIVO), generator=g,
+        img = pipe(prompt=p["prompt"], negative_prompt=p.get("negativo", NEGATIVE), generator=g,
                    width=p.get("largura", 1344), height=p.get("altura", 768),
                    num_inference_steps=p.get("passos", 28), guidance_scale=p.get("guia", 5.0)).images[0]
         img.save(p["saida"])

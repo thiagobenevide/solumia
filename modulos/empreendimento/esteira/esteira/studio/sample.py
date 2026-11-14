@@ -7,26 +7,26 @@ câmera) e renderiza só os primeiros `SEGUNDOS` com o estilo escolhido. Sai em
 import shutil
 
 from esteira.studio import compiler, style
-from esteira.project import PROJETOS, Projeto
+from esteira.project import PROJECTS, Project
 
-SEGUNDOS = 30
-PASTA = style.PASTA / "amostras"
-
-
-def pasta(est):
-    return PASTA / f"{est.id}-v{est.versao}"
+SECONDS = 30
+FOLDER = style.FOLDER / "amostras"
 
 
-def estado(est):
+def folder(est):
+    return FOLDER / f"{est.id}-v{est.versao}"
+
+
+def state(est):
     """{"16x9": True/False, ...}: quais formatos da versão já têm exemplo."""
-    return {f.replace(":", "x"): (pasta(est) / f.replace(":", "x") / "previa.mp4").exists() for f in est.formatos}
+    return {f.replace(":", "x"): (folder(est) / f.replace(":", "x") / "previa.mp4").exists() for f in est.formatos}
 
 
-def referencia(est):
+def reference(est):
     """Episódio cujo mapa serve de roteiro da amostra: o mais recente do canal, senão o mais recente da rede."""
     from esteira import production
-    mapas = sorted(PROJETOS.glob("*/*/estudio/mapa.json"), key=lambda a: a.stat().st_mtime, reverse=True)
-    projetos = [Projeto(a.parent.parent) for a in mapas]
+    mapas = sorted(PROJECTS.glob("*/*/estudio/mapa.json"), key=lambda a: a.stat().st_mtime, reverse=True)
+    projetos = [Project(a.parent.parent) for a in mapas]
     if est.modo == "apresentador":
         projetos = [p for p in projetos if production.camera(p)]
     if not projetos:
@@ -35,19 +35,19 @@ def referencia(est):
     return next((p for p in projetos if p.canal == est.canal), projetos[0])
 
 
-def gerar(alvo):
+def generate(alvo):
     """`alvo` = id do estilo ou `id@N`."""
-    est = style.carregar(alvo)
-    ref = referencia(est)
-    print(f"  exemplo de {style.rotulo(est)} ({est.id}) com o mapa de {ref.pasta.parent.name}-{ref.pasta.name}", flush=True)
+    est = style.load(alvo)
+    ref = reference(est)
+    print(f"  exemplo de {style.label(est)} ({est.id}) com o mapa de {ref.pasta.parent.name}-{ref.pasta.name}", flush=True)
     for fmt in est.formatos:
-        p = pasta(est) / fmt.replace(":", "x")
+        p = folder(est) / fmt.replace(":", "x")
         if p.exists():
             shutil.rmtree(p)
-        compiler.compilar(ref, est, fmt, destino=p, ate=SEGUNDOS)
+        compiler.build(ref, est, fmt, destino=p, ate=SECONDS)
         compiler.render(ref, fmt, p=p)
         compiler.audio(ref, est, fmt, p=p)
         (p / "final.mp4").unlink(missing_ok=True)
         shutil.rmtree(p / "render", ignore_errors=True)
         print(f"  {fmt}: {p / 'previa.mp4'}", flush=True)
-    return pasta(est)
+    return folder(est)

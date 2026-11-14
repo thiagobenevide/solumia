@@ -10,19 +10,19 @@ from esteira.dataset import export as X
 from esteira.dataset import registry as R
 
 
-def _resumo(cx: dict) -> str:
+def _summary(cx: dict) -> str:
     return json.dumps(cx, ensure_ascii=False)[:2000]
 
 
-def exemplos(tarefa: str, contexto: dict, k: int = 3, fora: set[str] = frozenset()) -> list[tuple[dict, object]]:
-    pares = [(r, cx, resp) for r, cx, resp in X._pares(tarefa) if r["id"] not in fora]
+def examples(tarefa: str, contexto: dict, k: int = 3, fora: set[str] = frozenset()) -> list[tuple[dict, object]]:
+    pares = [(r, cx, resp) for r, cx, resp in X._pairs(tarefa) if r["id"] not in fora]
     if not pares:
         return []
     try:
         from esteira.ai import embeddings
         if not embeddings.available():
             raise RuntimeError
-        alvo, *vs = embeddings.vectors([_resumo(contexto)] + [_resumo(cx) for _, cx, _ in pares])
+        alvo, *vs = embeddings.vectors([_summary(contexto)] + [_summary(cx) for _, cx, _ in pares])
         ordem = sorted(range(len(pares)), key=lambda i: -embeddings.cosine(alvo, vs[i]))
     except Exception:  # noqa: BLE001 — sem embeddings: os mais recentes
         ordem = list(range(len(pares)))[::-1]
@@ -34,16 +34,16 @@ def exemplos(tarefa: str, contexto: dict, k: int = 3, fora: set[str] = frozenset
 
 
 def prompt(tarefa: str, contexto: dict, k: int = 3, fora: set[str] = frozenset()) -> str:
-    return X.prompt(tarefa, contexto, exemplos(tarefa, contexto, k, fora))
+    return X.prompt(tarefa, contexto, examples(tarefa, contexto, k, fora))
 
 
-def gerar(tarefa: str, contexto: dict, modelo: str | None = None, k: int = 3):
+def generate(tarefa: str, contexto: dict, modelo: str | None = None, k: int = 3):
     """Uma resposta do modelo local, validada pelo esquema N1 da tarefa (ou None)."""
     from esteira.dataset import app_training
     from esteira.ai import local
-    esq = X.esquema(tarefa)
-    app = R.TAREFAS[tarefa]
-    modelo = modelo or app_training.promovido(app)  # o adaptador promovido da app, se houver
+    esq = X.schema(tarefa)
+    app = R.TASKS[tarefa]
+    modelo = modelo or app_training.promoted(app)  # o adaptador promovido da app, se houver
     kw = {"modelo": modelo} if modelo else {}
-    return local.ask(prompt(tarefa, contexto, k, fora=X.ouro(tarefa)), esq, temperature=0.2, max_tokens=6000,
+    return local.ask(prompt(tarefa, contexto, k, fora=X.gold(tarefa)), esq, temperature=0.2, max_tokens=6000,
                            operation=f"n1_{tarefa}", **kw)

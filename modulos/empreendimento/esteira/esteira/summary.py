@@ -8,16 +8,16 @@
 import json
 import sys
 
-from esteira.scenes import normalizar
+from esteira.scenes import normalize
 
-EDITAVEIS = {"busca_en", "busca", "tipo", "destaques", "movimento"}
+EDITABLE = {"busca_en", "busca", "tipo", "destaques", "movimento"}
 
 
 def _ids(texto):
     return {int(x) for x in texto.split(",")} if texto else None
 
 
-def resumo(projeto, cenas=None, sem_texto=False):
+def summary(projeto, cenas=None, sem_texto=False):
     plano = projeto.carregar_json("plano.json")
     so = _ids(cenas)
     sem_midia = [c["id"] for c in plano["cenas"] if not c.get("midia")]
@@ -36,31 +36,31 @@ def resumo(projeto, cenas=None, sem_texto=False):
         print(" | ".join(campos))
 
 
-def _palavras(projeto):
+def _words(projeto):
     # alinhamento.json tem o texto do roteiro (grafia certa); a transcrição é o fallback.
     if projeto.caminho("alinhamento.json").exists():
         return projeto.carregar_json("alinhamento.json")
     return projeto.carregar_json("transcricao.json")["palavras"]
 
 
-def palavras(projeto, de=0.0, ate=None):
+def words(projeto, de=0.0, ate=None):
     linha = []
-    for p in _palavras(projeto):
+    for p in _words(projeto):
         if p["ini"] >= de and (ate is None or p["ini"] <= ate):
             linha.append(f"{p['ini']:.1f} {p['p']}")
     print(" · ".join(linha))
 
 
-def _inicio(palavras, texto, ini, fim):
-    alvo = [normalizar(w) for w in texto.split()]
+def _start(palavras, texto, ini, fim):
+    alvo = [normalize(w) for w in texto.split()]
     dentro = [p for p in palavras if ini - 0.5 <= p["ini"] <= fim + 0.5]
     for i, p in enumerate(dentro):
-        if [normalizar(q["p"]) for q in dentro[i:i + len(alvo)]] == alvo:
+        if [normalize(q["p"]) for q in dentro[i:i + len(alvo)]] == alvo:
             return round(p["ini"], 3)
-    return next((round(p["ini"], 3) for p in dentro if normalizar(p["p"]) == alvo[0]), None)
+    return next((round(p["ini"], 3) for p in dentro if normalize(p["p"]) == alvo[0]), None)
 
 
-def ajustar(projeto, arquivo=None):
+def adjust(projeto, arquivo=None):
     """Uma linha JSON por cena: {"id": 3, "busca_en": "...", "tipo": "imagem", "destaques": ["piratas"]}.
 
     Só os campos informados mudam. Destaque pode ser texto puro: o início é achado nas palavras da cena.
@@ -68,7 +68,7 @@ def ajustar(projeto, arquivo=None):
     entrada = open(arquivo, encoding="utf-8").read() if arquivo else sys.stdin.read()
     plano = projeto.carregar_json("plano.json")
     por_id = {c["id"]: c for c in plano["cenas"]}
-    palavras_ = _palavras(projeto)
+    palavras_ = _words(projeto)
     erros, mudou = [], []
     for n, linha in enumerate(entrada.splitlines(), 1):
         linha = linha.strip()
@@ -83,7 +83,7 @@ def ajustar(projeto, arquivo=None):
         if not c:
             erros.append(f"linha {n}: cena inexistente")
             continue
-        proibidos = set(ed) - EDITAVEIS
+        proibidos = set(ed) - EDITABLE
         if proibidos:
             erros.append(f"cena {c['id']}: campos não editáveis {sorted(proibidos)}")
             continue
@@ -98,7 +98,7 @@ def ajustar(projeto, arquivo=None):
             for d in ed["destaques"]:
                 d = {"texto": d} if isinstance(d, str) else d
                 if d.get("inicio") is None:
-                    d["inicio"] = _inicio(palavras_, d["texto"], c["inicio"], c["fim"])
+                    d["inicio"] = _start(palavras_, d["texto"], c["inicio"], c["fim"])
                     if d["inicio"] is None:
                         erros.append(f"cena {c['id']}: '{d['texto']}' não é falado nesta cena; ignorado")
                         continue

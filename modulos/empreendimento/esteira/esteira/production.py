@@ -20,7 +20,7 @@ VIDEO_EXT = (".mp4", ".mov", ".mkv", ".m4v")
 RE_CAMERA = re.compile(r"\b(c[âa]mera|apresentador|eu (na tela|falando|olhando)|rosto|talking head|on camera)\b", re.I)
 
 
-def modo(projeto):
+def mode(projeto):
     return projeto.cfg.get("producao", {}).get("modo", "dark")
 
 
@@ -46,7 +46,7 @@ def _envelope(arq, segundos=240, taxa=8000, janela=80):
     return (env - env.mean()) / (env.std() + 1e-9)
 
 
-def sincronizar(wav, video):
+def sync(wav, video):
     """Deslocamento (s) tal que tempo_na_camera = tempo_no_wav + offset; e a confiança (0–1)."""
     a, b = _envelope(wav), _envelope(video)
     n = 1 << int(np.ceil(np.log2(len(a) + len(b))))
@@ -58,18 +58,18 @@ def sincronizar(wav, video):
     return round(lag * 0.01, 3), round(float(np.clip(pico, 0, 1)), 3)
 
 
-def preparar_camera(pasta, video, wav=None):
+def prepare_camera(pasta, video, wav=None):
     """Liga o vídeo da câmera ao projeto (link, sem copiar gigabytes) e grava camera.json. Devolve o áudio
     a usar como narração: o WAV sincronizado ou o som extraído da câmera."""
     video = Path(video)
     destino = pasta / f"camera{video.suffix.lower()}"
     if not destino.exists():
         destino.symlink_to(video.resolve())
-    from esteira.library import _sonda
-    w, h, dur = _sonda(destino)
+    from esteira.library import _probe
+    w, h, dur = _probe(destino)
     info = {"arquivo": str(video.resolve()), "largura": w, "altura": h, "duracao": dur, "offset": 0.0}
     if wav:
-        info["offset"], info["confianca_sync"] = sincronizar(wav, destino)
+        info["offset"], info["confianca_sync"] = sync(wav, destino)
         if info["confianca_sync"] < 0.3:
             print(f"  ! sincronia WAV × câmera fraca ({info['confianca_sync']}); confira no FilmCraft")
     else:
@@ -82,14 +82,14 @@ def preparar_camera(pasta, video, wav=None):
 
 # ---------------------------------------------------------------- quais cenas mostram o apresentador
 
-def _instantes_de_parte(projeto):
+def _instants_of_part(projeto):
     """Instante (s) em que começa cada Parte do roteiro, pela 1ª frase com tempo da fala de abertura."""
     arq = projeto.caminho("roteiro.json")
     if not arq.exists() or not projeto.caminho("frases.json").exists():
         return []
-    from esteira.graphics.plan import _fala_para_frase
+    from esteira.graphics.plan import _speech_to_sentence
     rot, frases = json.loads(arq.read_text()), projeto.carregar_json("frases.json")
-    mapa = _fala_para_frase(projeto.roteiro().read_text())
+    mapa = _speech_to_sentence(projeto.roteiro().read_text())
     saida = []
     for cap in rot.get("capitulos", []):
         k = mapa[min(cap["fala"], len(mapa) - 1)] if mapa else 0
@@ -99,15 +99,15 @@ def _instantes_de_parte(projeto):
     return saida
 
 
-def marcar_apresentador(projeto, plano, salvar=True):
+def mark_presenter(projeto, plano, salvar=True):
     """Modo apresentador: marca `camera: true` nas cenas em que você aparece (sem mídia de banco).
     Regras, em ordem: nota de cena pedindo câmera → câmera; nota de cena descrevendo outra imagem → B-roll;
     1ª cena do vídeo e de cada Parte → câmera; no resto, B-roll até cobrir `[producao] broll` do tempo."""
-    if modo(projeto) != "apresentador" or any("camera" in c for c in plano["cenas"]):
+    if mode(projeto) != "apresentador" or any("camera" in c for c in plano["cenas"]):
         return
-    from esteira.curation import _notas_por_tempo
+    from esteira.curation import _notes_by_time
     alvo = projeto.cfg.get("producao", {}).get("broll", 0.45)
-    notas, partes = _notas_por_tempo(projeto), _instantes_de_parte(projeto)
+    notas, partes = _notes_by_time(projeto), _instants_of_part(projeto)
 
     def dentro(c, t):
         return c["inicio"] - 0.5 <= t < c["fim"]
@@ -131,14 +131,14 @@ def marcar_apresentador(projeto, plano, salvar=True):
           f"({broll / max(tempo, 1e-9):.0%} do tempo)")
 
 
-def trechos_camera(projeto):
+def spans_camera(projeto):
     """[(início na timeline, início na câmera, duração)] a partir dos intervalos mantidos pelos cortes."""
     cortes = projeto.carregar_json("cortes.json") if projeto.caminho("cortes.json").exists() else {}
     intervalos = cortes.get("intervalos")
     if not intervalos and cortes.get("trechos") and projeto.caminho("transcricao_bruta.json").exists():
-        from esteira.cuts import _intervalos  # cortes.json de antes dos intervalos: recalcula das decisões
+        from esteira.cuts import _intervals  # cortes.json de antes dos intervalos: recalcula das decisões
         palavras = projeto.carregar_json("transcricao_bruta.json")["palavras"]
-        intervalos = _intervalos(cortes["trechos"], palavras, cortes.get("excluir", []))
+        intervalos = _intervals(cortes["trechos"], palavras, cortes.get("excluir", []))
     off = info_camera(projeto).get("offset", 0.0)
     if not intervalos:  # sem cortes: a gravação inteira
         return [(0.0, off, info_camera(projeto).get("duracao", 0) - off)]

@@ -10,17 +10,17 @@ from pathlib import Path
 from pydantic import BaseModel
 
 
-def esquema_json(modelo: type[BaseModel]) -> dict:
+def schema_json(modelo: type[BaseModel]) -> dict:
     return modelo.model_json_schema()
 
 
-def salvar_esquemas(pasta: Path) -> list[Path]:
+def save_schemas(pasta: Path) -> list[Path]:
     """Escreve `<app>/n1.v<N>.json` de cada app em `pasta` (o dataset guarda a versão de cada registro)."""
     from esteira.n1 import effectcraft, filmcraft, photocraft
     saida = []
     for mod in (filmcraft, photocraft, effectcraft):
-        arq = pasta / mod.APP / f"n1.v{mod.VERSAO}.json"
+        arq = pasta / mod.APP / f"n1.v{mod.VERSION}.json"
         arq.parent.mkdir(parents=True, exist_ok=True)
-        arq.write_text(json.dumps(esquema_json(mod.DOCUMENTO), ensure_ascii=False, indent=1))
+        arq.write_text(json.dumps(schema_json(mod.DOCUMENT), ensure_ascii=False, indent=1))
         saida.append(arq)
     return saida

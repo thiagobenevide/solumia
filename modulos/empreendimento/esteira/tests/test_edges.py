@@ -37,13 +37,13 @@ def _montar(partes, total):
 def test_fricativa_final_conta_como_fala():
     # "mais": vogal 1,0–1,3 s + "s" 1,3–1,45 s; o detector antigo (graves > agudos) tirava o "s"
     x = _montar([(1.0, _voz(0.3)), (1.3, _fric(0.15))], 3.0)
-    fala = B.analise(x)["fala"]
+    fala = B.analysis(x)["fala"]
     assert fala[int(1.33 / B.Q):int(1.42 / B.Q)].mean() > 0.8
 
 
 def test_respiracao_isolada_nao_e_fala():
     x = _montar([(0.5, _voz(0.3)), (1.6, _fric(0.3, 0.02))], 3.0)  # sopro 1 s depois da voz
-    assert B.analise(x)["fala"][int(1.65 / B.Q):int(1.85 / B.Q)].mean() < 0.2
+    assert B.analysis(x)["fala"][int(1.65 / B.Q):int(1.85 / B.Q)].mean() < 0.2
 
 
 def test_piso_local_acompanha_volume_que_cai():
@@ -52,25 +52,25 @@ def test_piso_local_acompanha_volume_que_cai():
     partes += [(t, _voz(0.4, 0.02)) for t in np.arange(21, 39, 2.0)]
     partes.append((31.4, _fric(0.12, 0.03)))  # "s" final fraco da palavra em 31,0–31,4
     x = _montar(partes, 40.0)
-    fala = B.analise(x)["fala"]
+    fala = B.analysis(x)["fala"]
     assert fala[int(31.05 / B.Q):int(31.35 / B.Q)].mean() > 0.8
     assert fala[int(31.42 / B.Q):int(31.5 / B.Q)].mean() > 0.5
 
 
 def test_borda_dentro_da_palavra_vai_para_fora():
     # mantido [0, 1.1] e [1.6, 3]; a palavra mantida "casa" vai até 1.25: a borda não pode ficar em 1.1
-    out = B.validar([[0.0, 1.1], [1.6, 3.0]], [(0.8, 1.25), (1.7, 2.0)])
-    assert out[0][1] >= 1.25 + B.DEPOIS - 1e-9
-    assert all(not B.dentro(t, B.zonas([(0.8, 1.25), (1.7, 2.0)])) for iv in out for t in iv)
+    out = B.validate([[0.0, 1.1], [1.6, 3.0]], [(0.8, 1.25), (1.7, 2.0)])
+    assert out[0][1] >= 1.25 + B.AFTER - 1e-9
+    assert all(not B.inside(t, B.zones([(0.8, 1.25), (1.7, 2.0)])) for iv in out for t in iv)
 
 
 def test_sem_vao_entre_palavras_nao_corta():
-    out = B.validar([[0.0, 1.0], [1.05, 2.0]], [(0.7, 1.02), (1.04, 1.5)])
+    out = B.validate([[0.0, 1.0], [1.05, 2.0]], [(0.7, 1.02), (1.04, 1.5)])
     assert out == [[0.0, 2.0]]
 
 
 def test_palavra_mantida_que_ficou_de_fora_volta():
-    out = B.validar([[0.0, 1.0], [2.0, 3.0]], [(1.3, 1.6)])
+    out = B.validate([[0.0, 1.0], [2.0, 3.0]], [(1.3, 1.6)])
     assert any(a <= 1.3 and b >= 1.6 for a, b in out)
 
 
@@ -78,17 +78,17 @@ def test_nucleo_estende_ate_o_fim_real_e_para_no_retake():
     som = np.zeros(400, bool)
     som[100:150] = True    # "casa" com som até 1,5 s; o Whisper disse 1,0–1,3
     som[150:200] = True    # retake colado começa em 1,5 (Whisper: 1,5–2,0) e sai
-    n = B.nucleos([(1.0, 1.3)], som, [(1.0, 1.3), (1.5, 2.0)])[0]
-    assert n[1] >= 1.5 - 1e-9 and n[1] <= 1.5 + B.VIZINHA_CORTADA + 1e-9
+    n = B.cores([(1.0, 1.3)], som, [(1.0, 1.3), (1.5, 2.0)])[0]
+    assert n[1] >= 1.5 - 1e-9 and n[1] <= 1.5 + B.NEIGHBOR_CUT + 1e-9
 
 
 def test_palavra_sem_som_nao_e_protegida():
     som = np.zeros(300, bool)
-    assert B.nucleos([(1.0, 1.4)], som, [(1.0, 1.4)]) == []
+    assert B.cores([(1.0, 1.4)], som, [(1.0, 1.4)]) == []
 
 
 def test_perdas_acha_palavra_cortada_pela_metade():
-    alertas = B.perdas([(1.0, 1.4), (2.0, 2.4)], [[0.0, 1.2], [1.9, 3.0]], ["casa", "mais"])
+    alertas = B.losses([(1.0, 1.4), (2.0, 2.4)], [[0.0, 1.2], [1.9, 3.0]], ["casa", "mais"])
     assert [a["texto"] for a in alertas] == ["casa"] and alertas[0]["perdeu"] == 0.5
 
 
@@ -98,9 +98,9 @@ def test_corte_do_estudio_mantem_palavra_pela_metade_na_mascara():
     sp[50:100] = True                         # "Oi" 0,5–1,0
     sp[200:225] = True                        # "casa" 2,0–2,5: só metade na máscara (o "sa" fraco saiu)
     ws = [[0.5, 1.0, "Oi"], [2.0, 2.5, "casa."]]
-    segs, _, _ = C.segmentos(sp, ws, [], dur=4.0)
+    segs, _, _ = C.segments(sp, ws, [], dur=4.0)
     assert any(a <= 2.0 and b >= 2.5 for a, b, _ in segs)
-    assert not B.perdas([(w[0], w[1]) for w in ws], [s[:2] for s in segs])
+    assert not B.losses([(w[0], w[1]) for w in ws], [s[:2] for s in segs])
 
 
 def test_vicio_esticado_nao_leva_o_comeco_da_seguinte():
@@ -108,10 +108,10 @@ def test_vicio_esticado_nao_leva_o_comeco_da_seguinte():
     sp = np.zeros(500, bool)
     sp[100:260] = True                        # "e" esticado 1,0–1,9 (o Whisper estica até 2,0) + "sempre" 1,9–2,6
     ws = [[1.0, 2.0, "e"], [1.9, 2.6, "sempre"]]
-    cortes = C.vicios(ws)
+    cortes = C.fillers(ws)
     assert cortes and cortes[0][2].endswith("(esticado)")
-    segs, _, _ = C.segmentos(sp, ws, cortes, dur=5.0)
-    assert any(a <= 1.9 - B.ANTES + 1e-9 and b >= 2.6 for a, b, _ in segs)
+    segs, _, _ = C.segments(sp, ws, cortes, dur=5.0)
+    assert any(a <= 1.9 - B.BEFORE + 1e-9 and b >= 2.6 for a, b, _ in segs)
 
 
 def test_bordas_da_esteira_nunca_dentro_da_palavra():
@@ -124,7 +124,7 @@ def test_bordas_da_esteira_nunca_dentro_da_palavra():
     pal = [{"p": "porcento", "ini": 1.0, "fim": 1.2}, {"p": "porcento", "ini": 1.5, "fim": 1.8},
            {"p": "agora.", "ini": 2.5, "fim": 3.0}]
     trechos = [{"i": 0, "j": 1, "manter": True}, {"i": 1, "j": 2, "manter": False}, {"i": 2, "j": 3, "manter": True}]
-    ivs = C._intervalos(trechos, pal, [], env)
+    ivs = C._intervals(trechos, pal, [], env)
     assert any(a <= 1.0 and b >= 1.42 for a, b in ivs)          # o fim real ficou
     assert not any(a < 1.55 < b for a, b in ivs)                # o retake saiu
 
@@ -132,5 +132,5 @@ def test_bordas_da_esteira_nunca_dentro_da_palavra():
 def test_combinar_alinhamento_descarta_tempo_absurdo():
     from esteira import alignment as A
     ws = [[1.0, 1.4, "casa"], [1.5, 1.9, "mais"], [2.0, 2.3, "fez"]]
-    out = A.combinar(ws, [[1.05, 1.38], None, [5.0, 5.3]])
+    out = A.combine(ws, [[1.05, 1.38], None, [5.0, 5.3]])
     assert out[0][:2] == [1.05, 1.38] and out[1][:2] == [1.5, 1.9] and out[2][:2] == [2.0, 2.3]

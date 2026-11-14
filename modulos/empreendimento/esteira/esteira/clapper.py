@@ -22,16 +22,16 @@ UNI = {"um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "quatro": 4, "cinco":
 ESP = {"dez": 10, "onze": 11, "doze": 12, "treze": 13, "quatorze": 14, "catorze": 14, "quinze": 15,
        "dezesseis": 16, "dezasseis": 16, "dezessete": 17, "dezassete": 17, "dezoito": 18, "dezenove": 19,
        "dezanove": 19}
-DEZ = {"vinte": 20, "trinta": 30, "quarenta": 40, "cinquenta": 50, "sessenta": 60, "setenta": 70,
+TEN = {"vinte": 20, "trinta": 30, "quarenta": 40, "cinquenta": 50, "sessenta": 60, "setenta": 70,
        "oitenta": 80, "noventa": 90}
 _alt = lambda d: "|".join(sorted(d, key=len, reverse=True))
-NUM = rf"(?:\d+|(?:{_alt(DEZ)})(?: e (?:{_alt(UNI)}))?|{_alt(ESP)}|{_alt(UNI)}|cem)"
+NUM = rf"(?:\d+|(?:{_alt(TEN)})(?: e (?:{_alt(UNI)}))?|{_alt(ESP)}|{_alt(UNI)}|cem)"
 # variações que o Whisper escreve: "corta parte 1", "corte a parte um", "cancelo parte catorze", "porte 2"
-RE_MARCA = re.compile(rf"\b(cort\w*|cancel\w*) (?:(?:a|o|da|de|na) )?(?:parte|partes|arte|porte|parti|parto) ({NUM})\b")
+RE_MARK = re.compile(rf"\b(cort\w*|cancel\w*) (?:(?:a|o|da|de|na) )?(?:parte|partes|arte|porte|parti|parto) ({NUM})\b")
 HOTWORDS = "Corte parte. Cancela parte."  # vício do Whisper para os marcadores (só na gravação bruta)
 
 
-def numero(texto):
+def number(texto):
     p = texto.split()
     if p[0].isdigit():
         return int(p[0])
@@ -40,16 +40,16 @@ def numero(texto):
     for d in (UNI, ESP):
         if p[0] in d:
             return d[p[0]]
-    return DEZ[p[0]] + (UNI[p[-1]] if len(p) == 3 else 0)
+    return TEN[p[0]] + (UNI[p[-1]] if len(p) == 3 else 0)
 
 
-def partes_do_roteiro(texto, capitulos=None):
+def parts_of_script(texto, capitulos=None):
     """Partes com as frases de cada uma; `f0` = índice global da primeira frase (o mesmo de
     `cortes.frases_do_roteiro` no roteiro inteiro). Com `capitulos` (as "## Parte N" do roteiro no vault,
     `roteiro.json`), cada parte junta as falas do seu capítulo; sem eles, parte = parágrafo."""
     falas, f0 = [], 0
     for linha in texto.splitlines():
-        frases = C.frases_do_roteiro(linha)
+        frases = C.sentences_of_script(linha)
         if frases:
             falas.append({"texto": linha.strip(), "frases": frases, "f0": f0})
             f0 += len(frases)
@@ -66,21 +66,21 @@ def partes_do_roteiro(texto, capitulos=None):
     return partes
 
 
-def do_projeto(projeto):
+def of_project(projeto):
     import json
     rot = projeto.caminho("roteiro.json")
     caps = json.loads(rot.read_text()).get("capitulos") if rot.exists() else None
-    return partes_do_roteiro(projeto.roteiro().read_text(), caps)
+    return parts_of_script(projeto.roteiro().read_text(), caps)
 
 
-def texto_para_leitura(partes):
+def text_to_read(partes):
     return "\n\n".join(f"PARTE {p['n']}" + (f" — {p['nome']}" if p.get("nome") else "") + f"\n{p['texto']}"
                        for p in partes) + (
         "\n\n— Ao terminar cada parte bem lida: pausa, \"Corte parte N\", pausa.\n"
         "— Se errou: \"Cancela parte N\" (ou só recomece; sem marcador a leitura não é usada).\n")
 
 
-def marcadores(palavras):
+def markers(palavras):
     """[{tipo: corte|cancela, parte, i0, i1}] — i0..i1 = palavras do marcador na transcrição."""
     idx, toks = [], []
     for k, p in enumerate(palavras):
@@ -94,15 +94,15 @@ def marcadores(palavras):
         inicio.append(len(texto))
         texto += t + " "
     saida = []
-    for m in RE_MARCA.finditer(texto):
+    for m in RE_MARK.finditer(texto):
         a = next(k for k, s in enumerate(inicio) if s >= m.start())
         b = max(k for k, s in enumerate(inicio) if s < m.end())
-        saida.append({"tipo": "corte" if m.group(1).startswith("cort") else "cancela", "parte": numero(m.group(2)),
+        saida.append({"tipo": "corte" if m.group(1).startswith("cort") else "cancela", "parte": number(m.group(2)),
                       "i0": idx[a], "i1": idx[b] + 1})
     return saida
 
 
-def _aparar(trechos, motivo):
+def _trim(trechos, motivo):
     """Só fica o que está entre a primeira e a última frase da parte: conversa antes de começar e sobra
     antes do marcador saem. Improviso no meio da tomada confirmada fica (o narrador aprovou a leitura)."""
     nucleo = [k for k, t in enumerate(trechos) if t["manter"] and t["tipo"] in ("tomada", "reformulada")]
@@ -117,9 +117,9 @@ def _aparar(trechos, motivo):
             t.update(manter=True, confianca=max(t["confianca"], 0.75), motivo=t["motivo"] + " · dentro da tomada confirmada")
 
 
-def _na_parte(parte, palavras, a, b, motivo):
+def _in_part(parte, palavras, a, b, motivo):
     """cortes.decidir só com as frases da parte, nas palavras a..b; índices de volta para a gravação toda."""
-    trechos, faltando = C.decidir(parte["frases"], palavras[a:b])
+    trechos, faltando = C.decide(parte["frases"], palavras[a:b])
     for t in trechos:
         t["i"] += a
         t["j"] += a
@@ -131,37 +131,37 @@ def _na_parte(parte, palavras, a, b, motivo):
             t["entre"] = [x + parte["f0"] for x in t["entre"]]
         t["parte"] = parte["n"]
         t["motivo"] = f"parte {parte['n']} · {t['motivo']}"
-    _aparar(trechos, motivo)
+    _trim(trechos, motivo)
     return trechos, faltando
 
 
-def _cobertura(parte, palavras, a, b):
-    escolhas, _, _ = C.escolher(parte["frases"], palavras[a:b])
+def _coverage(parte, palavras, a, b):
+    escolhas, _, _ = C.choose(parte["frases"], palavras[a:b])
     return sum(1 for e in escolhas if e) / len(parte["frases"])
 
 
-def _conferir_numero(s, validas, palavras):
+def _cross_check_number(s, validas, palavras):
     """Número dito ou ouvido errado ("corte parte 7" depois de ler a 6): se o texto lido cobre mal a parte
     dita e bem uma vizinha, vale a vizinha."""
     n = s["parte"]
     if s["b"] - s["a"] < 2:
         return n
-    dita = _cobertura(validas[n], palavras, s["a"], s["b"])
+    dita = _coverage(validas[n], palavras, s["a"], s["b"])
     if dita >= 0.6:
         return n
-    viz = [(_cobertura(validas[m], palavras, s["a"], s["b"]), m) for m in (n - 1, n + 1) if m in validas]
+    viz = [(_coverage(validas[m], palavras, s["a"], s["b"]), m) for m in (n - 1, n + 1) if m in validas]
     melhor = max(viz, default=(0, n))
     return melhor[1] if melhor[0] >= dita + 0.3 else n
 
 
-def _descartado(palavras, a, b, motivo, tipo="descartado"):
+def _discarded(palavras, a, b, motivo, tipo="descartado"):
     return {"ini": palavras[a]["ini"], "fim": palavras[b - 1]["fim"], "i": a, "j": b, "manter": False, "tipo": tipo,
             "motivo": motivo, "confianca": 1.0, "por": "claquete", "texto": " ".join(p["p"] for p in palavras[a:b])}
 
 
-def decidir(partes, palavras):
+def decide(partes, palavras):
     """None se a gravação não tem marcadores (fluxo antigo). Senão (trechos, faltando, avisos)."""
-    marcas = marcadores(palavras)
+    marcas = markers(palavras)
     if not marcas:
         return None
     avisos, segs, ini = [], [], 0
@@ -183,7 +183,7 @@ def decidir(partes, palavras):
             avisos.append(f"marcador \"{s['tipo']} parte {s['parte']}\" em {palavras[s['i0']]['ini']:.1f}s, mas o "
                           f"roteiro tem {len(partes)} partes: ignorado")
         elif s["tipo"] == "corte":
-            n = _conferir_numero(s, validas, palavras)
+            n = _cross_check_number(s, validas, palavras)
             if n != s["parte"]:
                 avisos.append(f"\"corte parte {s['parte']}\" em {palavras[s['i0']]['ini']:.0f}s, mas o texto lido é "
                               f"da parte {n}: usado como parte {n}")
@@ -198,7 +198,7 @@ def decidir(partes, palavras):
             usados.add(id(s))
             avisos.append(f"parte {p['n']}: \"corte\" sem nada lido antes")
         elif s:
-            tr, falt = _na_parte(p, palavras, s["a"], s["b"], f"corte parte {p['n']}")
+            tr, falt = _in_part(p, palavras, s["a"], s["b"], f"corte parte {p['n']}")
             usados.add(id(s))
         else:
             # sem "corte": procura a leitura no que não foi cancelado, da mais recente para a mais antiga
@@ -206,7 +206,7 @@ def decidir(partes, palavras):
             for s2 in reversed(segs + [cauda]):
                 if s2["tipo"] == "cancela" or s2["b"] - s2["a"] < 2:
                     continue
-                tr2, falt2 = _na_parte(p, palavras, s2["a"], s2["b"], f"parte {p['n']} sem marcador")
+                tr2, falt2 = _in_part(p, palavras, s2["a"], s2["b"], f"parte {p['n']} sem marcador")
                 if melhor is None or len(falt2) < len(melhor[1]):
                     melhor = (tr2, falt2, s2)
             if melhor and len(melhor[1]) <= len(p["frases"]) / 2:
@@ -224,9 +224,9 @@ def decidir(partes, palavras):
         if id(s) not in usados and s["b"] > s["a"]:
             motivo = {"cancela": f"cancelada (parte {s['parte']})", "sem marcador": "sem marcador no fim"}.get(
                 s["tipo"], f"parte {s['parte']} lida de novo depois" if s["parte"] in validas else "parte inexistente")
-            trechos.append(_descartado(palavras, s["a"], s["b"], motivo))
+            trechos.append(_discarded(palavras, s["a"], s["b"], motivo))
         if s is not cauda:
-            trechos.append(_descartado(palavras, s["i0"], s["i1"], f"marcador: {s['tipo']} parte {s['parte']}",
+            trechos.append(_discarded(palavras, s["i0"], s["i1"], f"marcador: {s['tipo']} parte {s['parte']}",
                                        "marcador"))
     # uma palavra só pode estar num trecho mantido; trecho que sai e cobre palavra mantida não é listado
     trechos.sort(key=lambda t: (t["i"], not t["manter"]))

@@ -32,7 +32,7 @@ video: 5
 
 
 def test_citacao_do_roteiro():
-    titulo, linhas, notas, fontes, citacoes = obsidian.converter(ROTEIRO)
+    titulo, linhas, notas, fontes, citacoes = obsidian.convert(ROTEIRO)
     assert [l["fala"][:8] for l in linhas if "fala" in l] == ["Em 2021,", "E o resu"]
     assert len(notas) == 2 and notas[1]["texto"] == "cérebro acendendo"
     assert len(fontes) == 1
@@ -47,4 +47,4 @@ def test_citacao_do_roteiro():
 def test_short_pela_pasta_e_nome():
     assert obsidian.short("Short 005a — Cartão.md", {}) == "a"
     assert obsidian.short("Roteiro — 005 Cartão.md", {}) == ""
-    assert obsidian.titulo_limpo("# Short 005b — O cartão anestesia") == "O cartão anestesia"
+    assert obsidian.title_clean("# Short 005b — O cartão anestesia") == "O cartão anestesia"

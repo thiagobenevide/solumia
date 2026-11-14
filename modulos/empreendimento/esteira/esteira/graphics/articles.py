@@ -23,7 +23,7 @@ def _slug(t):
     return re.sub(r"[^a-z0-9]+", "-", "".join(c for c in s if not unicodedata.combining(c))).strip("-")[:60]
 
 
-def _parece(titulo, arq):
+def _resembles(titulo, arq):
     """O PDF é desse artigo? Compara o título com o nome do arquivo, os metadados e a 1ª página."""
     alvo = _slug(titulo)
     if SequenceMatcher(None, alvo, _slug(arq.stem)).ratio() >= 0.7:
@@ -37,7 +37,7 @@ def _parece(titulo, arq):
     return SequenceMatcher(None, alvo, meta).ratio() >= 0.7 or alvo[:40] in pag1
 
 
-def _baixar(url, destino):
+def _download(url, destino):
     try:
         r = requests.get(url, headers=UA, timeout=40, allow_redirects=True)
     except requests.RequestException:
@@ -58,20 +58,20 @@ def _urls_openalex(doi):
     return [u for l in locs for u in (l.get("pdf_url"),) if u]
 
 
-def achar_pdf(fonte, pasta_vault=None):
+def find_pdf(fonte, pasta_vault=None):
     """Caminho do PDF da fonte, ou None."""
     destino = CACHE / f"{_slug(fonte['titulo'])}.pdf"
     if destino.exists():
         return destino
     if pasta_vault:
         for arq in Path(pasta_vault).expanduser().glob("*.pdf"):
-            if _parece(fonte["titulo"], arq):
+            if _resembles(fonte["titulo"], arq):
                 return arq
     urls = [fonte["url"]] if fonte.get("url", "") and fonte["url"].lower().endswith(".pdf") else []
     if fonte.get("doi"):
         urls += _urls_openalex(fonte["doi"])
     for u in urls:
-        if _baixar(u, destino) and _parece(fonte["titulo"], destino):
+        if _download(u, destino) and _resembles(fonte["titulo"], destino):
             events.debug("artigo baixado", titulo=fonte["titulo"][:60], url=u)
             return destino
         destino.unlink(missing_ok=True)
@@ -81,14 +81,14 @@ def achar_pdf(fonte, pasta_vault=None):
 NUM = re.compile(r"\d+(?:[.,]\d+)?")
 
 
-def _numeros(texto):
+def _numbers(texto):
     return {n.replace(",", ".").rstrip("0").rstrip(".") for n in NUM.findall(texto)}
 
 
-def candidatos_trecho(pdf, fala, termos_en=(), max_paginas=30, n=8):
+def candidates_span(pdf, fala, termos_en=(), max_paginas=30, n=8):
     """Frases do PDF que mais se parecem com a fala: números iguais pesam mais que palavras-chave."""
     doc = pymupdf.open(pdf)
-    nums, termos = _numeros(fala) - {"1", "2", "3"}, {t.lower() for t in termos_en}
+    nums, termos = _numbers(fala) - {"1", "2", "3"}, {t.lower() for t in termos_en}
     saida = []
     for k in range(min(len(doc), max_paginas)):
         texto = re.sub(r"-\n(?=\w)", "", doc[k].get_text())  # junta palavras hifenizadas
@@ -96,7 +96,7 @@ def candidatos_trecho(pdf, fala, termos_en=(), max_paginas=30, n=8):
         for frase in re.split(r"(?<=[.!?])\s+(?=[A-Z])", texto):
             if not 40 <= len(frase) <= 400:
                 continue
-            nota = 3 * len(nums & _numeros(frase)) + sum(t in frase.lower() for t in termos)
+            nota = 3 * len(nums & _numbers(frase)) + sum(t in frase.lower() for t in termos)
             if nota:
                 saida.append((nota, k, frase.strip()))
     saida.sort(key=lambda x: (-x[0], x[1]))

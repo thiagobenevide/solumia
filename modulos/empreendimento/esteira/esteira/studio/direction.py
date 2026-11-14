@@ -22,77 +22,77 @@ import re
 
 from pydantic import BaseModel, Field
 
-from esteira.bench import EscolhaPeca as Escolha
-from esteira.bench import normalizar, numeros
+from esteira.bench import ChoicePiece as Escolha
+from esteira.bench import normalize, numbers
 from esteira.core import events
 from esteira.studio import piece as P
 from esteira.studio import rhythm as R
 from esteira.ai import local
 
-TRATAMENTOS = ("voz_motion", "midia_motion", "camera_cheia", "camera_peca", "camera_2_5d", "3d")
-SO_APRESENTADOR = {"camera_cheia", "camera_peca", "camera_2_5d"}
-REGRAS_TRATAMENTO = {
+TREATMENTS = ("voz_motion", "midia_motion", "camera_cheia", "camera_peca", "camera_2_5d", "3d")
+SO_PRESENTER = {"camera_cheia", "camera_peca", "camera_2_5d"}
+RULES_TREATMENT = {
     "dark": "voz_motion = a peça ocupa a tela (dado forte, virada, pergunta); midia_motion = a imagem/vídeo do "
             "assunto com a peça por cima (a maioria); 3d só se a fala pedir um objeto no espaço.",
     "apresentador": "camera_cheia = o apresentador fala sem peça (opinião, conversa); camera_peca = câmera ao lado de "
                     "uma peça (dado, comparação); camera_2_5d = peça em perspectiva sobre a câmera; voz_motion = só a "
                     "peça na tela (virada forte); midia_motion = B-roll com peça por cima.",
 }
-N_CANDIDATAS = 5
-PESO_NAO, BONUS_INTENCAO, PENA_RECENTE, PENA_PERTO = 0.3, 0.12, 0.25, 0.1
-VAZIO = re.compile(r"\b(unknown|desconhecid[oa]s?|n/a|n\.a\.|não informad[oa]|não disponível|null)\b", re.I)
-ESTUDO = re.compile(r"\b(estudos?|pesquisa\w*|publicaram|artigo|levantamento|relatorio|autores)\b")
-CHAMADA = re.compile(r"\b(comenta|comentarios|inscrev|link na descricao|me segue|compartilh|curt[ae])")
-COTA_TEXTO = 0.4   # peças só de texto até 40% das escolhas (a cota de 3D é do perfil de ritmo: `cota_3d_s`)
+N_CANDIDATES = 5
+WEIGHT_NAO, BONUS_INTENT, PENALTY_RECENT, PENALTY_NEAR = 0.3, 0.12, 0.25, 0.1
+EMPTY = re.compile(r"\b(unknown|desconhecid[oa]s?|n/a|n\.a\.|não informad[oa]|não disponível|null)\b", re.I)
+STUDY = re.compile(r"\b(estudos?|pesquisa\w*|publicaram|artigo|levantamento|relatorio|autores)\b")
+CALL = re.compile(r"\b(comenta|comentarios|inscrev|link na descricao|me segue|compartilh|curt[ae])")
+QUOTA_TEXT = 0.4   # peças só de texto até 40% das escolhas (a cota de 3D é do perfil de ritmo: `cota_3d_s`)
 
 
-class Entidades(BaseModel):
+class Entities(BaseModel):
     numeros: list[str] = Field(default_factory=list)
     datas: list[str] = Field(default_factory=list)
     nomes: list[str] = Field(default_factory=list)
 
 
-class LeituraMomento(BaseModel):
+class ReadingMoment(BaseModel):
     intencao: str
     tom: str = "didatica"
     tratamento: str = "midia_motion"
-    entidades: Entidades = Field(default_factory=Entidades)
+    entidades: Entities = Field(default_factory=Entities)
 
 
-class LeituraBloco(BaseModel):
-    momentos: list[LeituraMomento]
+class ReadingBlock(BaseModel):
+    momentos: list[ReadingMoment]
 
 
-class Conferencia(BaseModel):
+class Verification(BaseModel):
     fiel: bool
     problema: str = ""
 
 
-class Preenchimento(BaseModel):
+class Filling(BaseModel):
     encaixes: dict = Field(default_factory=dict)
     botoes: dict = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------- números falados
 
-UNIDADES = {"zero": 0, "um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "quatro": 4, "cinco": 5, "seis": 6,
+UNITS = {"zero": 0, "um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "quatro": 4, "cinco": 5, "seis": 6,
             "sete": 7, "oito": 8, "nove": 9, "dez": 10, "onze": 11, "doze": 12, "treze": 13, "catorze": 14,
             "quatorze": 14, "quinze": 15, "dezesseis": 16, "dezessete": 17, "dezoito": 18, "dezenove": 19}
-DEZENAS = {"vinte": 20, "trinta": 30, "quarenta": 40, "cinquenta": 50, "sessenta": 60, "setenta": 70, "oitenta": 80,
+TENS = {"vinte": 20, "trinta": 30, "quarenta": 40, "cinquenta": 50, "sessenta": 60, "setenta": 70, "oitenta": 80,
            "noventa": 90}
-CENTENAS = {"cem": 100, "cento": 100, "duzentos": 200, "duzentas": 200, "trezentos": 300, "trezentas": 300,
+HUNDREDS = {"cem": 100, "cento": 100, "duzentos": 200, "duzentas": 200, "trezentos": 300, "trezentas": 300,
             "quatrocentos": 400, "quinhentos": 500, "seiscentos": 600, "setecentos": 700, "oitocentos": 800,
             "novecentos": 900}
 
 
-def ditos(texto):
+def spoken(texto):
     """Números do que foi falado como dígitos (`bancada.numeros`), inclusive os por extenso ("oito em cada dez" →
     8 e 10; "vinte e cinco" → 25; "três mil" → 3000), para a conferência de número inventado."""
-    saida = set(numeros(texto))
-    ws = normalizar(texto).split() + ["."]
+    saida = set(numbers(texto))
+    ws = normalize(texto).split() + ["."]
     valor, ativo = 0, False
     for k, w in enumerate(ws):
-        n = UNIDADES.get(w, DEZENAS.get(w, CENTENAS.get(w)))
+        n = UNITS.get(w, TENS.get(w, HUNDREDS.get(w)))
         if w in ("um", "uma") and not ativo and ws[k + 1] not in ("mil", "milhao", "milhoes", "bilhao"):
             n = None  # artigo ("um dia"), não número
         if w == "cento" and k and ws[k - 1] == "por":
@@ -112,20 +112,20 @@ def ditos(texto):
 
 # ---------------------------------------------------------------- 1. blocos e momentos
 
-def _palavras_norm(t):
-    return [w for w in normalizar(t).split() if w]
+def _words_norm(t):
+    return [w for w in normalize(t).split() if w]
 
 
-def blocos(trechos, falas, perfil):
+def blocks(trechos, falas, perfil):
     """Trechos (com tempo) agrupados por fala do roteiro (parágrafo); sem roteiro, por pausa > 1,2 s ou pelo tamanho
     máximo de bloco do perfil. → [{i, ini, fim, texto, trechos: [índices]}]."""
     grupos = []
     if falas:
-        alvo = [len(_palavras_norm(f)) for f in falas if _palavras_norm(f)]
+        alvo = [len(_words_norm(f)) for f in falas if _words_norm(f)]
         k, acc, atual = 0, 0, []
         for n, t in enumerate(trechos):
             atual.append(n)
-            acc += len(_palavras_norm(t["texto"]))
+            acc += len(_words_norm(t["texto"]))
             if k < len(alvo) and acc >= 0.85 * alvo[k]:
                 grupos.append(atual)
                 atual, acc, k = [], 0, k + 1
@@ -145,15 +145,15 @@ def blocos(trechos, falas, perfil):
              "texto": " ".join(trechos[n]["texto"] for n in g), "trechos": g} for i, g in enumerate(grupos)]
 
 
-def momentos(bloco, trechos, perfil):
+def moments(bloco, trechos, perfil):
     """Momentos do bloco no tamanho da virada do perfil; um trecho com número abre momento novo se o atual já tem um."""
     saida, atual = [], []
     for n in bloco["trechos"]:
         t = trechos[n]
         dur = (t["fim"] - trechos[atual[0]]["ini"]) if atual else 0
-        tem_num = any(ditos(trechos[x]["texto"]) for x in atual)
+        tem_num = any(spoken(trechos[x]["texto"]) for x in atual)
         if atual and (dur > perfil.virada_s[1]
-                      or (ditos(t["texto"]) and tem_num)
+                      or (spoken(t["texto"]) and tem_num)
                       or trechos[atual[-1]]["fim"] - trechos[atual[0]]["ini"] >= perfil.virada_s[0]):
             saida.append(atual)
             atual = []
@@ -166,44 +166,44 @@ def momentos(bloco, trechos, perfil):
 
 # ---------------------------------------------------------------- 2. leitura e tratamento
 
-def _regra(m):
+def _rule(m):
     """Leitura sem IA (plano B): número → numero, pergunta → pergunta, resto → destaque."""
     t = m["texto"]
-    intencao = "numero" if ditos(t) else "pergunta" if t.strip().endswith("?") else "destaque"
-    return LeituraMomento(intencao=intencao, tratamento="voz_motion" if intencao == "numero" else "midia_motion",
-                          entidades=Entidades(numeros=sorted(ditos(t))))
+    intencao = "numero" if spoken(t) else "pergunta" if t.strip().endswith("?") else "destaque"
+    return ReadingMoment(intencao=intencao, tratamento="voz_motion" if intencao == "numero" else "midia_motion",
+                          entidades=Entities(numeros=sorted(spoken(t))))
 
 
-def ler(bloco, ms, modo, perfil, antes=""):
-    trat = [t for t in TRATAMENTOS if modo == "apresentador" or t not in SO_APRESENTADOR]
-    texto = local.prompt("direcao_leitura", intencoes=", ".join(P.INTENCOES), tratamentos=", ".join(trat),
-                         regras_tratamento=REGRAS_TRATAMENTO.get(modo, REGRAS_TRATAMENTO["dark"]), modo=modo,
+def read(bloco, ms, modo, perfil, antes=""):
+    trat = [t for t in TREATMENTS if modo == "apresentador" or t not in SO_PRESENTER]
+    texto = local.prompt("direcao_leitura", intencoes=", ".join(P.INTENTS), tratamentos=", ".join(trat),
+                         regras_tratamento=RULES_TREATMENT.get(modo, RULES_TREATMENT["dark"]), modo=modo,
                          ritmo=perfil.id, antes=antes[-300:], n=len(ms),
                          momentos="\n".join(f"{k + 1}. {m['texto']}" for k, m in enumerate(ms)))
-    r = local.ask(texto, LeituraBloco, max_tokens=300 + 160 * len(ms), operation="direction")
+    r = local.ask(texto, ReadingBlock, max_tokens=300 + 160 * len(ms), operation="direction")
     if not r or len(r.momentos) != len(ms):
-        return [_regra(m) for m in ms], "regra"
-    return [_corrigir(x, m) for x, m in zip(r.momentos, ms, strict=True)], "local"
+        return [_rule(m) for m in ms], "regra"
+    return [_fix(x, m) for x, m in zip(r.momentos, ms, strict=True)], "local"
 
 
-def _corrigir(x: LeituraMomento, m):
-    if x.intencao not in P.INTENCOES:
-        x.intencao = _regra(m).intencao
-    if x.tratamento not in TRATAMENTOS:
+def _fix(x: ReadingMoment, m):
+    if x.intencao not in P.INTENTS:
+        x.intencao = _rule(m).intencao
+    if x.tratamento not in TREATMENTS:
         x.tratamento = "midia_motion"
     # número que a IA não viu: o código põe (a peça precisa do dado)
-    falados = ditos(m["texto"])
+    falados = spoken(m["texto"])
     if falados and not x.entidades.numeros:
         x.entidades.numeros = sorted(falados)
     return x
 
 
-def tratar(leituras, modo):
+def treat(leituras, modo):
     """Tratamento possível no modo; o mesmo três vezes seguidas troca o terceiro (variedade)."""
     saida = []
     for x in leituras:
         t = x.tratamento
-        if modo != "apresentador" and t in SO_APRESENTADOR:
+        if modo != "apresentador" and t in SO_PRESENTER:
             t = "voz_motion" if t == "camera_peca" else "midia_motion"
         if len(saida) >= 2 and saida[-1] == saida[-2] == t:
             t = {"midia_motion": "voz_motion", "voz_motion": "midia_motion", "camera_cheia": "camera_peca",
@@ -214,7 +214,7 @@ def tratar(leituras, modo):
 
 # ---------------------------------------------------------------- 3. candidatas
 
-def _vetores_fichas(fichas):
+def _vectors_cards(fichas):
     """{id: (vetor dos exemplos_sim, vetor dos exemplos_nao)} pelos embeddings; None sem o modelo."""
     from esteira.ai import embeddings as E
     textos = sorted({x for f in fichas for x in f.exemplos_sim + f.exemplos_nao + [f.comunica]})
@@ -226,19 +226,19 @@ def _vetores_fichas(fichas):
             for f in fichas}
 
 
-def _semelhanca_palavras(texto, f):
+def _similarity_words(texto, f):
     """Plano B sem embeddings: proporção de radicais do momento que aparecem nos exemplos da ficha."""
     def rad(t):
-        return {w[:5] for w in _palavras_norm(t) if len(w) > 3}
+        return {w[:5] for w in _words_norm(t) if len(w) > 3}
     m = rad(texto)
     if not m:
         return 0.0
     sim = rad(" ".join(f.exemplos_sim + [f.comunica]))
     nao = rad(" ".join(f.exemplos_nao))
-    return len(m & sim) / len(m) - PESO_NAO * len(m & nao) / len(m)
+    return len(m & sim) / len(m) - WEIGHT_NAO * len(m & nao) / len(m)
 
 
-def _cabe(f, tratamento, dur, formatos):
+def _fits(f, tratamento, dur, formatos):
     if not set(formatos) <= set(f.formatos) or dur < f.duracao_min * 0.8:
         return False
     if tratamento == "3d":
@@ -252,7 +252,7 @@ def _cabe(f, tratamento, dur, formatos):
     return True
 
 
-def candidatas(m, leitura, tratamento, fichas, vet_m, vet_f, usadas, formatos, perfil, escolhidas):
+def candidates(m, leitura, tratamento, fichas, vet_m, vet_f, usadas, formatos, perfil, escolhidas):
     """As N_CANDIDATAS melhores [(pontos, ficha)] para o momento. `usadas`: {peça: último t}; `escolhidas`: [(ficha,
     t)] já escolhidas no vídeo (cotas). Se o tratamento deixar menos de 5, completa com as outras que cabem no formato."""
     from esteira.ai import embeddings as E
@@ -263,40 +263,40 @@ def candidatas(m, leitura, tratamento, fichas, vet_m, vet_f, usadas, formatos, p
     def pontos(f):
         if vet_m is not None and vet_f is not None:
             sim, nao = vet_f[f.id]
-            s = E.cosine(vet_m, sim) - (PESO_NAO * E.cosine(vet_m, nao) if nao else 0.0)
+            s = E.cosine(vet_m, sim) - (WEIGHT_NAO * E.cosine(vet_m, nao) if nao else 0.0)
         else:
-            s = _semelhanca_palavras(m["texto"], f)
+            s = _similarity_words(m["texto"], f)
         if leitura.intencao in f.intencoes:
-            s += BONUS_INTENCAO
+            s += BONUS_INTENT
         t0 = usadas.get(f.id)
         if t0 is not None:
-            s -= PENA_RECENTE if m["ini"] - t0 < perfil.anti_repeticao_s else (
-                PENA_PERTO if m["ini"] - t0 < 2 * perfil.anti_repeticao_s else 0.0)
+            s -= PENALTY_RECENT if m["ini"] - t0 < perfil.anti_repeticao_s else (
+                PENALTY_NEAR if m["ini"] - t0 < 2 * perfil.anti_repeticao_s else 0.0)
         if f.peso == "3d" and m["ini"] - ultimo_3d < perfil.cota_3d_s:
             s -= 1.0
-        if f.peso == "texto" and escolhidas and texto_n / len(escolhidas) > COTA_TEXTO:
+        if f.peso == "texto" and escolhidas and texto_n / len(escolhidas) > QUOTA_TEXT:
             s -= 0.1
         return round(s, 4)
 
-    certas = [f for f in fichas if _cabe(f, tratamento, dur, formatos)]
-    ordem = sorted(certas, key=pontos, reverse=True)[:N_CANDIDATAS]
-    if len(ordem) < N_CANDIDATAS:
+    certas = [f for f in fichas if _fits(f, tratamento, dur, formatos)]
+    ordem = sorted(certas, key=pontos, reverse=True)[:N_CANDIDATES]
+    if len(ordem) < N_CANDIDATES:
         resto = [f for f in fichas if f not in ordem and set(formatos) <= set(f.formatos) and dur >= f.duracao_min * 0.8]
-        ordem += sorted(resto, key=pontos, reverse=True)[:N_CANDIDATAS - len(ordem)]
+        ordem += sorted(resto, key=pontos, reverse=True)[:N_CANDIDATES - len(ordem)]
     return [(pontos(f), f) for f in ordem]
 
 
 # ---------------------------------------------------------------- 4–5. escolha e preenchimento
 
-def linhas_candidatas(fichas):
+def lines_candidates(fichas):
     return "\n".join(f"- {f.id}: {f.comunica} (serve para: \"{f.exemplos_sim[0]}\"; \"{f.exemplos_sim[1]}\")"
                      for f in fichas)
 
 
-def escolher(m, leitura, tratamento, cands):
+def choose(m, leitura, tratamento, cands):
     if len(cands) == 1:
         return cands[0][1], "única candidata", "regra"
-    linhas = linhas_candidatas([f for _, f in cands])
+    linhas = lines_candidates([f for _, f in cands])
     texto = local.prompt("direcao_escolha", texto=m["texto"], intencao=leitura.intencao, tom=leitura.tom,
                          tratamento=tratamento, numeros=", ".join(leitura.entidades.numeros) or "nenhum",
                          candidatas=linhas)
@@ -307,7 +307,7 @@ def escolher(m, leitura, tratamento, cands):
     return cands[0][1], "fora da lista: ficou a mais parecida", "regra"
 
 
-def _descrever_encaixes(f):
+def _describe_fits(f):
     linhas = []
     for e in f.encaixes:
         lim = {"itens": f"{e.min_itens}–{e.max_itens} itens de até {e.max_car} caracteres",
@@ -319,19 +319,19 @@ def _descrever_encaixes(f):
     return "\n".join(linhas)
 
 
-def problemas(f, enc, bot, texto):
+def problems(f, enc, bot, texto):
     """Erros do preenchimento: limites da ficha + número que não foi dito no momento."""
-    erros = P.validar_dados(f, enc, bot)
+    erros = P.validate_data(f, enc, bot)
     valores = json.dumps(enc, ensure_ascii=False)
     de_numero = bool(f.intencoes) and f.intencoes[0] == "numero"
-    if de_numero and ditos(texto) and not numeros(valores):
+    if de_numero and spoken(texto) and not numbers(valores):
         erros.append("peça de número sem o número dito: ponha o valor como foi falado")
-    if de_numero and not ditos(texto):
+    if de_numero and not spoken(texto):
         erros.append("peça de número, mas nenhum número foi dito neste momento")
-    inventados = numeros(valores) - ditos(texto)
+    inventados = numbers(valores) - spoken(texto)
     if inventados:
         erros.append(f"números que não foram ditos: {', '.join(sorted(inventados))}")
-    if VAZIO.search(valores):
+    if EMPTY.search(valores):
         erros.append("campo com marcador vazio (Unknown, N/A...): deixe de fora o que não foi dito")
     for e in f.encaixes:
         if e.tipo == "pares" and isinstance(enc.get(e.nome), list):
@@ -343,42 +343,42 @@ def problemas(f, enc, bot, texto):
     pares = [str(x.get("valor", "")) for x in enc.get("valores") or [] if isinstance(x, dict)]
     if f.id.startswith("barras") and (not all(re.search(r"\d", v) for v in pares) or len(set(pares)) < 2):
         erros.append("barras precisam de números diferentes ditos na fala: use outra peça")
-    if f.id == "citacao_estudo" and not ESTUDO.search(normalizar(texto)):
+    if f.id == "citacao_estudo" and not STUDY.search(normalize(texto)):
         erros.append("a fala não cita estudo nenhum: use outra peça")
-    if f.id == "cta" and not CHAMADA.search(normalizar(texto)):
+    if f.id == "cta" and not CALL.search(normalize(texto)):
         erros.append("a fala não chama o público para nada: use outra peça")
     if f.id == "passo_a_passo" and re.match(r"\W*passo\s*:", str(enc.get("titulo", "")), re.I):
         erros.append("titulo: sem 'Passo:' quando não há número de passo")
     return erros
 
 
-def conferir(f, enc, m, contexto):
+def cross_check(f, enc, m, contexto):
     """Segunda passada da LLM local: o texto de tela diz o que a fala diz? Sem resposta, passa."""
     r = local.ask(local.prompt("direcao_conferir", texto=m["texto"], contexto=contexto[-300:], peca=f.id,
                                      comunica=f.comunica, tela=json.dumps(enc, ensure_ascii=False)),
-                        Conferencia, max_tokens=300, operation="direction")
+                        Verification, max_tokens=300, operation="direction")
     return [f"o texto de tela não bate com a fala: {r.problema}"] if getattr(r, "fiel", True) is False else []
 
 
-def citacoes(projeto):
+def quotes(projeto):
     """Blocos [!cite] do roteiro, com a fala em que aparecem: a única fonte de trecho, autor e ano."""
     arq = projeto.pasta / "roteiro.json"
     if not arq.exists():
         return []
-    falas = _falas(projeto)
+    falas = _speeches(projeto)
     cits = [c for c in json.loads(arq.read_text()).get("citacoes", []) if c.get("ok") and c.get("en")]
-    return [{**c, "palavras": set(_palavras_norm(falas[c["fala"]]))} for c in cits if 0 <= c["fala"] < len(falas)]
+    return [{**c, "palavras": set(_words_norm(falas[c["fala"]]))} for c in cits if 0 <= c["fala"] < len(falas)]
 
 
-def _citacao_de(m, cits):
+def _quote_of(m, cits):
     """Citação cuja fala contém o momento, ou None (o momento não cita estudo nenhum)."""
-    ditas = set(_palavras_norm(m["texto"]))
+    ditas = set(_words_norm(m["texto"]))
     notas = [(len(ditas & c["palavras"]) / max(len(ditas), 1), n) for n, c in enumerate(cits)]
     nota, n = max(notas, default=(0, 0))
     return cits[n] if nota >= 0.6 else None
 
 
-def _caber(texto, limite):
+def _fit(texto, limite):
     if len(texto) <= limite:
         return texto
     frase = re.match(r".+?[.!?](?=\s|$)", texto)
@@ -387,43 +387,43 @@ def _caber(texto, limite):
     return texto[:limite - 1].rsplit(" ", 1)[0].rstrip(" ,;:") + "…"
 
 
-def _preencher_citacao(f, m, cits):
+def _fill_quote(f, m, cits):
     """Peça de citação vem do bloco [!cite], nunca da LLM (que inventa trecho e autor). Sem citação no momento → None."""
-    c = _citacao_de(m, cits)
+    c = _quote_of(m, cits)
     if not c:
         return None
     fonte = {"trecho_en": c["en"], "traducao": c.get("pt", ""), "autor": c.get("autores", ""),
              "autores": c.get("autores", ""), "ano": str(c.get("ano", ""))[:4], "revista": c.get("revista", ""),
              "titulo": c.get("titulo", "")}
-    enc = {e.nome: _caber(fonte[e.nome], e.max_car) for e in f.encaixes if fonte.get(e.nome)}
-    return None if P.validar_dados(f, enc, {}) else (enc, {})
+    enc = {e.nome: _fit(fonte[e.nome], e.max_car) for e in f.encaixes if fonte.get(e.nome)}
+    return None if P.validate_data(f, enc, {}) else (enc, {})
 
 
-def preencher(f, m, leitura, cits=(), contexto=""):
+def fill(f, m, leitura, cits=(), contexto=""):
     """(encaixes, botões) válidos ou None depois de duas tentativas."""
     if any(e.nome == "trecho_en" for e in f.encaixes):
-        return _preencher_citacao(f, m, cits)
+        return _fill_quote(f, m, cits)
     erros = []
     for _ in range(2):
         texto = local.prompt(
             "direcao_preencher", peca=f.id, comunica=f.comunica, texto=m["texto"],
             numeros=", ".join(leitura.entidades.numeros) or "nenhum", datas=", ".join(leitura.entidades.datas) or "nenhuma",
-            nomes=", ".join(leitura.entidades.nomes) or "nenhum", encaixes=_descrever_encaixes(f),
+            nomes=", ".join(leitura.entidades.nomes) or "nenhum", encaixes=_describe_fits(f),
             botoes="\n".join(f"- {b.nome}: {b.valores} (padrão {b.padrao})" for b in f.botoes) or "(nenhum)",
             erros=("\nSua resposta anterior foi recusada: " + "; ".join(erros) + ". Corrija.\n") if erros else "")
-        r = local.ask(texto, Preenchimento, max_tokens=500, operation="direction")
+        r = local.ask(texto, Filling, max_tokens=500, operation="direction")
         if not r:
             erros = ["resposta vazia"]
             continue
         enc = {k: v for k, v in r.encaixes.items() if v not in (None, "", [])}
         bot = {k: v for k, v in r.botoes.items() if any(b.nome == k for b in f.botoes)}
-        erros = problemas(f, enc, bot, m["texto"]) or conferir(f, enc, m, contexto)
+        erros = problems(f, enc, bot, m["texto"]) or cross_check(f, enc, m, contexto)
         if not erros:
             return enc, bot
     return None
 
 
-def batidas(f, enc, m, palavras):
+def beats(f, enc, m, palavras):
     """Instante (s) em que a palavra de cada encaixe de `batidas` é dita dentro do momento."""
     saida = {}
     ditas = [w for w in palavras if m["ini"] - 0.05 <= w["ini"] <= m["fim"] + 0.05]
@@ -431,12 +431,12 @@ def batidas(f, enc, m, palavras):
         v = enc.get(nome)
         alvo = None
         if isinstance(v, str):
-            ns = sorted(numeros(v))  # o valor escrito em dígitos; a fala pode estar por extenso (casa pelo radical)
-            alvo = ns[0] if ns else next((w for w in _palavras_norm(v) if len(w) > 3), None)
+            ns = sorted(numbers(v))  # o valor escrito em dígitos; a fala pode estar por extenso (casa pelo radical)
+            alvo = ns[0] if ns else next((w for w in _words_norm(v) if len(w) > 3), None)
         if not alvo:
             continue
         for w in ditas:
-            if alvo in normalizar(w["p"]).replace(" ", "") or normalizar(w["p"]).startswith(alvo[:5]):
+            if alvo in normalize(w["p"]).replace(" ", "") or normalize(w["p"]).startswith(alvo[:5]):
                 saida[nome] = round(max(m["ini"], w["ini"] - 0.05), 3)
                 break
     return saida
@@ -444,80 +444,80 @@ def batidas(f, enc, m, palavras):
 
 # ---------------------------------------------------------------- mapa
 
-def refazer_cena(cena, ficha):
+def redo_scene(cena, ficha):
     """Troca a peça de uma cena do mapa (linha do tempo do app): preenche a nova pela IA local com a mesma validação
     da direção; se não der, aproveita título/valores que a cena já tinha. → a cena atualizada (ou ValueError)."""
     m = {"ini": cena["t"], "fim": cena["ate"], "texto": cena.get("frase", "")}
-    leitura = LeituraMomento(intencao=cena.get("intencao") or "destaque", tratamento=cena.get("tratamento", "midia_motion"),
-                             entidades=Entidades(numeros=sorted(ditos(m["texto"]))))
-    preenchido = preencher(ficha, m, leitura)
+    leitura = ReadingMoment(intencao=cena.get("intencao") or "destaque", tratamento=cena.get("tratamento", "midia_motion"),
+                             entidades=Entities(numeros=sorted(spoken(m["texto"]))))
+    preenchido = fill(ficha, m, leitura)
     if not preenchido:
-        enc = P.legado({"titulo": cena.get("titulo", ""), "valores": cena.get("valores", [])}, ficha)
-        if problemas(ficha, enc, {}, m["texto"]):
+        enc = P.legacy({"titulo": cena.get("titulo", ""), "valores": cena.get("valores", [])}, ficha)
+        if problems(ficha, enc, {}, m["texto"]):
             raise ValueError(f"{ficha.id} não serve para este momento (a IA não preencheu e o que havia não cabe)")
         preenchido = (enc, {})
     enc, bot = preenchido
     dur = min(max(cena["ate"] - cena["t"], ficha.duracao_min), ficha.duracao_max)
-    cena.update(cena=ficha.id, encaixes=enc, botoes={**P.padroes(ficha), **bot}, takeover=ficha.tela_cheia,
+    cena.update(cena=ficha.id, encaixes=enc, botoes={**P.defaults(ficha), **bot}, takeover=ficha.tela_cheia,
                 titulo=str(enc.get("titulo", ""))[:80], valores=enc.get("valores", []), sfx=ficha.sfx.get("entrada"),
                 ate=round(cena["t"] + dur, 3), manual=True, por="voce", motivo="trocada na linha do tempo")
     return cena
 
 
-def gabarito(ep, cena, aceita, origem):
+def answer_key(ep, cena, aceita, origem):
     """Caso da tarefa `bloco_peca` da bancada (momento + as 5 candidatas → a peça que a pessoa aprovou/trocou)."""
-    from esteira.bench import GABARITO
+    from esteira.bench import ANSWER_KEY
     ids = cena.get("candidatas") or []
     if not ids:
         return False
     fichas = []
     for i in dict.fromkeys(ids + [aceita]):
         try:
-            fichas.append(P.carregar(i))
+            fichas.append(P.load(i))
         except (KeyError, ValueError):
             continue
-    GABARITO.mkdir(parents=True, exist_ok=True)
+    ANSWER_KEY.mkdir(parents=True, exist_ok=True)
     caso = {"id": f"{origem}:{ep}:{cena.get('bloco')}:{cena.get('momento')}", "texto": cena.get("frase", ""),
             "intencao": cena.get("intencao", ""), "tratamento": cena.get("tratamento", ""),
-            "numeros": ", ".join(sorted(ditos(cena.get("frase", "")))), "candidatas": linhas_candidatas(fichas),
+            "numeros": ", ".join(sorted(spoken(cena.get("frase", "")))), "candidatas": lines_candidates(fichas),
             "aceitas": [aceita], "ia": cena.get("cena") if origem == "troca" else None}
-    with open(GABARITO / "bloco_peca.jsonl", "a") as f:
+    with open(ANSWER_KEY / "bloco_peca.jsonl", "a") as f:
         f.write(json.dumps(caso, ensure_ascii=False) + "\n")
     return True
 
 
-def gabarito_preencher(ep, cena, origem):
+def answer_key_fill(ep, cena, origem):
     """Caso de preenchimento (momento + peça → encaixes e botões que ficaram): treino da tarefa `preencher`."""
-    from esteira.bench import GABARITO
+    from esteira.bench import ANSWER_KEY
     if not cena.get("encaixes"):
         return False
-    GABARITO.mkdir(parents=True, exist_ok=True)
+    ANSWER_KEY.mkdir(parents=True, exist_ok=True)
     caso = {"id": f"{origem}:{ep}:{cena.get('bloco')}:{cena.get('momento')}:{cena['cena']}", "texto": cena.get("frase", ""),
             "peca": cena["cena"], "intencao": cena.get("intencao", ""), "encaixes": cena["encaixes"],
             "botoes": cena.get("botoes") or {}}
-    with open(GABARITO / "preencher.jsonl", "a") as f:
+    with open(ANSWER_KEY / "preencher.jsonl", "a") as f:
         f.write(json.dumps(caso, ensure_ascii=False) + "\n")
     return True
 
 
-def aprovar_mapa(ep, mapa):
+def approve_map(ep, mapa):
     """Mapa aprovado: cada peça escolhida pela IA (não fixada) vira acerto no gabarito, e cada preenchimento que ficou
     vira caso de preenchimento. → quantos casos de escolha."""
     for c in mapa.get("cenas", []):
         if c.get("por") in ("local", "regra", "voce", "gatilho") and c.get("encaixes"):
-            gabarito_preencher(ep, c, "aprovado")
-    return sum(gabarito(ep, c, c["cena"], "aprovado") for c in mapa.get("cenas", [])
+            answer_key_fill(ep, c, "aprovado")
+    return sum(answer_key(ep, c, c["cena"], "aprovado") for c in mapa.get("cenas", [])
                if c.get("candidatas") and c.get("por") in ("local", "regra") and not c.get("manual"))
 
 
-def _falas(projeto):
+def _speeches(projeto):
     arq = projeto.pasta / "roteiro.txt"
     if not arq.exists():
         return []
     return [x.strip() for x in arq.read_text().splitlines() if x.strip() and not x.startswith("#")]
 
 
-def _fixa(m, marcas, gat, fichas_id):
+def _fixed(m, marcas, gat, fichas_id):
     """Peça fixada no momento pela pessoa (apontamento) ou por gatilho do estilo → (id, por) ou None."""
     for n in m["trechos"]:
         if (c := marcas.get(n)) and c in fichas_id:
@@ -529,29 +529,29 @@ def _fixa(m, marcas, gat, fichas_id):
     return None
 
 
-def dirigir(projeto, estilo, perfil=None, formatos=None):
+def direct(projeto, estilo, perfil=None, formatos=None):
     """Escreve `<ep>/estudio/mapa.json` pela direção por bloco; devolve o mapa."""
     from esteira.studio import marking, cut, director, triggers
     from esteira.ai import embeddings as E
-    perfil = perfil or R.perfil_do(projeto)
+    perfil = perfil or R.profile_of(projeto)
     formatos = formatos or estilo.formatos
     pasta = projeto.pasta / "estudio"
     pasta.mkdir(exist_ok=True)
-    frases, palavras = cut.frases(projeto), cut.palavras(projeto)
+    frases, palavras = cut.sentences(projeto), cut.words(projeto)
     duracao = frases[-1]["fim"] + 1.0 if frases else 0
     palavras_d = [{"p": w["p"], "ini": w["ini"]} for w in palavras]
-    trechos = director.trechos(frases, palavras, estilo.regras.trecho_max_s)
-    marcas = marking.marcas(projeto, trechos)
+    trechos = director.spans(frases, palavras, estilo.regras.trecho_max_s)
+    marcas = marking.marks(projeto, trechos)
     gat = triggers.aplicar(trechos, estilo.gatilhos)
-    fichas = [f for f in P.no_canal(P.listar(), estilo) if f.motor in ("html", "effectcraft")]
+    fichas = [f for f in P.in_channel(P.list_all(), estilo) if f.motor in ("html", "effectcraft")]
     if not fichas:
         raise SystemExit("acervo vazio para o canal: aprove peças na Fábrica ou tire do filtro do canal")
     por_id = {f.id: f for f in fichas}
-    cits = citacoes(projeto)
-    bls = blocos(trechos, _falas(projeto), perfil)
-    ms_por_bloco = [momentos(b, trechos, perfil) for b in bls]
+    cits = quotes(projeto)
+    bls = blocks(trechos, _speeches(projeto), perfil)
+    ms_por_bloco = [moments(b, trechos, perfil) for b in bls]
     todos = [m for ms in ms_por_bloco for m in ms]
-    vet_f = _vetores_fichas(fichas)
+    vet_f = _vectors_cards(fichas)
     vet_m = E.vectors([m["texto"] for m in todos], E.QUERY) if vet_f is not None else None
     if vet_f is None:
         events.warning("direção: sem o modelo de embeddings; candidatas por palavras em comum")
@@ -560,30 +560,30 @@ def dirigir(projeto, estilo, perfil=None, formatos=None):
     antes = ""
     for b, ms in zip(bls, ms_por_bloco, strict=True):
         events.progress(b["i"] + 1, len(bls), f"bloco {b['i'] + 1}: {b['texto'][:50]}")
-        leituras, origem = ler(b, ms, estilo.modo, perfil, antes)
+        leituras, origem = read(b, ms, estilo.modo, perfil, antes)
         antes = b["texto"]
-        trats = tratar(leituras, estilo.modo)
+        trats = treat(leituras, estilo.modo)
         for m, lt, tr in zip(ms, leituras, trats, strict=True):
             if tr == "camera_cheia":
                 decisoes["midia"] += 1
                 continue
-            fixa = _fixa(m, marcas, gat, por_id)
+            fixa = _fixed(m, marcas, gat, por_id)
             reserva = []
             if fixa:
                 cands = [(1.0, por_id[fixa[0]])]
                 if fixa[1] == "gatilho":  # o gatilho sugere; se a peça não preencher, a direção escolhe outra
-                    reserva = candidatas(m, lt, tr, fichas, vet_por[id(m)], vet_f, usadas, formatos, perfil, escolhidas)
+                    reserva = candidates(m, lt, tr, fichas, vet_por[id(m)], vet_f, usadas, formatos, perfil, escolhidas)
             else:
-                cands = candidatas(m, lt, tr, fichas, vet_por[id(m)], vet_f, usadas, formatos, perfil, escolhidas)
+                cands = candidates(m, lt, tr, fichas, vet_por[id(m)], vet_f, usadas, formatos, perfil, escolhidas)
             if not cands:
                 decisoes["midia"] += 1
                 continue
-            f, motivo, por = escolher(m, lt, tr, cands)
+            f, motivo, por = choose(m, lt, tr, cands)
             por = fixa[1] if fixa else por
             ordem = [f] + [x for _, x in cands + reserva if x.id != f.id]
             preenchido = None
             for alvo in ordem[:3]:
-                preenchido = preencher(alvo, m, lt, cits, b["texto"])
+                preenchido = fill(alvo, m, lt, cits, b["texto"])
                 if preenchido:
                     if alvo.id != f.id:
                         motivo = f"{f.id} não preencheu; ficou {alvo.id}"
@@ -600,13 +600,13 @@ def dirigir(projeto, estilo, perfil=None, formatos=None):
             if dur < max(f.duracao_min, perfil.peca_s[0]) * 0.8:
                 decisoes["midia"] += 1
                 continue
-            bat = batidas(f, enc, m, palavras_d)
+            bat = beats(f, enc, m, palavras_d)
             t = max(t, bat.get("valor", 0) - 0.5)  # peça de número abre quando ele é dito, não vazia antes
             decisoes[por] = decisoes.get(por, 0) + 1
             usadas[f.id] = m["ini"]
             escolhidas.append((f, m["ini"]))
             cenas.append({"t": round(t, 3), "ate": round(t + dur, 3), "cena": f.id, "encaixes": enc,
-                          "botoes": {**P.padroes(f), **bot}, "batidas": bat,
+                          "botoes": {**P.defaults(f), **bot}, "batidas": bat,
                           "takeover": f.tela_cheia, "frase": m["texto"], "titulo": str(enc.get("titulo", ""))[:80],
                           "valores": enc.get("valores", []), "ancora": "", "por": por, "motivo": motivo,
                           "tratamento": tr, "intencao": lt.intencao, "leitura": origem, "bloco": b["i"], "momento": m["j"],
@@ -616,12 +616,12 @@ def dirigir(projeto, estilo, perfil=None, formatos=None):
     for a, b in zip(cenas, cenas[1:], strict=False):
         a["ate"] = round(min(a["ate"], b["t"] - 0.05), 3)
     cenas = [c for c in cenas if c["ate"] - c["t"] >= 0.6]
-    cenas = R.sem_capitulos(cenas, perfil)
-    cenas = R.gancho(cenas, perfil, trechos)
+    cenas = R.without_chapters(cenas, perfil)
+    cenas = R.hook(cenas, perfil, trechos)
     for n, c in enumerate(cenas):
         c["id"] = n
         c.setdefault("takeover", por_id[c["cena"]].tela_cheia if c["cena"] in por_id else False)
-    avisos = R.conferir(cenas, director._midia_tempos(projeto), duracao, perfil)
+    avisos = R.cross_check(cenas, director._media_times(projeto), duracao, perfil)
     mapa = {"estilo": estilo.id, "versao": estilo.versao, "duracao": duracao, "direcao": "blocos",
             "decisoes": decisoes, "cenas": cenas, "ritmo": {"perfil": perfil.id, "avisos": avisos},
             "blocos": [{"i": b["i"], "ini": b["ini"], "fim": b["fim"], "texto": b["texto"][:120]} for b in bls],

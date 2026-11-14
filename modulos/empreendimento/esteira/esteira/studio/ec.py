@@ -16,39 +16,39 @@ from pathlib import Path
 
 from esteira.studio import fonts
 
-PECAS = Path(__file__).parent / "pecas"
-NUCLEO = PECAS / "_ec" / "nucleo.jsx"
-FIM = PECAS / "_ec" / "fim.jsx"
+PIECES = Path(__file__).parent / "pecas"
+CORE = PIECES / "_ec" / "nucleo.jsx"
+END = PIECES / "_ec" / "fim.jsx"
 CLI = "effectcraft-cli"
-FONTES_USUARIO = Path("~/.local/share/fonts").expanduser()
-PAPEIS = {"fD": "fonte_destaque", "fT": "fonte_texto", "fM": "fonte_tecnica", "fE": "fonte_editorial", "fL": "fonte_legenda"}
+SOURCES_USER = Path("~/.local/share/fonts").expanduser()
+ROLES = {"fD": "fonte_destaque", "fT": "fonte_texto", "fM": "fonte_tecnica", "fE": "fonte_editorial", "fL": "fonte_legenda"}
 
 
-def disponivel():
+def available():
     return shutil.which(CLI) is not None
 
 
-def instalar_fontes(pele):
+def install_fonts(pele):
     """Copia os arquivos das fontes da pele (kit ou enviadas) para as fontes do usuário. → True se copiou alguma."""
-    todas = {**fonts.CATALOGO, **fonts._enviadas()}
+    todas = {**fonts.CATALOG, **fonts._uploaded()}
     copiou = False
-    FONTES_USUARIO.mkdir(parents=True, exist_ok=True)
-    for papel in PAPEIS.values():
+    SOURCES_USER.mkdir(parents=True, exist_ok=True)
+    for papel in ROLES.values():
         for arquivo, *_ in todas.get(getattr(pele, papel), ([], ""))[0]:
-            origem = fonts.caminho(arquivo)
-            if origem and origem.suffix.lower() in (".ttf", ".otf") and not (FONTES_USUARIO / origem.name).exists():
-                shutil.copy(origem, FONTES_USUARIO / origem.name)
+            origem = fonts.path(arquivo)
+            if origem and origem.suffix.lower() in (".ttf", ".otf") and not (SOURCES_USER / origem.name).exists():
+                shutil.copy(origem, SOURCES_USER / origem.name)
                 copiou = True
     return copiou
 
 
-def dados(ficha, encaixes, botoes, batidas, pele, formato, dur, t0=0.3, instantes=(), area=0.03, cauda=0.5):
+def data(ficha, encaixes, botoes, batidas, pele, formato, dur, t0=0.3, instantes=(), area=0.03, cauda=0.5):
     """DADOS do script. `cauda`: sobra depois da peça (prova/prévia); na produção 0 (a comp tem o tamanho da cena)."""
     from esteira.studio.piece import DIM
     W, H = DIM[formato]
     cores = {k: getattr(pele, k) for k in ("fundo", "fundo2", "texto", "destaque", "apoio", "acento")}
     return {"encaixes": encaixes, "botoes": botoes, "batidas": batidas, "t0": t0, "dur": round(t0 + dur + cauda, 3),
-            "w": W, "h": H, "fps": 30, "pele": {**cores, **{k: fonts.resolver(getattr(pele, v)) for k, v in PAPEIS.items()}},
+            "w": W, "h": H, "fps": 30, "pele": {**cores, **{k: fonts.resolve(getattr(pele, v)) for k, v in ROLES.items()}},
             "area": area, "instantes": list(instantes), "tela_cheia": ficha.tela_cheia}
 
 
@@ -57,24 +57,24 @@ def script(id_, d, rescan=False):
     pre = f"var DADOS = {json.dumps(d, ensure_ascii=False)};\n"
     if rescan:
         pre += 'app.run("text.fonts", {rescan: true});\n'
-    return pre + NUCLEO.read_text() + "\n" + corpo(id_, d) + "\n" + FIM.read_text()
+    return pre + CORE.read_text() + "\n" + body(id_, d) + "\n" + END.read_text()
 
 
-def corpo(id_, d):
+def body(id_, d):
     """Corpo da peça: o N1 compilado (`peca.n1.json`, preferido) ou o `peca.jsx` escrito à mão (peças antigas)."""
-    n1 = PECAS / id_ / "peca.n1.json"
+    n1 = PIECES / id_ / "peca.n1.json"
     if n1.exists():
         from esteira.n1 import effectcraft as N1
         try:
-            return N1.compilar(json.loads(n1.read_text()), d)
-        except (N1.ErroN1, ValueError) as e:  # vira erro do portão (a rodada é reprovada), nunca derruba o processo
+            return N1.build(json.loads(n1.read_text()), d)
+        except (N1.ErrorN1, ValueError) as e:  # vira erro do portão (a rodada é reprovada), nunca derruba o processo
             raise RuntimeError(f"peca.n1.json não compila com estes dados: {str(e)[:300]}") from e
-    return (PECAS / id_ / "peca.jsx").read_text()
+    return (PIECES / id_ / "peca.jsx").read_text()
 
 
-def _rodar(cmd, timeout=300, rotulo=None):
+def _run(cmd, timeout=300, rotulo=None):
     if rotulo:  # render com `--progress`: alimenta a barra do Monitor (mesmo leitor dos gráficos)
-        from esteira.graphics.effectcraft import _rodar as com_progresso
+        from esteira.graphics.effectcraft import _run as com_progresso
         return com_progresso(cmd, rotulo, timeout)
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     if r.returncode:
@@ -82,23 +82,23 @@ def _rodar(cmd, timeout=300, rotulo=None):
     return r.stdout
 
 
-def montar(id_, d, ecproj, pele=None):
+def assemble(id_, d, ecproj, pele=None):
     """Monta o `.ecproj` da peça. → (estouros, saída). Erro de script vira RuntimeError com a mensagem da engine."""
-    rescan = instalar_fontes(pele) if pele is not None else False
+    rescan = install_fonts(pele) if pele is not None else False
     with tempfile.TemporaryDirectory(prefix="ecp_") as tmp:
         arq = Path(tmp) / "peca.jsx"
         arq.write_text(script(id_, d, rescan))
-        saida = _rodar([CLI, "script", str(arq), "--save-as", str(ecproj)])
+        saida = _run([CLI, "script", str(arq), "--save-as", str(ecproj)])
     if "ok " not in saida:
         raise RuntimeError(f"a peça não terminou (falta o 'ok' do fim): {saida.strip()[-300:]}")
     return re.findall(r"^estouro (.+)$", saida, re.M), saida
 
 
-def quadro(ecproj, t, destino, fundo, escala=0.5):
+def frame(ecproj, t, destino, fundo, escala=0.5):
     """Quadro da comp "Peça" no instante t sobre a cor de fundo da pele, em JPG (metade do tamanho)."""
     with tempfile.TemporaryDirectory(prefix="ecq_") as tmp:
         png = Path(tmp) / "q.png"
-        _rodar([CLI, "render-frame", "--project", str(ecproj), "--comp", "Peça", "--time", f"{t:.3f}", "--out", str(png),
+        _run([CLI, "render-frame", "--project", str(ecproj), "--comp", "Peça", "--time", f"{t:.3f}", "--out", str(png),
                 "--transparent"])
         subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(png), "-f", "lavfi", "-i",
                         f"color=c={fundo.replace('#', '0x')}:s=16x16", "-filter_complex",
@@ -109,7 +109,7 @@ def quadro(ecproj, t, destino, fundo, escala=0.5):
 
 def render_webm(ecproj, destino):
     """WebM VP9 com alfa da comp "Peça" (o Chromium do HyperFrames toca com transparência)."""
-    _rodar([CLI, "render", "--project", str(ecproj), "--comp", "Peça", "--out", str(destino), "--format", "webm",
+    _run([CLI, "render", "--project", str(ecproj), "--comp", "Peça", "--out", str(destino), "--format", "webm",
             "--webm-codec", "vp9", "--channels", "rgba", "--quality", "best", "--progress"], timeout=900,
            rotulo=f"EffectCraft: {Path(destino).name}")
     return Path(destino)
@@ -117,7 +117,7 @@ def render_webm(ecproj, destino):
 
 def render_mp4(ecproj, destino):
     """MP4 da comp "Peça" (prévia da revisão: sem alfa, sobre o preto)."""
-    _rodar([CLI, "render", "--project", str(ecproj), "--comp", "Peça", "--out", str(destino), "--format", "h264",
+    _run([CLI, "render", "--project", str(ecproj), "--comp", "Peça", "--out", str(destino), "--format", "h264",
             "--quality", "draft", "--progress"], timeout=900, rotulo=f"EffectCraft: {Path(destino).name}")
     return Path(destino)
 
@@ -126,17 +126,17 @@ def render_mp4(ecproj, destino):
 
 RE_HEX = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 RE_RGB = re.compile(r"\[\s*(?:0|1|0?\.\d+)\s*,\s*(?:0|1|0?\.\d+)\s*,\s*(?:0|1|0?\.\d+)\s*\]")
-RE_FONTE = re.compile(r"\bfont\s*:\s*[\"']")
-PROIBIDO = re.compile(r"\b(?:Math\.random|Date\s*\(|new\s+Date|app\.project\.items\.addComp|writeLn)\b")
+RE_SOURCE = re.compile(r"\bfont\s*:\s*[\"']")
+FORBIDDEN = re.compile(r"\b(?:Math\.random|Date\s*\(|new\s+Date|app\.project\.items\.addComp|writeLn)\b")
 
 
-def checar_codigo(id_, ficha):
+def check_code(id_, ficha):
     """Checagens estáticas do peca.jsx: existe, sintaxe (node), pele só por papel, encaixes/botões declarados."""
     from esteira.studio import piece as P
     erros, avisos = [], []
-    if (PECAS / id_ / "peca.n1.json").exists():
-        return checar_n1(id_, ficha)
-    arq = PECAS / id_ / "peca.jsx"
+    if (PIECES / id_ / "peca.n1.json").exists():
+        return check_n1(id_, ficha)
+    arq = PIECES / id_ / "peca.jsx"
     if not arq.exists():
         return ["falta peca.jsx ou peca.n1.json"], avisos
     jsx = arq.read_text()
@@ -148,12 +148,12 @@ def checar_codigo(id_, ficha):
             r = subprocess.run([node, "--check", str(js)], capture_output=True, text=True)
             if r.returncode:
                 erros.append("sintaxe do peca.jsx: " + (r.stderr.strip().splitlines() or ["?"])[-1])
-    codigo = P._codigo(jsx)
+    codigo = P._code(jsx)
     if m := RE_HEX.search(codigo) or RE_RGB.search(codigo):
         erros.append(f"peca.jsx: cor fixa ({m.group(0)}); use cor(\"destaque\"), corRGB(\"fundo\") ou mistura(...)")
-    if RE_FONTE.search(codigo):
+    if RE_SOURCE.search(codigo):
         erros.append("peca.jsx: fonte fixa; use o papel (bloco/linha com papel: \"fD\" | \"fT\" | \"fM\" | \"fE\")")
-    if m := PROIBIDO.search(codigo):
+    if m := FORBIDDEN.search(codigo):
         erros.append(f"peca.jsx: {m.group(0)} não pode (aleatório/tempo real, comp própria ou saída que o portão lê)")
     usados_e = {a or b for a, b in re.findall(r"\bE\s*(?:\.\s*(\w+)|\[\s*[\"'](\w+)[\"']\s*\])", codigo)}
     usados_b = {a or b for a, b in re.findall(r"\bB\s*(?:\.\s*(\w+)|\[\s*[\"'](\w+)[\"']\s*\])", codigo)}
@@ -169,18 +169,18 @@ def checar_codigo(id_, ficha):
     return erros, avisos
 
 
-def checar_n1(id_, ficha):
+def check_n1(id_, ficha):
     """Peça em N1: esquema, compila com os padrões da ficha, sintaxe do script gerado e encaixes/botões declarados."""
     from esteira.n1 import effectcraft as N1
     from esteira.studio import piece as P
     erros, avisos = [], []
     try:
-        doc = N1.Peca.model_validate_json((PECAS / id_ / "peca.n1.json").read_text())
+        doc = N1.Piece.model_validate_json((PIECES / id_ / "peca.n1.json").read_text())
     except ValueError as e:
         return [f"peca.n1.json fora do esquema: {str(e)[:400]}"], avisos
-    bruto = (PECAS / id_ / "peca.n1.json").read_text()
-    todos = list(N1.percorrer(doc.elementos))  # com o que está dentro de caixas e repetir
-    conds = [c for x in [*todos, *doc.animacoes] for c in N1.condicoes(x.se)]
+    bruto = (PIECES / id_ / "peca.n1.json").read_text()
+    todos = list(N1.walk(doc.elementos))  # com o que está dentro de caixas e repetir
+    conds = [c for x in [*todos, *doc.animacoes] for c in N1.conditions(x.se)]
     usados_e = set(re.findall(r"\{\{(\w+)\}\}", bruto)) | {c.encaixe for c in conds if c.encaixe}
     usados_e |= {x for e in todos if e.tipo == "repetir" for x in (e.encaixe, e.ativos) if x}
     erros += [f"`repetir` {e.nome!r} com passo [0, 0]: todos os itens ficam no mesmo lugar, um sobre o outro (dê um "
@@ -214,8 +214,8 @@ def checar_n1(id_, ficha):
          "botoes": {b.nome: b.padrao for b in ficha.botoes}, "batidas": {}, "t0": 0.3, "dur": 6, "w": 1920,
          "h": 1080, "fps": 30, "tela_cheia": ficha.tela_cheia}
     try:
-        js = N1.compilar(doc, d)
-    except N1.ErroN1 as e:
+        js = N1.build(doc, d)
+    except N1.ErrorN1 as e:
         return [f"peca.n1.json não compila: {e}"], avisos
     node = P._node()
     if node:
@@ -228,19 +228,19 @@ def checar_n1(id_, ficha):
     return erros, avisos
 
 
-CORES_FORTES = ("destaque", "acento", "apoio")
+COLORS_STRONG = ("destaque", "acento", "apoio")
 
 
-def _layout_ruim(nos, doc, N1) -> list[str]:
+def _layout_bad(nos, doc, N1) -> list[str]:
     """Defeitos de caixa que a revisão do Claude reprovava sempre (traço que vira bloco, texto sem contraste sobre
     forma colorida, texto colado na borda, coluna de níveis misturados sem pesos): pegos aqui de graça."""
     erros = []
     for e, mae in nos:
-        if not isinstance(mae, N1.Caixa):
+        if not isinstance(mae, N1.Box):
             continue
         disp = mae.disposicao
-        if (isinstance(e, N1.Retangulo) and not e.proporcional and disp in ("coluna", "linha", "fluxo")
-                and not any(isinstance(x, N1.Repetir) for x in mae.filhos)):
+        if (isinstance(e, N1.Rectangle) and not e.proporcional and disp in ("coluna", "linha", "fluxo")
+                and not any(isinstance(x, N1.Repeat) for x in mae.filhos)):
             # no `fluxo` a caixa é linha no 16:9 e coluna no 9:16: precisa dos dois lados
             falta = next((k for k in {"coluna": "h", "linha": "w", "fluxo": "hw"}[disp] if getattr(e, k) is None), "")
             if falta:
@@ -259,43 +259,43 @@ def _layout_ruim(nos, doc, N1) -> list[str]:
     for e, _ in nos:  # forma de dado (barra, fatia) na cor do fundo some
         if (getattr(e, "proporcional", False) or getattr(e, "fatia", False)) and e.cor in ("fundo", "fundo2"):
             erros.append(f"forma de dado {e.nome!r} na cor `{e.cor}` some no fundo: use `destaque` (ou `acento`)")
-    for cx, mae in ((e, m) for e, m in nos if isinstance(e, N1.Caixa)):
-        formas = [x for x in cx.filhos if isinstance(x, (N1.Retangulo, N1.Elipse)) and x.cor in CORES_FORTES
+    for cx, mae in ((e, m) for e, m in nos if isinstance(e, N1.Box)):
+        formas = [x for x in cx.filhos if isinstance(x, (N1.Rectangle, N1.Ellipse)) and x.cor in COLORS_STRONG
                   and not getattr(x, "contorno", 0)]
         if cx.disposicao == "camadas" and formas:
-            if (isinstance(mae, N1.Caixa) and mae.disposicao in ("linha", "fluxo")
-                    and (r := next((x for x in formas if isinstance(x, N1.Retangulo) and not (x.w and x.h)), None))):
+            if (isinstance(mae, N1.Box) and mae.disposicao in ("linha", "fluxo")
+                    and (r := next((x for x in formas if isinstance(x, N1.Rectangle) and not (x.w and x.h)), None))):
                 erros.append(f"retângulo {r.nome!r} sem `w` e `h` no bloco {cx.nome!r} de uma `{mae.disposicao}` "
                              "vira uma tira da altura toda: dê `w` e `h` (bloco quadrado: w = h, ex.: 0.34)")
-            for t in (x for x in cx.filhos if isinstance(x, N1.Texto)):
+            for t in (x for x in cx.filhos if isinstance(x, N1.Text)):
                 if t.cor not in ("fundo", "fundo2") or t.peso < 700:
                     erros.append(f"texto {t.nome!r} em cor `{t.cor}`, peso {t.peso}, sobre a forma {formas[0].nome!r} "
                                  f"(`{formas[0].cor}`) some: texto sobre forma colorida usa cor `fundo`, peso 700+ "
                                  "(o N1 não tem variante por pele)")
         if cx.disposicao == "coluna" and not cx.pesos and len(cx.filhos) >= 3:
-            niveis = {x.nivel or "corpo" for x in cx.filhos if isinstance(x, N1.Texto)}
+            niveis = {x.nivel or "corpo" for x in cx.filhos if isinstance(x, N1.Text)}
             if len(niveis) >= 2 and niveis & {"titulo", "destaque", "numero"}:  # título que precisa quebrar
                 erros.append(f"coluna {cx.nome!r} com {len(cx.filhos)} filhos de níveis diferentes e sem `pesos`: "
                              "todos ganham a mesma altura (o título corta, o traço fica longe). Dê `pesos` (título "
                              "o maior, rótulo/traço os menores)")
     for cx in doc.elementos:
         if cx.tipo == "caixa" and cx.regiao == "tela" and all(
-                isinstance(x, N1.Texto) for x, _ in _descendentes(cx, N1) if not isinstance(x, N1.Caixa)):
+                isinstance(x, N1.Text) for x, _ in _descendants(cx, N1) if not isinstance(x, N1.Box)):
             erros.append(f"caixa {cx.nome!r} só de texto em `regiao: tela` cola o texto na borda: use `centro` "
                          "(ou topo/base); `tela` é para fundo/faixa com forma")
     return erros
 
 
-def _miudos(doc, ficha, N1) -> list[str]:
+def _small(doc, ficha, N1) -> list[str]:
     """Compila com o texto máximo nos formatos da ficha: texto que a célula espreme vira rótulo ilegível (o Claude
     reprovava; o `caber` do EffectCraft ainda encolhe mais)."""
     from esteira.studio import piece as P
-    cena = P._cena(ficha, 4.0)
+    cena = P._scene(ficha, 4.0)
     achados: dict[str, list[str]] = {}
     for fmt, (w, h) in P.DIM.items():
         if fmt not in ficha.formatos:
             continue
-        c = N1.Compilador(doc, {"encaixes": cena["encaixes"], "botoes": cena["botoes"], "batidas": cena["batidas"],
+        c = N1.Compiler(doc, {"encaixes": cena["encaixes"], "botoes": cena["botoes"], "batidas": cena["batidas"],
                                 "t0": 0.3, "dur": 4.0, "w": w, "h": h, "fps": 30, "tela_cheia": ficha.tela_cheia})
         try:
             c.compilar()
@@ -308,16 +308,16 @@ def _miudos(doc, ficha, N1) -> list[str]:
             for n, f in achados.items()]
 
 
-def _descendentes(cx, N1):
+def _descendants(cx, N1):
     for x in cx.filhos:
         yield x, cx
-        if isinstance(x, N1.Caixa):
-            yield from _descendentes(x, N1)
-        elif isinstance(x, N1.Repetir):
+        if isinstance(x, N1.Box):
+            yield from _descendants(x, N1)
+        elif isinstance(x, N1.Repeat):
             yield from ((y, x) for y in x.elementos)
 
 
-def checar_estrutura(doc, ficha) -> list[str]:
+def check_structure(doc, ficha) -> list[str]:
     """Portão estrutural, antes do render (de graça): o que compila mas sai vazio ou quebrado na tela. Eram esses
     os defeitos que só a revisão do Claude pegava (caixa vazia, encaixe obrigatório invisível, fileira de bolinhas,
     `se` com valor que o botão não tem, regiões sobrepostas)."""
@@ -327,9 +327,9 @@ def checar_estrutura(doc, ficha) -> list[str]:
     def andar(els, mae=None):
         for e in els:
             yield e, mae
-            if isinstance(e, N1.Caixa):
+            if isinstance(e, N1.Box):
                 yield from andar(e.filhos, e)
-            elif isinstance(e, N1.Repetir):
+            elif isinstance(e, N1.Repeat):
                 yield from andar(e.elementos, e)
 
     nos = list(andar(doc.elementos))
@@ -345,11 +345,11 @@ def checar_estrutura(doc, ficha) -> list[str]:
         elif e.encaixe and not textos and not forma_de_dado:
             erros.append(f"o molde do `repetir` {e.nome!r} não tem texto: cada item precisa mostrar o próprio conteúdo "
                          "({{item}} ou {{item.rotulo}}); só formas viram blocos de cor sem significado")
-        elif not e.encaixe and not textos and not (isinstance(mae, N1.Caixa) and mae.disposicao == "grade"):
+        elif not e.encaixe and not textos and not (isinstance(mae, N1.Box) and mae.disposicao == "grade"):
             erros.append(f"`repetir` {e.nome!r} de formas sem texto fora de caixa `grade`: os itens viram uma fileira "
                          "(ponha numa caixa `grade` com `colunas`, ou mostre texto em cada item)")
-    erros += _layout_ruim(nos, doc, N1)
-    erros += _miudos(doc, ficha, N1)
+    erros += _layout_bad(nos, doc, N1)
+    erros += _small(doc, ficha, N1)
     conteudo = " ".join(x.conteudo for x, _ in nos if x.tipo == "texto")
     visiveis = {e.encaixe for e, _ in nos if e.tipo == "repetir" and e.encaixe and any(
         x.tipo == "texto" or getattr(x, "fatia", False) or getattr(x, "proporcional", False) for x in e.elementos)}
@@ -367,7 +367,7 @@ def checar_estrutura(doc, ficha) -> list[str]:
     encaixes = {e.nome for e in ficha.encaixes}
     valores = {v: b for b, vs in botoes.items() for v in vs}
     for x in [*(e for e, _ in nos), *doc.animacoes, *(a for e, _ in nos if e.tipo == "repetir" for a in e.animacoes)]:
-        for c in N1.condicoes(x.se):
+        for c in N1.conditions(x.se):
             if c.botao and c.botao not in botoes:
                 dica = (f" ({c.botao!r} é valor do botão {valores[c.botao]!r}: use {{\"botao\": {valores[c.botao]!r}, "
                         f"\"igual\": {c.botao!r}}})" if c.botao in valores else
@@ -401,26 +401,26 @@ def checar_estrutura(doc, ficha) -> list[str]:
     return erros
 
 
-def provar(id_, ficha):
+def prove(id_, ficha):
     """Texto máximo nas duas peles de prova × formatos: monta, mede o estouro em INSTANTES e fotografa o meio.
     → (erros, quadros, segundos de montagem + quadro)."""
     from esteira.studio import piece as P
     erros, quadros = [], []
-    prova = PECAS / id_ / "prova"
+    prova = PIECES / id_ / "prova"
     shutil.rmtree(prova, ignore_errors=True)
     prova.mkdir(parents=True)
     dur = min(ficha.duracao_max, max(ficha.duracao_min, 4.0))
-    cena = P._cena(ficha, dur)
+    cena = P._scene(ficha, dur)
     t0 = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="ecprova_") as tmp:
-        for nome_pele, pele in P.PELES_PROVA.items():
+        for nome_pele, pele in P.SKINS_PROOF.items():
             for fmt in ficha.formatos:
-                inst = [round(cena["t"] + f * dur, 2) for f in P.INSTANTES]
-                d = dados(ficha, cena["encaixes"], cena["botoes"], cena["batidas"], pele, fmt, dur, cena["t"], inst,
-                          P.AREA_SEGURA)
+                inst = [round(cena["t"] + f * dur, 2) for f in P.INSTANTS]
+                d = data(ficha, cena["encaixes"], cena["botoes"], cena["batidas"], pele, fmt, dur, cena["t"], inst,
+                          P.AREA_SAFE)
                 ecproj = Path(tmp) / f"{nome_pele}_{fmt.replace(':', 'x')}.ecproj"
                 try:
-                    estouros, _ = montar(id_, d, ecproj, pele)
+                    estouros, _ = assemble(id_, d, ecproj, pele)
                 except (RuntimeError, subprocess.TimeoutExpired) as e:
                     erros.append(f"{nome_pele} {fmt}: {str(e)[:300]}")
                     continue
@@ -430,35 +430,35 @@ def provar(id_, ficha):
                             " (use `largura` para quebrar em parágrafo, reduza `tam` ou afaste da borda; no 9:16 use `vertical`)")
                     erros.append(f"{nome_pele} {fmt}: sai da área segura com o texto máximo: {estouros[:4]}{dica}")
                 arq = prova / f"{nome_pele}_{fmt.replace(':', 'x')}.jpg"
-                quadro(ecproj, cena["t"] + 0.6 * dur, arq, pele.fundo)
+                frame(ecproj, cena["t"] + 0.6 * dur, arq, pele.fundo)
                 quadros.append(arq.name)
     return erros, quadros, round(time.monotonic() - t0, 2)
 
 
-def previa(id_, est, formato):
+def preview(id_, est, formato):
     """MP4 da peça (preenchimento de exemplo) na pele do estilo, para a revisão."""
     from esteira.studio import piece as P
-    ficha = P.carregar(id_)
+    ficha = P.load(id_)
     dur = min(ficha.duracao_max, max(ficha.duracao_min, 5.0))
-    cena = P._cena(ficha, dur, encaixes=P.exemplos(ficha))
-    d = dados(ficha, cena["encaixes"], cena["botoes"], cena["batidas"], est.pele, formato, dur, cena["t"])
-    saida = P.previas_dir(id_) / f"{est.id}_{formato.replace(':', 'x')}.mp4"
+    cena = P._scene(ficha, dur, encaixes=P.examples(ficha))
+    d = data(ficha, cena["encaixes"], cena["botoes"], cena["batidas"], est.pele, formato, dur, cena["t"])
+    saida = P.previews_dir(id_) / f"{est.id}_{formato.replace(':', 'x')}.mp4"
     saida.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="ecprev_") as tmp:
         ecproj = Path(tmp) / "p.ecproj"
-        montar(id_, d, ecproj, est.pele)
+        assemble(id_, d, ecproj, est.pele)
         render_mp4(ecproj, saida)
     return saida
 
 
-def para_producao(id_, cena, est, formato, destino_webm):
+def to_production(id_, cena, est, formato, destino_webm):
     """Renderiza a peça para uma cena do mapa (encaixes/botões da cena, pele do estilo) → WebM com alfa do tamanho
     da cena; o `.ecproj` fica ao lado para edição à mão."""
     from esteira.studio import piece as P
-    ficha = P.carregar(id_)
+    ficha = P.load(id_)
     dur = max(0.6, cena["ate"] - cena["t"])
-    d = dados(ficha, cena.get("encaixes") or {}, {**P.padroes(ficha), **(cena.get("botoes") or {})},
+    d = data(ficha, cena.get("encaixes") or {}, {**P.defaults(ficha), **(cena.get("botoes") or {})},
               {k: round(v - cena["t"], 3) for k, v in (cena.get("batidas") or {}).items()}, est.pele, formato, dur, 0.0, cauda=0.0)
     ecproj = Path(destino_webm).with_suffix(".ecproj")
-    montar(id_, d, ecproj, est.pele)
+    assemble(id_, d, ecproj, est.pele)
     return render_webm(ecproj, destino_webm)

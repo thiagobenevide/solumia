@@ -7,7 +7,7 @@ import site
 import subprocess
 
 
-def _carregar_libs_cuda():
+def _load_libs_cuda():
     # As bibliotecas CUDA vêm dos pacotes pip nvidia-*; o ctranslate2 só as encontra pré-carregadas.
     for base in site.getsitepackages():
         for padrao in ("nvidia/cublas/lib/libcublas*.so.*", "nvidia/cudnn/lib/libcudnn*.so.*"):
@@ -18,7 +18,7 @@ def _carregar_libs_cuda():
                     pass
 
 
-def _decodificar(audio):
+def _decode(audio):
     # 16 kHz mono float32, o formato que o Whisper espera; o ffmpeg lê qualquer áudio ou vídeo.
     import numpy as np
     bruto = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-i", str(audio), "-ac", "1",
@@ -28,19 +28,19 @@ def _decodificar(audio):
 
 from esteira.core import events
 
-ESTICADA = 1.2   # s: palavra mais longa que isto costuma esconder fala que o Whisper não escreveu (retake)
-LENTO = 1.0      # palavras/s numa janela de 6 palavras: abaixo disto, idem
+STRETCHED = 1.2   # s: palavra mais longa que isto costuma esconder fala que o Whisper não escreveu (retake)
+SLOW = 1.0      # palavras/s numa janela de 6 palavras: abaixo disto, idem
 
 
-def _suspeitas(palavras):
+def _suspects(palavras):
     """Regiões [(ini, fim)] onde o Whisper "esticou" palavras por cima de fala repetida: ele escreve o texto
     uma vez só e espalha as palavras pelo tempo dos retakes (ex.: "análise" com 11 s)."""
     marcas = set()
     for k, w in enumerate(palavras):
-        if w["fim"] - w["ini"] > ESTICADA:
+        if w["fim"] - w["ini"] > STRETCHED:
             marcas.add(k)
         j = k + 5
-        if j < len(palavras) and palavras[j]["fim"] - w["ini"] > 6 / LENTO:
+        if j < len(palavras) and palavras[j]["fim"] - w["ini"] > 6 / SLOW:
             # janela lenta: só conta se não for pausa simples entre duas palavras
             durs = [palavras[i]["fim"] - palavras[i]["ini"] for i in range(k, j + 1)]
             if sum(durs) > 4:
@@ -56,12 +56,12 @@ def _suspeitas(palavras):
     return regioes
 
 
-def _refinar(modelo, sinal, palavras, idioma, sr=16000):
+def _refine(modelo, sinal, palavras, idioma, sr=16000):
     """Retranscreve as regiões suspeitas em pedaços curtos, separados pelos silêncios (VAD), cada um sem
     contexto: assim cada tentativa da mesma frase vira texto próprio e a etapa de cortes enxerga o retake."""
     from faster_whisper.vad import VadOptions, get_speech_timestamps
 
-    regioes = _suspeitas(palavras)
+    regioes = _suspects(palavras)
     if not regioes:
         return palavras
     recuperadas = 0
@@ -91,10 +91,10 @@ def _refinar(modelo, sinal, palavras, idioma, sr=16000):
     return palavras
 
 
-def transcrever(projeto, cfg, audio=None, saida_json="transcricao.json"):
+def transcribe(projeto, cfg, audio=None, saida_json="transcricao.json"):
     from esteira.ai.local import free_gpu
     free_gpu()  # o Whisper large-v3 precisa da VRAM que o LLM local ocupa
-    _carregar_libs_cuda()
+    _load_libs_cuda()
     from faster_whisper import WhisperModel
 
     from esteira.clapper import HOTWORDS
@@ -108,7 +108,7 @@ def transcrever(projeto, cfg, audio=None, saida_json="transcricao.json"):
 
     audio = audio or projeto.audio()
     print(f"  transcrevendo {audio.name} com {c['modelo']} ({disp})…")
-    sinal = _decodificar(audio)
+    sinal = _decode(audio)
     segmentos, info = modelo.transcribe(sinal, language=c["idioma"], word_timestamps=True,
                                         vad_filter=True, beam_size=5,
                                         # sem isto o Whisper "pula" retakes (texto repetido) da gravação bruta
@@ -121,7 +121,7 @@ def transcrever(projeto, cfg, audio=None, saida_json="transcricao.json"):
         textos.append(seg.text.strip())
         for w in seg.words:
             palavras.append({"p": w.word.strip(), "ini": round(w.start, 3), "fim": round(w.end, 3)})
-    palavras = _refinar(modelo, sinal, palavras, c["idioma"])
+    palavras = _refine(modelo, sinal, palavras, c["idioma"])
 
     saida = {"audio": audio.name, "duracao": round(info.duration, 3), "texto": " ".join(textos),
              "palavras": palavras, "refinada": True}

@@ -28,43 +28,43 @@ from pydantic import BaseModel, Field, ValidationError
 from esteira.core import events, trace
 from esteira.studio import piece as P
 from esteira.ai import claude
-from esteira.project import DADOS, RAIZ
+from esteira.project import DATA, ROOT
 
-PASTA = DADOS / "estudio" / "fabrica"
-PEDIDOS = PASTA / "pedidos.json"
-REGISTRO = PASTA / "registro.jsonl"
-REFS = PASTA / "referencias"
-REPROVADAS = PASTA / "reprovadas"
-GUIA = P.PASTA / "GUIA.md"
-GUIA_EC = P.PASTA / "GUIA_EC.md"
-GUIA_N1_EC = P.PASTA / "GUIA_N1_EC.md"
-MOTORES = PASTA / "motores.json"
-AMPLIACAO = PASTA / "ampliacao.json"  # ampliação contínua do acervo pelas lacunas (ligada pela pessoa no app)  # decisão de motor por intenção (aplicada pela pessoa a partir da comparação)
-REFERENCIA = "numero_impacto"   # peça mostrada ao Claude como exemplo do formato
-REFERENCIA_EC = "numero_impacto_ec"
-EXEMPLO_CAIXAS = P.PASTA / "_ec" / "exemplo_caixas.n1.json"  # exemplo da LLM local: layout só por caixas
+FOLDER = DATA / "estudio" / "fabrica"
+REQUESTS = FOLDER / "pedidos.json"
+RECORD = FOLDER / "registro.jsonl"
+REFS = FOLDER / "referencias"
+REJECTED = FOLDER / "reprovadas"
+GUIDE = P.FOLDER / "GUIA.md"
+GUIDE_EC = P.FOLDER / "GUIA_EC.md"
+GUIDE_N1_EC = P.FOLDER / "GUIA_N1_EC.md"
+ENGINES = FOLDER / "motores.json"
+EXPANSION = FOLDER / "ampliacao.json"  # ampliação contínua do acervo pelas lacunas (ligada pela pessoa no app)  # decisão de motor por intenção (aplicada pela pessoa a partir da comparação)
+REFERENCE = "numero_impacto"   # peça mostrada ao Claude como exemplo do formato
+REFERENCE_EC = "numero_impacto_ec"
+EXAMPLE_BOXES = P.FOLDER / "_ec" / "exemplo_caixas.n1.json"  # exemplo da LLM local: layout só por caixas
 # o guia vai inteiro em todo prompt da LLM local (contexto de 16k): as lições têm teto; as antigas vão para o arquivo
-LICOES_MAX_CAR = 6000
-LICOES_ARQUIVO = P.PASTA / "_ec" / "licoes_arquivo.md"
-LICAO_PARECIDA = 0.5  # semelhança (palavras em comum ÷ todas) a partir da qual a regra nova repete uma do guia
-LICOES_POR_PECA = 3  # teto de regras de uma mesma peça (guia + arquivo)
+LESSONS_MAX_CAR = 6000
+LESSONS_FILE = P.FOLDER / "_ec" / "licoes_arquivo.md"
+LESSON_SIMILAR = 0.5  # semelhança (palavras em comum ÷ todas) a partir da qual a regra nova repete uma do guia
+LESSONS_POR_PIECE = 3  # teto de regras de uma mesma peça (guia + arquivo)
 # prompt da LLM local: 16384 tokens de contexto − 7000 da resposta ≈ 9300 tokens ≈ 28 mil caracteres (~3,2 car/token)
-DOSSIE_MAX_CAR = 28000
-AMOSTRA_MIN = 3                 # peças revisadas por motor para a comparação sugerir um motor numa intenção
-META_LACUNA = 2                 # peças por intenção × peso para a lacuna fechar
-PESOS_LACUNA = ("2d", "2_5d")
-MODELO_LOCAL = "gemma-4-26b-a4b-it-ud-q3_k_xl"  # ia "local": MoE, ~50 tok/s; só motor html (EC não cabe em 16k)
-TETO_CHAMADA = 0.8              # US$ por geração (peça inteira com ficha é a resposta mais longa do sistema)
-AVULSO = "avulso"               # pedido das peças que não vieram de um pedido (ajuste/variação delas)
+DOSSIER_MAX_CAR = 28000
+SAMPLE_MIN = 3                 # peças revisadas por motor para a comparação sugerir um motor numa intenção
+META_GAP = 2                 # peças por intenção × peso para a lacuna fechar
+WEIGHTS_GAP = ("2d", "2_5d")
+MODEL_LOCAL = "gemma-4-26b-a4b-it-ud-q3_k_xl"  # ia "local": MoE, ~50 tok/s; só motor html (EC não cabe em 16k)
+CAP_CALL = 0.8              # US$ por geração (peça inteira com ficha é a resposta mais longa do sistema)
+STANDALONE = "avulso"               # pedido das peças que não vieram de um pedido (ajuste/variação delas)
 
 
-class Tarefa(BaseModel):
+class Task(BaseModel):
     tipo: Literal["ajuste", "variacao"]
     alvo: str
     comentario: str = ""
 
 
-class Pedido(BaseModel):
+class Request(BaseModel):
     id: str = Field(pattern=r"^[a-z0-9-]{3,40}$")
     tipo: Literal["livre", "referencia", "lacunas", "porte", "ideias"] = "livre"
     alvos: list[str] = Field(default_factory=list)  # porte: peças HTML a portar para EffectCraft (N1), na ordem
@@ -84,7 +84,7 @@ class Pedido(BaseModel):
     estado: Literal["ativo", "pausado", "concluido"] = "ativo"
     criado: str = ""
     pecas: list[str] = Field(default_factory=list)       # geradas por este pedido (em revisão ou aprovadas)
-    tarefas: list[Tarefa] = Field(default_factory=list)  # pedidas na revisão
+    tarefas: list[Task] = Field(default_factory=list)  # pedidas na revisão
     descartadas: int = 0
     gasto_usd: float = 0.0
     situacao: str = ""                      # última coisa que aconteceu (para o app)
@@ -94,7 +94,7 @@ class Pedido(BaseModel):
     pares: list[list[str]] = Field(default_factory=list)  # motor "ambos": [peça html, peça effectcraft] do mesmo pedido
 
 
-class PecaGerada(BaseModel):
+class PieceGenerated(BaseModel):
     """Resposta do Claude: os três arquivos da peça."""
     id: str = Field(description="id da peça: minúsculas, números e _ (3–40)")
     peca_js: str = Field("", description="conteúdo do peca.js (motor html)")
@@ -105,73 +105,73 @@ class PecaGerada(BaseModel):
     resumo: str = Field("", description="uma frase: o que a peça faz e o que a diferencia")
 
 
-class PecaN1Local(BaseModel):
+class PieceN1Local(BaseModel):
     """Resposta da LLM local no modo híbrido: só a peça em N1 (a ficha vem do HTML de partida ou da ideia do
     Claude). O esquema N1 vira gramática: a resposta sempre é um documento válido."""
     peca_n1: Any = Field(description="documento N1 da peça (GUIA_N1_EC)")
     comunica: str = Field("", description="uma frase: o que a peça comunica, se o visual mudou")
 
 
-class Ideia(BaseModel):
-    ficha: P.Ficha = Field(description="ficha.json completa (estado \"rascunho\", motor \"effectcraft\")")  # esquema real
+class Idea(BaseModel):
+    ficha: P.Card = Field(description="ficha.json completa (estado \"rascunho\", motor \"effectcraft\")")  # esquema real
     conceito: str = Field(description="composição, hierarquia e movimento da peça em 4–8 frases, com tempos")
 
 
-class Ideias(BaseModel):
+class Ideas(BaseModel):
     """Resposta do Claude no pedido `ideias`: só a parte criativa, várias peças por chamada."""
-    itens: list[Ideia]
+    itens: list[Idea]
 
 
-class PecaLocal(BaseModel):
+class PieceLocal(BaseModel):
     """Resposta do LLM local (só motor html): o código vem primeiro e é obrigatório. Com os campos opcionais
     do `PecaGerada`, a gramática deixava o modelo responder só a ficha."""
     id: str = Field(description="id da peça: minúsculas, números e _ (3–40)")
     peca_js: str = Field(min_length=300, description="conteúdo COMPLETO do peca.js: ESTUDIO.peca(\"<id>\", (k, c) => {...})")
     peca_css: str = Field(description="conteúdo do peca.css (só seletores dentro de .p-<id>); pode ser vazio")
-    ficha: P.Ficha = Field(description="ficha.json completo (esquema no guia)")  # esquema real: sem intenção inventada
+    ficha: P.Card = Field(description="ficha.json completo (esquema no guia)")  # esquema real: sem intenção inventada
     resumo: str = Field(description="uma frase: o que a peça faz e o que a diferencia")
 
 
 # ---------------------------------------------------------------- pedidos
 
-def _ler():
-    if not PEDIDOS.exists():
+def _read():
+    if not REQUESTS.exists():
         return {}
-    return {p["id"]: Pedido.model_validate(p) for p in json.loads(PEDIDOS.read_text())}
+    return {p["id"]: Request.model_validate(p) for p in json.loads(REQUESTS.read_text())}
 
 
-def _gravar(pedidos):
-    PASTA.mkdir(parents=True, exist_ok=True)
-    PEDIDOS.write_text(json.dumps([p.model_dump() for p in pedidos.values()], ensure_ascii=False, indent=1))
+def _write(pedidos):
+    FOLDER.mkdir(parents=True, exist_ok=True)
+    REQUESTS.write_text(json.dumps([p.model_dump() for p in pedidos.values()], ensure_ascii=False, indent=1))
 
 
-def pedidos():
-    return sorted(_ler().values(), key=lambda p: p.criado, reverse=True)
+def requests():
+    return sorted(_read().values(), key=lambda p: p.criado, reverse=True)
 
 
-def pedido(pid):
-    p = _ler().get(pid)
+def request(pid):
+    p = _read().get(pid)
     if not p:
         raise KeyError(f"pedido inexistente: {pid}")
     return p
 
 
-def _mudar(pid, **campos):
-    todos = _ler()
-    p = todos.get(pid) or Pedido(id=pid, quantidade=0, criado=_agora())
+def _change(pid, **campos):
+    todos = _read()
+    p = todos.get(pid) or Request(id=pid, quantidade=0, criado=_now())
     todos[pid] = p.model_copy(update=campos)
-    _gravar(todos)
+    _write(todos)
     if "situacao" in campos:
         trace.detail(f"{pid}: {campos['situacao']}")
     return todos[pid]
 
 
-def _agora():
+def _now():
     return datetime.now().isoformat(timespec="seconds")
 
 
 # primeira peça da fábrica e régua de qualidade de todas (docs/PLANO-ACERVO.md, "Peça de referência")
-CITACAO = (
+QUOTE = (
     "Peça de CITAÇÃO DE ESTUDO (a régua de qualidade do acervo). A página do artigo aparece em perspectiva 2,5D "
     "(CSS 3D: perspective + rotateY/rotateX suaves), a câmera percorre a página e aproxima até o trecho citado, o resto "
     "da página desfoca, o marca-texto passa linha a linha sobre os grifos acompanhando a fala (batida no encaixe "
@@ -183,29 +183,29 @@ CITACAO = (
     "mas tudo pela pele (variáveis) e pelos utilitários do kit.")
 
 
-def pedido_citacao(teto_dia_usd=3.0, motor="html"):
+def request_quote(teto_dia_usd=3.0, motor="html"):
     """Pedido pronto da primeira peça: a citação de PDF, com o modelo antigo anexado."""
-    p = novo_pedido("livre", CITACAO, 1, teto_dia_usd, motor=motor)
-    return _mudar(p.id, anexos=["esteira/graphics/modelos/citacao.html"])
+    p = new_request("livre", QUOTE, 1, teto_dia_usd, motor=motor)
+    return _change(p.id, anexos=["esteira/graphics/modelos/citacao.html"])
 
 
-def novo_pedido(tipo, texto="", quantidade=3, teto_dia_usd=3.0, referencia="", motor="html", ia="claude"):
+def new_request(tipo, texto="", quantidade=3, teto_dia_usd=3.0, referencia="", motor="html", ia="claude"):
     if tipo == "livre" and not texto.strip():
         raise ValueError("descreva o que gerar")
     if tipo == "referencia" and not referencia:
         raise ValueError("envie a imagem de referência")
     base = re.sub(r"[^a-z0-9]+", "-", (texto or tipo).lower())[:24].strip("-") or tipo
     pid = f"{datetime.now():%m%d-%H%M%S}-{base}"[:40].strip("-")
-    p = Pedido(id=pid, tipo=tipo, texto=texto.strip(), quantidade=quantidade, teto_dia_usd=teto_dia_usd,
-               referencia=referencia, criado=_agora(), motor="html" if ia == "local" else motor, ia=ia)
-    todos = _ler()
+    p = Request(id=pid, tipo=tipo, texto=texto.strip(), quantidade=quantidade, teto_dia_usd=teto_dia_usd,
+               referencia=referencia, criado=_now(), motor="html" if ia == "local" else motor, ia=ia)
+    todos = _read()
     todos[pid] = p
-    _gravar(todos)
-    _registrar("pedido", pedido=pid, tipo=tipo, texto=texto, quantidade=quantidade, motor=p.motor, ia=ia)
+    _write(todos)
+    _register("pedido", pedido=pid, tipo=tipo, texto=texto, quantidade=quantidade, motor=p.motor, ia=ia)
     return p
 
 
-def guardar_referencia(nome, dados):
+def store_reference(nome, dados):
     REFS.mkdir(parents=True, exist_ok=True)
     nome = re.sub(r"[^\w.-]+", "_", nome)[-80:]
     if not re.search(r"\.(png|jpe?g|webp)$", nome, re.I):
@@ -214,50 +214,50 @@ def guardar_referencia(nome, dados):
     return nome
 
 
-def enfileirar(pid):
+def enqueue(pid):
     """Põe o pedido na fila da vaga "claude" (não duplica se já está lá)."""
     from esteira.web import queue
-    return queue.adicionar(f"fabrica:{pid}", "studio-factory", [], "claude")
+    return queue.add(f"fabrica:{pid}", "studio-factory", [], "claude")
 
 
-def pausar(pid, pausado=True):
-    pedido(pid)
+def pause(pid, pausado=True):
+    request(pid)
     if not pausado:
-        _registrar("retomado", pedido=pid)
-    return _mudar(pid, estado="pausado" if pausado else "ativo", situacao="pausado" if pausado else "retomado")
+        _register("retomado", pedido=pid)
+    return _change(pid, estado="pausado" if pausado else "ativo", situacao="pausado" if pausado else "retomado")
 
 
-def _registrar(evento, **dados):
-    PASTA.mkdir(parents=True, exist_ok=True)
-    with open(REGISTRO, "a") as f:
-        f.write(json.dumps({"t": _agora(), "evento": evento, **dados}, ensure_ascii=False) + "\n")
+def _register(evento, **dados):
+    FOLDER.mkdir(parents=True, exist_ok=True)
+    with open(RECORD, "a") as f:
+        f.write(json.dumps({"t": _now(), "evento": evento, **dados}, ensure_ascii=False) + "\n")
 
 
-def registro(n=60):
-    if not REGISTRO.exists():
+def record(n=60):
+    if not RECORD.exists():
         return []
-    return [json.loads(x) for x in REGISTRO.read_text().splitlines()[-n:]][::-1]
+    return [json.loads(x) for x in RECORD.read_text().splitlines()[-n:]][::-1]
 
 
 # ---------------------------------------------------------------- acervo × lacunas
 
-def _no_acervo():
-    return [f for f in P.listar() if f.estado in ("aprovada", "revisao")]
+def _in_library():
+    return [f for f in P.list_all() if f.estado in ("aprovada", "revisao")]
 
 
-def lacunas():
+def gaps():
     """Intenção × peso com menos de META_LACUNA peças (aprovadas ou em revisão), as mais vazias primeiro."""
-    fichas = _no_acervo()
+    fichas = _in_library()
     saida = []
-    for intencao in P.INTENCOES:
-        for peso in PESOS_LACUNA:
+    for intencao in P.INTENTS:
+        for peso in WEIGHTS_GAP:
             tem = sum(1 for f in fichas if intencao in f.intencoes and f.peso == peso)
-            if tem < META_LACUNA:
-                saida.append({"intencao": intencao, "peso": peso, "tem": tem, "falta": META_LACUNA - tem})
-    return sorted(saida, key=lambda x: (x["tem"], P.INTENCOES.index(x["intencao"]), x["peso"]))
+            if tem < META_GAP:
+                saida.append({"intencao": intencao, "peso": peso, "tem": tem, "falta": META_GAP - tem})
+    return sorted(saida, key=lambda x: (x["tem"], P.INTENTS.index(x["intencao"]), x["peso"]))
 
 
-def gasto_hoje():
+def spent_today():
     from esteira.ai import claude
     hoje = date.today().isoformat()
     return round(sum((r.get("cost") or 0) for r in claude._records()
@@ -266,47 +266,47 @@ def gasto_hoje():
 
 # ---------------------------------------------------------------- geração
 
-def _arquivos(id_):
-    p = P.pasta(id_)
+def _files(id_):
+    p = P.folder(id_)
     ler = lambda n: (p / n).read_text() if (p / n).exists() else ""  # noqa: E731
     return {"peca.js": ler("peca.js"), "peca.css": ler("peca.css"), "peca.n1.json": ler("peca.n1.json"),
             "peca.jsx": "" if (p / "peca.n1.json").exists() else ler("peca.jsx"), "ficha.json": ler("ficha.json")}
 
 
-def _bloco(id_):
-    a = _arquivos(id_)
+def _block(id_):
+    a = _files(id_)
     return "\n".join(f"--- {n}\n{t.strip()}" for n, t in a.items() if t.strip())
 
 
-def _acervo_resumo():
+def _library_summary():
     linhas = [f"- {f.id}: {f.comunica} (intenções: {', '.join(f.intencoes)}; peso {f.peso}; {f.estado})"
-              for f in P.listar()]
+              for f in P.list_all()]
     return "\n".join(linhas) or "(vazio)"
 
 
-def proximo_porte(p: Pedido) -> str | None:
+def next_size(p: Request) -> str | None:
     """Próxima peça HTML do porte: ainda não tentada, ainda existente e sem irmã EffectCraft."""
     for a in p.alvos:
-        if a in p.feitos or not (P.pasta(a) / "ficha.json").exists() or (P.pasta(f"{a}_ec"[:40]) / "ficha.json").exists():
+        if a in p.feitos or not (P.folder(a) / "ficha.json").exists() or (P.folder(f"{a}_ec"[:40]) / "ficha.json").exists():
             continue
         return a
     return None
 
 
-def pedido_porte(estados=("aprovada", "revisao", "rascunho")) -> Pedido:
+def request_size(estados=("aprovada", "revisao", "rascunho")) -> Request:
     """Pedido de porte de todas as peças HTML do acervo para EffectCraft em N1: aprovadas primeiro (melhor
     referência), depois as em revisão. Cada porte é 1 chamada (+1 se o portão reprovar) e herda a ficha inteira."""
     ordem = {e: k for k, e in enumerate(estados)}
-    fichas = sorted((f for f in P.listar() if f.motor == "html" and f.estado in ordem),
+    fichas = sorted((f for f in P.list_all() if f.motor == "html" and f.estado in ordem),
                     key=lambda f: (ordem[f.estado], f.id))
-    p = novo_pedido("porte", "porte das peças HTML para EffectCraft (N1)", quantidade=min(len(fichas), 50),
+    p = new_request("porte", "porte das peças HTML para EffectCraft (N1)", quantidade=min(len(fichas), 50),
                     teto_dia_usd=50, motor="effectcraft")
-    return _mudar(p.id, alvos=[f.id for f in fichas])
+    return _change(p.id, alvos=[f.id for f in fichas])
 
 
-def _tarefa_nova(p: Pedido):
+def _task_new(p: Request):
     if p.tipo == "lacunas":
-        lc = lacunas()
+        lc = gaps()
         if not lc:
             return "O acervo não tem lacunas por intenção × peso: crie uma peça útil de uma intenção pouco coberta."
         x = lc[0]
@@ -318,68 +318,68 @@ def _tarefa_nova(p: Pedido):
     return f"Pedido da pessoa: {p.texto}"
 
 
-def dossie(p: Pedido, modo="nova", alvo="", comentario="", erros=(), motor="html", tarefa=None):
+def dossier(p: Request, modo="nova", alvo="", comentario="", erros=(), motor="html", tarefa=None):
     """Prompt da geração. `modo`: nova | ajuste | variacao | corrigir (portão reprovou); `motor`: html | effectcraft."""
     if modo == "ajuste":
         tarefa = (f"Reescreva a peça '{alvo}' atendendo ao pedido de ajuste da pessoa: {comentario}\n"
-                  f"Mantenha o id '{alvo}' e aumente `versao` em 1. Código atual:\n{_bloco(alvo)}")
+                  f"Mantenha o id '{alvo}' e aumente `versao` em 1. Código atual:\n{_block(alvo)}")
     elif modo == "variacao":
         tarefa = (f"Crie uma IRMÃ da peça '{alvo}': mesma intenção e mesmos encaixes, visual e movimento claramente "
-                  f"diferentes (outra composição, outra entrada). Id novo. Código da original:\n{_bloco(alvo)}")
+                  f"diferentes (outra composição, outra entrada). Id novo. Código da original:\n{_block(alvo)}")
     elif modo == "porte":
         tarefa = (f"Versão EffectCraft (N1) da peça HTML '{alvo}', que já existe e foi revisada. Mantenha o CONTRATO "
                   f"da ficha: intenções, encaixes, botões, exemplos e limites (só `motor` vira \"effectcraft\"). O "
                   f"visual e o movimento podem trazer PADRÕES NOVOS: use o que o EffectCraft faz melhor que o HTML "
                   f"(profundidade 2,5D, desfoque, traços que crescem, contagens, câmera) para uma peça mais rica que a "
                   f"original, sem perder a leitura. Ajuste `comunica` se o visual mudar. Id: {alvo}_ec. "
-                  f"Peça HTML de partida:\n{_bloco(alvo)}")
+                  f"Peça HTML de partida:\n{_block(alvo)}")
     elif modo == "corrigir":
         tarefa = ("A peça abaixo foi REPROVADA no portão automático. Corrija todos os erros mantendo a ideia e o id.\n"
-                  "Erros:\n" + "\n".join(f"- {e}" for e in erros) + f"\nCódigo:\n{_bloco(alvo)}")
+                  "Erros:\n" + "\n".join(f"- {e}" for e in erros) + f"\nCódigo:\n{_block(alvo)}")
     else:
-        tarefa = tarefa or _tarefa_nova(p)
+        tarefa = tarefa or _task_new(p)
     if motor == "effectcraft":
         from esteira.n1 import effectcraft as N1EC
         cabeca = ("Você escreve peças de motion graphics para o acervo do Estúdio (vídeos de YouTube em pt-BR) no motor "
                   "EffectCraft. A peça é um documento N1 (JSON de elementos e animações), NÃO código: o compilador gera "
                   "o script. Siga os guias e o esquema à risca; o portão automático reprova o que fugir deles.\n\n"
-                  f"=== GUIA DO N1 DO EFFECTCRAFT ===\n{GUIA_N1_EC.read_text()}\n\n"
-                  f"=== ESQUEMA N1 (JSON Schema) ===\n{json.dumps(N1EC.Peca.model_json_schema(), ensure_ascii=False)}\n\n"
-                  f"=== GUIA GERAL (ficha, encaixes, texto máximo, lições) ===\n{GUIA.read_text()}\n\n"
-                  f"=== LIÇÕES DO MOTOR EFFECTCRAFT ===\n{GUIA_EC.read_text()}\n\n"
-                  f"=== PEÇA DE REFERÊNCIA DO FORMATO ({REFERENCIA_EC}) ===\n{_bloco(REFERENCIA_EC)}\n\n")
+                  f"=== GUIA DO N1 DO EFFECTCRAFT ===\n{GUIDE_N1_EC.read_text()}\n\n"
+                  f"=== ESQUEMA N1 (JSON Schema) ===\n{json.dumps(N1EC.Piece.model_json_schema(), ensure_ascii=False)}\n\n"
+                  f"=== GUIA GERAL (ficha, encaixes, texto máximo, lições) ===\n{GUIDE.read_text()}\n\n"
+                  f"=== LIÇÕES DO MOTOR EFFECTCRAFT ===\n{GUIDE_EC.read_text()}\n\n"
+                  f"=== PEÇA DE REFERÊNCIA DO FORMATO ({REFERENCE_EC}) ===\n{_block(REFERENCE_EC)}\n\n")
         resposta = ("Responda com id, peca_n1 (o documento N1), ficha (objeto completo, estado \"rascunho\", motor "
                     "\"effectcraft\") e resumo. ")
     else:
         cabeca = ("Você escreve peças de motion graphics para o acervo do Estúdio (vídeos de YouTube em pt-BR, HyperFrames "
                   "+ GSAP). Siga o guia à risca; o portão automático reprova o que fugir dele.\n\n"
-                  f"=== GUIA DE ESCRITA DE PEÇAS ===\n{GUIA.read_text()}\n\n"
-                  f"=== PEÇA DE REFERÊNCIA DO FORMATO ({REFERENCIA}) ===\n{_bloco(REFERENCIA)}\n\n")
+                  f"=== GUIA DE ESCRITA DE PEÇAS ===\n{GUIDE.read_text()}\n\n"
+                  f"=== PEÇA DE REFERÊNCIA DO FORMATO ({REFERENCE}) ===\n{_block(REFERENCE)}\n\n")
         resposta = "Responda com id, peca_js, peca_css, ficha (objeto completo, estado \"rascunho\", motor \"html\") e resumo. "
     return (
         cabeca +
-        f"=== ACERVO ATUAL (não duplique; complemente) ===\n{_acervo_resumo()}\n\n"
-        + "".join(f"=== ANEXO {a} ===\n{(RAIZ / a).read_text()}\n\n" for a in p.anexos if (RAIZ / a).is_file())
+        f"=== ACERVO ATUAL (não duplique; complemente) ===\n{_library_summary()}\n\n"
+        + "".join(f"=== ANEXO {a} ===\n{(ROOT / a).read_text()}\n\n" for a in p.anexos if (ROOT / a).is_file())
         + f"=== TAREFA ===\n{tarefa}\n\n" + resposta +
         "Encaixes com limites honestos e exemplos reais; 5–10 exemplos_sim e 3–5 exemplos_nao de roteiros em pt-BR.\n"
-        f"(pedido {p.id} · {_agora()})"
+        f"(pedido {p.id} · {_now()})"
     )
 
 
-def _id_livre(base):
+def _id_free(base):
     base = re.sub(r"[^a-z0-9_]", "_", base.lower()).strip("_")[:36] or "peca"
     if not re.match(r"[a-z]", base):
         base = "p_" + base
     if len(base) < 3:
         base = (base + "_peca")[:36]
     id_, n = base, 2
-    while P.pasta(id_).exists():
+    while P.folder(id_).exists():
         id_, n = f"{base}_{n}", n + 1
     return id_
 
 
-def _escrever(g: PecaGerada, id_, versao=None, motor="html"):
-    d = P.pasta(id_)
+def _compose(g: PieceGenerated, id_, versao=None, motor="html"):
+    d = P.folder(id_)
     d.mkdir(parents=True, exist_ok=True)
     if motor == "effectcraft":
         for n in ("peca.js", "peca.css"):
@@ -414,16 +414,16 @@ def _escrever(g: PecaGerada, id_, versao=None, motor="html"):
     (d / "ficha.json").write_text(json.dumps(ficha, ensure_ascii=False, indent=1) + "\n")
 
 
-def checagem_visual(id_):
+def check_visual(id_):
     """IA local olha os quadros da prova (texto cortado, sobreposição, ilegível). Sem modelo de visão: pula."""
-    from esteira.bench import Visao
+    from esteira.bench import Vision
     from esteira.ai import local
     problemas = []
     # o processo roda com `--motor claude`: sem fixar, a visão iria ao Claude e gastaria a cota da assinatura
     antes = {k: os.environ.get(k) for k in ("ESTEIRA_ENGINE", "ESTEIRA_ENGINE_FIXED")}
     os.environ.update(ESTEIRA_ENGINE="local", ESTEIRA_ENGINE_FIXED="1")
     try:
-        return _checar_quadros(id_, Visao, local, problemas)
+        return _check_frames(id_, Vision, local, problemas)
     finally:
         for k, v in antes.items():
             if v is None:
@@ -432,8 +432,8 @@ def checagem_visual(id_):
                 os.environ[k] = v
 
 
-def _checar_quadros(id_, Visao, local, problemas):
-    for q in sorted((P.pasta(id_) / "prova").glob("*.jpg")):
+def _check_frames(id_, Visao, local, problemas):
+    for q in sorted((P.folder(id_) / "prova").glob("*.jpg")):
         try:
             r = local.ask(local.prompt("estudio_visao_prova"), Visao, model=local.VISION, images=[str(q)],
                                 max_tokens=200, operation="studio_vision")
@@ -447,36 +447,36 @@ def _checar_quadros(id_, Visao, local, problemas):
     return problemas
 
 
-def _portao(id_, visual=True):
-    r = P.portao(id_)
-    if r["ok"] and visual and (vis := checagem_visual(id_)):
+def _gate(id_, visual=True):
+    r = P.gate(id_)
+    if r["ok"] and visual and (vis := check_visual(id_)):
         r = {**r, "ok": False, "erros": vis}
-        ficha = P.carregar(id_)
-        P.salvar(ficha.model_copy(update={"estado": "rascunho"}))
-        (P.pasta(id_) / "prova" / "portao.json").write_text(json.dumps(r, ensure_ascii=False, indent=1))
+        ficha = P.load(id_)
+        P.save(ficha.model_copy(update={"estado": "rascunho"}))
+        (P.folder(id_) / "prova" / "portao.json").write_text(json.dumps(r, ensure_ascii=False, indent=1))
     return r
 
 
-def _descartar(id_, motivo):
-    destino = REPROVADAS / f"{id_}-{datetime.now():%Y%m%d%H%M%S}"
-    REPROVADAS.mkdir(parents=True, exist_ok=True)
-    if P.pasta(id_).exists():
-        shutil.move(str(P.pasta(id_)), destino)
+def _discard(id_, motivo):
+    destino = REJECTED / f"{id_}-{datetime.now():%Y%m%d%H%M%S}"
+    REJECTED.mkdir(parents=True, exist_ok=True)
+    if P.folder(id_).exists():
+        shutil.move(str(P.folder(id_)), destino)
         (destino / "motivo.txt").write_text(motivo)
 
 
-def _consultar(p: Pedido, texto, imagem=None):
+def _query(p: Request, texto, imagem=None):
     if p.ia == "local":
-        return _consultar_local(texto), 0.0
+        return _query_local(texto), 0.0
     from esteira.ai import claude
     ep = f"fabrica-{date.today().isoformat()}"
     antes = claude.spent(ep)[0]
-    cfg = {"claude": {"teto_chamada_usd": TETO_CHAMADA}}  # sem teto diário: o limite é a cota da assinatura (90%)
-    g = claude.query(texto, PecaGerada, cfg, ep, "fabrica_peca", image=imagem)
+    cfg = {"claude": {"teto_chamada_usd": CAP_CALL}}  # sem teto diário: o limite é a cota da assinatura (90%)
+    g = claude.query(texto, PieceGenerated, cfg, ep, "fabrica_peca", image=imagem)
     return g, round(claude.spent(ep)[0] - antes, 4)
 
 
-def _consultar_local(texto):
+def _query_local(texto):
     """A peça pelo LLM local (JSON forçado pelo esquema). Sem imagem de referência. O processo da fábrica
     roda na vaga "claude" com `--motor claude`: aqui o motor local é fixado só durante a chamada."""
     from esteira.ai import local
@@ -484,9 +484,9 @@ def _consultar_local(texto):
     os.environ.update(ESTEIRA_ENGINE="local", ESTEIRA_ENGINE_FIXED="1")
     try:
         # o número da tentativa muda o texto: sem ele o cache devolveria a mesma peça descartada
-        r = local.ask(f"{texto}\n\n(tentativa {time.time_ns()})", PecaLocal, model=MODELO_LOCAL,
+        r = local.ask(f"{texto}\n\n(tentativa {time.time_ns()})", PieceLocal, model=MODEL_LOCAL,
                             temperature=0.5, max_tokens=9000, operation="factory")
-        return r and PecaGerada(**r.model_dump(mode="json"))
+        return r and PieceGenerated(**r.model_dump(mode="json"))
     finally:
         for k, v in antes.items():
             if v is None:
@@ -495,32 +495,32 @@ def _consultar_local(texto):
                 os.environ[k] = v
 
 
-def gerar(p: Pedido, modo="nova", alvo="", comentario="", visual=True, motor=None, tarefa=None, ideia=None):
+def generate(p: Request, modo="nova", alvo="", comentario="", visual=True, motor=None, tarefa=None, ideia=None):
     """Uma peça (nova, ajuste ou variação) com uma rodada de correção. → {"id", "ok", "custo", "motivo", "motor"}.
     Motor: o da peça-alvo (ajuste/variação), senão `motor`, senão o do pedido (resolvido por `motor_do_pedido`).
     Híbrido (porte e ideias): a LLM local faz a peça em N1 (duas rodadas); se o portão reprovar as duas, o Claude
     socorre com o caminho normal (`quem` no resultado: local | socorro)."""
     if p.ia == "hibrido" and modo in ("porte", "conceito"):
-        r = _gerar_local_n1(p, modo, alvo, ideia, visual)
+        r = _generate_local_n1(p, modo, alvo, ideia, visual)
         if r["ok"]:
             return {**r, "quem": "local"}
-        if claude.quota_full() or modo == "porte" or not SOCORRO_IDEIAS:  # o Claude fica só com o criativo
+        if claude.quota_full() or modo == "porte" or not FALLBACK_IDEAS:  # o Claude fica só com o criativo
             return {**r, "quem": "local"}
         if modo == "conceito":  # socorro: o Claude escreve a peça da própria ideia
             tarefa = (f"Escreva a peça desta ideia (a LLM local não conseguiu: {r['motivo'][:200]}).\n"
                       f"Ficha: {json.dumps(ideia['ficha'], ensure_ascii=False)}\nConceito: {ideia['conceito']}")
             modo, alvo = "nova", ""
-        socorro = gerar(p.model_copy(update={"ia": "claude"}), modo, alvo, comentario, visual, "effectcraft", tarefa)
+        socorro = generate(p.model_copy(update={"ia": "claude"}), modo, alvo, comentario, visual, "effectcraft", tarefa)
         return {**socorro, "custo": socorro["custo"], "quem": "socorro"}
     if modo == "porte":
         motor = "effectcraft"
-    elif alvo and (P.pasta(alvo) / "ficha.json").exists():
-        motor = P.carregar(alvo).motor
-    motor = motor or motor_do_pedido(p)
+    elif alvo and (P.folder(alvo) / "ficha.json").exists():
+        motor = P.load(alvo).motor
+    motor = motor or engine_of_request(p)
     inicio = time.monotonic()
     imagem = str(REFS / p.referencia) if p.tipo == "referencia" and p.referencia and modo == "nova" else None
-    texto = dossie(p, modo, alvo, comentario, motor=motor, tarefa=tarefa)
-    g, custo = _consultar(p, texto, imagem)
+    texto = dossier(p, modo, alvo, comentario, motor=motor, tarefa=tarefa)
+    g, custo = _query(p, texto, imagem)
     if not g:
         quem = "o LLM local" if p.ia == "local" else "o Claude"
         return {"id": alvo or None, "ok": False, "custo": custo, "motivo": f"{quem} não respondeu (teto ou erro)",
@@ -528,106 +528,106 @@ def gerar(p: Pedido, modo="nova", alvo="", comentario="", visual=True, motor=Non
     copia = None
     if modo == "ajuste":
         id_ = alvo
-        versao = P.carregar(alvo).versao + 1
-        copia = PASTA / "copias" / f"{alvo}-{datetime.now():%Y%m%d%H%M%S}"  # volta se o ajuste não passar
-        shutil.copytree(P.pasta(alvo), copia, ignore=shutil.ignore_patterns("prova"))
+        versao = P.load(alvo).versao + 1
+        copia = FOLDER / "copias" / f"{alvo}-{datetime.now():%Y%m%d%H%M%S}"  # volta se o ajuste não passar
+        shutil.copytree(P.folder(alvo), copia, ignore=shutil.ignore_patterns("prova"))
     elif modo == "porte":
-        id_, versao = _id_livre(f"{alvo}_ec"[:40]), None
+        id_, versao = _id_free(f"{alvo}_ec"[:40]), None
     else:
-        id_, versao = _id_livre(g.id), None
-    _escrever(g, id_, versao, motor)
-    r = _portao(id_, visual)
+        id_, versao = _id_free(g.id), None
+    _compose(g, id_, versao, motor)
+    r = _gate(id_, visual)
     rodadas = 1
     ctx = {"pedido": {"tipo": p.tipo, "texto": p.texto, "referencia": p.referencia}, "modo": modo, "alvo": alvo,
            "comentario": comentario, "motor": motor, "tarefa": str(tarefa or "")}
     rg = _dataset(p, ctx, texto, g, r, id_, alvo if modo in ("ajuste", "variacao", "porte") else id_, motor)
     if not r["ok"]:
         events.warning(f"fábrica: {id_} reprovada no portão; volta ao Claude uma vez")
-        texto2 = dossie(p, "corrigir", id_, erros=r["erros"], motor=motor)
-        g2, c2 = _consultar(p, texto2)
+        texto2 = dossier(p, "corrigir", id_, erros=r["erros"], motor=motor)
+        g2, c2 = _query(p, texto2)
         custo += c2
         rodadas = 2
         if g2:
-            _escrever(g2, id_, versao, motor)
-            r = _portao(id_, visual)
+            _compose(g2, id_, versao, motor)
+            r = _gate(id_, visual)
             rg = _dataset(p, {**ctx, "modo": "corrigir", "erros": r.get("erros", [])}, texto2, g2, r, id_,
                           alvo if modo in ("ajuste", "variacao", "porte") else id_, motor, pai=rg)
     base = {"pedido": p.id, "peca": id_, "modo": modo, "motor": motor, "rodadas": rodadas, "custo": custo,
             "segundos": round(time.monotonic() - inicio, 1), "render_s": r.get("render_s"),
-            "intencoes": _intencoes(id_)}
+            "intencoes": _intents(id_)}
     if not r["ok"]:
         motivo = "; ".join(r["erros"][:4])
         if copia:  # o ajuste não passou: a versão anterior volta para a revisão, com o motivo nas notas
-            shutil.rmtree(P.pasta(id_))
-            shutil.copytree(copia, P.pasta(id_))
-            P.portao(id_)  # refaz a prova da versão anterior
-            ficha = P.carregar(id_)
-            P.salvar(ficha.model_copy(update={"estado": "revisao", "notas": f"ajuste reprovado: {motivo}"[:400]}))
+            shutil.rmtree(P.folder(id_))
+            shutil.copytree(copia, P.folder(id_))
+            P.gate(id_)  # refaz a prova da versão anterior
+            ficha = P.load(id_)
+            P.save(ficha.model_copy(update={"estado": "revisao", "notas": f"ajuste reprovado: {motivo}"[:400]}))
         else:
-            _descartar(id_, motivo)
-        _avaliar_dataset(rg, "descartada", motivo=motivo)
-        _registrar("descartada", **base, motivo=motivo)
+            _discard(id_, motivo)
+        _evaluate_dataset(rg, "descartada", motivo=motivo)
+        _register("descartada", **base, motivo=motivo)
         return {"id": id_, "ok": False, "custo": custo, "motivo": motivo, "motor": motor}
     if copia:
         shutil.rmtree(copia, ignore_errors=True)
-    _registrar("gerada", **base, resumo=g.resumo)
+    _register("gerada", **base, resumo=g.resumo)
     return {"id": id_, "ok": True, "custo": custo, "motivo": "", "motor": motor}
 
 
-def _dataset(p: Pedido, ctx, texto, g, r, id_, grupo, motor, pai=None):
+def _dataset(p: Request, ctx, texto, g, r, id_, grupo, motor, pai=None):
     """Rodada da fábrica no registro do dataset (falha aqui nunca derruba a fábrica). → id do registro."""
     try:
         from esteira.dataset import registry as R
-        return R.gravar(
+        return R.write(
             "peca_animar" if motor == "effectcraft" else "peca_html", grupo=f"peca:{grupo}", pai=pai,
             contexto=ctx, saida=g.model_dump(mode="json"),
-            origem="claude" if p.ia == "claude" else f"local:{MODELO_LOCAL}",
+            origem="claude" if p.ia == "claude" else f"local:{MODEL_LOCAL}",
             portao={"ok": bool(r.get("ok")), "erros": r.get("erros", [])[:8], "render_s": r.get("render_s")},
-            versoes={"guia": _sha_guia(motor)}, extra={"peca": id_, "pedido": p.id, "prompt": R.artefato(texto)})
+            versoes={"guia": _sha_guide(motor)}, extra={"peca": id_, "pedido": p.id, "prompt": R.artifact(texto)})
     except Exception as e:  # noqa: BLE001
         events.warning(f"dataset: rodada de {id_} não gravada ({e})")
         return None
 
 
-def _avaliar_dataset(rg, veredito, **kw):
+def _evaluate_dataset(rg, veredito, **kw):
     if not rg:
         return
     try:
         from esteira.dataset import registry as R
-        R.avaliar(rg, veredito, **kw)
+        R.evaluate(rg, veredito, **kw)
     except Exception as e:  # noqa: BLE001
         events.warning(f"dataset: veredito de {rg} não gravado ({e})")
 
 
-def _veredito_peca(id_, veredito, **kw):
+def _verdict_piece(id_, veredito, **kw):
     """Decisão da pessoa vai para a última rodada da peça no dataset."""
     try:
         from esteira.dataset import registry as R
-        rg = R.ultimo(peca=id_)
+        rg = R.last(peca=id_)
     except Exception:  # noqa: BLE001
         rg = None
-    _avaliar_dataset(rg and rg["id"], veredito, **kw)
+    _evaluate_dataset(rg and rg["id"], veredito, **kw)
 
 
-def _sha_guia(motor):
+def _sha_guide(motor):
     import hashlib
-    guia = P.PASTA / ("GUIA_EC.md" if motor == "effectcraft" else "GUIA.md")
+    guia = P.FOLDER / ("GUIA_EC.md" if motor == "effectcraft" else "GUIA.md")
     return hashlib.sha1(guia.read_bytes()).hexdigest()[:10] if guia.exists() else None
 
 
-LOTE_IDEIAS = 8  # ideias por chamada do Claude (a parte criativa é curta; o pesado fica com a LLM local)
-SOCORRO_IDEIAS = False  # socorro do Claude custa ~2x um lote de 8 ideias por peça: desligado (o lote rende mais)
-RODADAS_LOCAIS = 4  # tentativas da LLM local com o erro do portão (de graça) antes de desistir ou do socorro
+BATCH_IDEAS = 8  # ideias por chamada do Claude (a parte criativa é curta; o pesado fica com a LLM local)
+FALLBACK_IDEAS = False  # socorro do Claude custa ~2x um lote de 8 ideias por peça: desligado (o lote rende mais)
+ROUNDS_LOCALS = 4  # tentativas da LLM local com o erro do portão (de graça) antes de desistir ou do socorro
 
 
-def _compacto(x):
+def _compact(x):
     """N1 sem os campos vazios/padrão (None, {}, [], False): a versão anterior cabe no prompt da LLM local."""
     if isinstance(x, dict):
-        return {k: _compacto(v) for k, v in x.items() if v not in (None, {}, [], False)}
-    return [_compacto(v) for v in x] if isinstance(x, list) else x
+        return {k: _compact(v) for k, v in x.items() if v not in (None, {}, [], False)}
+    return [_compact(v) for v in x] if isinstance(x, list) else x
 
 
-def _dossie_local(modo, ficha, alvo="", ideia=None, erros=(), rascunho=None, anterior=None, ja_vistos=()):
+def _dossier_local(modo, ficha, alvo="", ideia=None, erros=(), rascunho=None, anterior=None, ja_vistos=()):
     """Prompt compacto para a LLM local (cabe em 16k com a resposta): guia N1, a ficha, a origem e o RASCUNHO do
     molde (N1 que já compila e passa no portão). A LLM adapta o rascunho; não monta a peça do zero. Depois de uma
     reprovação, a base é a VERSÃO ANTERIOR dela com os erros e as causas: corrige o que foi apontado, não refaz."""
@@ -644,22 +644,22 @@ def _dossie_local(modo, ficha, alvo="", ideia=None, erros=(), rascunho=None, ant
               "elementos que mostram encaixes, deixar caixa vazia, criar caixas de nível de cima em regiões já "
               "usadas, escrever x/y/w/h/d/tam, usar nome de encaixe ou botão que a ficha não declara. Botão que "
               "você não usar sai da ficha sozinho (melhor do que variante que não muda nada).",
-              f"=== GUIA N1 ===\n{GUIA_N1_EC.read_text()}",
+              f"=== GUIA N1 ===\n{GUIDE_N1_EC.read_text()}",
               f"=== FICHA (contrato: encaixes, botões, intenções) ===\n{json.dumps(ficha, ensure_ascii=False)}"]
     if anterior is not None:
         partes.append(f"=== SUA VERSÃO ANTERIOR (reprovada; corrija só o apontado) ===\n"
-                      f"{json.dumps(_compacto(anterior), ensure_ascii=False)}")
+                      f"{json.dumps(_compact(anterior), ensure_ascii=False)}")
     elif rascunho is not None:
         partes.append(f"=== RASCUNHO (molde preenchido pelo código; parta dele) ===\n"
                       f"{json.dumps(rascunho, ensure_ascii=False)}")
     else:
         partes.append(f"=== EXEMPLO N1 (rosca com legenda, só caixas) ===\n"
-                      f"{json.dumps(json.loads(EXEMPLO_CAIXAS.read_text()), ensure_ascii=False)}")
+                      f"{json.dumps(json.loads(EXAMPLE_BOXES.read_text()), ensure_ascii=False)}")
     if modo == "porte":
         # o que sobra do orçamento vai para o código de partida (o guia, a ficha e o rascunho não podem ser cortados)
-        livre = (DOSSIE_MAX_CAR - sum(len(x) for x in partes) - 1500
+        livre = (DOSSIER_MAX_CAR - sum(len(x) for x in partes) - 1500
                  - sum(len(e) + 3 for e in [*erros, *ja_vistos]))
-        js = (P.pasta(alvo) / "peca.js").read_text()[:max(1000, min(6000, livre))]
+        js = (P.folder(alvo) / "peca.js").read_text()[:max(1000, min(6000, livre))]
         partes.append(f"=== PEÇA HTML DE PARTIDA (a mesma ideia; use só como inspiração de ritmo e destaque) ===\n{js}")
     else:
         partes.append(f"=== IDEIA (do diretor criativo) ===\n{ideia['conceito']}")
@@ -671,20 +671,20 @@ def _dossie_local(modo, ficha, alvo="", ideia=None, erros=(), rascunho=None, ant
     return "\n\n".join(partes)
 
 
-def _consultar_n1_local(texto):
+def _query_n1_local(texto):
     from esteira.ai import local
     from esteira.n1 import effectcraft as N1EC
 
     class Resposta(BaseModel):
-        peca_n1: N1EC.Peca
+        peca_n1: N1EC.Piece
         comunica: str = ""
     antes = {k: os.environ.get(k) for k in ("ESTEIRA_ENGINE", "ESTEIRA_ENGINE_FIXED")}
     os.environ.update(ESTEIRA_ENGINE="local", ESTEIRA_ENGINE_FIXED="1")
     try:
-        r = local.ask(f"{texto}\n\n(tentativa {time.time_ns()})", Resposta, model=MODELO_LOCAL, temperature=0.4,
+        r = local.ask(f"{texto}\n\n(tentativa {time.time_ns()})", Resposta, model=MODEL_LOCAL, temperature=0.4,
                             max_tokens=7000, operation="fabrica_n1")
         # só o que a LLM escreveu: o que ela omite vem do molde (travar_molde), não do padrão do esquema (peso 400…)
-        return r and PecaN1Local(peca_n1=r.peca_n1.model_dump(mode="json", exclude_unset=True), comunica=r.comunica)
+        return r and PieceN1Local(peca_n1=r.peca_n1.model_dump(mode="json", exclude_unset=True), comunica=r.comunica)
     except Exception as e:  # noqa: BLE001 — llama fora do ar ou resposta truncada: vira falha da rodada
         events.warning(f"fábrica: LLM local falhou ({str(e)[:120]})")
         return None
@@ -696,10 +696,10 @@ def _consultar_n1_local(texto):
                 os.environ[k] = v
 
 
-REVISOES_CLAUDE = 4  # uma revisão por rodada que passa no portão técnico: só a aprovação do Claude leva à pessoa
+REVIEWS_CLAUDE = 4  # uma revisão por rodada que passa no portão técnico: só a aprovação do Claude leva à pessoa
 
 
-class RevisaoN1(BaseModel):
+class ReviewN1(BaseModel):
     aprovada: bool = Field(description="true só se a peça está pronta para um vídeo profissional")
     problemas: list[str] = Field(default_factory=list,
                                  description="o que está errado na tela, concreto: elemento, onde, em qual formato")
@@ -709,12 +709,12 @@ class RevisaoN1(BaseModel):
         "vazio se as lições atuais já cobrem"))
 
 
-def _folha_prova(id_) -> Path | None:
+def _sheet_proof(id_) -> Path | None:
     """Os quadros da prova lado a lado numa imagem (o Claude lê uma imagem por chamada)."""
-    qs = sorted((P.pasta(id_) / "prova").glob("*.jpg"))
+    qs = sorted((P.folder(id_) / "prova").glob("*.jpg"))
     if not qs:
         return None
-    saida = P.pasta(id_) / "prova" / "folha.png"
+    saida = P.folder(id_) / "prova" / "folha.png"
     entradas = sum((["-i", str(q)] for q in qs), [])
     filtro = "".join(f"[{i}:v]scale=-2:540[v{i}];" for i in range(len(qs))) + \
         "".join(f"[v{i}]" for i in range(len(qs))) + f"hstack=inputs={len(qs)}"
@@ -723,45 +723,45 @@ def _folha_prova(id_) -> Path | None:
     return saida if r.returncode == 0 and saida.exists() else None
 
 
-def _licoes_n1() -> str:
-    t = GUIA_N1_EC.read_text()
+def _lessons_n1() -> str:
+    t = GUIDE_N1_EC.read_text()
     return t.split("## Lições", 1)[1] if "## Lições" in t else ""
 
 
-def licao_n1(regras, id_=""):
+def lesson_n1(regras, id_=""):
     """Regras da revisão do Claude entram no guia N1 (lido pela LLM local em toda geração), sem repetir."""
-    t = GUIA_N1_EC.read_text()
+    t = GUIDE_N1_EC.read_text()
     if "## Lições" not in t:
         t = t.rstrip() + "\n\n## Lições (erros já vistos; não repita)\n"
     # compara também com o arquivo: a regra podada do guia voltava na revisão seguinte (fundo_ondas teve 10 iguais)
-    arq = LICOES_ARQUIVO.read_text() if LICOES_ARQUIVO.exists() else ""
+    arq = LESSONS_FILE.read_text() if LESSONS_FILE.exists() else ""
     todas = t.split("## Lições", 1)[1] + "\n" + arq
-    ja = [_palavras(x) for x in re.findall(r"^- (?:.*?: )?(.+?)(?: \(peça .*\))?$", todas, re.M)]
-    if id_ and todas.count(f"(peça {id_})") >= LICOES_POR_PECA:
+    ja = [_words(x) for x in re.findall(r"^- (?:.*?: )?(.+?)(?: \(peça .*\))?$", todas, re.M)]
+    if id_ and todas.count(f"(peça {id_})") >= LESSONS_POR_PIECE:
         return []  # a peça já ensinou o que tinha: mais regras dela só repetem a mesma reprovação com outras palavras
     novas = []
     for x in (x.strip().rstrip(".") for x in regras if x.strip()):
-        p = _palavras(x)
-        if p and all(len(p & q) / len(p | q) < LICAO_PARECIDA for q in ja):
+        p = _words(x)
+        if p and all(len(p & q) / len(p | q) < LESSON_SIMILAR for q in ja):
             novas.append(x)
             ja.append(p)
     # uma por revisão: o 12B não segue muitas regras soltas, e várias da mesma peça diziam quase a mesma coisa
     novas = novas[:1]
     if novas:
-        GUIA_N1_EC.write_text(t.rstrip() + "\n" + "".join(f"- {x} (peça {id_})\n" for x in novas))
-        podar_licoes()
+        GUIDE_N1_EC.write_text(t.rstrip() + "\n" + "".join(f"- {x} (peça {id_})\n" for x in novas))
+        prune_lessons()
     return novas
 
 
-def _palavras(x) -> set[str]:
+def _words(x) -> set[str]:
     """Palavras de 4+ letras da regra: base da semelhança entre lições (parecida = repetida)."""
     return {w for w in re.findall(r"\w+", x.lower()) if len(w) >= 4}
 
 
-def podar_licoes():
+def prune_lessons():
     """Mantém as lições do guia abaixo de LICOES_MAX_CAR: as de base (sem peça) ficam; das revisões, as mais novas.
     As que saem vão para LICOES_ARQUIVO (nada se perde, só sai do prompt). → quantas saíram."""
-    t = GUIA_N1_EC.read_text()
+    t = GUIDE_N1_EC.read_text()
     if "## Lições" not in t:
         return 0
     cab, corpo = t.split("## Lições", 1)
@@ -771,22 +771,22 @@ def podar_licoes():
     rev = [x for x in linhas if x not in base]
     ficam, total = [], sum(len(x) + 1 for x in base)
     for x in reversed(rev):
-        if total + len(x) + 1 > LICOES_MAX_CAR:
+        if total + len(x) + 1 > LESSONS_MAX_CAR:
             break
         ficam.insert(0, x)
         total += len(x) + 1
     saem = rev[:len(rev) - len(ficam)]
     if saem:
-        with LICOES_ARQUIVO.open("a") as f:
+        with LESSONS_FILE.open("a") as f:
             f.write("".join(x + "\n" for x in saem))
-        GUIA_N1_EC.write_text(f"{cab}## Lições{titulo}\n" + "".join(x + "\n" for x in base + ficam))
+        GUIDE_N1_EC.write_text(f"{cab}## Lições{titulo}\n" + "".join(x + "\n" for x in base + ficam))
     return len(saem)
 
 
-def _revisar_claude(id_, ficha, conceito, peca_n1):
+def _review_claude(id_, ficha, conceito, peca_n1):
     """O Claude revisa a prova que passou no portão local: aprova ou diz o problema, a causa no N1 e a regra geral
     (que vai para o guia da LLM local). → (RevisaoN1 | None, custo)."""
-    folha = _folha_prova(id_)
+    folha = _sheet_proof(id_)
     if not folha:
         return None, 0.0
     texto = ("Você revisa peças de motion graphics feitas por uma LLM local em N1 (JSON do EffectCraft) antes de irem "
@@ -801,45 +801,45 @@ def _revisar_claude(id_, ficha, conceito, peca_n1):
              "pele (`se` só testa botão ou encaixe; a cor é por papel) e, dentro de caixa, `apos` é ignorado: não "
              "proponha regra com isso. Em `causas`, diga o elemento e o campo exatos (ex.: \"Traco: falta h\"), "
              "porque a LLM corrige a própria versão a partir delas. No máximo UMA regra, só se for nova.\n\n"
-             f"=== GUIA N1 (regras atuais) ===\n{GUIA_N1_EC.read_text()}\n\n"
+             f"=== GUIA N1 (regras atuais) ===\n{GUIDE_N1_EC.read_text()}\n\n"
              f"=== FICHA ===\n{json.dumps({k: ficha.get(k) for k in ('id', 'descricao', 'intencoes', 'encaixes', 'botoes', 'comunica')}, ensure_ascii=False)}\n\n"
              f"=== CONCEITO ===\n{conceito or '(porte de peça HTML)'}\n\n"
              f"=== N1 ===\n{json.dumps(peca_n1, ensure_ascii=False)}")
     ep = f"fabrica-{date.today().isoformat()}"
     antes = claude.spent(ep)[0]
     try:
-        rev = claude.query(texto, RevisaoN1, {"claude": {"teto_chamada_usd": 0.3}}, ep, "fabrica_revisao",
+        rev = claude.query(texto, ReviewN1, {"claude": {"teto_chamada_usd": 0.3}}, ep, "fabrica_revisao",
                                image=str(folha))
     except Exception as e:  # noqa: BLE001 — revisão indisponível não derruba a fábrica
         events.warning(f"fábrica: revisão do Claude falhou ({str(e)[:120]})")
         rev = None
     custo = round(claude.spent(ep)[0] - antes, 4)
     if rev:
-        novas = licao_n1(rev.regras, id_)
-        _registrar("revisao", peca=id_, aprovada=rev.aprovada, problemas=rev.problemas[:6], causas=rev.causas[:6],
+        novas = lesson_n1(rev.regras, id_)
+        _register("revisao", peca=id_, aprovada=rev.aprovada, problemas=rev.problemas[:6], causas=rev.causas[:6],
                    regras=novas, custo=custo)
     return rev, custo
 
 
-def _botoes_usados(doc, botoes):
+def _buttons_used(doc, botoes):
     """Botões da ficha que o N1 usa (em `se` ou como velocidade): o resto sai da ficha da peça gerada."""
     from esteira.n1 import effectcraft as N1EC
-    nos = list(N1EC.percorrer(doc.elementos))
+    nos = list(N1EC.walk(doc.elementos))
     anims = [*doc.animacoes, *(a for e in nos if e.tipo == "repetir" for a in e.animacoes)]
-    usados = {c.botao for x in [*nos, *anims] for c in N1EC.condicoes(x.se) if c.botao}
+    usados = {c.botao for x in [*nos, *anims] for c in N1EC.conditions(x.se) if c.botao}
     if doc.botao_velocidade:
         usados.add(doc.botao_velocidade)
     return [b for b in botoes if (b.get("nome") if isinstance(b, dict) else b.nome) in usados]
 
 
-def _etapa(nome, peca="", rodada=0):
-    return {"nome": nome, "peca": peca, "rodada": rodada, "de": RODADAS_LOCAIS, "desde": datetime.now().isoformat(timespec="seconds")}
+def _stage(nome, peca="", rodada=0):
+    return {"nome": nome, "peca": peca, "rodada": rodada, "de": ROUNDS_LOCALS, "desde": datetime.now().isoformat(timespec="seconds")}
 
 
-TRAVADOS = ("w", "h", "d", "pesos", "disposicao", "regiao", "elementos")  # estrutura do molde: a LLM muda, mas não apaga (elementos = itens do `repetir`)
+LOCKED = ("w", "h", "d", "pesos", "disposicao", "regiao", "elementos")  # estrutura do molde: a LLM muda, mas não apaga (elementos = itens do `repetir`)
 
 
-def travar_molde(doc: dict, molde: dict) -> dict:
+def lock_mold(doc: dict, molde: dict) -> dict:
     """Completa a versão da LLM com o molde, por nome do elemento: campo que ela não escreveu vem do molde (não do
     padrão do esquema: a peça perdia peso 800, raio, caps…), os estruturais apagados (vazio/None) voltam e as chaves
     do `vertical` do molde que sumiram também. Ela perdia rodadas consertando o que o molde já acertava."""
@@ -855,7 +855,7 @@ def travar_molde(doc: dict, molde: dict) -> dict:
         for k, v in m.items():
             if k not in e and k not in ("filhos", "elementos"):
                 e[k] = copy.deepcopy(v)
-        for k in TRAVADOS:
+        for k in LOCKED:
             if m.get(k) is not None and e.get(k) in (None, [], ""):
                 e[k] = copy.deepcopy(m[k])
         if m.get("vertical"):
@@ -863,14 +863,14 @@ def travar_molde(doc: dict, molde: dict) -> dict:
     for k, v in molde.items():  # fundo_tela_cheia, botao_velocidade, animacoes que ela não escreveu
         if k not in doc and k != "elementos":
             doc[k] = copy.deepcopy(v)
-    _repor_encaixes(doc, molde, por_nome)
-    _podar_blocos(doc)
+    _restore_fits(doc, molde, por_nome)
+    _prune_blocks(doc)
     existem = set(por_nome(doc.get("elementos"), {}))  # animação de elemento renomeado/apagado não compilava
     doc["animacoes"] = [a for a in doc.get("animacoes") or [] if a.get("alvo") in existem]
     return doc
 
 
-def _podar_blocos(doc):
+def _prune_blocks(doc):
     """Tira o retângulo de cor forte sozinho numa caixa (sem `w`/`h`, vira um bloco do tamanho dela) e a caixa que
     ficar vazia: a LLM insistia nele rodada após rodada. Painel em `fundo`/`fundo2` ou translúcido fica."""
     def bloco(e):
@@ -896,18 +896,18 @@ def _podar_blocos(doc):
         doc["animacoes"] = [a for a in doc.get("animacoes") or [] if a.get("alvo") not in tirados]
 
 
-def _encaixes_de(el) -> set[str]:
+def _fits_of(el) -> set[str]:
     txt = json.dumps(el, ensure_ascii=False)
     return ({m for m in re.findall(r"\{\{(\w+)", txt)} | set(re.findall(r'"encaixe": "(\w+)"', txt))) - {"item"}
 
 
-def _marcas(el) -> set[str]:
+def _marks(el) -> set[str]:
     """O que o elemento mostra: marcadores {{x}} / {{item.campo}} e o encaixe de um `repetir`."""
     txt = json.dumps(el, ensure_ascii=False)
     return set(re.findall(r"\{\{([\w.]+)\}\}", txt)) | {f"lista:{x}" for x in re.findall(r'"encaixe": "(\w+)"', txt)}
 
 
-def _repor_encaixes(doc, molde, por_nome):
+def _restore_fits(doc, molde, por_nome):
     """Elemento do molde que mostra um encaixe e sumiu da versão da LLM (e o encaixe não aparece em outro lugar)
     volta, na caixa-mãe de mesmo nome ou no nível de cima, com as animações dele. Sem ele o portão reprovava e ela
     não sabia recriar (ficava presa devolvendo a mesma versão)."""
@@ -918,14 +918,14 @@ def _repor_encaixes(doc, molde, por_nome):
     for el, mae in andar(molde.get("elementos")):
         nomes = por_nome(doc.get("elementos"), {})
         destino = nomes.get(mae.get("nome")) if mae else None
-        mostra = _marcas(el)
+        mostra = _marks(el)
         if el.get("nome") in nomes or not mostra:
             continue
         so_item = all(m.split(".")[0] == "item" for m in mostra)
         if so_item and destino is None:
             continue
         # campo a campo: {{item.rotulo}} que sumiu volta mesmo que o item ainda mostre {{item.valor}}
-        if mostra <= _marcas(destino.get("elementos") if so_item else doc.get("elementos")):
+        if mostra <= _marks(destino.get("elementos") if so_item else doc.get("elementos")):
             continue
         lista = (destino.setdefault("filhos" if destino.get("tipo") == "caixa" else "elementos", [])
                  if destino else doc.setdefault("elementos", []))
@@ -935,7 +935,7 @@ def _repor_encaixes(doc, molde, por_nome):
                                                if a.get("alvo") in novos)
 
 
-def _base_seguinte(novo, anterior, molde, erros_novos=(), erros_antes=()):
+def _base_next(novo, anterior, molde, erros_novos=(), erros_antes=()):
     """Base da próxima rodada: a versão dela, salvo se empacou (devolveu igual) ou fugiu do molde (trocou os nomes
     da maior parte dos elementos, e a trava deixa de valer). → (base ou None = molde, aviso para a LLM ou "")."""
     if molde is None:
@@ -960,22 +960,22 @@ def _base_seguinte(novo, anterior, molde, erros_novos=(), erros_antes=()):
     return novo, ""
 
 
-def _vistos(erros, ja_vistos, atuais):
+def _seen(erros, ja_vistos, atuais):
     """Erros das rodadas anteriores que a versão atual não repete (até 6, os mais novos primeiro)."""
     return [e for e in dict.fromkeys([*erros, *ja_vistos]) if e not in atuais][:6]
 
 
-def _gerar_local_n1(p: Pedido, modo, alvo, ideia, visual):
+def _generate_local_n1(p: Request, modo, alvo, ideia, visual):
     """A LLM local faz a peça em N1 a partir do HTML (porte) ou da ideia do Claude; RODADAS_LOCAIS no portão."""
     inicio = time.monotonic()
     if modo == "porte":
         from esteira.studio import molds as M
-        ficha = M.ficha_porte({k: v for k, v in json.loads((P.pasta(alvo) / "ficha.json").read_text()).items()
+        ficha = M.card_size({k: v for k, v in json.loads((P.folder(alvo) / "ficha.json").read_text()).items()
                                if k not in ("estado", "notas")})
-        id_, grupo = _id_livre(f"{alvo}_ec"[:40]), alvo
+        id_, grupo = _id_free(f"{alvo}_ec"[:40]), alvo
     else:
         ficha = dict(ideia["ficha"])
-        id_ = _id_livre(re.sub(r"[^a-z0-9_]", "_", str(ficha.get("id") or "ideia").lower())[:36] or "ideia")
+        id_ = _id_free(re.sub(r"[^a-z0-9_]", "_", str(ficha.get("id") or "ideia").lower())[:36] or "ideia")
         grupo = id_
     ctx = {"pedido": {"tipo": p.tipo, "texto": p.texto}, "modo": modo, "alvo": alvo, "motor": "effectcraft",
            "conceito": (ideia or {}).get("conceito")}
@@ -983,58 +983,58 @@ def _gerar_local_n1(p: Pedido, modo, alvo, ideia, visual):
     from esteira.studio import molds as M
     from esteira.n1 import effectcraft as N1EC
     # triagem: o que o N1 não desenha não vai para a LLM local (falharia sempre e gastaria revisão do Claude)
-    if motivo := M.inviavel(ficha, ctx["conceito"] or ""):
-        _registrar("inviavel", pedido=p.id, peca=id_, modo=modo, motor="effectcraft", ia="local", motivo=motivo,
+    if motivo := M.unfeasible(ficha, ctx["conceito"] or ""):
+        _register("inviavel", pedido=p.id, peca=id_, modo=modo, motor="effectcraft", ia="local", motivo=motivo,
                    intencoes=ficha.get("intencoes", []))
         return {"id": id_, "ok": False, "custo": 0.0, "motivo": f"inviável no N1: {motivo}", "motor": "effectcraft",
                 "inviavel": True}
-    molde, rascunho = M.rascunho(ficha)
+    molde, rascunho = M.draft(ficha)
     ctx["molde"] = molde
     erros, ja_vistos, anterior, rg = [], [], None, None
     r = {"ok": False, "erros": ["a LLM local não respondeu"]}
     custo, revisoes, passou = 0.0, 0, False
-    for rodada in range(1, RODADAS_LOCAIS + 1):
-        _mudar(p.id, etapa=_etapa("n1", id_, rodada))
-        texto = _dossie_local(modo, ficha, alvo, ideia, erros, rascunho, anterior, ja_vistos)
-        if rodada == RODADAS_LOCAIS and not passou:
+    for rodada in range(1, ROUNDS_LOCALS + 1):
+        _change(p.id, etapa=_stage("n1", id_, rodada))
+        texto = _dossier_local(modo, ficha, alvo, ideia, erros, rascunho, anterior, ja_vistos)
+        if rodada == ROUNDS_LOCALS and not passou:
             # nenhuma versão da LLM chegou à revisão: a última rodada é o próprio rascunho do molde (já testado)
-            g = PecaN1Local(peca_n1=rascunho, comunica=ficha.get("comunica", ""))
+            g = PieceN1Local(peca_n1=rascunho, comunica=ficha.get("comunica", ""))
         else:
-            g = _consultar_n1_local(texto)
+            g = _query_n1_local(texto)
         if not g:
             r = {"ok": False, "erros": ["a LLM local não respondeu (contexto, tempo ou JSON)"]}
             continue
         if rascunho is not None:
-            g = g.model_copy(update={"peca_n1": travar_molde(g.peca_n1, rascunho)})
+            g = g.model_copy(update={"peca_n1": lock_mold(g.peca_n1, rascunho)})
         f = {**ficha, "id": id_, "motor": "effectcraft", "origem": "fabrica_local"}
         if g.comunica:
             f["comunica"] = g.comunica
-        doc = N1EC.Peca.model_validate(g.peca_n1)
-        f["botoes"] = _botoes_usados(doc, f.get("botoes") or [])  # o contrato só declara o que a peça faz
-        pg = PecaGerada(id=id_, peca_n1=g.peca_n1, ficha=f, resumo=g.comunica)
+        doc = N1EC.Piece.model_validate(g.peca_n1)
+        f["botoes"] = _buttons_used(doc, f.get("botoes") or [])  # o contrato só declara o que a peça faz
+        pg = PieceGenerated(id=id_, peca_n1=g.peca_n1, ficha=f, resumo=g.comunica)
         try:
-            estrutura = EC.checar_estrutura(doc, P.Ficha.model_validate(f))
+            estrutura = EC.check_structure(doc, P.Card.model_validate(f))
         except ValidationError as e:
             estrutura = [f"ficha fora do esquema: {str(e)[:200]}"]
-        if fora := N1EC.soltos(doc):
+        if fora := N1EC.loose(doc):
             estrutura.insert(0, f"elementos fora de caixa: {fora[:6]}. Ponha TUDO dentro de caixas (`regiao` + "
                                 "`disposicao`) e tire x/y/w/h/tam: o compilador posiciona")
         if estrutura:  # sem render nem Claude: o erro de estrutura volta direto para a LLM
             r = {"ok": False, "erros": estrutura[:8]}
             rg = _dataset(p.model_copy(update={"ia": "local"}), {**ctx, "rodada": rodada, "erros": erros}, texto, pg,
                           r, id_, grupo, "effectcraft", pai=rg)
-            ja_vistos = _vistos(erros, ja_vistos, r["erros"])
-            anterior, aviso = _base_seguinte(g.peca_n1, anterior, rascunho, r["erros"], erros)
+            ja_vistos = _seen(erros, ja_vistos, r["erros"])
+            anterior, aviso = _base_next(g.peca_n1, anterior, rascunho, r["erros"], erros)
             erros = [*r["erros"], *([aviso] if aviso else [])]
             continue
         try:
-            _escrever(pg, id_, None, "effectcraft")
-            _mudar(p.id, etapa=_etapa("portao", id_, rodada))
+            _compose(pg, id_, None, "effectcraft")
+            _change(p.id, etapa=_stage("portao", id_, rodada))
             # com a revisão do Claude disponível, a visão local sai do caminho: o erro visual vira diagnóstico + lição
             # (a visão local só dizia sim/não e errava); sem cota, ela volta como filtro
-            r = _portao(id_, False)  # técnico (esquema, compila, render, área segura); o visual é a revisão do Claude
+            r = _gate(id_, False)  # técnico (esquema, compila, render, área segura); o visual é a revisão do Claude
             if r["ok"]:  # o portão marca "revisao": até o Claude aprovar, é rascunho (interrupção não vaza peça)
-                P.salvar(P.carregar(id_).model_copy(update={"estado": "rascunho"}))
+                P.save(P.load(id_).model_copy(update={"estado": "rascunho"}))
         except Exception as e:  # noqa: BLE001 — uma peça ruim reprova a rodada, nunca derruba o lote
             r = {"ok": False, "erros": [f"{type(e).__name__}: {str(e)[:300]}"]}
         rg = _dataset(p.model_copy(update={"ia": "local"}), {**ctx, "rodada": rodada, "erros": erros}, texto, pg, r,
@@ -1042,9 +1042,9 @@ def _gerar_local_n1(p: Pedido, modo, alvo, ideia, visual):
         if r["ok"] and visual:  # aprovação explícita do Claude é obrigatória (sem revisão, não passa)
             passou = True
             rev = None
-            if revisoes < REVISOES_CLAUDE and not claude.quota_full():
-                _mudar(p.id, etapa=_etapa("revisao", id_, rodada))
-                rev, c = _revisar_claude(id_, f, (ideia or {}).get("conceito") or "", g.peca_n1)
+            if revisoes < REVIEWS_CLAUDE and not claude.quota_full():
+                _change(p.id, etapa=_stage("revisao", id_, rodada))
+                rev, c = _review_claude(id_, f, (ideia or {}).get("conceito") or "", g.peca_n1)
                 custo += c
                 revisoes += 1
             if rev is None:
@@ -1055,34 +1055,34 @@ def _gerar_local_n1(p: Pedido, modo, alvo, ideia, visual):
                 r = {"ok": False, "erros": ([f"revisão: {x}" for x in rev.problemas][:6] or ["revisão: reprovada"])
                      + [f"causa no N1: {x}" for x in rev.causas][:6]}
             else:
-                P.salvar(P.carregar(id_).model_copy(update={"estado": "revisao"}))
+                P.save(P.load(id_).model_copy(update={"estado": "revisao"}))
         if r.get("sem_revisao"):
             break  # sem revisão não adianta gastar mais rodadas da LLM
         if r["ok"]:
-            _registrar("gerada", pedido=p.id, peca=id_, modo=modo, motor="effectcraft", rodadas=rodada, custo=custo,
+            _register("gerada", pedido=p.id, peca=id_, modo=modo, motor="effectcraft", rodadas=rodada, custo=custo,
                        segundos=round(time.monotonic() - inicio, 1), render_s=r.get("render_s"), ia="local",
-                       intencoes=_intencoes(id_), resumo=g.comunica)
+                       intencoes=_intents(id_), resumo=g.comunica)
             return {"id": id_, "ok": True, "custo": custo, "motivo": "", "motor": "effectcraft"}
         # a próxima rodada corrige esta versão (não o molde); os erros de antes ficam como "não volte a eles"
-        ja_vistos = _vistos(erros, ja_vistos, r.get("erros", []))
-        anterior, aviso = _base_seguinte(g.peca_n1, anterior, rascunho, r.get("erros", []), erros)
+        ja_vistos = _seen(erros, ja_vistos, r.get("erros", []))
+        anterior, aviso = _base_next(g.peca_n1, anterior, rascunho, r.get("erros", []), erros)
         erros = [*r.get("erros", [])[:12], *([aviso] if aviso else [])]
     motivo = "; ".join(r.get("erros", [])[:4])
-    if (P.pasta(id_) / "ficha.json").exists():
-        _descartar(id_, f"local: {motivo}")
-    _avaliar_dataset(rg, "descartada", motivo=motivo)
-    _registrar("descartada", pedido=p.id, peca=id_, modo=modo, motor="effectcraft", rodadas=RODADAS_LOCAIS, custo=custo,
+    if (P.folder(id_) / "ficha.json").exists():
+        _discard(id_, f"local: {motivo}")
+    _evaluate_dataset(rg, "descartada", motivo=motivo)
+    _register("descartada", pedido=p.id, peca=id_, modo=modo, motor="effectcraft", rodadas=ROUNDS_LOCALS, custo=custo,
                segundos=round(time.monotonic() - inicio, 1), render_s=r.get("render_s"), ia="local",
                intencoes=[], motivo=motivo)
     return {"id": id_, "ok": False, "custo": custo, "motivo": motivo, "motor": "effectcraft"}
 
 
-def _vocabulario_n1():
+def _vocabulary_n1():
     """O que a LLM local consegue fazer em N1: os moldes e os limites (o Claude cria só ideias executáveis)."""
     from esteira.studio import molds as M
     linhas = [f"- {m['id']}: {m['descricao']} (intenções: {', '.join(m['intencoes'])}; encaixes: "
               + ", ".join(f"{s['nome']} ({'/'.join(s['tipos'])}{', obrigatório' if s.get('obrigatorio') else ''})"
-                          for s in m["slots"]) + ")" for m in M.carregar()]
+                          for s in m["slots"]) + ")" for m in M.load()]
     return ("Cada peça nasce de UM destes moldes (o executor adapta cores, tempos, ênfases e variantes de botão):\n"
             + "\n".join(linhas) + "\nPeças só 2D: textos, barras, linhas que se traçam, círculos/anéis/fatias, "
             "grades de pontos, cartões. Encaixes só dos tipos texto, numero, itens e pares. NÃO proponha: foto ou "
@@ -1091,7 +1091,7 @@ def _vocabulario_n1():
             "molde escolhido e diga qual é.")
 
 
-def _consultar_ideias(p: Pedido, n):
+def _query_ideas(p: Request, n):
     """O Claude só cria: `n` ideias (ficha + conceito) numa chamada. → (lista de dicts, custo)."""
     from esteira.ai import claude as C
     if p.ia == "local" or C.quota_full():
@@ -1101,31 +1101,31 @@ def _consultar_ideias(p: Pedido, n):
              "intenções, encaixes com limites honestos, botões, exemplos_sim/nao reais, motor \"effectcraft\", estado "
              "\"rascunho\") e o conceito (composição, hierarquia e movimento em 4–8 frases, com tempos). Não escreva "
              "código nem N1: outra IA executa o conceito.\n\n"
-             f"=== O QUE O EXECUTOR SABE DESENHAR (ideia fora disto é descartada sem tentar) ===\n{_vocabulario_n1()}\n\n"
-             f"=== GUIA GERAL (ficha, encaixes) ===\n{GUIA.read_text()}\n\n"
-             f"=== ACERVO ATUAL (não duplique) ===\n{_acervo_resumo()}\n\n"
-             f"=== LACUNAS ===\n{json.dumps(lacunas()[:12], ensure_ascii=False)}\n\n"
+             f"=== O QUE O EXECUTOR SABE DESENHAR (ideia fora disto é descartada sem tentar) ===\n{_vocabulary_n1()}\n\n"
+             f"=== GUIA GERAL (ficha, encaixes) ===\n{GUIDE.read_text()}\n\n"
+             f"=== ACERVO ATUAL (não duplique) ===\n{_library_summary()}\n\n"
+             f"=== LACUNAS ===\n{json.dumps(gaps()[:12], ensure_ascii=False)}\n\n"
              f"=== PEDIDO ===\n{p.texto or 'preencher lacunas do acervo com peças úteis para vídeos de finanças, história, ciência'}")
     ep = f"fabrica-{date.today().isoformat()}"
     antes = C.gasto(ep)[0]
-    r = C.query(texto, Ideias, {"claude": {"teto_chamada_usd": TETO_CHAMADA}}, ep, "fabrica_ideias")
+    r = C.query(texto, Ideas, {"claude": {"teto_chamada_usd": CAP_CALL}}, ep, "fabrica_ideias")
     return ([i.model_dump(mode="json") for i in r.itens] if r else []), round(C.gasto(ep)[0] - antes, 4)
 
 
-def pedido_hibrido(tipo="ideias", quantidade=40, texto="") -> Pedido:
+def request_hybrid(tipo="ideias", quantidade=40, texto="") -> Request:
     """Pedido no modo híbrido: `porte` (as HTML → N1 pela LLM local) ou `ideias` (o Claude cria em lote)."""
     if tipo == "porte":
-        p = pedido_porte()
-        return _mudar(p.id, ia="hibrido")
-    p = novo_pedido("ideias", texto, quantidade=min(quantidade, 50), teto_dia_usd=50, motor="effectcraft")
-    return _mudar(p.id, ia="hibrido")
+        p = request_size()
+        return _change(p.id, ia="hibrido")
+    p = new_request("ideias", texto, quantidade=min(quantidade, 50), teto_dia_usd=50, motor="effectcraft")
+    return _change(p.id, ia="hibrido")
 
 
-def _intencoes(id_):
+def _intents(id_):
     try:
-        return P.carregar(id_).intencoes
+        return P.load(id_).intencoes
     except (KeyError, ValidationError, FileNotFoundError):
-        for d in sorted(REPROVADAS.glob(f"{id_}-*"), reverse=True):  # descartada: a ficha foi junto
+        for d in sorted(REJECTED.glob(f"{id_}-*"), reverse=True):  # descartada: a ficha foi junto
             try:
                 return json.loads((d / "ficha.json").read_text()).get("intencoes", [])
             except (OSError, ValueError):
@@ -1133,107 +1133,107 @@ def _intencoes(id_):
         return []
 
 
-def _ativas(p: Pedido):
+def _active(p: Request):
     """Peças do pedido que ainda existem e não foram reprovadas."""
     vivas = []
     for i in p.pecas:
         try:
-            if P.carregar(i).estado in ("revisao", "aprovada"):
+            if P.load(i).estado in ("revisao", "aprovada"):
                 vivas.append(i)
         except (KeyError, ValidationError):
             continue
     return vivas
 
 
-def limpar_orfas():
+def clean_orphans():
     """Peça da LLM local em rascunho sem aprovação do Claude é sobra de processo interrompido (reinício no meio da
     revisão): vai para `reprovadas/`. Só roda sem fábrica em andamento (início de `rodar` e do painel)."""
     saiu = []
-    for f in P.listar("rascunho"):
+    for f in P.list_all("rascunho"):
         if f.origem == "fabrica_local":
             motivo = "órfã: o processo parou antes da aprovação do Claude (reinício no meio da geração)"
-            _descartar(f.id, motivo)
-            _registrar("orfa", peca=f.id, motivo=motivo)
+            _discard(f.id, motivo)
+            _register("orfa", peca=f.id, motivo=motivo)
             saiu.append(f.id)
     return saiu
 
 
-def rodar(pid, visual=True, maximo=80):
+def run(pid, visual=True, maximo=80):
     """Modo contínuo do pedido: tarefas da revisão primeiro, depois peças novas até a quantidade ou a cota do Claude."""
-    limpar_orfas()  # uma fábrica por vez (vaga "claude"): rascunho local que sobrou é de processo morto
+    clean_orphans()  # uma fábrica por vez (vaga "claude"): rascunho local que sobrou é de processo morto
     trace.node(f"fabrica:{pid}", "fabrica", f"pedido {pid}")  # nó "Fábrica de peças" no grafo do Monitor
     try:
-        return _rodar(pid, visual, maximo)
+        return _run(pid, visual, maximo)
     finally:
         trace.node(None, None)
-        if pid in _ler():
-            _mudar(pid, etapa={})  # o processo saiu: nada em andamento
+        if pid in _read():
+            _change(pid, etapa={})  # o processo saiu: nada em andamento
 
 
-FREIO_PEDIDO = 3   # descartes seguidos do Claude no mesmo pedido → o pedido pausa
-FREIO_FABRICA = 6  # descartes seguidos do Claude somando os pedidos → todos os pedidos do Claude pausam
+BRAKE_REQUEST = 3   # descartes seguidos do Claude no mesmo pedido → o pedido pausa
+BRAKE_FACTORY = 6  # descartes seguidos do Claude somando os pedidos → todos os pedidos do Claude pausam
 
 
-def _freio(pid):
+def _brake(pid):
     """Gasto de cota sem peça (o mesmo erro se repetindo) → motivo da parada, ou "". Só conta o Claude (custo > 0)."""
     # o freio e a retomada zeram a contagem (senão o pedido retomado pararia de novo na hora)
-    recentes = itertools.takewhile(lambda r: r.get("evento") not in ("freio", "retomado"), registro(400))
+    recentes = itertools.takewhile(lambda r: r.get("evento") not in ("freio", "retomado"), record(400))
     feitos = [r for r in recentes if r.get("evento") in ("gerada", "descartada") and (r.get("custo") or 0) > 0]
     seguidos = list(itertools.takewhile(lambda r: r["evento"] == "descartada", feitos))
     do_pedido = list(itertools.takewhile(lambda r: r["evento"] == "descartada",
                                          (r for r in feitos if r.get("pedido") == pid)))
-    if len(seguidos) >= FREIO_FABRICA:
+    if len(seguidos) >= BRAKE_FACTORY:
         return f"freio da fábrica: {len(seguidos)} descartes seguidos ({seguidos[0].get('motivo', '')[:120]})"
-    if len(do_pedido) >= FREIO_PEDIDO:
+    if len(do_pedido) >= BRAKE_REQUEST:
         return f"freio: {len(do_pedido)} descartes seguidos ({do_pedido[0].get('motivo', '')[:120]})"
     return ""
 
 
-def _frear(pid, motivo):
-    alvos = [x.id for x in pedidos() if x.ia == "claude" and x.estado == "ativo"] \
+def _apply_brake(pid, motivo):
+    alvos = [x.id for x in requests() if x.ia == "claude" and x.estado == "ativo"] \
         if motivo.startswith("freio da fábrica") else [pid]
     for a in alvos:
-        _mudar(a, estado="pausado", situacao=motivo[:200])
+        _change(a, estado="pausado", situacao=motivo[:200])
     events.warning(f"fábrica: {motivo}")
-    _registrar("freio", pedido=pid, motivo=motivo, pausados=alvos)
-    return pedido(pid)
+    _register("freio", pedido=pid, motivo=motivo, pausados=alvos)
+    return request(pid)
 
 
-def _rodar(pid, visual, maximo):
+def _run(pid, visual, maximo):
     for _ in range(maximo):
-        p = pedido(pid)
+        p = request(pid)
         if p.estado == "pausado":
-            _mudar(pid, situacao="pausado")
+            _change(pid, situacao="pausado")
             return p
-        if p.ia == "claude" and (motivo := _freio(pid)):
-            return _frear(pid, motivo)
+        if p.ia == "claude" and (motivo := _brake(pid)):
+            return _apply_brake(pid, motivo)
         if p.ia in ("claude", "hibrido") and claude.quota_full():
             events.warning(f"fábrica: cota da assinatura em {claude.quota():.0%}")
-            return _mudar(pid, situacao=f"cota do Claude em {claude.quota():.0%}: volta quando a janela virar")
+            return _change(pid, situacao=f"cota do Claude em {claude.quota():.0%}: volta quando a janela virar")
         if p.tarefas:
             t, resto = p.tarefas[0], p.tarefas[1:]
-            _mudar(pid, tarefas=resto, situacao=f"{t.tipo} de {t.alvo}")
-            r = gerar(p, t.tipo, t.alvo, t.comentario, visual)
+            _change(pid, tarefas=resto, situacao=f"{t.tipo} de {t.alvo}")
+            r = generate(p, t.tipo, t.alvo, t.comentario, visual)
             novas = p.pecas + ([r["id"]] if r["ok"] and t.tipo == "variacao" else [])
-            _mudar(pid, pecas=novas, gasto_usd=round(p.gasto_usd + r["custo"], 4),
+            _change(pid, pecas=novas, gasto_usd=round(p.gasto_usd + r["custo"], 4),
                    descartadas=p.descartadas + (0 if r["ok"] else 1),
                    situacao=f"{t.tipo} de {t.alvo}: " + ("em revisão" if r["ok"] else f"falhou ({r['motivo'][:80]})"))
             continue
         if p.tipo == "ideias":
             if len(p.pecas) + p.descartadas >= p.quantidade:
-                return _mudar(pid, estado="concluido", situacao=f"ideias concluídas: {len(p.pecas)} peças em revisão")
+                return _change(pid, estado="concluido", situacao=f"ideias concluídas: {len(p.pecas)} peças em revisão")
             if not p.conceitos:
-                _mudar(pid, situacao="o Claude está criando um lote de ideias", etapa=_etapa("ideias"))
-                novas, custo = _consultar_ideias(p, min(LOTE_IDEIAS, p.quantidade - len(p.pecas) - p.descartadas))
-                p = _mudar(pid, conceitos=novas, gasto_usd=round(p.gasto_usd + custo, 4))
+                _change(pid, situacao="o Claude está criando um lote de ideias", etapa=_stage("ideias"))
+                novas, custo = _query_ideas(p, min(BATCH_IDEAS, p.quantidade - len(p.pecas) - p.descartadas))
+                p = _change(pid, conceitos=novas, gasto_usd=round(p.gasto_usd + custo, 4))
                 if not novas:
-                    return _mudar(pid, situacao="o Claude não devolveu ideias (cota ou erro)")
+                    return _change(pid, situacao="o Claude não devolveu ideias (cota ou erro)")
                 continue
             ideia, resto = p.conceitos[0], p.conceitos[1:]
-            _mudar(pid, conceitos=resto, situacao=f"LLM local expandindo a ideia {ideia['ficha'].get('id', '?')}")
-            r = gerar(p, "conceito", ideia=ideia, visual=visual)
-            p = pedido(pid)
-            _mudar(pid, pecas=p.pecas + ([r["id"]] if r["ok"] else []), gasto_usd=round(p.gasto_usd + r["custo"], 4),
+            _change(pid, conceitos=resto, situacao=f"LLM local expandindo a ideia {ideia['ficha'].get('id', '?')}")
+            r = generate(p, "conceito", ideia=ideia, visual=visual)
+            p = request(pid)
+            _change(pid, pecas=p.pecas + ([r["id"]] if r["ok"] else []), gasto_usd=round(p.gasto_usd + r["custo"], 4),
                    descartadas=p.descartadas + (0 if r["ok"] or r.get("inviavel") else 1),
                    locais=p.locais + (r.get("quem") == "local"),
                    socorros=p.socorros + (r.get("quem") == "socorro"),
@@ -1241,61 +1241,61 @@ def _rodar(pid, visual, maximo):
                    f"{'pulada' if r.get('inviavel') else 'descartada'}: {r['motivo'][:80]}")
             continue
         if p.tipo == "porte":
-            alvo = proximo_porte(p)
+            alvo = next_size(p)
             if alvo is None:
-                return _mudar(pid, estado="concluido", situacao=f"porte concluído: {len(p.pecas)} peças em revisão")
-            _mudar(pid, situacao=f"portando {alvo} ({len(p.pecas) + p.descartadas + 1} de {len(p.alvos)})")
-            r = gerar(p, "porte", alvo, visual=visual)
+                return _change(pid, estado="concluido", situacao=f"porte concluído: {len(p.pecas)} peças em revisão")
+            _change(pid, situacao=f"portando {alvo} ({len(p.pecas) + p.descartadas + 1} de {len(p.alvos)})")
+            r = generate(p, "porte", alvo, visual=visual)
             if r.get("motivo", "").startswith("o Claude não respondeu"):
-                return _mudar(pid, gasto_usd=round(p.gasto_usd + r["custo"], 4), situacao=r["motivo"])
-            p = pedido(pid)
-            _mudar(pid, pecas=p.pecas + ([r["id"]] if r["ok"] else []), gasto_usd=round(p.gasto_usd + r["custo"], 4),
+                return _change(pid, gasto_usd=round(p.gasto_usd + r["custo"], 4), situacao=r["motivo"])
+            p = request(pid)
+            _change(pid, pecas=p.pecas + ([r["id"]] if r["ok"] else []), gasto_usd=round(p.gasto_usd + r["custo"], 4),
                    descartadas=p.descartadas + (0 if r["ok"] or r.get("inviavel") else 1), feitos=[*p.feitos, alvo],
                    locais=p.locais + (r.get("quem") == "local"), socorros=p.socorros + (r.get("quem") == "socorro"),
                    situacao=f"{r['id']} em revisão" if r["ok"] else
                    f"{alvo}: {'pulada' if r.get('inviavel') else 'descartada'} ({r['motivo'][:80]})")
             continue
-        ativas = _ativas(p)
+        ativas = _active(p)
         if p.motor == "ambos" and len(ativas) < 2 * p.quantidade and p.estado != "concluido":
-            r = _gerar_par(p, ativas, visual)
+            r = _generate_pair(p, ativas, visual)
             if r is not None:
                 return r
             continue
         ativas_n = len(ativas) // 2 if p.motor == "ambos" else len(ativas)  # "ambos": a quantidade é de pares
         if ativas_n >= p.quantidade or p.estado == "concluido":
-            aprovadas = sum(1 for i in ativas if P.carregar(i).estado == "aprovada")
+            aprovadas = sum(1 for i in ativas if P.load(i).estado == "aprovada")
             fim = aprovadas >= p.quantidade * (2 if p.motor == "ambos" else 1)
-            return _mudar(pid, pecas=ativas, estado="concluido" if fim else p.estado,
+            return _change(pid, pecas=ativas, estado="concluido" if fim else p.estado,
                           situacao="concluído" if fim else "aguardando sua revisão")
-        _mudar(pid, situacao=f"gerando peça {len(ativas) + 1} de {p.quantidade}")
-        r = gerar(p, "nova", visual=visual)
+        _change(pid, situacao=f"gerando peça {len(ativas) + 1} de {p.quantidade}")
+        r = generate(p, "nova", visual=visual)
         if r.get("motivo", "").startswith("o Claude não respondeu"):
-            return _mudar(pid, gasto_usd=round(p.gasto_usd + r["custo"], 4), situacao=r["motivo"])
-        _mudar(pid, pecas=ativas + ([r["id"]] if r["ok"] else []), gasto_usd=round(p.gasto_usd + r["custo"], 4),
+            return _change(pid, gasto_usd=round(p.gasto_usd + r["custo"], 4), situacao=r["motivo"])
+        _change(pid, pecas=ativas + ([r["id"]] if r["ok"] else []), gasto_usd=round(p.gasto_usd + r["custo"], 4),
                descartadas=p.descartadas + (0 if r["ok"] else 1),
                situacao=f"{r['id']} em revisão" if r["ok"] else f"descartada: {r['motivo'][:100]}")
         time.sleep(0.2)
-    return pedido(pid)
+    return request(pid)
 
 
-def _gerar_par(p: Pedido, ativas, visual):
+def _generate_pair(p: Request, ativas, visual):
     """Motor "ambos": o mesmo pedido (mesma tarefa) no HTML e no EffectCraft; o par entra junto na revisão.
     → Pedido quando o laço deve parar (Claude sem resposta), senão None."""
-    tarefa = _tarefa_nova(p)
-    _mudar(p.id, situacao=f"gerando par {len(ativas) // 2 + 1} de {p.quantidade} (HTML e EffectCraft)")
+    tarefa = _task_new(p)
+    _change(p.id, situacao=f"gerando par {len(ativas) // 2 + 1} de {p.quantidade} (HTML e EffectCraft)")
     ids, custo, falhas = [], 0.0, 0
     for motor in ("html", "effectcraft"):
-        r = gerar(p, "nova", visual=visual, motor=motor, tarefa=tarefa)
+        r = generate(p, "nova", visual=visual, motor=motor, tarefa=tarefa)
         custo += r["custo"]
         if r.get("motivo", "").startswith("o Claude não respondeu"):
-            return _mudar(p.id, gasto_usd=round(p.gasto_usd + custo, 4), situacao=r["motivo"],
+            return _change(p.id, gasto_usd=round(p.gasto_usd + custo, 4), situacao=r["motivo"],
                           pecas=ativas + ids)
         if r["ok"]:
             ids.append(r["id"])
         else:
             falhas += 1
-    atual = pedido(p.id)
-    _mudar(p.id, pecas=ativas + ids, pares=atual.pares + ([ids] if len(ids) == 2 else []),
+    atual = request(p.id)
+    _change(p.id, pecas=ativas + ids, pares=atual.pares + ([ids] if len(ids) == 2 else []),
            gasto_usd=round(atual.gasto_usd + custo, 4), descartadas=atual.descartadas + falhas,
            situacao=f"par em revisão: {' × '.join(ids)}" if ids else "o par foi descartado no portão")
     return None
@@ -1303,41 +1303,41 @@ def _gerar_par(p: Pedido, ativas, visual):
 
 # ---------------------------------------------------------------- motores: decisão e comparação
 
-def motores():
+def engines():
     """Decisão de motor por intenção (aplicada pela pessoa): {"padrao", "por_intencao": {intenção: motor}}."""
-    if MOTORES.exists():
-        return json.loads(MOTORES.read_text())
+    if ENGINES.exists():
+        return json.loads(ENGINES.read_text())
     return {"padrao": "html", "por_intencao": {}}
 
 
-def aplicar_motores(por_intencao, padrao="html"):
-    PASTA.mkdir(parents=True, exist_ok=True)
-    validos = {k: v for k, v in por_intencao.items() if k in P.INTENCOES and v in ("html", "effectcraft")}
-    d = {"padrao": padrao if padrao in ("html", "effectcraft") else "html", "por_intencao": validos, "em": _agora()}
-    MOTORES.write_text(json.dumps(d, ensure_ascii=False, indent=1))
-    _registrar("motores", **d)
+def aplicar_engines(por_intencao, padrao="html"):
+    FOLDER.mkdir(parents=True, exist_ok=True)
+    validos = {k: v for k, v in por_intencao.items() if k in P.INTENTS and v in ("html", "effectcraft")}
+    d = {"padrao": padrao if padrao in ("html", "effectcraft") else "html", "por_intencao": validos, "em": _now()}
+    ENGINES.write_text(json.dumps(d, ensure_ascii=False, indent=1))
+    _register("motores", **d)
     return d
 
 
-def motor_do_pedido(p: Pedido):
+def engine_of_request(p: Request):
     """Motor de uma peça nova do pedido: o escolhido, ou ("auto") o decidido para a intenção da lacuna."""
     if p.motor in ("html", "effectcraft"):
         return p.motor
-    m = motores()
-    if p.tipo == "lacunas" and (lc := lacunas()):
+    m = engines()
+    if p.tipo == "lacunas" and (lc := gaps()):
         return m["por_intencao"].get(lc[0]["intencao"], m["padrao"])
     return m["padrao"]
 
 
-def comparacao():
+def comparison():
     """Os dois motores lado a lado, pelo registro da fábrica: geração (portão, rodadas, custo, tempo), render da
     prova, revisão da pessoa (aprovação e nota) e troca de pele; no geral e por intenção, com a sugestão de motor."""
-    regs = registro(100000)
+    regs = record(100000)
     motor_da = {}
     for r in regs:
         if r.get("peca") and r.get("motor"):
             motor_da.setdefault(r["peca"], r["motor"])
-    for f in P.listar():
+    for f in P.list_all():
         motor_da.setdefault(f.id, f.motor)
 
     def vazio():
@@ -1365,7 +1365,7 @@ def comparacao():
                 a["aprovadas" if r["evento"] == "aprovada" else "reprovadas"] += 1
                 if r.get("nota"):
                     a["notas"].append(r["nota"])
-    arq_pele = P.previas_dir("_canais").parent / "_prova_canais" / "resultado.json"
+    arq_pele = P.previews_dir("_canais").parent / "_prova_canais" / "resultado.json"
     if arq_pele.exists():
         for x in json.loads(arq_pele.read_text()).get("problemas", []):
             m = motor_da.get(x["peca"])
@@ -1388,7 +1388,7 @@ def comparacao():
 
     def pontos(c):
         """Aprovação da pessoa pesa mais; nota e portão desempatam (None = sem dado)."""
-        if c["revisadas"] < AMOSTRA_MIN:
+        if c["revisadas"] < SAMPLE_MIN:
             return None
         return (0.5 * (c["taxa_aprovacao"] or 0) + 0.3 * ((c["nota_media"] or 3) / 5) + 0.2 * (c["taxa_portao"] or 0))
 
@@ -1397,87 +1397,87 @@ def comparacao():
     for i, d in tabela.items():
         ph, pe = pontos(d["html"]), pontos(d["effectcraft"])
         if ph is None or pe is None:
-            sugestao[i] = {"motor": None, "motivo": f"amostra pequena (mínimo {AMOSTRA_MIN} revisadas por motor)"}
+            sugestao[i] = {"motor": None, "motivo": f"amostra pequena (mínimo {SAMPLE_MIN} revisadas por motor)"}
         else:
             vence = "effectcraft" if pe > ph + 0.05 else "html"
             sugestao[i] = {"motor": vence, "motivo": f"pontos html {ph:.2f} × effectcraft {pe:.2f}"
                            + ("" if vence == "effectcraft" else " (empate fica no html, o motor atual)")}
     return {"geral": {m: fechar(v) for m, v in geral.items()}, "por_intencao": tabela, "sugestao": sugestao,
-            "decisao": motores(), "amostra_min": AMOSTRA_MIN,
+            "decisao": engines(), "amostra_min": SAMPLE_MIN,
             "pendente": "acerto da IA local ao preencher: entra com a direção nova (etapa 6)"}
 
 
 # ---------------------------------------------------------------- revisão
 
-def _pedido_da(id_):
-    return next((p for p in _ler().values() if id_ in p.pecas), None)
+def _request_of(id_):
+    return next((p for p in _read().values() if id_ in p.pecas), None)
 
 
-def fila_revisao():
+def queue_review():
     """Peças esperando a pessoa, com o pedido de origem."""
     saida = []
-    for f in P.listar("revisao"):
-        p = _pedido_da(f.id)
+    for f in P.list_all("revisao"):
+        p = _request_of(f.id)
         par = next((x for x in (p.pares if p else []) if f.id in x), None)
         saida.append({"id": f.id, "pedido": p.id if p else None, "pedido_texto": p.texto if p else "",
                       "motor": f.motor, "par": [x for x in par if x != f.id][0] if par else None})
     return saida
 
 
-def licao(texto, id_="", motor="html"):
+def lesson(texto, id_="", motor="html"):
     """Acrescenta uma regra aprendida na revisão ao fim do guia do motor (lido em toda geração)."""
-    arq = GUIA_EC if motor == "effectcraft" else GUIA
+    arq = GUIDE_EC if motor == "effectcraft" else GUIDE
     guia = arq.read_text()
     linha = f"- {date.today():%d/%m/%Y}: {texto.strip()}" + (f" (peça {id_})" if id_ else "")
     guia = re.sub(r"\(entram aqui os motivos de reprovação e os ajustes pedidos na revisão[^)]*\)\n", "", guia)
     arq.write_text(guia.rstrip() + "\n" + linha + "\n")
 
 
-def revisar(id_, acao, texto="", nota=None):
+def review(id_, acao, texto="", nota=None):
     """Decisão da pessoa sobre uma peça: aprovar | ajuste | variacao | reprovar; `nota` 1–5 (comparação dos motores)."""
-    ficha = P.carregar(id_)
+    ficha = P.load(id_)
     if nota is not None and not (isinstance(nota, int) and 1 <= nota <= 5):
         raise ValueError("nota de 1 a 5")
     extra = {"motor": ficha.motor, "intencoes": ficha.intencoes, "nota": nota}
-    p = _pedido_da(id_) or _mudar(AVULSO, pecas=[*(_ler().get(AVULSO) or Pedido(id=AVULSO)).pecas, id_],
+    p = _request_of(id_) or _change(STANDALONE, pecas=[*(_read().get(STANDALONE) or Request(id=STANDALONE)).pecas, id_],
                                   estado="ativo", texto="ajustes e variações de peças avulsas")
     if acao == "aprovar":
-        P.salvar(ficha.model_copy(update={"estado": "aprovada"}))
-        _veredito_peca(id_, "aprovada", nota=nota)
-        _registrar("aprovada", peca=id_, pedido=p.id, **extra)
-        aprovadas = sum(1 for i in _ativas(p) if P.carregar(i).estado == "aprovada")
-        if p.id != AVULSO and aprovadas >= p.quantidade * (2 if p.motor == "ambos" else 1):
-            _mudar(p.id, estado="concluido", situacao="concluído")
+        P.save(ficha.model_copy(update={"estado": "aprovada"}))
+        _verdict_piece(id_, "aprovada", nota=nota)
+        _register("aprovada", peca=id_, pedido=p.id, **extra)
+        aprovadas = sum(1 for i in _active(p) if P.load(i).estado == "aprovada")
+        if p.id != STANDALONE and aprovadas >= p.quantidade * (2 if p.motor == "ambos" else 1):
+            _change(p.id, estado="concluido", situacao="concluído")
         return {"ok": True}
     if acao in ("ajuste", "variacao"):
         if acao == "ajuste" and not texto.strip():
             raise ValueError("diga o que ajustar")
-        _mudar(p.id, tarefas=[*p.tarefas, Tarefa(tipo=acao, alvo=id_, comentario=texto.strip())],
+        _change(p.id, tarefas=[*p.tarefas, Task(tipo=acao, alvo=id_, comentario=texto.strip())],
                estado="ativo" if p.estado != "pausado" else "pausado")
         if acao == "ajuste":
-            licao(f"ajuste pedido: {texto.strip()}", id_, ficha.motor)
-            _veredito_peca(id_, "ajuste", nota=nota, comentario=texto.strip())
-        _registrar(acao, peca=id_, pedido=p.id, texto=texto, **extra)
-        return {"ok": True, "fila": enfileirar(p.id) is not None}
+            lesson(f"ajuste pedido: {texto.strip()}", id_, ficha.motor)
+            _verdict_piece(id_, "ajuste", nota=nota, comentario=texto.strip())
+        _register(acao, peca=id_, pedido=p.id, texto=texto, **extra)
+        return {"ok": True, "fila": enqueue(p.id) is not None}
     if acao == "reprovar":
         if ficha.origem == "kit":
             raise ValueError("peça migrada do kit: o diretor atual ainda a usa; peça um ajuste em vez de reprovar")
         if not texto.strip():
             raise ValueError("diga o motivo da reprovação (vira regra para as próximas)")
-        licao(f"reprovada: {texto.strip()}", id_, ficha.motor)
-        _veredito_peca(id_, "reprovada", nota=nota, motivo=texto.strip())
-        _descartar(id_, texto.strip())
-        _registrar("reprovada", peca=id_, pedido=p.id, motivo=texto, **extra)
+        lesson(f"reprovada: {texto.strip()}", id_, ficha.motor)
+        _verdict_piece(id_, "reprovada", nota=nota, motivo=texto.strip())
+        _discard(id_, texto.strip())
+        _register("reprovada", peca=id_, pedido=p.id, motivo=texto, **extra)
         restantes = [i for i in p.pecas if i != id_]
-        reabrir = p.id != AVULSO and p.estado != "pausado"
-        _mudar(p.id, pecas=restantes, estado="ativo" if reabrir else p.estado)
-        return {"ok": True, "fila": (enfileirar(p.id) is not None) if reabrir else False}
+        reabrir = p.id != STANDALONE and p.estado != "pausado"
+        _change(p.id, pecas=restantes, estado="ativo" if reabrir else p.estado)
+        return {"ok": True, "fila": (enqueue(p.id) is not None) if reabrir else False}
     raise ValueError(f"ação inválida: {acao}")
 
 
 # ---------------------------------------------------------------- ampliação contínua
 
-class Ampliacao(BaseModel):
+class Expansion(BaseModel):
     """O acervo cresce sozinho pelas lacunas (intenção × peso, inclusive 2,5D), um pedido por dia, dentro do teto e
     só enquanto a fila de revisão não acumula (a pessoa continua aprovando tudo)."""
     ativo: bool = False
@@ -1487,67 +1487,67 @@ class Ampliacao(BaseModel):
     revisao_max: int = Field(8, ge=1, le=100)
 
 
-def ampliacao():
-    return Ampliacao.model_validate_json(AMPLIACAO.read_text()) if AMPLIACAO.exists() else Ampliacao()
+def expansion():
+    return Expansion.model_validate_json(EXPANSION.read_text()) if EXPANSION.exists() else Expansion()
 
 
-def salvar_ampliacao(**campos):
-    a = Ampliacao.model_validate({**ampliacao().model_dump(), **campos})
-    PASTA.mkdir(parents=True, exist_ok=True)
-    AMPLIACAO.write_text(a.model_dump_json(indent=1))
-    _registrar("ampliacao", **a.model_dump())
+def save_expansion(**campos):
+    a = Expansion.model_validate({**expansion().model_dump(), **campos})
+    FOLDER.mkdir(parents=True, exist_ok=True)
+    EXPANSION.write_text(a.model_dump_json(indent=1))
+    _register("ampliacao", **a.model_dump())
     return a
 
 
-def ampliar():
+def expand():
     """Chamado pelo relógio da fila: cria (ou retoma) o pedido de lacunas do dia se a ampliação está ligada, há
     lacuna, sobra teto e a fila de revisão não passou do limite. → (pedido ou None, motivo)."""
-    a = ampliacao()
+    a = expansion()
     if not a.ativo:
         return None, "desligada"
     if claude.quota_full():
         return None, f"cota do Claude em {claude.quota():.0%}"
-    if len(fila_revisao()) >= a.revisao_max:
+    if len(queue_review()) >= a.revisao_max:
         return None, f"{a.revisao_max}+ peças esperando revisão"
-    if not lacunas():
+    if not gaps():
         return None, "sem lacunas"
     hoje = date.today().isoformat()
-    do_dia = next((p for p in _ler().values() if p.texto == f"ampliação contínua {hoje}"), None)
+    do_dia = next((p for p in _read().values() if p.texto == f"ampliação contínua {hoje}"), None)
     if do_dia:
         if do_dia.estado == "ativo":
-            enfileirar(do_dia.id)
+            enqueue(do_dia.id)
         return do_dia, "pedido do dia"
-    p = novo_pedido("lacunas", "", a.pecas_por_dia, a.teto_dia_usd, motor=a.motor)
-    p = _mudar(p.id, texto=f"ampliação contínua {hoje}")
-    enfileirar(p.id)
+    p = new_request("lacunas", "", a.pecas_por_dia, a.teto_dia_usd, motor=a.motor)
+    p = _change(p.id, texto=f"ampliação contínua {hoje}")
+    enqueue(p.id)
     return p, "pedido criado"
 
 
-def retomar():
+def resume():
     """Relógio da fila: com a cota abaixo do limite, volta à fila todo pedido do Claude ativo que ainda não
     terminou (parado pela cota, ou interrompido por reinício do painel). Os pausados (pessoa ou freio) ficam."""
     if claude.quota_full():
         return []
     voltaram = []
-    for p in pedidos():
-        if p.ia != "claude" or p.id == AVULSO or p.estado != "ativo" or p.situacao == "aguardando sua revisão":
+    for p in requests():
+        if p.ia != "claude" or p.id == STANDALONE or p.estado != "ativo" or p.situacao == "aguardando sua revisão":
             continue
-        enfileirar(p.id)  # não duplica se já está na fila
+        enqueue(p.id)  # não duplica se já está na fila
         voltaram.append(p.id)
     return voltaram
 
 
-def resumo():
+def summary():
     """Estado da fábrica para o app."""
-    return {"pedidos": [p.model_dump() for p in pedidos() if p.id != AVULSO or p.tarefas],
-            "revisao": fila_revisao(), "lacunas": lacunas()[:12], "gasto_hoje": gasto_hoje(),
-            "acervo": {"aprovadas": len(P.listar("aprovada")), "revisao": len(P.listar("revisao"))},
-            "registro": registro(30), "motores": motores(), "ampliacao": ampliacao().model_dump()}
+    return {"pedidos": [p.model_dump() for p in requests() if p.id != STANDALONE or p.tarefas],
+            "revisao": queue_review(), "lacunas": gaps()[:12], "gasto_hoje": spent_today(),
+            "acervo": {"aprovadas": len(P.list_all("aprovada")), "revisao": len(P.list_all("revisao"))},
+            "registro": record(30), "motores": engines(), "ampliacao": expansion().model_dump()}
 
 
 # ── painel ao vivo (app → Empreendimento → Fábrica): ideias → N1 → portão → revisão → acervo/dataset ──
 
-def _quem(r):
+def _who(r):
     """Quem fez o evento do registro: claude | local | voce | sistema."""
     if r.get("evento") in ("aprovada", "reprovada", "ajuste", "variacao", "retomado"):
         return "voce"
@@ -1558,18 +1558,18 @@ def _quem(r):
     return "sistema"
 
 
-CATEGORIAS = [("revisão do Claude", r"^revisão"), ("texto fora da área segura", r"área segura"),
+CATEGORIES = [("revisão do Claude", r"^revisão"), ("texto fora da área segura", r"área segura"),
               ("visão local (cortado, sobreposto, ilegível)", r"visão local"), ("LLM local não respondeu", r"não respondeu"),
               ("N1 não compila", r"não compila|ErroN1|marcador"), ("N1 fora do esquema", r"fora do esquema|ficha:"),
               ("itens empilhados (repetir)", r"repetir"), ("encaixe/botão não declarado", r"não declara")]
 
 
-def _categoria(motivo) -> str:
+def _category(motivo) -> str:
     m = str(motivo or "")
-    return next((nome for nome, rx in CATEGORIAS if re.search(rx, m)), "outro")
+    return next((nome for nome, rx in CATEGORIES if re.search(rx, m)), "outro")
 
 
-def _chamadas_vivas():
+def _calls_live():
     """Chamadas de LLM em andamento nos processos da fábrica (rastro ao vivo)."""
     saida = []
     for arq in trace.DIR.glob("*.json"):
@@ -1587,7 +1587,7 @@ def _chamadas_vivas():
     return saida
 
 
-def _janelas_cota():
+def _windows_quota():
     try:
         j = json.loads(claude.QUOTA_FILE.read_text())
     except (OSError, ValueError):
@@ -1598,7 +1598,7 @@ def _janelas_cota():
             for k, v in j.items()}
 
 
-def painel():
+def panel():
     """Estado da fábrica para o painel ao vivo: o que está em andamento (etapa, peça, chamada do Claude ou da LLM
     local), cota, números de hoje por quem fez, fila de ideias, acervo, dataset das tarefas e linha do tempo."""
     from collections import Counter
@@ -1606,30 +1606,30 @@ def painel():
     from esteira.dataset import index
     from esteira.web import queue
     hoje = date.today().isoformat()
-    ps = [p for p in pedidos() if p.id != AVULSO]
+    ps = [p for p in requests() if p.id != STANDALONE]
     hibridos = [p for p in ps if p.ia == "hibrido" and p.estado != "concluido"]
-    tarefas = queue.listar()
+    tarefas = queue.list_all()
     rodando = {t["ep"].split(":", 1)[1] for t in tarefas if t["ep"].startswith("fabrica:") and t["estado"] == "rodando"}
     na_fila = {t["ep"].split(":", 1)[1] for t in tarefas if t["ep"].startswith("fabrica:") and t["estado"] == "na fila"}
-    reg = [r for r in registro(2000) if str(r.get("t", "")).startswith(hoje)]
+    reg = [r for r in record(2000) if str(r.get("t", "")).startswith(hoje)]
     feitos = [r for r in reg if r.get("evento") in ("gerada", "descartada") and r.get("motor") == "effectcraft"]
-    motivos = Counter(_categoria(r.get("motivo")) for r in feitos if r["evento"] == "descartada")
+    motivos = Counter(_category(r.get("motivo")) for r in feitos if r["evento"] == "descartada")
     revs = [r for r in reg if r.get("evento") == "revisao"]
     gastos = Counter()
     for r in claude._records():
         if str(r.get("ep", "")) == f"fabrica-{hoje}":
             gastos[r.get("reason") or "outro"] += r.get("cost") or 0
-    acervo = Counter((f.motor, f.estado) for f in P.listar())
-    sit = index.situacao()
+    acervo = Counter((f.motor, f.estado) for f in P.list_all())
+    sit = index.status()
     thumbs = [{"ep": t["ep"], "estado": t["estado"], "inicio": t.get("inicio")} for t in tarefas
               if t.get("comando") in ("thumb", "thumbs") and t["estado"] in ("rodando", "na fila")]
-    licoes = [x[2:] for x in _licoes_n1().strip().splitlines() if x.startswith("- ")]
+    licoes = [x[2:] for x in _lessons_n1().strip().splitlines() if x.startswith("- ")]
     return {
         "agora": [{"pedido": p.id, "tipo": p.tipo, "estado": p.estado, "rodando": p.id in rodando,
                    "na_fila": p.id in na_fila, "etapa": p.etapa if p.id in rodando else {}, "situacao": p.situacao}
                   for p in hibridos],
-        "chamadas": _chamadas_vivas(),
-        "cota": {"janelas": _janelas_cota(), "limite": claude.quota_limit(), "cheia": claude.quota_full()},
+        "chamadas": _calls_live(),
+        "cota": {"janelas": _windows_quota(), "limite": claude.quota_limit(), "cheia": claude.quota_full()},
         "pedidos": [{"id": p.id, "tipo": p.tipo, "texto": p.texto[:120], "estado": p.estado, "quantidade": p.quantidade,
                      "pecas": len(p.pecas), "descartadas": p.descartadas, "ideias_na_fila": len(p.conceitos),
                      "alvos": len(p.alvos), "feitos": len(p.feitos), "gasto_usd": p.gasto_usd,
@@ -1651,12 +1651,12 @@ def painel():
                        "motivos": [{"motivo": m or "?", "n": n} for m, n in motivos.most_common(6)]},
             "gasto": {k: round(v, 3) for k, v in gastos.items()}, "gasto_total": round(sum(gastos.values()), 3),
         },
-        "revisao": len(fila_revisao()),
+        "revisao": len(queue_review()),
         "acervo": {m: {e: acervo[(m, e)] for e in ("aprovada", "revisao", "rascunho")} for m in ("html", "effectcraft")},
         "dataset": {t: sit.get(t, {}) for t in ("peca_animar", "peca_html", "thumb_compor", "foto_tratar")},
         "thumbs": {"tarefas": thumbs},
         "licoes": {"total": len(licoes), "ultimas": licoes[-5:]},
-        "eventos": [{"t": r.get("t"), "quem": _quem(r), "evento": r.get("evento"), "peca": r.get("peca"),
+        "eventos": [{"t": r.get("t"), "quem": _who(r), "evento": r.get("evento"), "peca": r.get("peca"),
                      "texto": str(r.get("motivo") or "; ".join(r.get("problemas") or []) or r.get("resumo") or "")[:220],
-                     "custo": r.get("custo"), "aprovada": r.get("aprovada")} for r in registro(40)],
+                     "custo": r.get("custo"), "aprovada": r.get("aprovada")} for r in record(40)],
     }

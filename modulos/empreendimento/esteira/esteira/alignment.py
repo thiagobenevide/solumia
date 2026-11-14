@@ -12,49 +12,49 @@ import tempfile
 from pathlib import Path
 
 from esteira.core import events
-from esteira.project import RAIZ
+from esteira.project import ROOT
 
-PY_IMG = RAIZ / ".venv-img" / "bin" / "python"
-MODELO = "jonatasgrosman/wav2vec2-large-xlsr-53-portuguese"
-DESVIO_MAX = 0.6  # s: tempo alinhado mais longe que isto do Whisper é erro do alinhamento; fica o do Whisper
+PY_IMG = ROOT / ".venv-img" / "bin" / "python"
+MODEL = "jonatasgrosman/wav2vec2-large-xlsr-53-portuguese"
+DEVIATION_MAX = 0.6  # s: tempo alinhado mais longe que isto do Whisper é erro do alinhamento; fica o do Whisper
 
 
-def ligado(cfg):
+def enabled(cfg):
     return cfg.get("cortes", {}).get("alinhamento", True) and PY_IMG.exists()
 
 
-def _assinatura(audio, palavras):
+def _signature(audio, palavras):
     st = Path(audio).stat()
     h = hashlib.sha1(json.dumps([str(audio), st.st_size, st.st_mtime_ns, palavras]).encode()).hexdigest()
     return h[:16]
 
 
-def refinar(audio, palavras, cache=None, cfg=None):
+def refine(audio, palavras, cache=None, cfg=None):
     """palavras [[ini, fim, texto]] → mesma lista com ini/fim do alinhamento forçado onde ele deu certo."""
-    if not palavras or (cfg is not None and not ligado(cfg)) or not PY_IMG.exists():
+    if not palavras or (cfg is not None and not enabled(cfg)) or not PY_IMG.exists():
         return palavras
-    chave = _assinatura(audio, palavras)
+    chave = _signature(audio, palavras)
     if cache and Path(cache).exists():
         d = json.loads(Path(cache).read_text())
         if d.get("chave") == chave:
             return d["palavras"]
     try:
-        tempos = _rodar(audio, palavras)
+        tempos = _run(audio, palavras)
     except (subprocess.CalledProcessError, OSError, ValueError) as e:
         erro = (getattr(e, "stderr", None) or str(e)).strip()[-200:]
         events.warning(f"alinhamento forçado falhou ({erro}); bordas pelo tempo do Whisper")
         return palavras
-    saida = combinar(palavras, tempos)
+    saida = combine(palavras, tempos)
     if cache:
         Path(cache).write_text(json.dumps({"chave": chave, "palavras": saida}, ensure_ascii=False))
     return saida
 
 
-def combinar(palavras, tempos):
+def combine(palavras, tempos):
     """Aplica os tempos alinhados (None = não alinhou) sem deixar uma palavra passar por cima da vizinha."""
     saida = []
     for (ini, fim, t), al in zip(palavras, tempos, strict=True):
-        if al and abs(al[0] - ini) <= DESVIO_MAX and abs(al[1] - fim) <= DESVIO_MAX and al[1] > al[0]:
+        if al and abs(al[0] - ini) <= DEVIATION_MAX and abs(al[1] - fim) <= DEVIATION_MAX and al[1] > al[0]:
             ini, fim = al
         saida.append([ini, fim, t])
     for a, b in zip(saida, saida[1:]):
@@ -63,16 +63,16 @@ def combinar(palavras, tempos):
     return saida
 
 
-def _rodar(audio, palavras):
+def _run(audio, palavras):
     from esteira.ai.local import free_gpu
-    from esteira.transcribe import _decodificar
+    from esteira.transcribe import _decode
     free_gpu()
     with tempfile.TemporaryDirectory() as tmp:
         cru = Path(tmp) / "audio.f32"
-        _decodificar(audio).tofile(cru)
+        _decode(audio).tofile(cru)
         pedido = Path(tmp) / "pedido.json"
-        pedido.write_text(json.dumps({"audio": str(cru), "words": palavras, "model": MODELO}))
-        r = subprocess.run([str(PY_IMG), "-I", str(RAIZ / "esteira/ai/ctc_align.py"), str(pedido)],
+        pedido.write_text(json.dumps({"audio": str(cru), "words": palavras, "model": MODEL}))
+        r = subprocess.run([str(PY_IMG), "-I", str(ROOT / "esteira/ai/ctc_align.py"), str(pedido)],
                            capture_output=True, text=True, check=True)
     tempos = json.loads(r.stdout.strip().splitlines()[-1])
     if len(tempos) != len(palavras):

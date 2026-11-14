@@ -22,28 +22,28 @@ from esteira.dataset import registry as R
 BASE = "unsloth/gemma-4-12b-it"
 BASE_GGUF = "gemma-4-12b-it-ud-q4_k_xl"  # a mesma base, quantizada, no roteador
 MAX_B = 12  # decisão do plano: só se treinam bases de até 12B
-TAREFAS_APP = {"effectcraft": ["peca_animar"], "filmcraft": ["montar", "corrigir_montagem"],
+TASKS_APP = {"effectcraft": ["peca_animar"], "filmcraft": ["montar", "corrigir_montagem"],
                "photocraft": ["thumb_compor", "foto_tratar"]}
-SIGLA = {"effectcraft": "ec", "filmcraft": "fc", "photocraft": "pc"}
+ACRONYM = {"effectcraft": "ec", "filmcraft": "fc", "photocraft": "pc"}
 
 
-def _pasta():
+def _folder():
     from esteira.ai import llama
     return llama.MODELS_DIR / "adaptadores"
 
 
-def bilhoes(base: str) -> float | None:
+def billions(base: str) -> float | None:
     m = re.search(r"(\d+(?:\.\d+)?)b\b", base.lower())
     return float(m.group(1)) if m else None
 
 
-def _versao(app: str) -> int:
-    nums = [int(m.group(1)) for a in _pasta().glob(f"{SIGLA[app]}-v*.gguf")
-            if (m := re.match(rf"{SIGLA[app]}-v(\d+)\.gguf$", a.name))]
+def _version(app: str) -> int:
+    nums = [int(m.group(1)) for a in _folder().glob(f"{ACRONYM[app]}-v*.gguf")
+            if (m := re.match(rf"{ACRONYM[app]}-v(\d+)\.gguf$", a.name))]
     return max(nums, default=0) + 1
 
 
-def _parar_servicos() -> list[str]:
+def _stop_services() -> list[str]:
     """Para os serviços do PC que seguram VRAM durante o treino. → os que estavam ativos (religados no fim)."""
     parados = []
     for s in ("agent-worker",):
@@ -53,31 +53,31 @@ def _parar_servicos() -> list[str]:
     return parados
 
 
-def faltam(app: str) -> dict[str, int]:
-    s = index.situacao()
-    return {t: max(0, index.MINIMO[t] - s.get(t, {}).get("sft", 0)) for t in TAREFAS_APP[app]}
+def missing(app: str) -> dict[str, int]:
+    s = index.status()
+    return {t: max(0, index.MINIMUM[t] - s.get(t, {}).get("sft", 0)) for t in TASKS_APP[app]}
 
 
-def treinar(app: str, base: str = BASE, epocas: float = 2.0, forcar: bool = False) -> dict:
+def train(app: str, base: str = BASE, epocas: float = 2.0, forcar: bool = False) -> dict:
     from esteira.core import locks
     from esteira.studio import training
     from esteira.ai import local
-    from esteira.project import RAIZ
-    if (b := bilhoes(base)) is None or b > MAX_B:
+    from esteira.project import ROOT
+    if (b := billions(base)) is None or b > MAX_B:
         raise SystemExit(f"base {base}: só se treinam modelos de até {MAX_B}B")
-    if not forcar and any(faltam(app).values()):
-        raise SystemExit(f"{app}: faltam casos para o mínimo de treino {faltam(app)} (use forcar só no teste)")
-    py = training.ambiente()
+    if not forcar and any(missing(app).values()):
+        raise SystemExit(f"{app}: faltam casos para o mínimo de treino {missing(app)} (use forcar só no teste)")
+    py = training.environment()
     if not py.exists():
         raise SystemExit("ambiente de treino ausente: ~/.local/bin/uv venv .venv-treino --python 3.12 && "
                          "~/.local/bin/uv pip install --python .venv-treino/bin/python unsloth gguf")
-    exp = X.ultima() or Path(X.exportar()["pasta"])
-    nome = f"{SIGLA[app]}-v{_versao(app)}"
-    saida = R.PASTA / "treinos" / nome
+    exp = X.last() or Path(X.export()["pasta"])
+    nome = f"{ACRONYM[app]}-v{_version(app)}"
+    saida = R.FOLDER / "treinos" / nome
     dados = saida / "dados"
     dados.mkdir(parents=True, exist_ok=True)
     n = 0
-    for t in TAREFAS_APP[app]:
+    for t in TASKS_APP[app]:
         for lado in ("train", "val"):
             arq = exp / "sft" / f"{t}.{lado}.jsonl"
             if arq.exists() and arq.stat().st_size:
@@ -88,23 +88,23 @@ def treinar(app: str, base: str = BASE, epocas: float = 2.0, forcar: bool = Fals
     if "machine" not in locks._held:  # o `./dark` já ocupa a vaga ao iniciar; segunda trava no mesmo processo trava
         locks.acquire("machine", f"treino {nome}")
     local.free_gpu()
-    parados = _parar_servicos()  # worker da plataforma (+ voz XTTS) ocupa ~3 GB de VRAM
+    parados = _stop_services()  # worker da plataforma (+ voz XTTS) ocupa ~3 GB de VRAM
     try:
-        subprocess.run([str(py), str(RAIZ / "esteira/ai/train_lora.py"), str(dados), str(saida), "--base", base,
+        subprocess.run([str(py), str(ROOT / "esteira/ai/train_lora.py"), str(dados), str(saida), "--base", base,
                         "--epochs", str(epocas), "--adapter-only"], check=True,
                        env={**__import__("os").environ, "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
     finally:
         for s in parados:
             subprocess.run(["systemctl", "--user", "start", s], check=False)
     info = json.loads((saida / "training.json").read_text())
-    destino = _pasta() / f"{nome}.gguf"
+    destino = _folder() / f"{nome}.gguf"
     destino.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(info["adapter"], destino)
     from esteira.n1 import effectcraft, filmcraft, photocraft
     manifesto = {"nome": nome, "app": app, "base": base, "base_gguf": BASE_GGUF, "em": datetime.now().isoformat(),
-                 "exportacao": exp.name, "hash_exportacao": X.hash_exportacao(exp), "casos_treino": n,
-                 "n1": {"filmcraft": filmcraft.VERSAO, "photocraft": photocraft.VERSAO,
-                        "effectcraft": effectcraft.VERSAO}[app],
+                 "exportacao": exp.name, "hash_exportacao": X.hash_export(exp), "casos_treino": n,
+                 "n1": {"filmcraft": filmcraft.VERSION, "photocraft": photocraft.VERSION,
+                        "effectcraft": effectcraft.VERSION}[app],
                  "perda": info.get("loss"), "perda_val": info.get("val_loss"), "forcado": forcar, "promovido": False}
     destino.with_suffix(".json").write_text(json.dumps(manifesto, ensure_ascii=False, indent=1))
     return manifesto
@@ -116,7 +116,7 @@ def _base_gguf() -> Path:
         else llama.MODELS_DIR / f"{BASE_GGUF}.gguf"
 
 
-def _escrever_presets(entradas: dict[str, Path]) -> None:
+def _write_presets(entradas: dict[str, Path]) -> None:
     from esteira.ai import llama
     base = next(p for p in _base_gguf().parent.glob("*.gguf") if not p.name.startswith("mmproj")) \
         if _base_gguf().parent.is_dir() else _base_gguf()
@@ -127,7 +127,7 @@ def _escrever_presets(entradas: dict[str, Path]) -> None:
     llama.PRESETS.write_text("\n".join(linhas))
 
 
-def _ler_presets() -> dict[str, Path]:
+def _read_presets() -> dict[str, Path]:
     from esteira.ai import llama
     if not llama.PRESETS.exists():
         return {}
@@ -140,34 +140,34 @@ def _ler_presets() -> dict[str, Path]:
     return saida
 
 
-def promovido(app: str) -> str | None:
-    nome = f"{SIGLA[app]}-atual"
-    return nome if nome in _ler_presets() else None
+def promoted(app: str) -> str | None:
+    nome = f"{ACRONYM[app]}-atual"
+    return nome if nome in _read_presets() else None
 
 
-def promover(app: str, nome: str, n: int | None = None) -> dict:
+def promote(app: str, nome: str, n: int | None = None) -> dict:
     """Portão de promoção: base × candidato no ouro das tarefas da app (bancada). Promove só se ganhar."""
     from esteira import bench
     from esteira.ai import llama
-    adaptador = _pasta() / f"{nome}.gguf"
+    adaptador = _folder() / f"{nome}.gguf"
     if not adaptador.exists():
         raise SystemExit(f"adaptador inexistente: {adaptador}")
-    presets = _ler_presets()
+    presets = _read_presets()
     candidato = f"{nome}-candidato"
-    _escrever_presets({**presets, candidato: adaptador})
+    _write_presets({**presets, candidato: adaptador})
     if not llama.restart():
         raise SystemExit("o roteador não voltou com o preset novo")
-    tarefas = [f"n1_{t}" for t in TAREFAS_APP[app] if bench.casos(f"n1_{t}")]
+    tarefas = [f"n1_{t}" for t in TASKS_APP[app] if bench.cases(f"n1_{t}")]
     if not tarefas:
         raise SystemExit(f"{app}: sem casos no ouro para comparar")
-    res = bench.rodar([BASE_GGUF, candidato], tarefas, n)
+    res = bench.run([BASE_GGUF, candidato], tarefas, n)
     nota = {m: sum(x["nota"] for x in info["tarefas"].values()) / max(len(info["tarefas"]), 1)
             for m, info in res["modelos"].items()}
     ganhou = nota.get(candidato, 0) > nota.get(BASE_GGUF, 0)
     presets.pop(candidato, None)
     if ganhou:
-        presets[f"{SIGLA[app]}-atual"] = adaptador
-    _escrever_presets(presets)
+        presets[f"{ACRONYM[app]}-atual"] = adaptador
+    _write_presets(presets)
     llama.restart()
     man = adaptador.with_suffix(".json")
     if man.exists():

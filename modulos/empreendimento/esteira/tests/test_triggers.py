@@ -1,16 +1,16 @@
 from esteira.studio import triggers
-from esteira.studio.style import Estilo
+from esteira.studio.style import Style
 
-G = triggers.padrao()
+G = triggers.default()
 
 
 def _id(frase, **ctx):
-    d = triggers.detectar(frase, G, ctx)
+    d = triggers.detect(frase, G, ctx)
     return d["gatilho"].id if d else None
 
 
 def test_estudo_vence_porcentagem():
-    d = triggers.detectar("Segundo a CNC, 81,7% das famílias brasileiras estão endividadas.", G)
+    d = triggers.detect("Segundo a CNC, 81,7% das famílias brasileiras estão endividadas.", G)
     assert d["gatilho"].id == "estudo_citado"
     assert "porcentagem" in d["perdeu"]
 
@@ -39,16 +39,16 @@ def test_palavra_inteira():
 
 
 def test_cor_pelo_sentido():
-    d = triggers.detectar("81,7% das famílias estão endividadas", G)
+    d = triggers.detect("81,7% das famílias estão endividadas", G)
     assert d["cor"] == "acento"
 
 
 def test_testar_roteiro():
-    e = Estilo(id="teste-ap", nome="t", canal="t", modo="apresentador")
+    e = Style(id="teste-ap", nome="t", canal="t", modo="apresentador")
     texto = ("Segundo a CNC, 81,7% das famílias brasileiras estão endividadas. "
              "E sabe qual é o maior vilão? "
              "O cartão de crédito. Sem nenhum gatilho por aqui hoje não.")
-    r = triggers.testar(triggers.frases_do_texto(texto), e)
+    r = triggers.test(triggers.sentences_of_text(texto), e)
     ids = [c["gatilho"] for c in r["cenas"]]
     assert ids[:3] == ["estudo_citado", "pergunta", "termo"]
     assert any(a["tipo"] == "sem_gatilho" for a in r["avisos"])

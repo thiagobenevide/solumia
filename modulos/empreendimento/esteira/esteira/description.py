@@ -13,7 +13,7 @@ def _link(f):
     return f.get("url", "")
 
 
-def _linha(f):
+def _line(f):
     autor, ano = f.get("autores", "").strip(), f.get("ano", "")[:4]
     detalhes = f.get("detalhes", "").split(" · ")[0].strip()  # depois do "·" vêm anotações do vault
     partes = [f"{autor} ({ano})" if ano else autor, f.get("titulo", "").strip(),
@@ -22,7 +22,7 @@ def _linha(f):
     return f"• {texto}" + (f"\n  {_link(f)}" if _link(f) else "")
 
 
-def gerar(projeto):
+def generate(projeto):
     rot = json.loads(projeto.caminho("roteiro.json").read_text()) if projeto.caminho("roteiro.json").exists() else {}
     fontes = rot.get("fontes", [])
     graficos = projeto.carregar_json("graficos.json") if projeto.caminho("graficos.json").exists() else []
@@ -38,7 +38,7 @@ def gerar(projeto):
     ordem = na_tela + [k for k in range(len(fontes)) if k not in na_tela]
     blocos = []
     if fontes:
-        blocos.append("📚 Estudos e fontes citados no vídeo\n" + "\n".join(_linha(fontes[k]) for k in ordem))
+        blocos.append("📚 Estudos e fontes citados no vídeo\n" + "\n".join(_line(fontes[k]) for k in ordem))
     creditos = projeto.caminho("creditos.txt")
     if creditos.exists() and creditos.read_text().strip():
         blocos.append("📷 Créditos das imagens\n" + creditos.read_text().strip())

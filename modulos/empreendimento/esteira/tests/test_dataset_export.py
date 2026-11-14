@@ -18,7 +18,7 @@ def _montagem(dur=120):
 def test_trechos_da_montagem_cobrem_tudo_sem_repetir():
     doc = _montagem()
     ctx = {"duracao": 120, "cenas": [{"id": k, "inicio": k} for k in range(0, 120, 10)], "graficos": [], "chaves": []}
-    partes = X.trechos_montagem(ctx, doc)
+    partes = X.spans_assembly(ctx, doc)
     assert len(partes) == 3 and partes[0][0]["trecho"] == [0.0, 45.0]
     todas = [json.dumps(o, sort_keys=True) for _, d in partes for o in d["ops"]]
     assert sorted(todas) == sorted(json.dumps(o, sort_keys=True) for o in doc["ops"])
@@ -28,20 +28,20 @@ def test_trechos_da_montagem_cobrem_tudo_sem_repetir():
 def test_exportar_divide_por_grupo_tira_o_ouro_e_monta_dpo():
     for g in range(12):
         for v in ("escolhida", None):
-            rg = R.gravar("foto_tratar", grupo=f"foto:{g}", contexto={"g": g}, origem="t",
+            rg = R.write("foto_tratar", grupo=f"foto:{g}", contexto={"g": g}, origem="t",
                           saida={"foco": [0.5, 0.5], "recortar": v is None, "separar_planos": False})
             if v:
-                R.avaliar(rg, v)
+                R.evaluate(rg, v)
             else:
-                R.avaliar(rg, "reprovada", motivo="recorte desnecessário")
-    r = X.exportar(["foto_tratar"])
+                R.evaluate(rg, "reprovada", motivo="recorte desnecessário")
+    r = X.export(["foto_tratar"])
     t = r["tarefas"]["foto_tratar"]
     assert t["sft"] + t["val"] + t["eval"] == 12 and t["eval"] >= 1 and t["dpo"] == 12
-    pasta = X.ultima()
+    pasta = X.last()
     linha = json.loads((pasta / "sft/foto_tratar.train.jsonl").read_text().splitlines()[0])
     assert [m["role"] for m in linha["messages"]] == ["system", "user", "assistant"]
     assert json.loads(linha["messages"][2]["content"])["recortar"] is False
     assert "manifesto" in json.loads((pasta / "manifesto.json").read_text())
-    casos = bench.casos("n1_foto_tratar")
-    assert casos and bench.nota_n1("foto_tratar", casos[0],
-                                     X.esquema("foto_tratar").model_validate(casos[0]["referencia"])) == 1.0
+    casos = bench.cases("n1_foto_tratar")
+    assert casos and bench.score_n1("foto_tratar", casos[0],
+                                     X.schema("foto_tratar").model_validate(casos[0]["referencia"])) == 1.0

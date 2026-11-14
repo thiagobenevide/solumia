@@ -16,8 +16,8 @@ from markupsafe import Markup, escape
 
 from esteira.core import trace
 
-RAIZ = Path(__file__).parent
-_jinja = Environment(loader=FileSystemLoader(RAIZ / "modelos"), autoescape=True)
+ROOT = Path(__file__).parent
+_jinja = Environment(loader=FileSystemLoader(ROOT / "modelos"), autoescape=True)
 
 # Congela animações CSS e ganchos JS (contadores etc.) no instante t, em segundos.
 _SEEK = """
@@ -30,11 +30,11 @@ window.seek = (t) => {
 
 
 # Caixa de texto livre: valores que faltarem vêm daqui (o editor do painel usa os mesmos).
-CAIXA = dict(texto="", x=8, y=70, w=60, tam=64, fonte="Inter", peso=800, cor="#f4f1ea", cor_d="", fundo="nenhum",
+BOX = dict(texto="", x=8, y=70, w=60, tam=64, fonte="Inter", peso=800, cor="#f4f1ea", cor_d="", fundo="nenhum",
              cor_fundo="#0a1122", alinhar="left", maiusculas=False, entrada="subir", atraso=0.2, vel=0.6)
 
 
-def _marcar(texto):
+def _mark(texto):
     """*destaque* → cor de destaque; quebra de linha preservada."""
     return Markup(re.sub(r"\*(.+?)\*", r'<span class="d">\1</span>', str(escape(texto))).replace("\n", "<br>"))
 
@@ -43,13 +43,13 @@ def html(modelo, dados, segundos, w=1920, h=1080, cor="#ffd400", estatico=False)
     """`dados` pode trazer "efeito" ({entrada, saida, vel}) e "caixas" (lista de caixas de texto livres)."""
     dados = dict(dados)
     efeito = dados.pop("efeito", None) or {}
-    caixas = [dict(CAIXA, **c, html=_marcar(c.get("texto", ""))) for c in dados.pop("caixas", None) or []]
+    caixas = [dict(BOX, **c, html=_mark(c.get("texto", ""))) for c in dados.pop("caixas", None) or []]
     return _jinja.get_template(f"{modelo}.html").render(
-        **dados, dur=segundos, w=w, h=h, vertical=h > w, cor=cor, raiz=RAIZ.as_uri(), efeito=efeito,
+        **dados, dur=segundos, w=w, h=h, vertical=h > w, cor=cor, raiz=ROOT.as_uri(), efeito=efeito,
         caixas=caixas, estatico=estatico)
 
 
-def previa(modelo, dados, segundos, w, h, cor, trocas, estatico=False):
+def preview(modelo, dados, segundos, w, h, cor, trocas, estatico=False):
     """HTML para o editor do painel: com `seek` e caminhos file:// trocados por URLs do servidor."""
     s = html(modelo, dados, segundos, w, h, cor, estatico).replace("<head>", f"<head><script>{_SEEK}</script>", 1)
     for de, para in trocas.items():
@@ -57,7 +57,7 @@ def previa(modelo, dados, segundos, w, h, cor, trocas, estatico=False):
     return s
 
 
-def _quadros(pagina_html, indices, fps, w, h, pasta, feito=None, total=0, rotulo=""):
+def _frames(pagina_html, indices, fps, w, h, pasta, feito=None, total=0, rotulo=""):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
         nav = pw.chromium.launch()
@@ -74,7 +74,7 @@ def _quadros(pagina_html, indices, fps, w, h, pasta, feito=None, total=0, rotulo
         nav.close()
 
 
-def renderizar(modelo, dados, segundos, destino, fps=30, w=1920, h=1080, cor="#ffd400", paralelo=4,
+def render(modelo, dados, segundos, destino, fps=30, w=1920, h=1080, cor="#ffd400", paralelo=4,
                previa=None):
     """Gera `destino` (.mov ProRes 4444 com alfa). `previa`: instante (s) salvo em PNG sobre fundo cinza."""
     destino = Path(destino)
@@ -86,7 +86,7 @@ def renderizar(modelo, dados, segundos, destino, fps=30, w=1920, h=1080, cor="#f
         partes = [range(k, n, paralelo) for k in range(paralelo)]
         feito, rotulo = [0], f"quadros de {destino.name} ({paralelo} abas do Chromium)"
         with ThreadPoolExecutor(paralelo) as ex:
-            list(ex.map(lambda r: _quadros(pagina, r, fps, w, h, tmp, feito, n, rotulo), partes))
+            list(ex.map(lambda r: _frames(pagina, r, fps, w, h, tmp, feito, n, rotulo), partes))
         trace.task("render", f"ffmpeg: {n} PNG → ProRes 4444 com alfa", 0, None)
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-framerate", str(fps),
                         "-i", tmp / "q%05d.png", "-c:v", "prores_ks", "-profile:v", "4444",
@@ -102,7 +102,7 @@ def renderizar(modelo, dados, segundos, destino, fps=30, w=1920, h=1080, cor="#f
     return destino
 
 
-def imagem(modelo, dados, destino, w=1280, h=720):
+def image(modelo, dados, destino, w=1280, h=720):
     """Um quadro só (thumbnail): modelo HTML → PNG."""
     from playwright.sync_api import sync_playwright
     tmp = Path(tempfile.mkdtemp(prefix="img_"))

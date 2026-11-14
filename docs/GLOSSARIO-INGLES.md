@@ -120,9 +120,22 @@ api_system). Testes seguem o módulo (`test_cortes` → `test_cuts`, `test_etapa
 Pastas de dados do pacote ainda com o nome antigo: `graphics/fontes`, `graphics/modelos`, `studio/pecas`,
 `studio/kit`, `studio/estilos`, `studio/ritmos`, `ai/prompts/*.md`, `tests/dados`.
 
+## Esteira — nomes de nível de módulo (funções, classes, constantes)
+
+Renomeados em bloco, palavra por palavra, pelo dicionário abaixo (o nome composto mantém a ordem das palavras:
+`cota_cheia` → `quota_full`, `PASTA` → `FOLDER`, `PecaGerada` → `PieceGenerated`). Principais termos do domínio:
+acervo → library, bancada → bench, cena → scene, corte → cut, peca → piece, ficha → card, folha → sheet, estilo →
+style, gatilho → trigger, portao → gate, fabrica → factory, pedido → request, lacuna → gap, roteiro → script, fala →
+speech, frase → sentence, trecho → span, tomada → take, borda → edge, soco → punch, selo → badge, pele → skin,
+molde → mold, teto → cap, piso → floor, freio → brake, socorro → fallback, situacao → status, gabarito →
+answer_key, legenda → caption, trilha → track, quadro → frame, previa → preview, pasta → folder, arquivo/arq →
+file, gravar/escrever → write, carregar → load, listar → list_all, compilar → build, registro → record.
+Ainda em português dentro dos módulos: métodos e campos de classes (os campos Pydantic são chaves JSON), parâmetros,
+variáveis locais, comentários, docstrings e mensagens.
+
 Estado da migração da esteira: `core/`, `ai/` e a CLI (`esteira.py`: comandos, flags, ids das etapas e das operações)
 feitos, com painel, fila, grafo do monitor e app usando os nomes novos. Ainda em português, cada um no seu passo:
-o interior dos módulos fora de `core/` e `ai/` (funções, variáveis, mensagens; os nomes de arquivo já estão em inglês), as etapas internas do Estúdio (`dirigir`,
+o interior dos módulos fora de `core/` e `ai/` (métodos, campos, parâmetros, variáveis, comentários e mensagens; nomes de arquivo e nomes de nível de módulo já estão em inglês), as etapas internas do Estúdio (`dirigir`,
 `compilar`… e os eventos `estudio-<etapa>`), rótulos de alvo da fila (`fabrica:`, `peca:`, `treino:`, `roteiro:`),
 valores de `--mode`/`--intensity`, chaves próprias da API web (`processos`, `vagas`, `etapas`…) e da fila
 (`comando`, `vaga`, `estado`), chaves do `config.toml`, os prompts de `ai/prompts/` e o nome do pacote `esteira`. O script `artigo` do vault ainda grava a barra externa com
