@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Atualiza a VPS com o master do GitHub: git pull no repositório de lá e roda o instalar_vps
+# (seguro de repetir: só reconstrói e reinicia) e reinicia a esteira e o worker do PC. VPS vem do
+# .env.prd (TUNEL_HOST, DOMINIO).
+#
+#   infra/scripts/atualizar_vps [usuario@vps]
+set -euo pipefail
+
+raiz="$(cd "$(dirname "$0")/../.." && pwd)"
+ler() { grep -E "^$1=" "$raiz/.env.prd" 2>/dev/null | tail -n1 | cut -d= -f2-; }
+dominio="$(ler DOMINIO)"; dominio="${dominio:-agent.thiagobenevide.com}"
+host="$(ler TUNEL_HOST)"; vps="${1:-root@${host:-$dominio}}"
+
+echo "▶ Atualizando $vps"
+# A pasta do repositório lá sai do rótulo do docker compose (…/infra/docker); senão, os lugares comuns.
+# shellcheck disable=SC2016
+ssh -o BatchMode=yes "$vps" bash -s <<'EOF'
+set -euo pipefail
+dir="$(docker ps -q | head -n1 | xargs -r docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' 2>/dev/null || true)"
+repo="${dir%/infra/docker}"
+if [ ! -x "$repo/infra/scripts/instalar_vps" ]; then
+    for d in ~/agent /opt/agent /root/agent /home/*/agent; do
+        [ -x "$d/infra/scripts/instalar_vps" ] && repo="$d" && break
+    done
+fi
+[ -x "$repo/infra/scripts/instalar_vps" ] || { echo "✗ repositório não encontrado na VPS" >&2; exit 1; }
+cd "$repo"
+echo "▶ $repo: $(git log --oneline -1)"
+git fetch -q origin
+# Histórico reescrito no GitHub (ex.: remoção de segredo): o fast-forward falha; o reset --keep
+# segue para o master novo e se recusa se houver mudança local versionada (nada se perde).
+git merge --ff-only -q origin/master 2>/dev/null || git reset -q --keep origin/master
+echo "▶ agora: $(git log --oneline -1)"
+infra/scripts/instalar_vps 2>&1 | tail -n 15
+EOF
+
+echo "▶ Conferindo a rota nova"
+curl -s -o /dev/null -w '/api/codigo/arvore → HTTP %{http_code} (401 = existe, falta login; 404 = ainda antigo)\n' \
+    "https://$dominio/api/codigo/arvore"
+
+# A esteira e o worker rodam no PC (serviços do systemd do usuário): sem reiniciar, seguem com o
+# código antigo mesmo com a VPS em dia. Os pedidos do Código são filhos do worker, então, se este
+# script roda dentro dele, o reinício do worker fica para 60 s depois (fora do serviço) para não
+# derrubar a sessão que pediu a atualização.
+echo "▶ Reiniciando os serviços do PC"
+if systemctl --user cat agent-esteira >/dev/null 2>&1; then
+    systemctl --user restart agent-esteira && echo "agent-esteira reiniciado"
+fi
+if systemctl --user cat agent-worker >/dev/null 2>&1; then
+    if grep -q 'agent-worker\.service' /proc/self/cgroup; then
+        systemd-run --user --quiet --on-active=60 systemctl --user restart agent-worker \
+            && echo "agent-worker reinicia em 60 s (este pedido roda dentro dele)"
+    else
+        systemctl --user restart agent-worker && echo "agent-worker reiniciado"
+    fi
+fi

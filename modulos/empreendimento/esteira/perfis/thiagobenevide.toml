@@ -1,0 +1,11 @@
+# Tecnologia/software: verde-água, glitch e cortes secos.
+[graficos]
+cor = "#00e0a4"
+[thumb]
+cor_texto = "#00e0a4"
+[efeitos]
+intervalo_forte = 15
+[efeitos.transicao]
+tensao = ["glitch", "cross_dissolve", "push"]
+revelacao = ["glitch", "zoom_blur", "flash"]
+dado = ["push", "cross_dissolve", "slide"]

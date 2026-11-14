@@ -1,0 +1,63 @@
+/* Diagrama de convergência em card de vidro: só variáveis da pele do kit. */
+.p-diagrama_convergencia_vidro { --cw: 70; --lw: 23; display: flex; align-items: center; justify-content: center; }
+.p-diagrama_convergencia_vidro.dc-lat { justify-content: flex-end; padding-right: calc(6 * var(--U)); }
+.p-diagrama_convergencia_vidro .dc-cena { perspective: calc(140 * var(--U)); }
+.p-diagrama_convergencia_vidro .dc-card { width: calc(var(--cw) * var(--U)); box-sizing: border-box; padding: calc(2.5 * var(--U));
+  border-radius: calc(var(--R, 2) * var(--U)); border: calc(.25 * var(--U)) solid color-mix(in srgb, var(--texto) 24%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--texto) 14%, transparent), transparent 42%),
+    color-mix(in srgb, var(--fundo) 72%, transparent);
+  -webkit-backdrop-filter: blur(calc(1.6 * var(--U))); backdrop-filter: blur(calc(1.6 * var(--U)));
+  box-shadow: 0 calc(2 * var(--U)) calc(6 * var(--U)) rgba(0,0,0,.5); }
+
+.p-diagrama_convergencia_vidro .dc-dia { position: relative; width: 100%; aspect-ratio: 100 / 56; }
+.p-diagrama_convergencia_vidro .dc-svg { position: absolute; inset: 0; }
+.p-diagrama_convergencia_vidro .dc-svg svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.p-diagrama_convergencia_vidro .dc-cv { fill: none; stroke: var(--destaque); stroke-width: 1.1; stroke-linecap: round;
+  stroke-dasharray: 1; stroke-dashoffset: 1; }
+.p-diagrama_convergencia_vidro .dc-stem { stroke: var(--apoio); }
+
+.p-diagrama_convergencia_vidro .dc-no { position: absolute; top: 3.5%; width: 32%; display: flex; flex-direction: column; align-items: center; }
+.p-diagrama_convergencia_vidro .dc-c { position: relative; width: 62.5%; aspect-ratio: 1; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--fundo) 80%, transparent); border: calc(.3 * var(--U)) solid var(--destaque);
+  box-shadow: 0 0 calc(3 * var(--U)) color-mix(in srgb, var(--destaque) 60%, transparent), inset 0 0 calc(2 * var(--U)) color-mix(in srgb, var(--destaque) 30%, transparent); }
+.p-diagrama_convergencia_vidro .dc-halo { position: absolute; inset: 0; border-radius: 50%; border: calc(.4 * var(--U)) solid var(--destaque); opacity: 0; }
+.p-diagrama_convergencia_vidro .dc-ic { width: 52%; height: 52%; color: var(--destaque); display: flex; align-items: center; justify-content: center; }
+.p-diagrama_convergencia_vidro .dc-ic svg { width: 100%; height: 100%; stroke: currentColor; }
+.p-diagrama_convergencia_vidro .dc-rot { margin-top: calc(1.2 * var(--U)); font: 800 calc(2.8 * var(--U))/1.1 var(--fD); color: var(--texto);
+  text-transform: uppercase; letter-spacing: .02em; white-space: nowrap; text-align: center; }
+
+.p-diagrama_convergencia_vidro .dc-ponto { position: absolute; left: 47.8%; top: 78.2%; width: 4.4%; aspect-ratio: 1; border-radius: 50%;
+  background: var(--destaque); box-shadow: 0 0 calc(2.5 * var(--U)) var(--destaque); }
+.p-diagrama_convergencia_vidro .dc-anel { position: absolute; inset: 0; border-radius: 50%; border: calc(.3 * var(--U)) solid var(--destaque); }
+
+.p-diagrama_convergencia_vidro .dc-pan { margin-top: calc(-.5 * var(--U)); padding: calc(2.5 * var(--U)); border-radius: calc(var(--R, 2) * var(--U));
+  border: calc(.25 * var(--U)) solid color-mix(in srgb, var(--destaque) 55%, transparent);
+  background: color-mix(in srgb, var(--fundo2, var(--fundo)) 65%, transparent); }
+.p-diagrama_convergencia_vidro .dc-cab { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(1 * var(--U)) calc(2 * var(--U)); margin-bottom: calc(2 * var(--U)); }
+.p-diagrama_convergencia_vidro .dc-tit { font: 800 calc(3.8 * var(--U))/1.1 var(--fD); color: var(--texto); text-transform: uppercase; letter-spacing: .02em; }
+.p-diagrama_convergencia_vidro .dc-selo { font: 800 calc(3.4 * var(--U))/1 var(--fD); color: var(--destaque); text-transform: uppercase; white-space: nowrap;
+  padding: calc(.7 * var(--U)) calc(1.4 * var(--U)); border-radius: 999px; border: calc(.3 * var(--U)) solid var(--destaque); }
+
+.p-diagrama_convergencia_vidro .dc-trs { position: relative; display: flex; flex-direction: column; gap: calc(1.2 * var(--U)); }
+.p-diagrama_convergencia_vidro .dc-row { display: flex; align-items: center; height: calc(5 * var(--U)); }
+.p-diagrama_convergencia_vidro .dc-rl { width: calc(var(--lw) * var(--U)); flex: none; font: 700 calc(2.9 * var(--U))/1 var(--fM); color: var(--texto);
+  text-transform: uppercase; letter-spacing: .02em; white-space: nowrap; }
+.p-diagrama_convergencia_vidro .dc-rb { position: relative; flex: 1; height: 100%; border-radius: calc(.8 * var(--U)); background: color-mix(in srgb, var(--texto) 14%, transparent); }
+.p-diagrama_convergencia_vidro .dc-seg { position: absolute; top: 12%; bottom: 12%; border-radius: calc(.6 * var(--U)); transform-origin: left center; }
+.p-diagrama_convergencia_vidro .dc-s0 { background: var(--destaque); }
+.p-diagrama_convergencia_vidro .dc-s1 { background: var(--apoio); }
+.p-diagrama_convergencia_vidro .dc-s2 { background: var(--acento); }
+
+.p-diagrama_convergencia_vidro .dc-ov { position: absolute; top: calc(-1 * var(--U)); bottom: calc(-1 * var(--U)); left: calc(var(--lw) * var(--U)); right: 0; pointer-events: none; }
+.p-diagrama_convergencia_vidro .dc-cur { position: absolute; top: 0; bottom: 0; left: 0; width: calc(.5 * var(--U)); margin-left: calc(-.25 * var(--U));
+  background: var(--texto); box-shadow: 0 0 calc(1.5 * var(--U)) var(--destaque); }
+.p-diagrama_convergencia_vidro .dc-cur::before { content: ""; position: absolute; top: calc(-1 * var(--U)); left: 50%; width: calc(1.8 * var(--U)); height: calc(1.8 * var(--U));
+  margin-left: calc(-.9 * var(--U)); border-radius: 50%; background: var(--destaque); }
+
+.vertical .p-diagrama_convergencia_vidro { --cw: 86; --lw: 27; }
+.vertical .p-diagrama_convergencia_vidro.dc-lat { justify-content: center; padding-right: 0; }
+.vertical .p-diagrama_convergencia_vidro .dc-rot { font-size: calc(3.2 * var(--U)); }
+.vertical .p-diagrama_convergencia_vidro .dc-tit { font-size: calc(4.6 * var(--U)); }
+.vertical .p-diagrama_convergencia_vidro .dc-selo { font-size: calc(3.8 * var(--U)); }
+.vertical .p-diagrama_convergencia_vidro .dc-rl { font-size: calc(3.3 * var(--U)); }
+.vertical .p-diagrama_convergencia_vidro .dc-row { height: calc(6 * var(--U)); }

@@ -1,0 +1,19 @@
+/* Migrada do kit (cena barras_comparacao). */
+.p-barras_comparacao .barras { align-items: stretch; text-align: left; gap: calc(3 * var(--U)); padding: 0 calc(16 * var(--U)); }
+.p-barras_comparacao .barras .titulo { margin-bottom: calc(1.5 * var(--U)); }
+.p-barras_comparacao .linhab { display: grid; grid-template-columns: calc(40 * var(--U)) 1fr calc(24 * var(--U)); align-items: center; gap: calc(3 * var(--U)); opacity: 0; }
+.vertical .p-barras_comparacao .linhab { grid-template-columns: 1fr auto; row-gap: calc(1.2 * var(--U)); }
+.vertical .p-barras_comparacao .linhab .trilho { grid-column: 1 / -1; grid-row: 2; }
+.p-barras_comparacao .linhab .rot { font: 600 calc(3.6 * var(--U))/1.2 var(--fT); }
+.p-barras_comparacao .linhab .rot span { display: block; font: 700 calc(1.8 * var(--U)) var(--fM); letter-spacing: .15em; color: var(--destaque); margin-bottom: calc(.6 * var(--U)); }
+.p-barras_comparacao .linhab .trilho { height: calc(1.4 * var(--U)); background: color-mix(in srgb, var(--texto) 8%, transparent); }
+.p-barras_comparacao .linhab .enche { height: 100%; transform-origin: 0 50%; background: color-mix(in srgb, var(--texto) 55%, transparent); }
+.p-barras_comparacao .linhab.ult .enche { background: var(--destaque); box-shadow: 0 0 calc(2.5 * var(--U)) color-mix(in srgb, var(--destaque) 55%, transparent); }
+.vertical .p-barras_comparacao .linhab .rot { font-size: calc(4.8 * var(--U)); }
+.vertical .p-barras_comparacao .linhab .rot span { font-size: calc(2.4 * var(--U)); }
+.vertical .p-barras_comparacao .linhab .trilho { height: calc(2 * var(--U)); }
+.vertical .p-barras_comparacao .barras { padding: 0 calc(7 * var(--U)); gap: calc(4.4 * var(--U)); }
+.p-barras_comparacao .linhab .val { font: 800 calc(6.4 * var(--U))/1 var(--fD); letter-spacing: -.03em; text-align: right; font-variant-numeric: tabular-nums; }
+.p-barras_comparacao .linhab.ult .val { color: var(--destaque); }
+.al-esquerda .p-barras_comparacao .barras { align-items: stretch; }
+.vertical.al-esquerda .p-barras_comparacao .barras { align-items: stretch; }

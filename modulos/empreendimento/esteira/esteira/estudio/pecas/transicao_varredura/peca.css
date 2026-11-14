@@ -1,0 +1,16 @@
+/* Transição de varredura: só variáveis da pele. */
+.p-transicao_varredura { overflow: hidden; pointer-events: none; }
+.p-transicao_varredura .ts-palco { position: absolute; inset: 0; overflow: hidden; }
+.p-transicao_varredura .ts-c1 { background: var(--destaque); }
+.p-transicao_varredura .ts-c2 { background: var(--apoio); }
+.p-transicao_varredura .ts-c3 { background: var(--acento); }
+.p-transicao_varredura .ts-faixa { position: absolute; }
+.p-transicao_varredura .ts-giro { position: absolute; left: 50%; top: 50%; }
+.p-transicao_varredura .ts-camada { position: absolute; inset: 0; }
+.p-transicao_varredura .ts-circ { position: absolute; left: 50%; top: 50%; border-radius: 50%; }
+.p-transicao_varredura .ts-furo { position: absolute; left: 50%; top: 50%; border-radius: 50%; background: transparent;
+  box-shadow: 0 0 0 calc(1.4 * var(--U)) var(--apoio), 0 0 0 calc(400 * var(--U)) var(--destaque); }
+.p-transicao_varredura .ts-palavra { position: absolute; left: 0; right: 0; top: 50%; margin-top: calc(-5 * var(--U));
+  text-align: center; font: 800 calc(8 * var(--U) * var(--esc, 1))/1.1 var(--fD); color: var(--fundo);
+  letter-spacing: -.01em; text-transform: uppercase; white-space: nowrap; text-shadow: 0 calc(.4 * var(--U)) calc(1.2 * var(--U)) rgba(0,0,0,.5); }
+.vertical .p-transicao_varredura .ts-palavra { font-size: calc(7 * var(--U) * var(--esc, 1)); }

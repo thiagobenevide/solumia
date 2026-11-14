@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Liga este PC à VPS depois do instalar_vps: busca a chave do worker e a do túnel, grava
+# plataforma/worker/.env e instala (systemd --user) três serviços que voltam sozinhos:
+#   agent-esteira  painel da esteira (:8765)
+#   agent-tunel    túnel SSH reverso que publica a esteira em https://<domínio>/esteira/
+#   agent-worker   worker (LLM local) conectado em wss://<domínio>/ws/worker
+#
+#   infra/scripts/conectar_vps usuario@vps [/caminho/do/repo/na/vps]
+set -euo pipefail
+
+destino="${1:?uso: conectar_vps usuario@vps [/caminho/do/repo/na/vps]}"
+remoto="${2:-agent}"
+raiz="$(cd "$(dirname "$0")/../.." && pwd)"
+conf="$HOME/.config/agent"
+units="$HOME/.config/systemd/user"
+mkdir -p "$conf" "$units"
+chmod 700 "$conf"
+
+echo "▶ Buscando configuração em $destino:$remoto"
+scp -q "$destino:$remoto/.env.pc" "$conf/vps.env"
+scp -q "$destino:$remoto/infra/docker/tunel/chave_pc" "$conf/tunel_chave" 2>/dev/null ||
+    echo "! chave_pc não encontrada na VPS: usando a de TUNEL_CHAVE_PUBLICA, copie a privada para $conf/tunel_chave"
+chmod 600 "$conf"/*
+# shellcheck disable=SC1091
+set -a; . "$conf/vps.env"; set +a
+
+echo "▶ plataforma/worker/.env"
+w="$raiz/plataforma/worker/.env"
+[ -f "$w" ] || cp "$raiz/plataforma/worker/.env.example" "$w"
+for k in WORKER_GATEWAY_URL WORKER_API_KEY; do
+    if grep -q "^$k=" "$w"; then sed -i "s|^$k=.*|$k=${!k}|" "$w"; else echo "$k=${!k}" >> "$w"; fi
+done
+chmod 600 "$w"
+
+echo "▶ Serviços systemd --user"
+cat > "$units/agent-esteira.service" <<EOF
+[Unit]
+Description=Painel da esteira (agent)
+
+[Service]
+WorkingDirectory=$raiz/modulos/empreendimento/esteira
+ExecStart=$raiz/modulos/empreendimento/esteira/dark painel --porta 8765
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOF
+cat > "$units/agent-tunel.service" <<EOF
+[Unit]
+Description=Túnel da esteira para a VPS (agent)
+After=network-online.target agent-esteira.service
+
+[Service]
+ExecStart=$(command -v ssh) -N -i $conf/tunel_chave -p $TUNEL_PORTA \\
+    -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \\
+    -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$conf/known_hosts \\
+    -R 0.0.0.0:8765:localhost:8765 tunel@$TUNEL_HOST
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOF
+cat > "$units/agent-worker.service" <<EOF
+[Unit]
+Description=Worker do agent (LLM local para a VPS)
+After=network-online.target
+
+[Service]
+ExecStart=$raiz/infra/scripts/run_worker.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user daemon-reload
+systemctl --user enable --now agent-esteira agent-tunel agent-worker
+systemctl --user restart agent-tunel agent-worker
+# Sem linger os serviços só sobem depois do login gráfico.
+loginctl enable-linger "$USER" 2>/dev/null || echo "! rode 'sudo loginctl enable-linger $USER' para subir no boot"
+
+sleep 5
+systemctl --user --no-pager --lines=0 status agent-esteira agent-tunel agent-worker | grep -E '●|Active:'
+echo
+echo "Logs: journalctl --user -u agent-tunel -u agent-worker -u agent-esteira -f"

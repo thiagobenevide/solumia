@@ -1,0 +1,114 @@
+{
+ "id": "numero_bloco_sombra_ec",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "effectcraft",
+ "estado": "aprovada",
+ "comunica": "um número que impressiona como bloco espesso com sombra que vem de longe e para no centro, com a unidade encaixando ao lado e uma legenda curta num cartão à frente",
+ "intencoes": [
+  "numero",
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "81% das famílias brasileiras estão endividadas.",
+  "O rotativo do cartão passa de 400% ao ano.",
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "A luz dessa estrela leva 4 anos para chegar até nós.",
+  "Esse fundo rendeu 12,5% no último ano.",
+  "Só 1 em cada 3 jovens tem reserva de emergência.",
+  "O brasileiro gasta em média 5 horas por dia no celular.",
+  "Essa dívida cresceu R$ 300 bilhões em dois anos."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Compare o CDB com a poupança.",
+  "Agora me conta aqui nos comentários o que você acha."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 7.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "valor",
+   "tipo": "numero",
+   "descricao": "o número como foi dito, sem a unidade",
+   "obrigatorio": true,
+   "max_car": 8,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "81,7"
+  },
+  {
+   "nome": "unidade",
+   "tipo": "texto",
+   "descricao": "a unidade que encaixa ao lado do número (%, milhões, anos, ao ano)",
+   "obrigatorio": false,
+   "max_car": 12,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": true,
+   "opcoes": [],
+   "exemplo": "%"
+  },
+  {
+   "nome": "legenda",
+   "tipo": "texto",
+   "descricao": "o que o número mede, em uma frase curta; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 48,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "das famílias brasileiras estão *endividadas*"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "espessura",
+   "valores": [
+    "fina",
+    "media",
+    "grossa"
+   ],
+   "padrao": "media",
+   "descricao": "profundidade do bloco do número"
+  },
+  {
+   "nome": "velocidade",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": "ritmo da chegada"
+  }
+ ],
+ "batidas": [
+  "valor"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Versão 2,5D do número de impacto no motor EffectCraft: profundidade simulada por escala, desfoque e camadas de extrusão deslocadas, com sombra no chão."
+}

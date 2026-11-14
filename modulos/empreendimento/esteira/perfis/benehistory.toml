@@ -1,0 +1,8 @@
+# História/religião: âmbar envelhecido, dissoluções de filme.
+[graficos]
+cor = "#d9a35b"
+[thumb]
+cor_texto = "#ffcf7a"
+[efeitos.transicao]
+tensao = ["film_dissolve", "burn_chroma", "film_dissolve"]
+dado = ["film_dissolve", "cross_dissolve"]

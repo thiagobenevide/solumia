@@ -1,0 +1,374 @@
+{
+ "versao": 1,
+ "fundo": "veu",
+ "fundo_tela_cheia": "tela",
+ "opacidade_veu": 0.85,
+ "batidas_padrao": {},
+ "elementos": [
+  {
+   "tipo": "retangulo",
+   "nome": "Sombra do painel",
+   "x": 0.046,
+   "y": 0.712,
+   "w": 1.64,
+   "h": 0.26,
+   "cor": "fundo",
+   "opacidade": 50,
+   "raio": 0.015,
+   "ancora_esq": true,
+   "vertical": {
+    "x": 0.05,
+    "y": 0.41,
+    "w": 0.92,
+    "h": 0.7
+   }
+  },
+  {
+   "tipo": "retangulo",
+   "nome": "Painel",
+   "x": 0.04,
+   "y": 0.7,
+   "w": 1.64,
+   "h": 0.26,
+   "cor": "fundo2",
+   "opacidade": 88,
+   "raio": 0.015,
+   "ancora_esq": true,
+   "vertical": {
+    "x": 0.04,
+    "y": 0.4,
+    "w": 0.92,
+    "h": 0.7
+   }
+  },
+  {
+   "tipo": "retangulo",
+   "nome": "Barra lateral",
+   "x": 0.04,
+   "y": 0.7,
+   "w": 0.012,
+   "h": 0.26,
+   "cor": "destaque",
+   "ancora_esq": true,
+   "vertical": {
+    "x": 0.04,
+    "y": 0.4,
+    "w": 0.92,
+    "h": 0.012
+   }
+  },
+  {
+   "tipo": "retangulo",
+   "nome": "Linha de varredura",
+   "x": 0.04,
+   "y": 0.958,
+   "w": 1.64,
+   "h": 0.004,
+   "cor": "apoio",
+   "ancora_esq": true,
+   "vertical": {
+    "x": 0.04,
+    "y": 0.797,
+    "w": 0.92
+   }
+  },
+  {
+   "tipo": "elipse",
+   "nome": "Pulso",
+   "x": 0.1,
+   "y": 0.83,
+   "d": 0.15,
+   "cor": "destaque",
+   "contorno": 0.004,
+   "vertical": {
+    "x": 0.5,
+    "y": 0.49,
+    "d": 0.2
+   }
+  },
+  {
+   "tipo": "elipse",
+   "nome": "Disco do selo",
+   "x": 0.1,
+   "y": 0.83,
+   "d": 0.15,
+   "cor": "fundo",
+   "vertical": {
+    "x": 0.5,
+    "y": 0.49,
+    "d": 0.2
+   }
+  },
+  {
+   "tipo": "elipse",
+   "nome": "Anel do selo",
+   "x": 0.1,
+   "y": 0.83,
+   "d": 0.15,
+   "cor": "destaque",
+   "contorno": 0.006,
+   "vertical": {
+    "x": 0.5,
+    "y": 0.49,
+    "d": 0.2
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Exclamação",
+   "conteudo": "!",
+   "x": 0.1,
+   "y": 0.865,
+   "fonte": "fD",
+   "peso": 900,
+   "tam": 0.1,
+   "cor": "destaque",
+   "alinhar": "centro",
+   "vertical": {
+    "x": 0.5,
+    "y": 0.514,
+    "tam": 0.12
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Kicker Atenção",
+   "conteudo": "Atenção",
+   "x": 0.19,
+   "y": 0.755,
+   "fonte": "fM",
+   "peso": 700,
+   "tam": 0.026,
+   "cor": "destaque",
+   "alinhar": "esquerda",
+   "caps": true,
+   "tracking": 300,
+   "vertical": {
+    "x": 0.5,
+    "y": 0.595,
+    "tam": 0.03,
+    "alinhar": "centro"
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Título",
+   "conteudo": "{{titulo}}",
+   "se": {
+    "encaixe": "titulo"
+   },
+   "x": 0.19,
+   "y": 0.775,
+   "largura": 0.76,
+   "fonte": "fD",
+   "peso": 800,
+   "tam": 0.06,
+   "cor": "texto",
+   "alinhar": "esquerda",
+   "entrelinha": 1.1,
+   "vertical": {
+    "x": 0.08,
+    "y": 0.615,
+    "largura": 0.84,
+    "tam": 0.075,
+    "alinhar": "centro"
+   }
+  }
+ ],
+ "animacoes": [
+  {
+   "anim": "entrar",
+   "alvo": "Sombra do painel",
+   "de": "aparecer",
+   "t": 0.1,
+   "dur": 0.6
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Painel",
+   "de": "esq",
+   "t": 0,
+   "dur": 0.6
+  },
+  {
+   "anim": "tracar",
+   "alvo": "Barra lateral",
+   "t": 0.1,
+   "dur": 0.7,
+   "vertical": true
+  },
+  {
+   "anim": "tracar",
+   "alvo": "Linha de varredura",
+   "t": 0.4,
+   "dur": 0.9
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Disco do selo",
+   "de": "escala",
+   "t": 0.15,
+   "dur": 0.5
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Anel do selo",
+   "de": "escala",
+   "t": 0.2,
+   "dur": 0.6
+  },
+  {
+   "anim": "chaves",
+   "alvo": "Pulso",
+   "prop": "opacidade",
+   "pares": [
+    [
+     0,
+     0
+    ],
+    [
+     0.3,
+     70
+    ],
+    [
+     1.1,
+     0
+    ],
+    [
+     1.2,
+     70
+    ],
+    [
+     2,
+     0
+    ],
+    [
+     2.1,
+     70
+    ],
+    [
+     2.9,
+     0
+    ]
+   ]
+  },
+  {
+   "anim": "chaves",
+   "alvo": "Pulso",
+   "prop": "escala",
+   "pares": [
+    [
+     0,
+     [
+      100,
+      100
+     ]
+    ],
+    [
+     0.3,
+     [
+      100,
+      100
+     ]
+    ],
+    [
+     1.1,
+     [
+      190,
+      190
+     ]
+    ],
+    [
+     1.2,
+     [
+      100,
+      100
+     ]
+    ],
+    [
+     2,
+     [
+      190,
+      190
+     ]
+    ],
+    [
+     2.1,
+     [
+      100,
+      100
+     ]
+    ],
+    [
+     2.9,
+     [
+      190,
+      190
+     ]
+    ]
+   ]
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Exclamação",
+   "de": "escala",
+   "t": 0.35,
+   "dur": 0.5
+  },
+  {
+   "anim": "chaves",
+   "alvo": "Exclamação",
+   "prop": "rotacao",
+   "pares": [
+    [
+     0.8,
+     0
+    ],
+    [
+     0.9,
+     -12
+    ],
+    [
+     1,
+     10
+    ],
+    [
+     1.1,
+     -6
+    ],
+    [
+     1.2,
+     0
+    ]
+   ]
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Kicker Atenção",
+   "de": "esq",
+   "t": 0.25,
+   "dur": 0.6
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Título",
+   "de": "baixo",
+   "t": 0.35,
+   "dur": 0.7
+  },
+  {
+   "anim": "desfocar",
+   "alvo": "Título",
+   "pares": [
+    [
+     0.35,
+     14
+    ],
+    [
+     1,
+     0
+    ]
+   ]
+  }
+ ]
+}

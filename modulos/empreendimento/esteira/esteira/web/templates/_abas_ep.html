@@ -1,0 +1,11 @@
+{# Cabeçalho comum das páginas de um episódio: trilha, título e abas. Recebe `ep`, `aba` e, se houver, `titulo_ep`. #}
+<div class="flex flex-wrap items-center gap-2 text-sm text-slate-400">
+  <a href="/" class="hover:text-white">Biblioteca</a><span class="text-slate-600">/</span>
+  <a href="/ep/{{ ep }}" class="hover:text-white font-mono">{{ ep }}</a>
+</div>
+<nav class="mt-4 flex gap-1 overflow-x-auto p-1 rounded-xl bg-tinta-900/70 border border-azul-400/10 w-fit max-w-full text-sm">
+  {% for chave, href, nome in [("geral", "", "Visão geral"), ("roteiro", "/roteiro", "Roteiro"), ("graficos", "/graficos", "Gráficos"), ("thumbs", "/thumbs", "Thumbs"),
+                               ("cortes", "/cortes", "Cortes"), ("cenas", "/cenas", "Linha do tempo")] %}
+  <a href="/ep/{{ ep }}{{ href }}" class="shrink-0 px-4 py-2 rounded-lg transition {{ 'bg-azul-500 text-white shadow-[0_4px_16px_-4px_#2563eb]' if chave == aba else 'text-slate-400 hover:text-white hover:bg-white/5' }}">{{ nome }}</a>
+  {% endfor %}
+</nav>

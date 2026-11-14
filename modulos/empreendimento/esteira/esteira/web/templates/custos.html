@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titulo %}Custos · Esteira dark{% endblock %}
+{% block corpo %}
+<p class="font-mono text-xs tracking-[.25em] text-azul-400 uppercase">Escalonamento</p>
+<h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">Consumo do Claude</h1>
+<p class="mt-2 text-sm text-slate-400">O Claude só é chamado quando o código e o LLM local não resolvem com confiança. Tetos em <code class="font-mono text-slate-300">config.toml [claude]</code>.</p>
+<p class="mt-2 text-sm text-emerald-300/90">Sem cobrança extra: as chamadas usam a sua assinatura do Claude (sem chave de API). Os valores em US$ são o <b>equivalente em preço de API</b>, só para medir o consumo e aplicar os tetos; eles gastam o limite de uso da assinatura, não dinheiro.</p>
+
+<div class="mt-6 grid gap-3 sm:grid-cols-3">
+  {% for rot, val, sub in [("Hoje", hoje, "teto US$ %.2f" % cfg.get('teto_dia_usd', 3)), ("Total", total, "%d chamadas" % regs|length), ("Teto por episódio", cfg.get('teto_episodio_usd', 1), cfg.get('modelo', ''))] %}
+  <div class="cartao rounded-xl p-5"><p class="text-xs text-slate-500 uppercase tracking-wider">{{ rot }}</p>
+    <p class="mt-2 text-3xl font-semibold text-white tabular-nums">US$ {{ '%.3f' % val }}</p><p class="mt-1 text-xs text-slate-500">{{ sub }}</p></div>
+  {% endfor %}
+</div>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-[300px_1fr]">
+  <div class="cartao rounded-xl p-4">
+    <p class="font-mono text-xs tracking-widest text-slate-500 uppercase mb-3">Por episódio</p>
+    {% for ep, v in por_ep %}<div class="flex justify-between py-1.5 text-sm border-b border-white/5 last:border-0"><a href="/ep/{{ ep }}" class="hover:text-azul-300">{{ ep }}</a><span class="font-mono tabular-nums">US$ {{ '%.3f' % v }}</span></div>
+    {% else %}<p class="text-sm text-slate-500">Nenhuma chamada.</p>{% endfor %}
+  </div>
+  <div class="cartao rounded-xl overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="text-xs text-slate-500 uppercase tracking-wider"><tr class="border-b border-white/5"><th class="text-left p-3">Quando</th><th class="text-left p-3">Episódio</th><th class="text-left p-3">Motivo</th><th class="text-right p-3">Equiv. US$</th></tr></thead>
+      <tbody>{% for r in regs %}<tr class="border-b border-white/5 last:border-0"><td class="p-3 font-mono text-xs text-slate-400">{{ r.t[5:16].replace('T', ' ') }}</td><td class="p-3">{{ r.ep }}</td><td class="p-3 text-slate-300">{{ r.motivo }}{% if r.resposta is none %} <span class="text-rose-400">(sem resposta)</span>{% endif %}</td><td class="p-3 text-right font-mono tabular-nums">{{ '%.4f' % r.custo }}</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

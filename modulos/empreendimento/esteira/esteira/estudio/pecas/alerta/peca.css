@@ -1,0 +1,11 @@
+/* Migrada do kit (cena alerta). */
+.area.split .p-alerta .alerta { top: 30%; bottom: auto; }
+.p-alerta .alerta { position: absolute; left: calc(7 * var(--U)); right: calc(7 * var(--U)); bottom: calc(10 * var(--U)); display: flex; align-items: center; gap: calc(3 * var(--U)); opacity: 0; }
+.vertical .p-alerta .alerta { bottom: auto; top: 58%; }
+.p-alerta .alerta .ai { position: relative; flex: none; width: calc(13 * var(--U)); height: calc(13 * var(--U)); border-radius: 50%; display: grid; place-items: center;
+  color: var(--destaque); background: color-mix(in srgb, var(--destaque) 14%, var(--fundo)); border: calc(.3 * var(--U)) solid var(--destaque); }
+.p-alerta .alerta .ai svg { width: 58%; height: 58%; }
+.p-alerta .alerta .ai svg * { stroke-dasharray: 1; }
+.p-alerta .alerta .pulso { position: absolute; inset: 0; border-radius: 50%; border: calc(.3 * var(--U)) solid var(--destaque); }
+.p-alerta .alerta .ak { font: 700 calc(2.3 * var(--U)) var(--fM); letter-spacing: .3em; text-transform: uppercase; color: var(--destaque); }
+.p-alerta .alerta .ap { margin-top: calc(.8 * var(--U)); font: 800 calc(5.4 * var(--U) * var(--esc, 1))/1.1 var(--fD); letter-spacing: -.01em; }

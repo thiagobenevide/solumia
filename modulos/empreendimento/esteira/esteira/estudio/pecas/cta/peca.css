@@ -1,0 +1,11 @@
+/* Migrada do kit (cena cta). */
+.p-cta .cta { position: absolute; left: 0; right: 0; bottom: calc(12 * var(--U)); display: flex; justify-content: center; opacity: 0; }
+.vertical .p-cta .cta { bottom: auto; top: 62%; }
+.p-cta .cta .anel { position: absolute; left: 50%; top: 50%; width: calc(60 * var(--U)); height: calc(14 * var(--U)); margin: calc(-7 * var(--U)) 0 0 calc(-30 * var(--U));
+  border-radius: 99px; border: calc(.4 * var(--U)) solid var(--destaque); }
+.p-cta .botao { position: relative; display: flex; align-items: center; gap: calc(2 * var(--U)); font: 800 calc(5 * var(--U))/1 var(--fD); text-transform: uppercase;
+  letter-spacing: -.01em; padding: calc(2.6 * var(--U)) calc(5 * var(--U)); border-radius: 99px; color: var(--fundo); background: var(--destaque);
+  box-shadow: 0 0 calc(5 * var(--U)) color-mix(in srgb, var(--destaque) 45%, transparent); }
+#root .p-cta .botao b { color: var(--fundo); text-decoration: underline; text-underline-offset: .12em; }
+.p-cta .seta { display: inline-block; }
+.area.split .p-cta .cta { top: 30%; bottom: auto; }

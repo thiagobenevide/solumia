@@ -1,0 +1,22 @@
+name: agent_eletronica
+description: "Telas do módulo Eletrônica: CAD de circuitos (esquemático) com mouse, tablet e caneta."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  agent_core:
+    path: ../../../plataforma/app_core
+  file_picker: ^13.3.0
+  pdf: ^3.11.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

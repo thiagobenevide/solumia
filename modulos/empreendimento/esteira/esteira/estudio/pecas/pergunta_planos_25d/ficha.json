@@ -1,0 +1,97 @@
+{
+ "id": "pergunta_planos_25d",
+ "versao": 1,
+ "origem": "fabrica",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma pergunta retórica ao espectador num cartão em perspectiva que chega do fundo, palavra a palavra, com uma interrogação ou anéis em planos de profundidade atrás",
+ "intencoes": [
+  "pergunta"
+ ],
+ "exemplos_sim": [
+  "Você sabe para onde vai o seu dinheiro todo mês?",
+  "Será que vale mesmo a pena deixar tudo na poupança?",
+  "E se você começasse a investir hoje com apenas cinquenta reais?",
+  "Por que o cartão de crédito parece tão fácil de usar e tão difícil de pagar?",
+  "Quanto custa, de verdade, parcelar essa compra?",
+  "Mas afinal, o que é inflação e por que ela mexe no seu bolso?",
+  "Você já parou para pensar quanto tempo trabalha só para pagar juros?"
+ ],
+ "exemplos_nao": [
+  "Hoje vamos falar sobre reserva de emergência.",
+  "O Tesouro Selic rende 10,5% ao ano.",
+  "Primeiro anote suas despesas; depois corte o supérfluo.",
+  "Se inscreva no canal e ative o sininho."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 6.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "pergunta",
+   "tipo": "texto",
+   "descricao": "a pergunta como foi dita; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 70,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Você sabe para onde *vai* o seu dinheiro?"
+  },
+  {
+   "nome": "apoio",
+   "tipo": "texto",
+   "descricao": "duas ou três palavras acima da pergunta, que situam o tema",
+   "obrigatorio": false,
+   "max_car": 28,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "pense nisso"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "camera",
+   "valores": [
+    "orbita",
+    "aproxima"
+   ],
+   "padrao": "orbita",
+   "descricao": "orbita: a cena gira de um lado ao outro; aproxima: a câmera avança devagar sobre o cartão"
+  },
+  {
+   "nome": "fundo",
+   "valores": [
+    "interrogacao",
+    "aneis"
+   ],
+   "padrao": "interrogacao",
+   "descricao": "o que fica em profundidade atrás do cartão: um ponto de interrogação gigante ou anéis concêntricos"
+  }
+ ],
+ "batidas": [
+  "pergunta"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Lacuna pergunta × 2_5d. Cartão em perspectiva (perspective ~140U), planos atrás em z negativo, giro de ±8° durante a fala. Interrogação reduzida para caber na área segura em qualquer pele."
+}

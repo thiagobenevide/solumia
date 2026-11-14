@@ -1,0 +1,10 @@
+/* Câmera atravessando planos: só variáveis da pele do kit. */
+.p-planos_camera .pc-cena { position: absolute; inset: 0; perspective: calc(110 * var(--U)); perspective-origin: 50% 50%; overflow: hidden; }
+.p-planos_camera .pc-mundo { position: absolute; left: 50%; top: 50%; transform-style: preserve-3d; }
+.p-planos_camera .pc-plano { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; opacity: 0;
+  font: 700 calc(6 * var(--U)) var(--fD); letter-spacing: -.01em; color: color-mix(in srgb, var(--texto) 60%, transparent);
+  filter: blur(calc(.25 * var(--U))); }
+.p-planos_camera .pc-tit { position: absolute; width: calc(120 * var(--U)); transform: translate(-50%, -50%); text-align: center;
+  font: 800 calc(9 * var(--U) * var(--esc, 1))/1.05 var(--fD); letter-spacing: -.02em; color: var(--texto); opacity: 0; }
+.vertical .p-planos_camera .pc-tit { width: calc(86 * var(--U)); font-size: calc(10 * var(--U) * var(--esc, 1)); }
+.vertical .p-planos_camera .pc-plano { font-size: calc(7 * var(--U)); }

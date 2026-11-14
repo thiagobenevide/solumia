@@ -1,0 +1,60 @@
+{
+ "id": "carimbo",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "conclusão curta e firme (pronto, aprovado, proibido) carimbada",
+ "intencoes": [
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "Pronto: dívida quitada.",
+  "E isso é proibido por lei.",
+  "Resultado: aprovado.",
+  "Golpe confirmado.",
+  "Missão cumprida."
+ ],
+ "exemplos_nao": [
+  "81% estão endividadas.",
+  "Passo 1: anote os gastos.",
+  "Os juros mais caros são estes."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "leve"
+ ],
+ "energia": "alta",
+ "peso": "texto",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 1.0,
+ "duracao_max": 4.0,
+ "tela_cheia": false,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Aprovado"
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "stamp"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

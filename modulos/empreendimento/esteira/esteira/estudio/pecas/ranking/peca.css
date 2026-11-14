@@ -1,0 +1,12 @@
+/* Migrada do kit (cena ranking). */
+.p-ranking .ranking { align-items: stretch; text-align: left; gap: calc(2.6 * var(--U)); padding: 0 calc(16 * var(--U)); }
+.vertical .p-ranking .ranking { padding: 0 calc(7 * var(--U)); }
+.p-ranking .rk { display: grid; grid-template-columns: calc(9 * var(--U)) 1fr calc(22 * var(--U)); align-items: center; gap: calc(2.6 * var(--U)); opacity: 0; }
+.p-ranking .rk .rp { font: 800 calc(5 * var(--U))/1 var(--fD); color: var(--acento); border-radius: calc(1 * var(--U)); text-align: center; }
+.p-ranking .rk.top .rp { color: var(--destaque); }
+.p-ranking .rk .rr { font: 600 calc(3.4 * var(--U))/1.2 var(--fT); margin-bottom: calc(1 * var(--U)); }
+.p-ranking .rk .rt { height: calc(1.6 * var(--U)); background: color-mix(in srgb, var(--texto) 8%, transparent); border-radius: 99px; overflow: hidden; }
+.p-ranking .rk .re { height: 100%; transform-origin: 0 50%; background: color-mix(in srgb, var(--texto) 50%, transparent); }
+.p-ranking .rk.top .re { background: var(--destaque); box-shadow: 0 0 calc(2 * var(--U)) var(--destaque); }
+.p-ranking .rk .rv { font: 800 calc(6 * var(--U) * var(--esc, 1))/1 var(--fD); text-align: right; font-variant-numeric: tabular-nums; }
+.p-ranking .rk.top .rv { color: var(--destaque); }

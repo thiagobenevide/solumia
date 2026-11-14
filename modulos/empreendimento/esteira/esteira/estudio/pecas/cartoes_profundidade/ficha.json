@@ -1,0 +1,98 @@
+{
+ "id": "cartoes_profundidade",
+ "versao": 1,
+ "origem": "etapa7",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "dois a quatro itens em cartões que chegam do fundo e se arrumam em camadas",
+ "intencoes": [
+  "lista",
+  "processo",
+  "comparacao"
+ ],
+ "exemplos_sim": [
+  "Existem três tipos de dívida: a boa, a ruim e a perigosa.",
+  "O método tem quatro etapas, e a última é a mais importante.",
+  "Você tem duas saídas: renegociar ou trocar a dívida.",
+  "São três sinais de alerta que quase ninguém percebe.",
+  "As opções são poupança, Tesouro e CDB."
+ ],
+ "exemplos_nao": [
+  "81% das famílias estão endividadas.",
+  "Por que a gente gasta mais do que ganha?",
+  "Comenta aqui embaixo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 9.0,
+ "tela_cheia": true,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "título acima dos cartões",
+   "obrigatorio": false,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Três tipos de *dívida*"
+  },
+  {
+   "nome": "itens",
+   "tipo": "itens",
+   "descricao": "um cartão por item; o último fica em destaque",
+   "obrigatorio": true,
+   "max_car": 34,
+   "max_valor": 16,
+   "min_itens": 2,
+   "max_itens": 4,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "A dívida boa",
+    "A dívida ruim",
+    "A dívida perigosa"
+   ]
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "arranjo",
+   "valores": [
+    "leque",
+    "fila"
+   ],
+   "padrao": "leque",
+   "descricao": "cartões abertos em leque ou em fila funda"
+  },
+  {
+   "nome": "velocidade",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": ""
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "swoosh"
+ },
+ "notas": "Peça 2,5D de referência (etapa 7)."
+}

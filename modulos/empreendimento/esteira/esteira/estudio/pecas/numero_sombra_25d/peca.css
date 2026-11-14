@@ -1,0 +1,34 @@
+/* Número em bloco 2,5D: só variáveis da pele do kit. */
+.p-numero_sombra_25d { display: flex; align-items: center; justify-content: center; }
+.p-numero_sombra_25d .ns-cena { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  perspective: calc(150 * var(--U)); }
+.p-numero_sombra_25d .ns-palco { display: flex; flex-direction: column; align-items: center; transform-style: preserve-3d;
+  max-width: calc(150 * var(--U)); text-align: center; }
+.p-numero_sombra_25d .ns-linha { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap;
+  gap: calc(1 * var(--U)) calc(2.5 * var(--U)); transform-style: preserve-3d; }
+.p-numero_sombra_25d .ns-n { --dx: 1; font: 800 calc(19 * var(--U) * var(--esc, 1))/1.05 var(--fD); color: var(--destaque);
+  letter-spacing: -.03em; font-variant-numeric: tabular-nums; white-space: nowrap;
+  text-shadow:
+    calc(var(--dx) * .3 * var(--U)) calc(.3 * var(--U)) 0 color-mix(in srgb, var(--destaque) 60%, var(--fundo)),
+    calc(var(--dx) * .6 * var(--U)) calc(.6 * var(--U)) 0 color-mix(in srgb, var(--destaque) 55%, var(--fundo)),
+    calc(var(--dx) * .9 * var(--U)) calc(.9 * var(--U)) 0 color-mix(in srgb, var(--destaque) 50%, var(--fundo)),
+    calc(var(--dx) * 1.2 * var(--U)) calc(1.2 * var(--U)) 0 color-mix(in srgb, var(--destaque) 45%, var(--fundo)),
+    calc(var(--dx) * 1.5 * var(--U)) calc(1.5 * var(--U)) 0 color-mix(in srgb, var(--destaque) 40%, var(--fundo)),
+    calc(var(--dx) * 1.8 * var(--U)) calc(1.8 * var(--U)) 0 color-mix(in srgb, var(--destaque) 35%, var(--fundo)),
+    calc(var(--dx) * 2.6 * var(--U)) calc(3 * var(--U)) calc(1.4 * var(--U)) rgba(0,0,0,.5); }
+.p-numero_sombra_25d.ns-dir .ns-n { --dx: -1; }
+.p-numero_sombra_25d .ns-un { font: 700 calc(6.5 * var(--U) * var(--esc, 1))/1.1 var(--fD); color: var(--texto);
+  white-space: nowrap; }
+.p-numero_sombra_25d .ns-plano { margin-top: calc(6 * var(--U)); }
+.p-numero_sombra_25d .ns-leg { font: 500 calc(4.4 * var(--U))/1.25 var(--fT); color: var(--texto);
+  max-width: calc(100 * var(--U)); padding: calc(1.6 * var(--U)) calc(3 * var(--U)); border-radius: var(--R);
+  background: color-mix(in srgb, var(--fundo2) 90%, transparent);
+  border: calc(.3 * var(--U)) solid color-mix(in srgb, var(--destaque) 40%, transparent);
+  box-shadow: 0 calc(1.5 * var(--U)) calc(4 * var(--U)) rgba(0,0,0,.5); }
+.p-numero_sombra_25d .ns-leg .d { color: var(--destaque); }
+.vertical .p-numero_sombra_25d .ns-palco { max-width: calc(88 * var(--U)); }
+.vertical .p-numero_sombra_25d .ns-linha { flex-direction: column; align-items: center; flex-wrap: nowrap; gap: calc(1.5 * var(--U)); }
+.vertical .p-numero_sombra_25d .ns-n { font-size: calc(12 * var(--U) * var(--esc, 1)); }
+.vertical .p-numero_sombra_25d .ns-un { font-size: calc(6 * var(--U) * var(--esc, 1)); white-space: normal; }
+.vertical .p-numero_sombra_25d .ns-plano { margin-top: calc(7 * var(--U)); }
+.vertical .p-numero_sombra_25d .ns-leg { font-size: calc(4.6 * var(--U)); max-width: calc(80 * var(--U)); }

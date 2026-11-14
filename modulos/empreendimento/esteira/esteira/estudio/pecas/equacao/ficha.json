@@ -1,0 +1,86 @@
+{
+ "id": "equacao",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "conta ou cálculo dito (200 × 60 = 12 mil), termo a termo até o resultado",
+ "intencoes": [
+  "numero",
+  "processo"
+ ],
+ "exemplos_sim": [
+  "200 reais por mês vezes 60 meses dá 12 mil reais.",
+  "Se você guarda 10 reais por dia, são 3.650 por ano.",
+  "Mil reais a 10% ao mês viram 3.138 em um ano.",
+  "Somando aluguel, luz e mercado, são 2.800 reais.",
+  "Dividindo a dívida em 12 vezes, cada parcela fica em 450."
+ ],
+ "exemplos_nao": [
+  "81% estão endividadas.",
+  "Poupança ou Tesouro?",
+  "Vamos entender por que isso acontece."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 8.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 30,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Quanto você paga no ano"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "termos da conta; o último par é o resultado",
+   "obrigatorio": true,
+   "max_car": 16,
+   "max_valor": 9,
+   "min_itens": 2,
+   "max_itens": 4,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "por mês",
+     "valor": "R$ 200"
+    },
+    {
+     "rotulo": "meses",
+     "valor": "60"
+    },
+    {
+     "rotulo": "no total",
+     "valor": "R$ 12 mil"
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "click"
+ },
+ "notas": "Migrada do kit na etapa 3. Sem o dado necessário, cai em contador."
+}

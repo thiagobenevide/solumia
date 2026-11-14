@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block titulo %}Processos · Esteira dark{% endblock %}
+{% block corpo %}
+<div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+  <div>
+    <p class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase"><a href="/monitor" class="hover:underline">Monitor</a> · processos</p>
+    <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">Processos</h1>
+    <p class="mt-2 text-sm text-slate-400 max-w-2xl">Cada <span class="font-mono">./dark</span> pesado, do terminal ou da fila. Abra um para ver só ele: o que faz agora, por onde passou, chamadas de LLM, eventos e log.</p>
+  </div>
+</div>
+<div class="grid sm:grid-cols-2 gap-3 mb-6">
+{% for v, d in vagas.items() %}
+  <div class="cartao rounded-xl px-4 py-3 flex items-center gap-3">
+    <span class="h-2 w-2 rounded-full {{ 'bg-sky-400 animate-pulse' if d else 'bg-emerald-400' }}"></span>
+    <span class="text-xs font-mono uppercase tracking-wider text-slate-400">{{ 'Máquina (GPU/local)' if v == 'maquina' else 'Claude' }}</span>
+    <span class="text-xs text-slate-300 truncate">{% if d %}ocupada: <span class="font-mono">{{ d.comando }}</span>{% else %}livre{% endif %}</span>
+  </div>
+{% endfor %}
+</div>
+{% if not processos %}<div class="cartao rounded-xl p-10 text-center text-slate-400">Nenhum processo registrado ainda.</div>{% endif %}
+<div class="space-y-2">
+{% for r in processos %}
+  {% set cor = {"rodando": "text-sky-300", "ok": "text-emerald-400", "erro": "text-rose-400", "cancelado": "text-slate-500", "interrompido": "text-amber-400"}[r.estado] %}
+  <a href="/processos/{{ r.id }}" class="cartao rounded-xl px-4 py-3 flex flex-wrap items-center gap-4 hover:border-azul-400/40">
+    <span class="w-24 text-xs font-mono uppercase tracking-wider {{ cor }} {{ 'animate-pulse' if r.estado == 'rodando' }}">{{ r.estado }}</span>
+    <span class="flex-1 min-w-[220px] font-mono text-sm text-white truncate">./dark {{ r.comando }} {{ r.args|join(' ') }}</span>
+    <span class="text-[10px] px-1.5 py-0.5 rounded-md ring-1 {{ 'bg-violet-500/10 text-violet-300 ring-violet-400/25' if r.vaga == 'claude' else 'bg-orange-500/10 text-orange-300 ring-orange-400/25' }}">{{ 'Claude' if r.vaga == 'claude' else 'máquina' }}</span>
+    <span class="text-xs text-slate-500">{{ 'fila' if r.fila else 'terminal' }}</span>
+    <span class="w-40 text-right text-xs font-mono text-slate-500">{{ r.inicio|int|datahora }} · {{ (r.dur // 60)|int }}m{{ '%02d' % (r.dur % 60) }}s</span>
+  </a>
+{% endfor %}
+</div>
+{% if processos|selectattr('estado', 'equalto', 'rodando')|list %}<script>setTimeout(() => location.reload(), 5000)</script>{% endif %}
+{% endblock %}

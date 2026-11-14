@@ -1,0 +1,67 @@
+/* CTA com botão: só variáveis da pele do kit (cores, fontes, --U). */
+.p-cta_botao_sino { display: flex; align-items: center; justify-content: center; }
+.p-cta_botao_sino .cs-corpo { display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: calc(4 * var(--U)); max-width: calc(150 * var(--U)); }
+.p-cta_botao_sino .cs-col { display: flex; flex-direction: column; align-items: center; gap: calc(4 * var(--U)); }
+.p-cta_botao_sino .cs-texto { font: 800 calc(7 * var(--U) * var(--esc, 1))/1.15 var(--fD); color: var(--texto);
+  max-width: calc(130 * var(--U)); }
+.p-cta_botao_sino .cs-texto .d { color: var(--destaque); }
+.p-cta_botao_sino .cs-linha { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: calc(4 * var(--U)); }
+.p-cta_botao_sino .cs-bw { position: relative; display: inline-block; }
+.p-cta_botao_sino .cs-btn { position: relative; display: grid; overflow: hidden; border-radius: 999px;
+  padding: calc(2.6 * var(--U)) calc(5 * var(--U)); background: var(--destaque); color: var(--fundo);
+  font: 800 calc(4.6 * var(--U) * var(--esc, 1))/1 var(--fD); letter-spacing: .02em; text-transform: uppercase;
+  white-space: nowrap; box-shadow: 0 calc(1 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.5); }
+.p-cta_botao_sino .cs-fill { position: absolute; inset: 0; background: var(--texto); opacity: 0; }
+.p-cta_botao_sino .cs-l { grid-area: 1 / 1; position: relative; z-index: 1; display: flex; align-items: center;
+  justify-content: center; gap: calc(1 * var(--U)); }
+.p-cta_botao_sino .cs-l + .cs-l { opacity: 0; color: var(--fundo); }
+.p-cta_botao_sino .cs-gl svg { width: 1.2em; height: 1.2em; fill: currentColor; display: block; }
+.p-cta_botao_sino .cs-onda { position: absolute; inset: 0; border: calc(.6 * var(--U)) solid var(--destaque);
+  border-radius: 999px; opacity: 0; pointer-events: none; }
+.p-cta_botao_sino .cs-cur { position: absolute; left: 50%; top: 50%; width: calc(7 * var(--U)); height: calc(7 * var(--U));
+  pointer-events: none; z-index: 2; opacity: 0; filter: drop-shadow(0 calc(.5 * var(--U)) calc(.8 * var(--U)) rgba(0,0,0,.5)); }
+.p-cta_botao_sino .cs-cur svg { width: 100%; height: 100%; fill: var(--texto); stroke: var(--fundo); stroke-width: 1.4; display: block; }
+.p-cta_botao_sino .cs-sino { position: relative; width: calc(11 * var(--U)); height: calc(11 * var(--U)); color: var(--acento);
+  display: grid; place-items: center; opacity: 0; }
+.p-cta_botao_sino .cs-sino .cs-gl { display: contents; }
+.p-cta_botao_sino .cs-sino svg { width: 100%; height: 100%; fill: currentColor; }
+.p-cta_botao_sino .cs-ponto { position: absolute; top: 4%; right: 6%; width: calc(3 * var(--U)); height: calc(3 * var(--U));
+  border-radius: 50%; background: var(--destaque); border: calc(.5 * var(--U)) solid var(--fundo); transform: scale(0); }
+.p-cta_botao_sino .cs-cont { font: 800 calc(7 * var(--U) * var(--esc, 1))/1.1 var(--fD); color: var(--destaque);
+  font-variant-numeric: tabular-nums; max-width: calc(120 * var(--U)); }
+.p-cta_botao_sino .cs-cont small { font-size: .5em; font-weight: 600; margin-left: .15em; color: var(--texto); }
+.p-cta_botao_sino .cs-det { font: 500 calc(4.2 * var(--U))/1.25 var(--fT); color: var(--texto); max-width: calc(100 * var(--U)); }
+.p-cta_botao_sino .cs-det .d { color: var(--destaque); }
+
+/* variação 2,5D: cartão do próximo vídeo */
+.p-cta_botao_sino .cs-cartao { flex-direction: row; gap: calc(9 * var(--U)); }
+.p-cta_botao_sino .cs-cartao .cs-col { align-items: flex-start; text-align: left; max-width: calc(80 * var(--U)); }
+.p-cta_botao_sino .cs-cartao .cs-texto { font-size: calc(6 * var(--U) * var(--esc, 1)); max-width: calc(80 * var(--U)); }
+.p-cta_botao_sino .cs-cartao .cs-linha { justify-content: flex-start; }
+.p-cta_botao_sino .cs-cena { perspective: calc(130 * var(--U)); }
+.p-cta_botao_sino .cs-palco { transform-style: preserve-3d; width: calc(62 * var(--U)); padding: calc(1.6 * var(--U));
+  background: var(--fundo2); border-radius: calc(2 * var(--U)); box-shadow: 0 calc(3 * var(--U)) calc(7 * var(--U)) rgba(0,0,0,.5); opacity: 0; }
+.p-cta_botao_sino .cs-thumb { position: relative; aspect-ratio: 16 / 9; border-radius: calc(1.2 * var(--U)); overflow: hidden;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--destaque) 55%, var(--fundo2)), var(--fundo2)); }
+.p-cta_botao_sino .cs-playc { width: calc(9 * var(--U)); height: calc(9 * var(--U)); border-radius: 50%; background: var(--texto);
+  color: var(--fundo); display: grid; place-items: center; }
+.p-cta_botao_sino .cs-playc svg { width: calc(4.5 * var(--U)); height: calc(4.5 * var(--U)); }
+.p-cta_botao_sino .cs-barra { position: absolute; left: 0; right: 0; bottom: 0; height: calc(.8 * var(--U));
+  background: color-mix(in srgb, var(--texto) 25%, transparent); }
+.p-cta_botao_sino .cs-barra b { display: block; height: 100%; background: var(--acento); transform: scaleX(0); transform-origin: left; }
+.p-cta_botao_sino .cs-ctit { padding-top: calc(1.4 * var(--U)); font: 700 calc(3.6 * var(--U) * var(--esc, 1))/1.2 var(--fT);
+  color: var(--texto); text-align: left; }
+
+.vertical .p-cta_botao_sino .cs-corpo { max-width: calc(92 * var(--U)); }
+.vertical .p-cta_botao_sino .cs-texto { font-size: calc(7.5 * var(--U) * var(--esc, 1)); max-width: calc(88 * var(--U)); }
+.vertical .p-cta_botao_sino .cs-btn { font-size: calc(4.4 * var(--U) * var(--esc, 1)); padding: calc(2.6 * var(--U)) calc(4.4 * var(--U)); }
+.vertical .p-cta_botao_sino .cs-cont { font-size: calc(6.5 * var(--U) * var(--esc, 1)); max-width: calc(88 * var(--U)); }
+.vertical .p-cta_botao_sino .cs-det { font-size: calc(5.4 * var(--U)); max-width: calc(88 * var(--U)); }
+.vertical .p-cta_botao_sino .cs-cartao { flex-direction: column; gap: calc(6 * var(--U)); }
+.vertical .p-cta_botao_sino .cs-cartao .cs-col { align-items: center; text-align: center; max-width: calc(88 * var(--U)); }
+.vertical .p-cta_botao_sino .cs-cartao .cs-texto { font-size: calc(7 * var(--U) * var(--esc, 1)); max-width: calc(88 * var(--U)); }
+.vertical .p-cta_botao_sino .cs-cartao .cs-linha { justify-content: center; }
+.vertical .p-cta_botao_sino .cs-palco { width: calc(76 * var(--U)); }
+.vertical .p-cta_botao_sino .cs-ctit { font-size: calc(4.4 * var(--U) * var(--esc, 1)); }

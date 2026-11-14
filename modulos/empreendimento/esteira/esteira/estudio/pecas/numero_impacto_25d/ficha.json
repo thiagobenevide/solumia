@@ -1,0 +1,104 @@
+{
+ "id": "numero_impacto_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um número que impressiona como bloco espesso que vem de longe, com a unidade ao lado e uma legenda curta num plano à frente",
+ "intencoes": [
+  "numero",
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "81% das famílias brasileiras estão endividadas.",
+  "O rotativo do cartão passa de 400% ao ano.",
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "A luz de uma estrela leva 4 anos para chegar aqui.",
+  "Esse investimento rendeu 12,5% no último ano.",
+  "O brasileiro gasta em média 9 horas por dia na internet.",
+  "Só 3 em cada 10 pessoas guardam dinheiro todo mês.",
+  "Esse celular custa 2.499 reais."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Compare o CDB com a poupança.",
+  "Se você gostou, deixa o like e se inscreve no canal."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 7.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "valor",
+   "tipo": "numero",
+   "descricao": "o número como foi dito, sem a unidade",
+   "obrigatorio": true,
+   "max_car": 8,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "1.234,5"
+  },
+  {
+   "nome": "unidade",
+   "tipo": "texto",
+   "descricao": "a unidade do número (%, milhões, reais, horas, anos)",
+   "obrigatorio": false,
+   "max_car": 12,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "milhões"
+  },
+  {
+   "nome": "legenda",
+   "tipo": "texto",
+   "descricao": "o que o número mede, em uma linha; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 44,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "de pessoas com o *nome sujo*"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "profundidade",
+   "valores": [
+    "suave",
+    "forte"
+   ],
+   "padrao": "suave",
+   "descricao": "distância e giro da chegada do número e amplitude da câmera"
+  }
+ ],
+ "batidas": [
+  "valor"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Variante 2,5D de numero_impacto: CSS 3D (perspective, translateZ, rotateX/Y), bloco extrudado por text-shadow e câmera que respira até o fim."
+}

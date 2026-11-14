@@ -1,0 +1,15 @@
+<!-- logo do Agent em silhueta branca (ícone da notificação e do mostrador) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="16"
+        android:strokeLineCap="round"
+        android:pathData="M128,140L128,60M128,140L52,194M128,140L204,194" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M128,32a26,26 0,1 0,0.01 0zM52,168a26,26 0,1 0,0.01 0zM204,168a26,26 0,1 0,0.01 0zM128,98a42,42 0,1 0,0.01 0z" />
+</vector>

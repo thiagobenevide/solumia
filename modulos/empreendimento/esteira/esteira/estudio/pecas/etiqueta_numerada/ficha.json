@@ -1,0 +1,114 @@
+{
+ "id": "etiqueta_numerada",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma etiqueta numerada presa a um card ou elemento, com número em destaque e uma palavra em caixa alta que nomeia aquele ponto (passo, lado ou momento)",
+ "intencoes": [
+  "processo",
+  "comparacao",
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "Passo dois: olhar para a câmera.",
+  "Antes, o saldo era negativo.",
+  "Depois da mudança, tudo ficou mais simples.",
+  "Primeiro ponto: a reserva de emergência.",
+  "Agora o terceiro erro, que é o mais comum.",
+  "Olha só o antes e o depois desse ajuste.",
+  "Regra número 1: nunca gaste o que ainda não ganhou.",
+  "No quarto item, falamos de impostos."
+ ],
+ "exemplos_nao": [
+  "O rotativo do cartão passa de 400% ao ano.",
+  "Vamos entender por que isso acontece.",
+  "Em 1990, o plano mudou a economia do país.",
+  "Compare o CDB com a poupança."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 1.5,
+ "duracao_max": 5.0,
+ "tela_cheia": false,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "numero",
+   "tipo": "numero",
+   "descricao": "número da etiqueta como dito, com zero à esquerda se fizer sentido (02); vazio quando for só uma palavra como ANTES",
+   "obrigatorio": false,
+   "max_car": 6,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "02"
+  },
+  {
+   "nome": "palavra",
+   "tipo": "texto",
+   "descricao": "a palavra-chave da etiqueta, em poucas palavras (vira caixa alta)",
+   "obrigatorio": true,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "olhar"
+  },
+  {
+   "nome": "complemento",
+   "tipo": "texto",
+   "descricao": "uma linha curta sob a etiqueta; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 48,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "olhe para a *câmera*, não para a tela"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "posicao",
+   "valores": [
+    "esquerda",
+    "direita"
+   ],
+   "padrao": "esquerda",
+   "descricao": "lado da tela em que a etiqueta fica e de onde ela desliza"
+  },
+  {
+   "nome": "estilo",
+   "valores": [
+    "pilula",
+    "vidro"
+   ],
+   "padrao": "pilula",
+   "descricao": "pílula escura plana ou card de vidro em perspectiva com brilho"
+  }
+ ],
+ "batidas": [
+  "numero"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Por cima da mídia, fundo transparente (sem k.veu nem fundo cheio). O número conta preservando zeros à esquerda; sem número, mostra só a palavra."
+}

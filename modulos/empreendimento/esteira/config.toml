@@ -1,0 +1,148 @@
+# Configuração da esteira de vídeos dark.
+# Cada projeto pode sobrescrever qualquer chave com um config.toml próprio dentro da pasta do projeto.
+
+[fontes]
+vault = "~/Documents/github/obsidian"     # roteiros em Notas/Empreendimento/YouTube/<canal>/Roteiros
+gravacoes = "~/Music/Youtube"              # WAVs em <Canal>/...
+artigos = "~/Documents/github/obsidian/Referências/Artigos"   # PDFs citados no vídeo
+
+[claude]
+# Escalonamento automático (claude -p) só para casos que o LLM local não resolveu com confiança.
+ativo = true
+modelo = "claude-sonnet-5-5"
+teto_episodio_usd = 1.00
+teto_dia_usd = 3.00
+teto_chamada_usd = 0.30
+
+[video]
+formato = "16:9"   # "16:9" vídeo longo (1920x1080) · "9:16" Shorts/Reels/TikTok (aplica [vertical] abaixo)
+largura = 1920
+altura = 1080
+fps = 30
+
+[producao]
+# dark: só a narração + bancos de imagens. apresentador: vídeo da câmera (onde você aparece) na V1, cortado
+# igual à narração, e mídia de banco como B-roll em parte das cenas. Cada roteiro pode escolher com
+# `modo: apresentador` no frontmatter; cada canal, no seu perfil.
+modo = "dark"
+broll = 0.45                   # fração do tempo coberta por B-roll no modo apresentador
+grade_camera = false           # aplicar o tom "dark" também sobre a câmera
+
+[acervo]
+# Toda mídia baixada fica guardada com metadados e é reaproveitada antes de chamar as APIs.
+pasta = "acervo"               # relativo a $AGENT_DATA/empreendimento, ou caminho absoluto (ex.: um HD externo)
+reaproveitar = true
+max_usos_canal = 2             # a mesma mídia aparece no máximo 2 vezes por canal
+
+[transcricao]
+modelo = "large-v3"        # tiny | base | small | medium | large-v3 (melhor em pt-BR)
+idioma = "pt"
+dispositivo = "auto"       # auto | cuda | cpu
+
+[cenas]
+alvo_segundos = 4.5        # duração ideal de cada cena (troca de imagem/vídeo)
+min_segundos = 2.5
+max_segundos = 7.0
+proporcao_video = 0.6      # fração das cenas que tenta usar vídeo em vez de foto
+
+[midia]
+# Ordem de busca. pexels e pixabay precisam de chave no arquivo .env; openverse é livre (só imagens).
+provedores = ["pexels", "pixabay", "openverse"]
+idioma_busca = "pt-BR"
+
+[edicao]
+transicao = "cross_dissolve"   # nome de qualquer transição do FilmCraft (filmcraft-cli exec effects.list kind=VideoTransition)
+transicao_frames = 12
+zoom = 8                       # % de zoom do Ken Burns ao longo de cada cena
+destaque_segundos = 2.5        # quanto tempo a palavra em *destaque* fica na tela
+fonte = "Inter"
+fonte_estilo = "Bold"
+destaque_tamanho = 130
+destaque_cor = "#ffffff"
+titulo_inicio = true           # mostra o título (linha "# ..." do roteiro) nos primeiros segundos
+legendas = false               # queima legendas geradas da narração no vídeo
+legenda_tamanho = 54
+legenda_margem = 0.06          # distância da borda de baixo (fração da altura)
+grade_cor = "dark"             # dark | nenhuma: escurece e dessatura levemente as cenas para o clima do canal
+
+[efeitos]
+# Transição de entrada de cada cena pelo clima que o LLM deu a ela (rodízio dentro da lista).
+# Efeitos fortes (glitch, flash, zoom_blur...) aparecem no máximo a cada `intervalo_forte` segundos.
+intervalo_forte = 20
+
+[efeitos.transicao]
+tensao = ["film_dissolve", "glitch", "cross_dissolve"]
+revelacao = ["flash", "zoom_blur", "light_leak"]
+dado = ["cross_dissolve", "push", "cross_dissolve"]
+respiro = ["film_dissolve", "light_sweep"]
+neutro = ["cross_dissolve"]
+
+[efeitos.zoom]   # % de Ken Burns por clima
+tensao = 12
+revelacao = 10
+dado = 7
+respiro = 5
+neutro = 8
+
+[monitor]
+# Tarifa de energia (R$/kWh, com impostos) para estimar o custo elétrico no Monitor do painel.
+tarifa_kwh = 0.85
+
+[editor]
+# Assistente de IA do editor do painel (gráficos e thumbs): "claude" (assinatura, conta no teto de [claude]) ou "local".
+motor_ia = "claude"
+
+[graficos]
+cor = "#ffd400"   # cor de destaque dos gráficos (cada perfil de canal pode trocar)
+paralelo = 6
+motor = "effectcraft"   # "effectcraft": cada peça vira um .ecproj editável (abrir pelo painel) e a engine renderiza; "html": Chromium
+
+[audio]
+musica = ""                    # trilha de fundo (opcional); toca em loop com ducking sob a narração
+musica_db = -20
+loudness_lufs = -14            # volume final padrão YouTube
+
+[foto]   # receita fixa do canal para as fotos das cenas (PhotoCraft, N1); por foto só se decide foco/recorte
+ativo = false          # true: a montagem usa a foto tratada (midia/tratadas/*.png)
+lut = "tealOrange"     # warm | cool | tealOrange | bleachBypass | fadedFilm | dayForNight | monoContrast | crossProcess
+contraste = 12
+saturacao = -8
+nitidez = 0.25         # 0–1
+grao = 0.08            # 0–1
+desfoque_fundo = 0.0   # 0–1, só quando a decisão separa os planos
+
+[thumb]
+largura = 1280
+altura = 720
+motor = "photocraft"   # "photocraft": cada thumb também vira um .pcraft em camadas (abrir pelo painel); "html": Chromium
+cena = 0                       # id da cena usada de fundo (0 = a primeira cena com mídia)
+cor_texto = "#ffd400"
+alerta = "#ff2d2d"          # vermelho de alerta (selo, seta)
+tamanho_texto = 150
+
+# Sobrescritas do formato 9:16 (o config.toml do projeto ainda vence). Área segura dos Shorts: nada
+# importante nos 250 px de cima, nos ~420 px de baixo e nos 150 px da direita (botões e legenda do app).
+[vertical.video]
+largura = 1080
+altura = 1920
+
+[vertical.cenas]
+alvo_segundos = 2.8
+min_segundos = 1.6
+max_segundos = 4.5
+
+[vertical.graficos]
+capitulos = false              # Short não tem cartela de "Parte N"
+
+[vertical.graficos.agenda]
+cobertura_max = 0.4
+
+[vertical.edicao]
+titulo_inicio = false
+legendas = true
+legenda_tamanho = 70
+legenda_margem = 0.24
+destaque_tamanho = 110
+
+[vertical.thumb]
+ativo = false                  # Shorts usam um quadro do próprio vídeo como capa

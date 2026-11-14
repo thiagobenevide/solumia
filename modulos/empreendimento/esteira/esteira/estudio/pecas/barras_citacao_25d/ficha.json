@@ -1,0 +1,137 @@
+{
+ "id": "barras_citacao_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "dois valores comparados em barras 3D com a fonte e uma frase citada, num card de vidro em perspectiva sobre a mídia",
+ "intencoes": [
+  "comparacao",
+  "numero",
+  "citacao"
+ ],
+ "exemplos_sim": [
+  "Segundo a própria Anthropic, o novo modelo resolveu 76% dos problemas de código, contra 38% do anterior.",
+  "Um estudo da USP mostrou que quem poupa todo mês junta 3 vezes mais em dez anos do que quem poupa de vez em quando.",
+  "De acordo com o Banco Central, o juro do cartão rotativo chegou a 440% ao ano, contra 14% do crédito pessoal.",
+  "Pela pesquisa do IBGE, 82% dos jovens usam o celular para estudar, enquanto só 31% usam o computador.",
+  "A própria empresa admite: o tempo de resposta caiu de 12 segundos para 4.",
+  "Segundo a OMS, 60% dos adultos dormem menos do que o ideal, contra 25% das crianças.",
+  "O relatório da consultoria aponta que o Pix já responde por 45% dos pagamentos, e o cartão de débito por 18%."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "O rendimento foi de 12,5% no último ano.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Compare o CDB com a poupança em quatro critérios."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.5,
+ "duracao_max": 9.0,
+ "tela_cheia": false,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "fonte",
+   "tipo": "texto",
+   "descricao": "título curto de quem disse ou publicou o dado, vira caixa alta na cor de destaque",
+   "obrigatorio": true,
+   "max_car": 28,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "A PRÓPRIA ANTHROPIC"
+  },
+  {
+   "nome": "frase",
+   "tipo": "texto",
+   "descricao": "a frase citada, que vai entre aspas; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 100,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Em tarefas de código, o modelo novo resolveu *o dobro* dos problemas do anterior"
+  },
+  {
+   "nome": "barras",
+   "tipo": "pares",
+   "descricao": "exatamente duas barras: rótulo de cada uma e o valor como foi dito, com a unidade",
+   "obrigatorio": true,
+   "max_car": 18,
+   "max_valor": 8,
+   "min_itens": 2,
+   "max_itens": 2,
+   "unidade": true,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Modelo anterior",
+     "valor": "38%"
+    },
+    {
+     "rotulo": "Modelo novo",
+     "valor": "76%"
+    }
+   ]
+  },
+  {
+   "nome": "rodape",
+   "tipo": "texto",
+   "descricao": "a fonte por extenso, em letra técnica no rodapé do card",
+   "obrigatorio": false,
+   "max_car": 46,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Fonte: relatório técnico, 2026"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "lado",
+   "valores": [
+    "direita",
+    "esquerda",
+    "centro"
+   ],
+   "padrao": "direita",
+   "descricao": "onde o card flutua sobre a mídia"
+  },
+  {
+   "nome": "inclinacao",
+   "valores": [
+    "suave",
+    "media",
+    "forte"
+   ],
+   "padrao": "media",
+   "descricao": "quanto as barras giram em perspectiva"
+  }
+ ],
+ "batidas": [
+  "barras"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Card de vidro sem fundo cheio; em tela cheia usa o fundo do kit. Barras são prismas CSS 3D (frente, lado, topo); a maior usa a cor de destaque e a outra a de apoio. Altura proporcional ao valor."
+}

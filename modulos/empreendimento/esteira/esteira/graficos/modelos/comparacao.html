@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{# Dois lados frente a frente (método A × método B), com até 3 linhas de atributos cada. #}
+{% block estilo %}
+.veu { position: absolute; inset: 0; background: rgba(6,7,10,.82); animation: aparecer .45s ease-out both; }
+.lado { position: absolute; top: 200px; width: 700px; }
+.a { left: 170px; animation: entrar-esq .8s .15s var(--suave) both; }
+.b { right: 170px; text-align: right; animation: entrar-dir .8s .3s var(--suave) both; }
+@keyframes entrar-dir { from { opacity: 0; transform: translateX(80px); filter: blur(12px); } }
+.lado .rotulo { color: #8f8a80; }
+.lado .nome { margin-top: 20px; font: 800 92px/1 Inter; letter-spacing: -.03em; }
+.b .nome { color: var(--cor); }
+.lado ul { list-style: none; margin-top: 44px; }
+.lado li { margin-top: 22px; font: 500 34px/1.3 Inter; color: #e6e1d6; animation: entrar-baixo .6s var(--suave) both; }
+.vs { position: absolute; left: 50%; top: 250px; transform: translateX(-50%); font: italic 700 64px Playfair, serif;
+  color: #6f6a61; animation: aparecer .6s .5s both; }
+.eixo { position: absolute; left: 50%; top: 360px; width: 2px; height: 460px; background: rgba(255,255,255,.15);
+  transform-origin: 50% 0; animation: crescer .8s .5s var(--suave) both; }
+@keyframes crescer { from { transform: scaleY(0); } }
+{% if vertical %}
+.lado { width: auto; left: 80px; right: 120px; text-align: left; }
+.a { top: 300px; }
+.b { top: 1000px; right: 120px; text-align: left; }
+.lado .nome { font-size: 84px; }
+.lado ul { margin-top: 26px; }
+.vs { left: 80px; top: 860px; transform: none; }
+.eixo { display: none; }
+{% endif %}
+{% endblock %}
+{% block corpo %}
+<div class="veu"></div>
+<div class="lado a"><div class="rotulo">{{ rotulo_a }}</div><div class="nome">{{ nome_a }}</div>
+  <ul>{% for x in itens_a %}<li style="animation-delay:{{ '%.2f' % (0.9 + loop.index0 * 0.35) }}s">{{ x }}</li>{% endfor %}</ul></div>
+<div class="vs">vs</div><div class="eixo"></div>
+<div class="lado b"><div class="rotulo">{{ rotulo_b }}</div><div class="nome">{{ nome_b }}</div>
+  <ul>{% for x in itens_b %}<li style="animation-delay:{{ '%.2f' % (1.05 + loop.index0 * 0.35) }}s">{{ x }}</li>{% endfor %}</ul></div>
+{% endblock %}

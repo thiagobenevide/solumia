@@ -1,0 +1,87 @@
+{
+ "id": "placa_alerta_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "rascunho",
+ "comunica": "um aviso ou dado perigoso numa placa que cai em perspectiva e quica, entre faixas zebradas, com texto curto que treme uma vez",
+ "intencoes": [
+  "alerta"
+ ],
+ "exemplos_sim": [
+  "Cuidado: nunca passe a senha do banco por mensagem.",
+  "Atenção: o rotativo do cartão cobra mais de 400% ao ano.",
+  "Perigo: esse golpe já levou a economia de milhares de aposentados.",
+  "Não deposite nada antes de confirmar o CNPJ da empresa.",
+  "Alerta de golpe: ninguém do banco liga pedindo código por SMS.",
+  "Cuidado com o limite do cheque especial, os juros são abusivos.",
+  "Atenção ao prazo: perder essa data custa multa e juros.",
+  "Risco alto: investir o dinheiro da reserva de emergência em ações."
+ ],
+ "exemplos_nao": [
+  "Vamos entender como o cartão de crédito funciona.",
+  "81% das famílias brasileiras estão endividadas.",
+  "Anote suas despesas e depois corte o supérfluo.",
+  "Compare o CDB com a poupança."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 6,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "a palavra-chave do aviso, em poucas palavras (aparece em maiúsculas na placa)",
+   "obrigatorio": true,
+   "max_car": 24,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "golpe do falso boleto"
+  },
+  {
+   "nome": "texto",
+   "tipo": "texto",
+   "descricao": "uma frase curta que explica o perigo ou o dado; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 60,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Confira o *beneficiário* antes de pagar"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "nivel",
+   "valores": [
+    "atencao",
+    "perigo"
+   ],
+   "padrao": "atencao",
+   "descricao": "atencao usa a cor de destaque e tremor leve; perigo usa a cor de acento e tremor forte"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Placa em CSS 3D (perspective + rotationX/Y/z); faixas zebradas em duas profundidades deslizando em sentidos opostos; clarão no primeiro impacto se o canal não proíbe flash."
+}

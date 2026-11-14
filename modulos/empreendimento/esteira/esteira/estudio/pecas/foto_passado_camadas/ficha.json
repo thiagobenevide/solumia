@@ -1,0 +1,111 @@
+{
+ "id": "foto_passado_camadas",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um momento do passado mostrado numa foto de época sépia, em porta-retrato ou recorte de jornal, com grão de filme, a data carimbada e uma legenda datilografada letra por letra",
+ "intencoes": [
+  "narrativa_passado"
+ ],
+ "exemplos_sim": [
+  "Em 12 de maio de 1958, a avenida Central parou para ver o desfile.",
+  "Essa é a fábrica no dia da inauguração, em 1936.",
+  "Era assim o centro de São Paulo no começo do século passado.",
+  "Em 1969, o homem pisou na Lua, e o mundo inteiro ficou diante da TV.",
+  "Esta foto de 1985 mostra a fila na porta do banco no dia do congelamento.",
+  "Naquele verão de 1950, o estádio do Maracanã ainda estava sendo terminado.",
+  "Minha avó guardou essa imagem da chegada da família ao porto, em 1927.",
+  "O jornal da época anunciava a greve geral com essa manchete."
+ ],
+ "exemplos_nao": [
+  "Agora vamos ver como isso funciona na prática.",
+  "Em 2024, o PIB cresceu 3,4% no ano.",
+  "Compare o antes e o depois com os dois gráficos.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.5,
+ "duracao_max": 9.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "midia",
+   "tipo": "imagem",
+   "descricao": "a foto de época (ou imagem do acontecimento); vira sépia com grão",
+   "obrigatorio": true,
+   "max_car": 120,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "foto antiga de uma avenida cheia de gente e bondes"
+  },
+  {
+   "nome": "data",
+   "tipo": "texto",
+   "descricao": "a data ou o ano do registro, como dito, para o carimbo",
+   "obrigatorio": true,
+   "max_car": 20,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "12 de maio de 1958"
+  },
+  {
+   "nome": "legenda",
+   "tipo": "texto",
+   "descricao": "uma linha que diz o que a foto mostra, datilografada na tela",
+   "obrigatorio": true,
+   "max_car": 64,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Avenida Central em dia de desfile, Rio de Janeiro"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "moldura",
+   "valores": [
+    "retrato",
+    "jornal"
+   ],
+   "padrao": "retrato",
+   "descricao": "porta-retrato com passe-partout ou recorte de jornal com linhas de texto"
+  },
+  {
+   "nome": "disposicao",
+   "valores": [
+    "unica",
+    "camadas"
+   ],
+   "padrao": "unica",
+   "descricao": "uma foto só ou fotos empilhadas em camadas, com a câmera girando de leve"
+  }
+ ],
+ "batidas": [
+  "data"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Complementa foto_epoca: a variação 'camadas' empilha cartões em perspectiva leve (CSS 3D) e o grão de filme oscila quadro a quadro. Sem imagem carregada, mostra um fundo de papel envelhecido. O selo da data fica fora do recorte da foto e quebra linha, para não cortar no 9:16."
+}

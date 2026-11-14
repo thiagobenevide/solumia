@@ -1,0 +1,30 @@
+/* Etiqueta lateral de vidro: só variáveis da pele; fundo transparente. */
+.p-etiqueta_lateral_vidro { display: flex; align-items: center; padding: calc(6 * var(--U)); box-sizing: border-box; }
+.p-etiqueta_lateral_vidro.ev-esq { justify-content: flex-start; }
+.p-etiqueta_lateral_vidro.ev-dir { justify-content: flex-end; }
+.p-etiqueta_lateral_vidro .ev-cena { perspective: calc(130 * var(--U)); max-width: calc(70 * var(--U)); }
+.p-etiqueta_lateral_vidro .ev-palco { transform-style: preserve-3d; display: flex; flex-direction: column; gap: calc(2 * var(--U)); align-items: flex-start; }
+.p-etiqueta_lateral_vidro.ev-dir .ev-palco { align-items: flex-end; }
+.p-etiqueta_lateral_vidro .ev-pilula { display: inline-flex; align-items: center; gap: calc(1.6 * var(--U));
+  padding: calc(1.6 * var(--U)) calc(3.2 * var(--U)); border-radius: 999px; white-space: nowrap;
+  background: color-mix(in srgb, var(--fundo) 88%, transparent);
+  border: calc(.3 * var(--U)) solid color-mix(in srgb, var(--texto) 30%, transparent);
+  box-shadow: 0 calc(1 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.5); }
+.p-etiqueta_lateral_vidro .ev-num { font: 800 calc(5 * var(--U) * var(--esc, 1))/1 var(--fD); color: var(--destaque);
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.p-etiqueta_lateral_vidro .ev-sep { width: calc(.3 * var(--U)); height: calc(4 * var(--U)); background: color-mix(in srgb, var(--texto) 35%, transparent); }
+.p-etiqueta_lateral_vidro .ev-pal { font: 800 calc(4 * var(--U) * var(--esc, 1))/1 var(--fD); color: var(--texto);
+  letter-spacing: .12em; text-transform: uppercase; }
+.p-etiqueta_lateral_vidro .ev-vidro { padding: calc(2.4 * var(--U)) calc(3 * var(--U)); border-radius: var(--R, calc(2 * var(--U)));
+  background: color-mix(in srgb, var(--fundo) 55%, transparent);
+  border: calc(.25 * var(--U)) solid color-mix(in srgb, var(--texto) 22%, transparent);
+  -webkit-backdrop-filter: blur(calc(2 * var(--U))); backdrop-filter: blur(calc(2 * var(--U)));
+  max-width: calc(58 * var(--U)); box-shadow: 0 calc(1 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.5); }
+.p-etiqueta_lateral_vidro .ev-leg { font: 600 calc(3.8 * var(--U))/1.25 var(--fT); color: var(--texto); }
+.p-etiqueta_lateral_vidro .ev-leg .d { color: var(--destaque); }
+.vertical .p-etiqueta_lateral_vidro { padding: calc(5 * var(--U)); }
+.vertical .p-etiqueta_lateral_vidro .ev-cena { max-width: calc(88 * var(--U)); }
+.vertical .p-etiqueta_lateral_vidro .ev-num { font-size: calc(6 * var(--U) * var(--esc, 1)); }
+.vertical .p-etiqueta_lateral_vidro .ev-pal { font-size: calc(4.6 * var(--U) * var(--esc, 1)); }
+.vertical .p-etiqueta_lateral_vidro .ev-vidro { max-width: calc(80 * var(--U)); }
+.vertical .p-etiqueta_lateral_vidro .ev-leg { font-size: calc(4.8 * var(--U)); }

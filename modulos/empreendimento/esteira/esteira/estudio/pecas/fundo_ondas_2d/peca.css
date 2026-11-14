@@ -1,0 +1,10 @@
+/* Fundo de ondas: só variáveis da pele do kit. */
+.p-fundo_ondas_2d { overflow: hidden; }
+.p-fundo_ondas_2d .fo-cena { position: absolute; inset: 0; overflow: hidden; }
+.p-fundo_ondas_2d .fo-onda { position: absolute; left: 0; top: 0; width: 200%; height: 100%; opacity: 0; will-change: transform; }
+.p-fundo_ondas_2d .fo-onda svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.p-fundo_ondas_2d .fo-onda path { fill: none; stroke-width: calc(.45 * var(--U)); stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.p-fundo_ondas_2d .fo-a { stroke: color-mix(in srgb, var(--destaque) 70%, transparent); }
+.p-fundo_ondas_2d .fo-b { stroke: color-mix(in srgb, var(--apoio) 60%, transparent); }
+.p-fundo_ondas_2d .fo-c { stroke: color-mix(in srgb, var(--texto) 35%, transparent); }
+.vertical .p-fundo_ondas_2d .fo-onda path { stroke-width: calc(.6 * var(--U)); }

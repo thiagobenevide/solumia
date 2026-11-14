@@ -1,0 +1,18 @@
+Port 2222
+HostKey /etc/ssh/chaves/ssh_host_ed25519_key
+AuthorizedKeysFile /home/tunel/.ssh/authorized_keys
+AllowUsers tunel
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+# Só "ssh -N -R 0.0.0.0:8765:localhost:8765": nada de shell, terminal ou encaminhamento local.
+AllowTcpForwarding remote
+GatewayPorts clientspecified
+PermitListen 0.0.0.0:8765 8765
+PermitOpen none
+PermitTTY no
+X11Forwarding no
+AllowAgentForwarding no
+ForceCommand /bin/false
+ClientAliveInterval 30
+ClientAliveCountMax 3

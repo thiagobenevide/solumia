@@ -1,0 +1,103 @@
+{
+ "id": "etiqueta_lateral_vidro",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma etiqueta numerada presa ao canto da imagem, com o número em destaque e uma palavra em caixa alta que nomeia o ponto (passo, lado ou momento)",
+ "intencoes": [
+  "processo",
+  "comparacao",
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "Passo dois: olhe para a câmera, não para a tela.",
+  "Antes de investir, você precisa de reserva.",
+  "Depois da mudança, o resultado apareceu em semanas.",
+  "Primeiro ponto: separe o que é fixo do que é variável.",
+  "Terceira regra: nunca pague só o mínimo.",
+  "De um lado, o plano antigo; do outro, o novo.",
+  "Etapa quatro: revise tudo no fim do mês."
+ ],
+ "exemplos_nao": [
+  "81% das famílias estão endividadas.",
+  "Compare o CDB com a poupança em três critérios.",
+  "Vamos entender por que isso acontece."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "leve"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.0,
+ "duracao_max": 6.0,
+ "tela_cheia": false,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "numero",
+   "tipo": "numero",
+   "descricao": "número do ponto, como dito (ex.: 02); só dígitos",
+   "obrigatorio": true,
+   "max_car": 3,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "02"
+  },
+  {
+   "nome": "palavra",
+   "tipo": "texto",
+   "descricao": "palavra-chave que nomeia o ponto (vira caixa alta)",
+   "obrigatorio": true,
+   "max_car": 14,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "olhar"
+  },
+  {
+   "nome": "legenda",
+   "tipo": "texto",
+   "descricao": "uma linha curta no cartão de vidro; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 60,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "olhe para a *câmera*, não para a tela"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "lado",
+   "valores": [
+    "esquerda",
+    "direita"
+   ],
+   "padrao": "esquerda",
+   "descricao": "de que lado a etiqueta entra e fica"
+  }
+ ],
+ "batidas": [
+  "numero"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Fundo transparente, sem véu nem fundo cheio: feita para ficar sobre apresentador ou mídia. Complementa etiqueta_numerada com cartão de vidro opcional."
+}

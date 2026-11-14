@@ -1,0 +1,128 @@
+{
+ "id": "estrada_marcos_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "rascunho",
+ "comunica": "uma linha do tempo em forma de estrada: os marcos (ano e rótulo) vêm de longe e passam ao lado, e o marco atual chega ao centro em destaque, com foto opcional",
+ "intencoes": [
+  "dado_temporal",
+  "narrativa_passado"
+ ],
+ "exemplos_sim": [
+  "Em 1500, os portugueses chegam ao Brasil; em 1822, o país declara a independência; em 1889, vira república.",
+  "Em 1994 veio o Plano Real, em 2002 o país tinha inflação sob controle e hoje a história é outra.",
+  "A empresa foi fundada em 2010, abriu capital em 2015 e em 2024 chegou a 5 milhões de clientes.",
+  "Primeiro vieram as cartas, depois o telégrafo, o telefone, a internet e agora a inteligência artificial.",
+  "Em 1969 o homem pisou na Lua, em 1981 voou o primeiro ônibus espacial e em 2021 o Brasil entrou na corrida de novo.",
+  "Veja o caminho da poupança: de 1964, passando pelo Plano Real, até a Selic alta de 2024.",
+  "Essa jornada começou em 2008, com a crise, e só em 2020 chegamos ao ponto em que estamos agora.",
+  "Do primeiro iPhone em 2007 até o modelo de hoje, foram quase vinte anos de mudanças."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "81% das famílias brasileiras estão endividadas.",
+  "Compare o CDB com a poupança.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.5,
+ "duracao_max": 14,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "marcos",
+   "tipo": "pares",
+   "descricao": "os marcos em ordem cronológica: rotulo = ano ou data curta; valor = o que aconteceu, em poucas palavras",
+   "obrigatorio": true,
+   "max_car": 8,
+   "max_valor": 40,
+   "min_itens": 2,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "1500",
+     "valor": "Chegada dos portugueses"
+    },
+    {
+     "rotulo": "1822",
+     "valor": "Independência do Brasil"
+    },
+    {
+     "rotulo": "1889",
+     "valor": "Proclamação da República"
+    },
+    {
+     "rotulo": "1994",
+     "valor": "Lançamento do Plano Real"
+    }
+   ]
+  },
+  {
+   "nome": "destaque",
+   "tipo": "texto",
+   "descricao": "o ano (como escrito em marcos) do marco atual, que chega ao centro e fecha a viagem; sem ele vale o último marco; marcos listados depois dele não aparecem",
+   "obrigatorio": false,
+   "max_car": 8,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "1994"
+  },
+  {
+   "nome": "foto",
+   "tipo": "imagem",
+   "descricao": "foto opcional do marco em destaque (caminho ou endereço da imagem)",
+   "obrigatorio": false,
+   "max_car": 300,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": ""
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "lado",
+   "valores": [
+    "alternado",
+    "esquerda",
+    "direita"
+   ],
+   "padrao": "alternado",
+   "descricao": "de que lado da estrada ficam os marcos que passam"
+  },
+  {
+   "nome": "camera",
+   "valores": [
+    "respira",
+    "fixa"
+   ],
+   "padrao": "respira",
+   "descricao": "a câmera gira alguns graus durante a viagem ou fica parada"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "A câmera avança pela estrada (translateZ do palco) e cada marco que passa some antes de chegar à lente. Na tela cheia usa o fundo do kit; por cima da mídia a estrada fica mais leve."
+}

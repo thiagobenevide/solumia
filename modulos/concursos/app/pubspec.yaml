@@ -1,0 +1,24 @@
+name: agent_concursos
+description: "Telas do módulo Concursos: listagem, edital → plano de estudos pelo Claude, tarefas, prazos e alertas."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  agent_core:
+    path: ../../../plataforma/app_core
+  file_picker: ^13.3.0
+  http: ^1.2.0
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

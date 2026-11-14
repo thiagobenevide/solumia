@@ -1,0 +1,47 @@
+name: agent
+description: "Sistema centralizado de produtividade e conhecimento"
+publish_to: none
+version: 0.2.0+1
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  agent_core:
+    path: ../app_core
+  agent_notas:
+    path: ../app_notas
+  agent_empreendimento:
+    path: ../../modulos/empreendimento/app
+  agent_arquivos:
+    path: ../../modulos/arquivos/app
+  agent_financas:
+    path: ../../modulos/financas/app
+  agent_saude:
+    path: ../../modulos/saude/app
+  agent_estudos:
+    path: ../../modulos/estudos/app
+  agent_rotinas:
+    path: ../../modulos/rotinas/app
+  agent_design:
+    path: ../../modulos/design/app
+  agent_eletronica:
+    path: ../../modulos/eletronica/app
+  agent_codigo:
+    path: ../../modulos/codigo/app
+  agent_painel:
+    path: ../../modulos/painel/app
+  ota_update: ^7.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/logo.png

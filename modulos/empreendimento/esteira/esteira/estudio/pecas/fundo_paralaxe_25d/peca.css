@@ -1,0 +1,22 @@
+/* Fundo em paralaxe: só variáveis da pele; sem texto. */
+.p-fundo_paralaxe_25d { overflow: hidden; }
+.p-fundo_paralaxe_25d .fp-cena { position: absolute; inset: 0; perspective: calc(130 * var(--U)); perspective-origin: 50% 50%; overflow: hidden; }
+.p-fundo_paralaxe_25d .fp-palco { position: absolute; inset: 0; transform-style: preserve-3d; }
+.p-fundo_paralaxe_25d .fp-camada { position: absolute; inset: -14%; transform-style: preserve-3d; }
+.p-fundo_paralaxe_25d .fp-mancha { position: absolute; border-radius: 50%; opacity: .32; }
+.p-fundo_paralaxe_25d .fp-m0 { background: radial-gradient(circle, color-mix(in srgb, var(--destaque) 38%, transparent), transparent 68%); }
+.p-fundo_paralaxe_25d .fp-m1 { background: radial-gradient(circle, color-mix(in srgb, var(--apoio) 34%, transparent), transparent 68%); }
+.p-fundo_paralaxe_25d .fp-m2 { background: radial-gradient(circle, color-mix(in srgb, var(--acento) 30%, transparent), transparent 68%); }
+.p-fundo_paralaxe_25d .fp-ponto { position: absolute; border-radius: 50%; }
+.p-fundo_paralaxe_25d .fp-p0 { background: var(--texto); }
+.p-fundo_paralaxe_25d .fp-p1 { background: var(--destaque); }
+.p-fundo_paralaxe_25d .fp-p2 { background: var(--apoio); }
+/* véu: escurece a faixa da legenda e suaviza o miolo para o texto por cima ler bem */
+.p-fundo_paralaxe_25d .fp-veu { position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(to top, color-mix(in srgb, var(--fundo) 62%, transparent) 0%, transparent 48%),
+    radial-gradient(ellipse at center, color-mix(in srgb, var(--fundo) 28%, transparent) 0%, transparent 70%); }
+.vertical .p-fundo_paralaxe_25d .fp-veu {
+  background:
+    linear-gradient(to top, color-mix(in srgb, var(--fundo) 66%, transparent) 0%, transparent 42%),
+    radial-gradient(ellipse at center, color-mix(in srgb, var(--fundo) 28%, transparent) 0%, transparent 70%); }

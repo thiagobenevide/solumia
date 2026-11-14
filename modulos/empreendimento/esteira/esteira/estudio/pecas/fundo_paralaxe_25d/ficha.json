@@ -1,0 +1,82 @@
+{
+ "id": "fundo_paralaxe_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "fundo animado discreto, sem texto, em camadas de paralaxe leve atrás da narração quando não há mídia, deixando a legenda legível",
+ "intencoes": [
+  "fundo"
+ ],
+ "exemplos_sim": [
+  "Agora eu vou te explicar com calma, só conversando.",
+  "Antes de mostrar os números, uma reflexão rápida.",
+  "Fica comigo até o final que isso vai fazer sentido.",
+  "Pensa comigo: o que acontece quando o dinheiro some do mês?",
+  "Esse é o ponto que quase ninguém comenta.",
+  "Vou te contar uma história que mudou minha forma de investir.",
+  "Respira, que a gente vai por partes.",
+  "E aqui entra a parte mais importante da conversa."
+ ],
+ "exemplos_nao": [
+  "81% das famílias brasileiras estão endividadas.",
+  "Compare o CDB com a poupança.",
+  "Se inscreva no canal e ative o sininho.",
+  "Em 1994 foi criado o Plano Real."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "calma"
+ ],
+ "energia": "baixa",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 30.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "tema",
+   "tipo": "texto",
+   "descricao": "assunto da fala em poucas palavras; não aparece na tela, só muda a disposição das manchas e pontos",
+   "obrigatorio": false,
+   "max_car": 24,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "conversa sobre dinheiro"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "textura",
+   "valores": [
+    "particulas",
+    "grao",
+    "gradiente"
+   ],
+   "padrao": "particulas",
+   "descricao": "particulas: pontos que flutuam; grao: pontinhos finos e numerosos; gradiente: só manchas de cor que respiram"
+  },
+  {
+   "nome": "movimento",
+   "valores": [
+    "lento",
+    "normal"
+   ],
+   "padrao": "lento",
+   "descricao": "velocidade do vai-e-vem das camadas"
+  }
+ ],
+ "batidas": [],
+ "sfx": {},
+ "notas": "Complementa fundo_respira (2D) com camadas em paralaxe leve. Movimento em vai-e-vem senoidal (yoyo), sem emenda. Sem texto, só cores da pele. O encaixe tema é opcional e só varia a semente."
+}

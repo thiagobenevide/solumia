@@ -1,0 +1,6 @@
+/* Migrada do kit (cena pergunta_destaque). */
+#root .p-pergunta_destaque .area.split .qt { max-width: 100%; }
+.p-pergunta_destaque .pergunta .qm { position: absolute; inset: 0; display: grid; place-items: center; font: italic 700 calc(60 * var(--U))/1 var(--fE);
+  color: color-mix(in srgb, var(--destaque) 16%, transparent); opacity: 0; }
+.p-pergunta_destaque .pergunta .qt { position: relative; max-width: calc(140 * var(--U)); font: 800 calc(9.4 * var(--U))/1.06 var(--fD); letter-spacing: -.02em; }
+.vertical .p-pergunta_destaque .pergunta .qt { font-size: calc(9 * var(--U)); }

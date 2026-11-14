@@ -1,0 +1,65 @@
+{
+ "id": "alerta_ec",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "effectcraft",
+ "estado": "aprovada",
+ "comunica": "cuidado ou aviso importante: painel sobre a mídia com selo de exclamação que pulsa e balança, o rótulo ATENÇÃO e a frase de alerta",
+ "intencoes": [
+  "alerta"
+ ],
+ "exemplos_sim": [
+  "Cuidado: nunca pague só o mínimo da fatura.",
+  "Atenção, esse golpe está circulando no WhatsApp.",
+  "Fique atento às tarifas escondidas.",
+  "Não caia nessa armadilha.",
+  "Cuidado com ofertas de empréstimo que pedem depósito antecipado.",
+  "Atenção: nunca passe o código de verificação para ninguém.",
+  "Desconfie de quem promete lucro garantido.",
+  "Cuidado com o limite do cheque especial."
+ ],
+ "exemplos_nao": [
+  "81% estão endividadas.",
+  "Poupança ou Tesouro?",
+  "Em 1994 veio o Real.",
+  "Vamos ver como isso funciona.",
+  "Inscreva-se no canal."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "urgente",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 1.5,
+ "duracao_max": 6.0,
+ "tela_cheia": false,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 48,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Nunca pague só o mínimo da fatura"
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "ding"
+ },
+ "notas": "Versão EffectCraft de alerta: painel com sombra, barra que traça, selo com anel pulsante e exclamação que balança, título com desfoque na entrada. Rótulo fixo ATENÇÃO (sem variante dica)."
+}

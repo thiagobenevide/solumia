@@ -1,0 +1,31 @@
+name: agent_core
+description: "Núcleo comum do app: tema, cliente da API, contrato de módulo e widgets compartilhados."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+  path_provider: ^2.1.5
+  pdfrx: ^2.10.1
+  audioplayers: ^6.8.1
+  record: ^7.1.2
+  shared_preferences: ^2.5.6
+  url_launcher: ^6.3.3
+  webview_flutter: ^4.13.0
+  flutter_secure_storage: ^11.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  assets:
+    - assets/logo.png

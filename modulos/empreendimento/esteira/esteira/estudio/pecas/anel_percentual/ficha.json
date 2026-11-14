@@ -1,0 +1,83 @@
+{
+ "id": "anel_percentual",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "porcentagem ou proporção dita (81,7%; 8 em cada 10), anel que preenche junto com o número",
+ "intencoes": [
+  "numero",
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "81,7% das famílias estão endividadas.",
+  "Oito em cada dez brasileiros têm alguma dívida.",
+  "Só 12% conseguem guardar dinheiro todo mês.",
+  "Metade da renda vai para pagar juros.",
+  "A inadimplência chegou a 30% entre os jovens."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "Pense nisso antes de assinar qualquer contrato.",
+  "Esse é o ponto mais importante do vídeo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.0,
+ "duracao_max": 7.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "das famílias endividadas"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "porcentagem dita (ou 'N em cada M' no título); rótulo 'Fonte'/'Ano' vira o kicker",
+   "obrigatorio": true,
+   "max_car": 30,
+   "max_valor": 10,
+   "min_itens": 1,
+   "max_itens": 2,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "das famílias endividadas",
+     "valor": "81,7%"
+    },
+    {
+     "rotulo": "Fonte",
+     "valor": "CNC 2024"
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Migrada do kit na etapa 3. Sem o dado necessário, cai em contador."
+}

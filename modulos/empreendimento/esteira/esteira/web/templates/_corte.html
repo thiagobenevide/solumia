@@ -1,0 +1,15 @@
+{% set rotulo = {"tomada": "tomada", "reformulada": "reformulada", "continuacao": "continuação", "improviso": "improviso",
+                 "retake": "retake", "bastidor": "bastidor", "fora": "fora do roteiro",
+                 "descartado": "leitura descartada", "marcador": "marcador falado"} %}
+{% set quem = {"llm": "LLM local", "claude": "Claude", "painel": "você"}.get(t.por, "regra") %}
+<div id="corte-{{ t.k }}" class="cartao rounded-lg p-3 flex items-start gap-3 {{ '' if t.manter else 'opacity-60' }}">
+  <button onclick="ouvir({{ t.ini }}, {{ t.fim }})" class="shrink-0 w-20 text-left font-mono text-xs text-sky-300 hover:text-sky-200 pt-0.5">▶ {{ '%d:%04.1f' % ((t.ini // 60)|int, t.ini % 60) }}</button>
+  <div class="flex-1 min-w-0">
+    <p class="text-[15px] leading-snug {{ 'text-white' if t.manter else 'text-slate-400 line-through decoration-slate-600' }}">{{ t.texto }}</p>
+    <p class="mt-1 text-xs text-slate-500"><span class="px-1.5 py-0.5 rounded bg-white/5 text-slate-300">{{ rotulo.get(t.tipo, t.tipo) }}</span>
+      · decidido por {{ quem }} · {{ t.motivo.split(' → ')[-1][:140] }}</p>
+  </div>
+  <button hx-post="/ep/{{ ep }}/cortes/{{ t.k }}/alternar" hx-target="#corte-{{ t.k }}" hx-swap="outerHTML"
+          class="shrink-0 w-16 py-1.5 rounded-md text-xs font-semibold {{ 'bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25' if t.manter else 'bg-rose-500/15 text-rose-300 hover:bg-rose-500/25' }}">
+    {{ 'Fica' if t.manter else 'Sai' }}</button>
+</div>

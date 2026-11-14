@@ -1,0 +1,127 @@
+{
+ "id": "via_marcos_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma sequência de marcos no tempo (ano e rótulo) numa estrada em perspectiva: os marcos vêm de longe e passam ao lado, e o marco de destaque para no centro, com foto opcional",
+ "intencoes": [
+  "dado_temporal",
+  "narrativa_passado"
+ ],
+ "exemplos_sim": [
+  "Em 1994 o Plano Real acabou com a inflação descontrolada.",
+  "Primeiro veio 1969, depois 1983 e, por fim, a internet chegou ao Brasil em 1995.",
+  "Em 2007 saiu o primeiro iPhone, em 2010 o iPad, e em 2016 a Apple já valia quase um trilhão.",
+  "A empresa nasceu em 1998, abriu o capital em 2004 e virou gigante em 2015.",
+  "De 1500 até 1822, o Brasil foi colônia; a independência veio em setembro de 1822.",
+  "Veja como tudo mudou: 1990 o primeiro site, 2004 as redes sociais, 2020 o trabalho remoto.",
+  "A história do Pix começa em 2018 e chega ao público em novembro de 2020.",
+  "Foram mais de cinquenta anos de corrida espacial: 1957, 1961, 1969."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "Compare o CDB com a poupança."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 5.0,
+ "duracao_max": 12.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "marcos",
+   "tipo": "pares",
+   "descricao": "marcos em ordem cronológica: rotulo = ano (ou data curta), valor = o que aconteceu, em poucas palavras. A estrada para no marco de destaque; marcos depois dele não aparecem",
+   "obrigatorio": true,
+   "max_car": 10,
+   "max_valor": 28,
+   "min_itens": 2,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "1994",
+     "valor": "Plano Real"
+    },
+    {
+     "rotulo": "2002",
+     "valor": "Chegada do Pix às ideias"
+    },
+    {
+     "rotulo": "2018",
+     "valor": "Pix é anunciado"
+    },
+    {
+     "rotulo": "2020",
+     "valor": "Pix chega ao público"
+    }
+   ]
+  },
+  {
+   "nome": "destaque",
+   "tipo": "texto",
+   "descricao": "o ano do marco que fica em destaque no centro; se vazio, o último marco",
+   "obrigatorio": false,
+   "max_car": 10,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "2020"
+  },
+  {
+   "nome": "imagem",
+   "tipo": "imagem",
+   "descricao": "foto opcional do marco em destaque",
+   "obrigatorio": false,
+   "max_car": 10,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": ""
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "passagem",
+   "valores": [
+    "alternada",
+    "esquerda",
+    "direita"
+   ],
+   "padrao": "alternada",
+   "descricao": "lado por onde os marcos saem ao passar pela câmera"
+  },
+  {
+   "nome": "camera",
+   "valores": [
+    "respira",
+    "fixa"
+   ],
+   "padrao": "respira",
+   "descricao": "a câmera gira alguns graus durante a fala ou fica parada"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Foto só no marco de destaque (o encaixe imagem). Marcos antes do destaque passam um a um; os depois dele são ignorados."
+}

@@ -1,0 +1,112 @@
+{
+ "id": "chamada_cartao_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma chamada para o espectador agir (se inscrever, comentar ou ver o próximo vídeo) num cartão em perspectiva cujo botão é apertado por um cursor",
+ "intencoes": [
+  "chamada"
+ ],
+ "exemplos_sim": [
+  "Se você gostou, se inscreve no canal e ativa o sininho.",
+  "Conta aqui nos comentários qual foi a sua maior dívida.",
+  "No próximo vídeo eu mostro como sair do vermelho, não perde.",
+  "Deixa o seu like para esse vídeo chegar a mais gente.",
+  "Clica no vídeo que está aparecendo na tela e continua assistindo.",
+  "Quer receber o próximo vídeo assim que sair? Se inscreve agora.",
+  "Comenta aí a palavra planilha que eu te mando o modelo.",
+  "Antes de sair, deixa sua pergunta aqui embaixo que eu respondo."
+ ],
+ "exemplos_nao": [
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "Vamos entender por que a inflação sobe.",
+  "O CDB rende mais que a poupança neste cenário.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "leve"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 6.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "acao",
+   "tipo": "texto",
+   "descricao": "a ação pedida, curta e no imperativo; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 28,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Se inscreva no *canal*"
+  },
+  {
+   "nome": "detalhe",
+   "tipo": "texto",
+   "descricao": "uma linha que diz o benefício ou o que fazer; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 70,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "e ative o sino para não perder o *próximo vídeo*"
+  },
+  {
+   "nome": "botao",
+   "tipo": "texto",
+   "descricao": "o texto do botão que o cursor aperta",
+   "obrigatorio": true,
+   "max_car": 18,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Inscrever-se"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "destino",
+   "valores": [
+    "inscrever",
+    "comentar",
+    "proximo"
+   ],
+   "padrao": "inscrever",
+   "descricao": "ícone do botão: sino, balão de comentário ou play"
+  },
+  {
+   "nome": "inclinacao",
+   "valores": [
+    "esquerda",
+    "direita"
+   ],
+   "padrao": "esquerda",
+   "descricao": "lado para onde o cartão gira ao chegar"
+  }
+ ],
+ "batidas": [
+  "acao"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Cartão de vidro com duas camadas atrás, chegada do fundo e câmera que respira; o cursor aperta o botão com onda de clique. Texto secundário a partir de 3,6U."
+}

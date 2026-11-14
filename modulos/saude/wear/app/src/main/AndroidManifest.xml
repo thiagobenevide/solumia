@@ -1,0 +1,70 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="android.hardware.type.watch" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- frequência cardíaca ao vivo: BODY_SENSORS até o Wear OS 5; READ_HEART_RATE no 6 -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" android:maxSdkVersion="35" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <!-- batimento passivo com o app fechado (Wear OS 4–5; no 6 a do Health Connect) -->
+    <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" android:maxSdkVersion="35" />
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+    <!-- refaz o registro do sensor passivo depois de reiniciar o relógio -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- passos, calorias e distância do dia (sensor passivo) e calorias do treino -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- treino em segundo plano: serviço em primeiro plano do tipo health -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <!-- alarme no início de cada bloco da agenda -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <!-- botão "Atualizar app": instala o relogio.apk publicado na VPS -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application
+        android:icon="@drawable/ic_agent"
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.DeviceDefault"
+        android:usesCleartextTraffic="false">
+
+        <!-- funciona sem o app do celular: fala direto com o backend -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="true" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <receiver android:name=".AlarmeReceiver" android:exported="false" />
+        <receiver android:name=".InstalacaoReceiver" android:exported="false" />
+        <receiver android:name=".PassivoBootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- sensor passivo (Passivo.kt): o Health Services entrega os lotes aqui -->
+        <service
+            android:name=".PassivoServico"
+            android:exported="true"
+            android:permission="com.google.android.wearable.healthservices.permission.PASSIVE_DATA_BINDING" />
+
+        <service
+            android:name=".TreinoServico"
+            android:exported="false"
+            android:foregroundServiceType="health" />
+    </application>
+</manifest>

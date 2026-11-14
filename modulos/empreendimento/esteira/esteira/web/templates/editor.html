@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% from "_motor.html" import motor %}
+{% block titulo %}Editor · {{ ep }}{% endblock %}
+{% block corpo %}
+{% set aba = "graficos" if tipo == "grafico" else "thumbs" %}{% include "_abas_ep.html" %}
+<div class="mt-6 flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <p class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Editor manual</p>
+    <h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">{{ titulo_pagina }}</h1>
+    <p class="mt-1 text-sm text-slate-400">Prévia ao vivo, igual ao que será renderizado. Arraste as caixas de texto na prévia para posicioná-las.</p>
+    <p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Prévia e {{ 'renderização' if tipo == 'grafico' else 'PNG' }}: {{ motor([('py', 'Python + Chromium (CPU)')]) }}
+      · Assistente: {{ motor([('claude', 'Claude')]) }} ou {{ motor([('local', 'LLM local')]) }}, conforme o seletor</p>
+  </div>
+  <div class="flex items-center gap-2 text-sm">
+    {% if tipo == "grafico" and i >= 0 %}
+    <form method="post" action="/ep/{{ ep }}/editor/grafico/{{ i }}/excluir" onsubmit="return confirm('Excluir este gráfico do vídeo?')">
+      <button class="px-3 py-2 rounded-lg text-rose-300 hover:bg-rose-500/10">Excluir</button></form>
+    {% endif %}
+    <a href="/ep/{{ ep }}/{{ 'graficos' if tipo == 'grafico' else 'thumbs' }}" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5">Voltar</a>
+    <button id="salvar" class="px-4 py-2 rounded-lg bg-azul-500 text-white font-medium hover:bg-azul-400">
+      {{ 'Salvar e renderizar' if tipo == 'grafico' else 'Salvar thumb (PNG)' }}</button>
+  </div>
+</div>
+<p id="msg" class="mt-3 text-sm hidden"></p>
+
+<div class="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
+  <!-- Prévia -->
+  <div class="lg:sticky lg:top-20 self-start">
+    <div id="moldura" class="relative rounded-xl overflow-hidden ring-1 ring-white/10"
+         style="background: repeating-conic-gradient(#1b2030 0% 25%, #232a3d 0% 50%) 50% / 32px 32px; {{ 'max-width: 420px; margin: 0 auto;' if h > w }}">
+      <iframe id="previa" style="width: {{ w }}px; height: {{ h }}px; transform-origin: 0 0; border: 0; position: absolute; left: 0; top: 0;"></iframe>
+      <div id="erro" class="absolute inset-0 hidden items-center justify-center p-6 text-center text-rose-300 bg-black/70 text-sm"></div>
+    </div>
+    {% if tipo == "grafico" %}
+    <div class="mt-3 flex items-center gap-3 text-sm">
+      <button id="tocar" class="w-20 px-3 py-1.5 rounded-lg bg-white/5 text-slate-200 hover:bg-white/10">▶ tocar</button>
+      <input id="tempo" type="range" min="0" step="0.01" value="0" class="flex-1 accent-blue-500">
+      <span id="rotulo_t" class="w-24 text-right font-mono text-xs text-slate-400"></span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Painel -->
+  <div class="space-y-4 text-sm">
+    <section class="cartao rounded-xl p-4">
+      <h2 class="font-semibold text-white">Assistente de IA <span id="motor_selo" class="ml-1 align-middle"></span></h2>
+      <p class="mt-1 text-xs text-slate-400">Descreva a mudança: "deixe mais impactante", "crie caixas com a fonte do estudo", "legenda curta embaixo". A sugestão aparece na prévia; nada é salvo sem você.</p>
+      <textarea id="pedido" rows="2" class="mt-2 w-full campo" placeholder="o que mudar?"></textarea>
+      <div class="mt-2 flex items-center gap-2">
+        <select id="motor" class="campo w-auto">
+          <option value="claude" {{ 'selected' if motor == 'claude' }}>Claude (assinatura)</option>
+          <option value="local" {{ 'selected' if motor == 'local' }}>LLM local (GPU)</option>
+        </select>
+        <button id="ia" class="px-3 py-1.5 rounded-lg bg-azul-500/20 text-azul-200 ring-1 ring-azul-400/30 hover:bg-azul-500/30">Sugerir</button>
+        <button id="desfazer" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 hidden">Desfazer</button>
+      </div>
+      <p id="ia_msg" class="mt-2 text-xs text-slate-300 hidden"></p>
+    </section>
+
+    <section class="cartao rounded-xl p-4">
+      <h2 class="font-semibold text-white">{{ 'Peça' if tipo == 'grafico' else 'Thumbnail' }}</h2>
+      <div id="campos" class="mt-3 space-y-2.5"></div>
+    </section>
+
+    {% if tipo == "grafico" %}
+    <section class="cartao rounded-xl p-4">
+      <h2 class="font-semibold text-white">Efeitos e transições</h2>
+      <div id="efeitos" class="mt-3 grid grid-cols-3 gap-2"></div>
+    </section>
+    {% endif %}
+
+    <section class="cartao rounded-xl p-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold text-white">Caixas de texto</h2>
+        <button id="nova_caixa" class="px-2.5 py-1 rounded-lg bg-white/5 text-slate-200 hover:bg-white/10">+ caixa</button>
+      </div>
+      <div class="mt-2 flex flex-wrap gap-1.5 text-xs" id="presets"></div>
+      <div id="caixas" class="mt-3 space-y-3"></div>
+    </section>
+  </div>
+</div>
+
+<style>
+.campo { background: #0e1730; border: 1px solid rgba(96,165,250,.2); border-radius: .5rem; padding: .35rem .55rem; color: #e2e8f0; width: 100%; }
+.campo:focus { outline: none; box-shadow: 0 0 0 2px rgba(59,130,246,.45); }
+.rot { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 2px; }
+</style>
+<script>
+const EP = {{ ep|tojson }}, TIPO = {{ tipo|tojson }}, W = {{ w }}, H = {{ h }};
+const CITACOES = {{ citacoes|tojson }}, MODELOS = {{ (modelos or [])|tojson }}, FUNDOS = {{ (fundos or [])|tojson }}, COR = {{ cor|tojson }};
+let I = {{ i }}, estado = {{ estado|tojson }}, anterior = null, t = 0, tocando = false, base = 0;
+estado.caixas = estado.caixas || [];
+const $ = (id) => document.getElementById(id);
+const CAIXA = {texto: "", x: 8, y: 70, w: 60, tam: Math.round(64 * W / 1920), fonte: "Inter", peso: 800, cor: "#f4f1ea", cor_d: "", fundo: "nenhum",
+               cor_fundo: "#0a1122", alinhar: "left", maiusculas: false, entrada: "subir", atraso: 0.2, vel: 0.6};
+const k = W / 1920;  // presets pensados no 1920
+
+function aviso(txt, ruim) { const m = $("msg"); m.textContent = txt; m.className = "mt-3 text-sm " + (ruim ? "text-rose-300" : "text-teal-300"); }
+function el(tag, attrs = {}, filhos = []) { const e = document.createElement(tag); Object.assign(e, attrs); filhos.forEach(f => e.append(f)); return e; }
+function campo(rotulo, entrada, largo) { const d = el("label", {className: largo ? "block col-span-3" : "block"}); d.append(el("span", {className: "rot", textContent: rotulo}), entrada); return d; }
+function entradaDe(valor, aoMudar, tipo) {
+  let e;
+  if (Array.isArray(tipo)) { e = el("select", {className: "campo"}); tipo.forEach(o => e.append(el("option", {value: o, textContent: o, selected: o == valor}))); }
+  else if (tipo == "bool") { e = el("input", {type: "checkbox", checked: !!valor, className: "accent-blue-500"}); e.onchange = () => aoMudar(e.checked); return e; }
+  else if (tipo == "texto") { e = el("textarea", {className: "campo", rows: 2, value: valor ?? ""}); }
+  else if (tipo == "cor") { e = el("input", {type: "text", className: "campo font-mono", value: valor ?? "", placeholder: "#rrggbb"}); }
+  else e = el("input", {type: tipo == "num" ? "number" : "text", step: "any", className: "campo", value: valor ?? ""});
+  e.oninput = () => aoMudar(tipo == "num" ? (e.value === "" ? null : +e.value) : e.value);
+  return e;
+}
+
+// ---------- Campos da peça / thumb ----------
+function desenharCampos() {
+  const c = $("campos"); c.innerHTML = "";
+  if (TIPO == "thumb") {
+    const g = el("div", {className: "grid grid-cols-2 gap-2"});
+    const set = (k) => (v) => { estado[k] = v; atualizar(); };
+    g.append(campo("Texto (2–4 palavras)", entradaDe(estado.texto, set("texto"), "texto"), true));
+    g.lastChild.className = "block col-span-2";
+    g.append(campo("Palavra em destaque", entradaDe(estado.destaque, set("destaque"))),
+             campo("Selo (opcional)", entradaDe(estado.selo, set("selo"))),
+             campo("Layout", entradaDe(estado.layout, set("layout"), ["rosto_direita", "rosto_esquerda", "numero"])),
+             campo("Tamanho do texto (px, vazio = auto)", entradaDe(estado.tamanho, set("tamanho"), "num")),
+             campo("Cor do destaque", entradaDe(estado.cor_d, set("cor_d"), "cor")),
+             campo("Cor de alerta (selo/seta)", entradaDe(estado.alerta, set("alerta"), "cor")),
+             campo("Fundo", entradaDe(estado.fundo, set("fundo"), FUNDOS)),
+             campo("Seta", entradaDe(estado.seta, set("seta"), "bool")));
+    c.append(g);
+    return;
+  }
+  const g = el("div", {className: "grid grid-cols-3 gap-2"});
+  const modelo = I < 0 ? entradaDe(estado.modelo, (v) => { estado.modelo = v; estado.dados = v == "caixas" ? {veu: "baixo"} : estado.dados; desenharCampos(); atualizar(); }, ["caixas"])
+                       : el("input", {className: "campo opacity-60", value: estado.modelo, disabled: true});
+  g.append(campo("Modelo", modelo),
+           campo("Início (s)", entradaDe(estado.inicio, (v) => { estado.inicio = v; }, "num")),
+           campo("Duração (s)", entradaDe(estado.dur, (v) => { estado.dur = v; atualizar(); }, "num")));
+  c.append(g);
+  for (const [chave, valor] of Object.entries(estado.dados)) {
+    const mudar = (v) => { estado.dados[chave] = v; atualizar(); };
+    if (chave == "arquivo") { c.append(campo("PDF", el("input", {className: "campo opacity-60 text-xs", value: valor.split("/").pop(), disabled: true}))); continue; }
+    if (chave == "veu") { c.append(campo("Véu (escurece a cena para dar leitura)", entradaDe(valor, mudar, ["nenhum", "baixo", "esquerda", "total"]))); continue; }
+    if (typeof valor == "number") c.append(campo(chave, entradaDe(valor, mudar, "num")));
+    else if (typeof valor == "boolean") c.append(campo(chave, entradaDe(valor, mudar, "bool")));
+    else if (typeof valor == "string") c.append(campo(chave + (chave == "trecho" ? " (como está no PDF)" : ""), entradaDe(valor, mudar, valor.length > 50 || chave == "texto" ? "texto" : "")));
+    else {
+      const e = el("textarea", {className: "campo font-mono text-xs", rows: 4, value: JSON.stringify(valor, null, 1)});
+      e.oninput = () => { try { estado.dados[chave] = JSON.parse(e.value); e.style.borderColor = ""; atualizar(); } catch { e.style.borderColor = "#f43f5e"; } };
+      c.append(campo(chave + " (JSON)", e));
+    }
+  }
+  c.append(el("p", {className: "text-[11px] text-slate-500", textContent: "*asteriscos* marcam a palavra em destaque."}));
+}
+
+function desenharEfeitos() {
+  const c = $("efeitos"); if (!c) return; c.innerHTML = "";
+  const ef = estado.efeito = estado.efeito || {};
+  const set = (k) => (v) => { ef[k] = v; atualizar(); };
+  c.append(campo("Entrada", entradaDe(ef.entrada || "padrao", set("entrada"), ["padrao", "nenhuma", "fade", "subir", "zoom", "deslizar", "desfoque", "revelar"])),
+           campo("Saída", entradaDe(ef.saida || "padrao", set("saida"), ["padrao", "nenhuma", "fade", "zoom", "deslizar", "descer"])),
+           campo("Velocidade (s)", entradaDe(ef.vel ?? 0.6, set("vel"), "num")));
+}
+
+// ---------- Caixas ----------
+function desenharCaixas() {
+  const c = $("caixas"); c.innerHTML = "";
+  estado.caixas.forEach((cx, n) => {
+    const set = (k) => (v) => { cx[k] = v; atualizar(); };
+    const g = el("div", {className: "grid grid-cols-3 gap-2"});
+    g.append(campo("Texto", entradaDe(cx.texto, set("texto"), "texto"), true),
+      campo("x %", entradaDe(cx.x, set("x"), "num")), campo("y %", entradaDe(cx.y, set("y"), "num")), campo("largura %", entradaDe(cx.w, set("w"), "num")),
+      campo("Tamanho px", entradaDe(cx.tam, set("tam"), "num")), campo("Fonte", entradaDe(cx.fonte, set("fonte"), ["Inter", "Playfair", "Mono"])),
+      campo("Peso", entradaDe(String(cx.peso), (v) => { cx.peso = +v; atualizar(); }, ["300", "400", "500", "600", "700", "800", "900"])),
+      campo("Cor", entradaDe(cx.cor, set("cor"), "cor")), campo("Cor destaque", entradaDe(cx.cor_d, set("cor_d"), "cor")),
+      campo("Alinhar", entradaDe(cx.alinhar, set("alinhar"), ["left", "center", "right"])),
+      campo("Fundo", entradaDe(cx.fundo, set("fundo"), ["nenhum", "solido", "vidro", "tarja", "contorno"])),
+      campo("Cor do fundo", entradaDe(cx.cor_fundo, set("cor_fundo"), "cor")), campo("Maiúsculas", entradaDe(cx.maiusculas, set("maiusculas"), "bool")));
+    if (TIPO == "grafico") g.append(campo("Entrada", entradaDe(cx.entrada, set("entrada"), ["subir", "fade", "zoom", "esquerda", "revelar", "nenhuma"])),
+      campo("Atraso (s)", entradaDe(cx.atraso, set("atraso"), "num")), campo("Velocidade (s)", entradaDe(cx.vel, set("vel"), "num")));
+    const barra = el("div", {className: "flex items-center justify-between"}, [el("span", {className: "text-xs font-mono text-azul-300", textContent: `caixa ${n + 1}`})]);
+    const acoes = el("div", {className: "flex gap-1 text-xs"});
+    const botao = (txt, f) => { const b = el("button", {className: "px-2 py-0.5 rounded bg-white/5 hover:bg-white/10", textContent: txt}); b.onclick = f; return b; };
+    acoes.append(botao("↑", () => mover(n, -1)), botao("↓", () => mover(n, 1)),
+                 botao("duplicar", () => { estado.caixas.splice(n + 1, 0, {...cx, y: Math.min(95, cx.y + 8)}); desenharCaixas(); atualizar(); }),
+                 botao("remover", () => { estado.caixas.splice(n, 1); desenharCaixas(); atualizar(); }));
+    barra.append(acoes);
+    c.append(el("div", {className: "rounded-lg border border-white/10 p-3 space-y-2"}, [barra, g]));
+  });
+}
+function mover(n, d) { const m = n + d; if (m < 0 || m >= estado.caixas.length) return; [estado.caixas[n], estado.caixas[m]] = [estado.caixas[m], estado.caixas[n]]; desenharCaixas(); atualizar(); }
+function addCaixas(lista, veu) {
+  estado.caixas.push(...lista.map(c => ({...CAIXA, ...c, tam: Math.round((c.tam || 64) * k)})));
+  if (veu && estado.modelo == "caixas") estado.dados.veu = veu;
+  desenharCampos(); desenharCaixas(); atualizar();
+}
+function desenharPresets() {
+  const c = $("presets"); c.innerHTML = "";
+  const p = (txt, f) => { const b = el("button", {className: "px-2 py-1 rounded-md bg-azul-500/10 text-azul-200 ring-1 ring-azul-400/20 hover:bg-azul-500/20", textContent: txt}); b.onclick = f; c.append(b); };
+  p("Título + subtítulo", () => addCaixas([{texto: "Título *forte*", y: 38, w: 70, tam: 110, peso: 900, maiusculas: true},
+                                            {texto: "subtítulo explicativo", y: 56, w: 60, tam: 44, peso: 500, cor: "#cbd5e1", atraso: 0.5}], "esquerda"));
+  p("Legenda inferior", () => addCaixas([{texto: "Legenda com *destaque*", y: 82, w: 70, tam: 48, peso: 700, fundo: "vidro"}]));
+  p("Destaque central", () => addCaixas([{texto: "*NÚMERO*", x: 10, y: 38, w: 80, tam: 180, peso: 900, alinhar: "center", fundo: "contorno", entrada: "zoom"}], "total"));
+  CITACOES.forEach((ci, n) => p(`Fonte: ${(ci.autores || "").split(/[ ,]/)[0]} ${ci.ano || ""}`, () => addCaixas([
+    {texto: `ESTUDO · ${ci.ano || ""}`, x: 6, y: 52, w: 60, tam: 26, fonte: "Mono", peso: 600, cor: COR, maiusculas: true, entrada: "fade"},
+    {texto: ci.autores || "", x: 6, y: 57, w: 60, tam: 56, peso: 800, atraso: 0.3},
+    {texto: ci.revista || "", x: 6, y: 66, w: 60, tam: 34, fonte: "Playfair", peso: 500, cor: "#cbd5e1", atraso: 0.5},
+    ...(ci.pt ? [{texto: `“${ci.pt}”`, x: 6, y: 73, w: 58, tam: 34, fonte: "Playfair", peso: 400, fundo: "tarja", atraso: 0.9, entrada: "revelar"}] : [])], "esquerda")));
+}
+
+// ---------- Prévia ----------
+let espera = null, versao = 0;
+function atualizar() { clearTimeout(espera); espera = setTimeout(recarregar, 280); }
+async function recarregar() {
+  const v = ++versao;
+  const r = await fetch(`/ep/${EP}/editor/previa`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({tipo: TIPO, estado})});
+  if (v != versao) return;
+  const erro = $("erro");
+  if (!r.ok) { erro.textContent = await r.text(); erro.style.display = "flex"; return; }
+  erro.style.display = "none";
+  $("previa").srcdoc = await r.text();
+}
+function escalar() {
+  const m = $("moldura"), s = m.clientWidth / W;
+  m.style.height = (H * s) + "px"; $("previa").style.transform = `scale(${s})`;
+}
+$("previa").onload = () => {
+  const doc = $("previa").contentDocument, win = $("previa").contentWindow;
+  if (TIPO == "grafico") { $("tempo").max = estado.dur; win.document.fonts.ready.then(() => { if (!tocando) win.seek && win.seek(t); }); }
+  doc.querySelectorAll(".caixa").forEach(caixa => {
+    caixa.style.cursor = "move"; caixa.style.outline = "1px dashed rgba(96,165,250,.0)";
+    caixa.onmouseenter = () => caixa.style.outlineColor = "rgba(96,165,250,.8)";
+    caixa.onmouseleave = () => caixa.style.outlineColor = "rgba(96,165,250,0)";
+    caixa.onpointerdown = (ev) => {
+      const n = +caixa.dataset.k, cx = estado.caixas[n], x0 = ev.clientX, y0 = ev.clientY, a = cx.x, b = cx.y;
+      caixa.setPointerCapture(ev.pointerId);
+      caixa.onpointermove = (e) => { cx.x = +(a + (e.clientX - x0) / W * 100).toFixed(1); cx.y = +(b + (e.clientY - y0) / H * 100).toFixed(1);
+                                     caixa.style.left = cx.x + "%"; caixa.style.top = cx.y + "%"; };
+      caixa.onpointerup = () => { caixa.onpointermove = null; desenharCaixas(); };
+    };
+  });
+};
+if (TIPO == "grafico") {
+  const mostrar = () => { $("tempo").value = t; $("rotulo_t").textContent = `${t.toFixed(2)} / ${(+estado.dur).toFixed(1)}s`; };
+  $("tempo").oninput = (e) => { tocando = false; $("tocar").textContent = "▶ tocar"; t = +e.target.value; $("previa").contentWindow.seek?.(t); mostrar(); };
+  $("tocar").onclick = () => { tocando = !tocando; $("tocar").textContent = tocando ? "❚❚ pausar" : "▶ tocar"; base = performance.now() - t * 1000; };
+  (function quadro(agora) {
+    if (tocando) { t = ((agora - base) / 1000) % estado.dur; $("previa").contentWindow?.seek?.(t); mostrar(); }
+    requestAnimationFrame(quadro);
+  })(performance.now());
+  t = Math.min(estado.dur * 0.65, estado.dur); mostrar();
+}
+
+// ---------- IA e salvar ----------
+$("ia").onclick = async () => {
+  const msg = $("ia_msg"); msg.className = "mt-2 text-xs text-slate-300"; msg.textContent = "pensando…";
+  $("ia").disabled = true;
+  const r = await fetch(`/ep/${EP}/editor/ia`, {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({tipo: TIPO, estado, pedido: $("pedido").value, motor: $("motor").value})});
+  $("ia").disabled = false;
+  if (!r.ok) { msg.className = "mt-2 text-xs text-rose-300"; msg.textContent = await r.text(); return; }
+  const j = await r.json();
+  anterior = JSON.parse(JSON.stringify(estado));
+  estado = {...estado, ...j.estado}; estado.caixas = estado.caixas || [];
+  $("desfazer").classList.remove("hidden");
+  msg.innerHTML = ""; msg.append(j.explicacao || "sugestão aplicada na prévia");
+  (j.avisos || []).forEach(a => msg.append(el("span", {className: "block text-amber-300", textContent: "⚠ " + a})));
+  desenharTudo(); atualizar();
+};
+$("desfazer").onclick = () => { if (!anterior) return; estado = anterior; anterior = null; $("desfazer").classList.add("hidden"); desenharTudo(); atualizar(); };
+function seloMotor() { const c = $("motor").value == "claude"; $("motor_selo").innerHTML = c
+  ? '<span class="text-[10px] px-1.5 py-0.5 rounded-md ring-1 bg-violet-500/10 text-violet-300 ring-violet-400/25">Claude · assinatura, conta no teto</span>'
+  : '<span class="text-[10px] px-1.5 py-0.5 rounded-md ring-1 bg-teal-500/10 text-teal-300 ring-teal-400/25">LLM local · usa a GPU</span>'; }
+$("motor").onchange = seloMotor; seloMotor();
+$("nova_caixa").onclick = () => addCaixas([{texto: "Novo *texto*"}]);
+$("salvar").onclick = async () => {
+  const url = TIPO == "thumb" ? `/ep/${EP}/editor/thumb` : `/ep/${EP}/editor/grafico/${I}`;
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(estado)});
+  if (!r.ok) return aviso(await r.text(), true);
+  const j = await r.json();
+  if (TIPO == "thumb") { aviso(`Salva como thumbs/${j.arquivo}. Em Thumbs, escolha a vaga do teste A/B.`); }
+  else { aviso("Salvo. A renderização desta peça entrou na fila (Produção); depois rode a montagem para o vídeo ter a mudança.");
+         if (I != j.i) history.replaceState(null, "", `/ep/${EP}/graficos/${j.i}/editar`); I = j.i; }
+};
+function desenharTudo() { desenharCampos(); desenharEfeitos(); desenharCaixas(); }
+desenharTudo(); desenharPresets();
+window.addEventListener("resize", escalar); escalar(); recarregar();
+</script>
+{% endblock %}

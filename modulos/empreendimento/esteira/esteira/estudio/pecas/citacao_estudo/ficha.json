@@ -1,0 +1,82 @@
+{
+ "id": "citacao_estudo",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "estudo, pesquisa ou autor citado, com ano e fonte",
+ "intencoes": [
+  "citacao"
+ ],
+ "exemplos_sim": [
+  "Um estudo de Harvard de 2019 acompanhou 12 mil famílias.",
+  "Segundo o Banco Central, metade dos brasileiros não poupa nada.",
+  "Uma pesquisa da Serasa mostrou que 4 em cada 10 adultos estão negativados.",
+  "O economista Daniel Kahneman explica isso.",
+  "Os dados são do IBGE, divulgados no mês passado."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "Pense nisso antes de assinar qualquer contrato.",
+  "Esse é o ponto mais importante do vídeo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "calma"
+ ],
+ "energia": "baixa",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 8.0,
+ "tela_cheia": false,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 60,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Universidade de Harvard"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "dados do estudo; rótulo 'Ano' vira o kicker",
+   "obrigatorio": false,
+   "max_car": 20,
+   "max_valor": 26,
+   "min_itens": 0,
+   "max_itens": 3,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Ano",
+     "valor": "2019"
+    },
+    {
+     "rotulo": "Amostra",
+     "valor": "12 mil famílias"
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "click"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

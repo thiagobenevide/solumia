@@ -1,0 +1,97 @@
+{
+ "id": "pergunta_gancho",
+ "versao": 1,
+ "origem": "fabrica",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma pergunta retórica ao espectador, palavra por palavra, com a palavra-chave em destaque e um ponto de interrogação que pulsa; no fim ela encolhe para o canto e fica como gancho",
+ "intencoes": [
+  "pergunta"
+ ],
+ "exemplos_sim": [
+  "Será que você realmente sabe para onde vai o seu dinheiro?",
+  "E se eu te dissesse que a poupança está perdendo para a inflação?",
+  "Por que o brasileiro continua pagando juros tão altos no cartão?",
+  "Você já parou para pensar quanto custa não investir?",
+  "Será que vale a pena quitar a dívida antes de investir?",
+  "Mas afinal, o que acontece com o seu dinheiro parado no banco?",
+  "Quem de fato ganha quando você parcela a compra em doze vezes?"
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "O rotativo do cartão passa de 400% ao ano.",
+  "Anote suas despesas e corte o supérfluo.",
+  "Compare o CDB com a poupança."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.5,
+ "duracao_max": 9.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "pergunta",
+   "tipo": "texto",
+   "descricao": "a pergunta como foi dita (o ponto de interrogação final é desenhado pela peça)",
+   "obrigatorio": true,
+   "max_car": 90,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Será que você realmente sabe para onde vai o seu dinheiro?"
+  },
+  {
+   "nome": "destaque",
+   "tipo": "texto",
+   "descricao": "a palavra-chave (ou poucas palavras) da pergunta, escrita igual a ela, que vai em destaque",
+   "obrigatorio": false,
+   "max_car": 24,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "dinheiro"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "estilo",
+   "valores": [
+    "plano",
+    "cartao"
+   ],
+   "padrao": "plano",
+   "descricao": "plano: texto solto na tela; cartao: a pergunta num cartão que gira em profundidade (2,5D)"
+  },
+  {
+   "nome": "canto",
+   "valores": [
+    "esquerda",
+    "direita"
+   ],
+   "padrao": "esquerda",
+   "descricao": "canto superior onde a pergunta encolhe no fim"
+  }
+ ],
+ "batidas": [
+  "destaque"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Complementa pergunta_destaque: aqui a pergunta continua visível no canto como gancho. Variação 2,5D pelo botão estilo=cartao."
+}

@@ -1,0 +1,86 @@
+{
+ "id": "ranking",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "três ou mais itens ordenados por valor, do maior para o menor",
+ "intencoes": [
+  "comparacao",
+  "lista"
+ ],
+ "exemplos_sim": [
+  "Os juros mais caros: rotativo com 430%, cheque especial com 130% e crédito pessoal com 90%.",
+  "Os estados mais endividados são São Paulo, Rio e Minas.",
+  "No topo dos gastos estão aluguel, mercado e transporte.",
+  "As cinco maiores dívidas dos brasileiros.",
+  "Quem mais cobra tarifa: banco A, B e C."
+ ],
+ "exemplos_nao": [
+  "81% estão endividadas.",
+  "Passo 1: anote os gastos.",
+  "Vamos entender por que isso acontece."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 9.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Juros mais caros do país"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "itens com valor; ordenados do maior para o menor",
+   "obrigatorio": true,
+   "max_car": 22,
+   "max_valor": 8,
+   "min_itens": 2,
+   "max_itens": 5,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Rotativo do cartão",
+     "valor": "430%"
+    },
+    {
+     "rotulo": "Cheque especial",
+     "valor": "130%"
+    },
+    {
+     "rotulo": "Crédito pessoal",
+     "valor": "90%"
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "swoosh"
+ },
+ "notas": "Migrada do kit na etapa 3. Sem o dado necessário, cai em lista_itens."
+}

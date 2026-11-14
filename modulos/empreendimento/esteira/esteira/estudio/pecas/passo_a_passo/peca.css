@@ -1,0 +1,7 @@
+/* Migrada do kit (cena passo_a_passo). */
+.p-passo_a_passo .passo .pn { flex: none; display: grid; place-items: center; min-width: calc(14 * var(--U)); padding: 0 calc(2 * var(--U));
+  font: 800 calc(8 * var(--U))/1 var(--fD); letter-spacing: -.04em; color: var(--destaque); border-right: 1px solid color-mix(in srgb, var(--texto) 12%, transparent); }
+.p-passo_a_passo .passo .pn svg { width: calc(7 * var(--U)); height: calc(7 * var(--U)); }
+.p-passo_a_passo .passo .tx { align-self: center; }
+.p-passo_a_passo .pt { margin-top: calc(1 * var(--U)); font: 700 calc(4.6 * var(--U))/1.15 var(--fD); letter-spacing: -.01em; }
+.vertical .p-passo_a_passo .pt { font-size: calc(5 * var(--U)); }

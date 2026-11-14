@@ -1,0 +1,112 @@
+{
+ "id": "fluxo_etapas",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um processo em três a cinco etapas encadeadas, ligadas por uma linha que se desenha de uma para a outra até o resultado",
+ "intencoes": [
+  "processo",
+  "lista"
+ ],
+ "exemplos_sim": [
+  "Primeiro você anota os gastos, depois define um teto e, por fim, automatiza a reserva.",
+  "O processo tem quatro etapas: pedido, análise, aprovação e pagamento.",
+  "Tudo começa na coleta do dado, passa pela limpeza e termina no gráfico.",
+  "Do cadastro até o primeiro rendimento são só três passos.",
+  "A água evapora, forma nuvens e volta como chuva.",
+  "Para abrir a conta: envie o documento, tire uma selfie e espere a confirmação.",
+  "O dinheiro sai da sua conta, passa pelo banco e só então chega ao vendedor."
+ ],
+ "exemplos_nao": [
+  "Anote seus gastos todos os dias.",
+  "O rotativo do cartão passa de 400% ao ano.",
+  "Compare o CDB com a poupança.",
+  "Por que isso acontece com tanta gente?"
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "calma"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 4.0,
+ "duracao_max": 12.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "o nome do processo, em poucas palavras; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Como *abrir* a conta em 3 passos"
+  },
+  {
+   "nome": "etapas",
+   "tipo": "itens",
+   "descricao": "as etapas na ordem em que acontecem, cada uma curta (verbo ou substantivo)",
+   "obrigatorio": true,
+   "max_car": 22,
+   "max_valor": 16,
+   "min_itens": 3,
+   "max_itens": 5,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "Enviar documento",
+    "Fazer selfie",
+    "Aguardar análise",
+    "Conta aberta"
+   ]
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "marcador",
+   "valores": [
+    "numero",
+    "check"
+   ],
+   "padrao": "numero",
+   "descricao": "o que aparece dentro do nó: número da etapa ou um visto"
+  },
+  {
+   "nome": "final",
+   "valores": [
+    "pulso",
+    "nenhum"
+   ],
+   "padrao": "pulso",
+   "descricao": "a última etapa vira o resultado, preenchida e com anel que pulsa"
+  },
+  {
+   "nome": "velocidade",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": "ritmo em que as etapas entram"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Complementa passo_a_passo (um passo só): aqui a sequência inteira aparece de uma vez, horizontal no 16:9 e vertical no 9:16."
+}

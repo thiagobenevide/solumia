@@ -1,0 +1,19 @@
+/* Pergunta gancho: só variáveis da pele do kit. */
+.p-pergunta_gancho .pg-cena { position: absolute; inset: 0; }
+.p-pergunta_gancho .pg-corpo { position: absolute; left: 50%; top: 50%; transform-origin: 0 0; box-sizing: border-box; }
+.p-pergunta_gancho .pg-cartao { display: flex; flex-direction: column; align-items: center; text-align: center; box-sizing: border-box; }
+.p-pergunta_gancho .pg-frase { font: 800 calc(7.2 * var(--U) * var(--esc, 1))/1.2 var(--fD); color: var(--texto);
+  letter-spacing: -.01em; overflow-wrap: anywhere; }
+.p-pergunta_gancho .pg-w { display: inline-block; position: relative; margin: 0 .14em; }
+.p-pergunta_gancho .pg-d { color: var(--destaque); }
+.p-pergunta_gancho .pg-sub { position: absolute; left: 0; right: 0; bottom: -.06em; height: .09em; background: var(--destaque);
+  transform-origin: 0 50%; transform: scaleX(0); border-radius: 999px; }
+.p-pergunta_gancho .pg-q { margin-top: calc(1 * var(--U)); font: 800 calc(18 * var(--U) * var(--esc, 1))/1 var(--fD);
+  color: var(--destaque); opacity: 0; }
+.p-pergunta_gancho.pg-card .pg-corpo { perspective: calc(120 * var(--U)); }
+.p-pergunta_gancho.pg-card .pg-cartao { padding: calc(5 * var(--U)) calc(6 * var(--U)); border-radius: var(--R);
+  background: color-mix(in srgb, var(--fundo2) 92%, transparent);
+  border: calc(.4 * var(--U)) solid color-mix(in srgb, var(--destaque) 45%, transparent);
+  box-shadow: 0 calc(3 * var(--U)) calc(8 * var(--U)) rgba(0,0,0,.5); }
+.vertical .p-pergunta_gancho .pg-frase { font-size: calc(6.4 * var(--U) * var(--esc, 1)); }
+.vertical .p-pergunta_gancho .pg-q { font-size: calc(14 * var(--U) * var(--esc, 1)); }

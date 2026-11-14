@@ -1,0 +1,109 @@
+{
+ "id": "pergunta_canto",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma pergunta retórica ao espectador, palavra por palavra, com a palavra-chave em destaque e um ? que pulsa; no fim ela encolhe para o canto e continua como gancho",
+ "intencoes": [
+  "pergunta"
+ ],
+ "exemplos_sim": [
+  "Será que você realmente sabe para onde vai o seu dinheiro?",
+  "Por que quase ninguém consegue sair do rotativo do cartão?",
+  "E se você pudesse dobrar sua reserva em dois anos?",
+  "Você já se perguntou por que a poupança rende tão pouco?",
+  "Qual é o verdadeiro custo de parcelar tudo no cartão?",
+  "Será que vale a pena trocar o CDB pelo Tesouro Direto?",
+  "Como uma estrela consegue brilhar por bilhões de anos?",
+  "Quem de fato lucra quando você fica endividado?"
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "81% das famílias brasileiras estão endividadas.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Se inscreva no canal e ative o sininho."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 8.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "pergunta",
+   "tipo": "texto",
+   "descricao": "a pergunta como foi dita, sem o ponto de interrogação (o ? grande é da peça)",
+   "obrigatorio": true,
+   "max_car": 90,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Será que você sabe para onde vai o seu dinheiro?"
+  },
+  {
+   "nome": "destaque",
+   "tipo": "texto",
+   "descricao": "a palavra-chave da pergunta, escrita igual a ela, que fica em destaque",
+   "obrigatorio": true,
+   "max_car": 24,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "dinheiro"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "formato",
+   "valores": [
+    "texto",
+    "cartao"
+   ],
+   "padrao": "texto",
+   "descricao": "texto solto na tela ou frase num cartão que gira em profundidade"
+  },
+  {
+   "nome": "canto",
+   "valores": [
+    "esquerda",
+    "direita"
+   ],
+   "padrao": "esquerda",
+   "descricao": "canto superior para onde a pergunta encolhe no fim"
+  },
+  {
+   "nome": "velocidade",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": "ritmo da entrada palavra por palavra"
+  }
+ ],
+ "batidas": [
+  "destaque"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "destaque": "pop"
+ },
+ "notas": "Variação do pedido: botão formato=cartao usa CSS 3D leve (rotationY/X em cartão com perspective) e a peça segue peso 2d. Próxima de pergunta_gancho (revisão) e pergunta_destaque; aqui a pergunta encolhe e fica visível no canto."
+}

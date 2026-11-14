@@ -1,0 +1,127 @@
+{
+ "id": "passado_arquivo_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um momento do passado mostrado como cartão de arquivo em perspectiva, com o ano carimbado, um título e uma legenda, e as épocas anteriores empilhadas atrás em profundidade",
+ "intencoes": [
+  "narrativa_passado"
+ ],
+ "exemplos_sim": [
+  "Em 1994, o Plano Real acabou com a hiperinflação no Brasil.",
+  "Tudo começou em 1969, quando a internet ainda era um experimento militar.",
+  "Em 1888, a Lei Áurea abolia oficialmente a escravidão no país.",
+  "Nos anos 1920, o rádio entrou nas casas e mudou o jeito de se informar.",
+  "Em 1929, a quebra da bolsa de Nova York arrastou o mundo para a crise.",
+  "Há 500 anos, as caravelas portuguesas chegavam a essa costa.",
+  "Em 2008, um banco quebrou e o mundo inteiro sentiu o tranco.",
+  "Lá em 1971, o dólar deixou de ser lastreado em ouro."
+ ],
+ "exemplos_nao": [
+  "Hoje o cenário é bem diferente.",
+  "Compare o CDB com a poupança.",
+  "Esse investimento rendeu 12,5% no último ano.",
+  "Vamos entender por que isso acontece."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 8.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "ano",
+   "tipo": "texto",
+   "descricao": "o ano, década ou época como dito",
+   "obrigatorio": true,
+   "max_car": 10,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "1994"
+  },
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "o que aconteceu naquele momento, em poucas palavras",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Nasce o Plano Real"
+  },
+  {
+   "nome": "legenda",
+   "tipo": "texto",
+   "descricao": "uma linha de contexto; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 80,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "a inflação chegava a *80% ao mês*"
+  },
+  {
+   "nome": "marcos",
+   "tipo": "itens",
+   "descricao": "até dois anos ou épocas anteriores, que ficam empilhados atrás do cartão",
+   "obrigatorio": false,
+   "max_car": 8,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 2,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "1986",
+    "1990"
+   ]
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "acabamento",
+   "valores": [
+    "papel",
+    "vidro"
+   ],
+   "padrao": "papel",
+   "descricao": "cartão claro de arquivo ou cartão escuro translúcido"
+  },
+  {
+   "nome": "movimento",
+   "valores": [
+    "aproxima",
+    "gira"
+   ],
+   "padrao": "aproxima",
+   "descricao": "a câmera se aproxima devagar ou gira de lado até ficar de frente"
+  }
+ ],
+ "batidas": [
+  "ano"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Complementa as linhas do tempo (que mostram vários eventos): aqui é um único momento do passado, com as épocas anteriores só como pano de fundo. Texto principal nunca fica atrás de nada."
+}

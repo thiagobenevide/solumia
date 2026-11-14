@@ -1,0 +1,28 @@
+/* Comparação em pilares 2,5D: só variáveis da pele do kit. */
+.p-comparacao_pilares_25d { display: flex; align-items: center; justify-content: center; }
+.p-comparacao_pilares_25d .cp-cena { perspective: calc(140 * var(--U)); width: calc(150 * var(--U)); display: flex; justify-content: center; }
+.p-comparacao_pilares_25d .cp-palco { display: flex; align-items: flex-end; justify-content: center; gap: calc(14 * var(--U));
+  transform-style: preserve-3d; }
+.p-comparacao_pilares_25d .cp-col { width: calc(48 * var(--U)); padding-top: calc(17 * var(--U)); display: flex; flex-direction: column;
+  align-items: center; text-align: center; opacity: 0; }
+.p-comparacao_pilares_25d .cp-trilho { position: relative; width: calc(26 * var(--U)); height: calc(36 * var(--U)); display: flex; align-items: flex-end; }
+.p-comparacao_pilares_25d .cp-pilar { position: relative; width: 100%; height: 0; border-radius: var(--R, 0) var(--R, 0) 0 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--apoio) 85%, var(--fundo)), color-mix(in srgb, var(--apoio) 45%, var(--fundo2)));
+  box-shadow: 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5); }
+.p-comparacao_pilares_25d .cp-topo { position: absolute; inset: 0; border-radius: inherit; opacity: 0;
+  background: linear-gradient(180deg, var(--destaque), color-mix(in srgb, var(--destaque) 55%, var(--fundo2))); }
+.p-comparacao_pilares_25d .cp-val { position: absolute; left: 50%; bottom: 100%; width: calc(48 * var(--U)); transform: translateX(-50%);
+  padding-bottom: calc(1.5 * var(--U)); font: 800 calc(9 * var(--U) * var(--esc, 1))/1 var(--fD); color: var(--texto);
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.p-comparacao_pilares_25d .cp-vn { white-space: nowrap; }
+.p-comparacao_pilares_25d .cp-un { display: block; margin-top: calc(.8 * var(--U)); font: 600 calc(3.2 * var(--U))/1.1 var(--fT);
+  letter-spacing: 0; color: var(--destaque); }
+.p-comparacao_pilares_25d .cp-rot { margin-top: calc(2.5 * var(--U)); max-width: calc(46 * var(--U)); font: 600 calc(4 * var(--U) * var(--esc, 1))/1.15 var(--fT);
+  color: var(--texto); }
+.vertical .p-comparacao_pilares_25d .cp-cena { width: calc(94 * var(--U)); }
+.vertical .p-comparacao_pilares_25d .cp-palco { gap: calc(4 * var(--U)); }
+.vertical .p-comparacao_pilares_25d .cp-col { width: calc(40 * var(--U)); padding-top: calc(20 * var(--U)); }
+.vertical .p-comparacao_pilares_25d .cp-trilho { width: calc(24 * var(--U)); height: calc(55 * var(--U)); }
+.vertical .p-comparacao_pilares_25d .cp-val { width: calc(40 * var(--U)); font-size: calc(7.2 * var(--U) * var(--esc, 1)); }
+.vertical .p-comparacao_pilares_25d .cp-un { font-size: calc(3.6 * var(--U)); }
+.vertical .p-comparacao_pilares_25d .cp-rot { max-width: calc(38 * var(--U)); font-size: calc(4.4 * var(--U) * var(--esc, 1)); }

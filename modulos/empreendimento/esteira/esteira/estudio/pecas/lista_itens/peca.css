@@ -1,0 +1,21 @@
+/* Migrada do kit (cena lista_itens). */
+.p-lista_itens .lista { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(5 * var(--U));
+  padding: 0 calc(10 * var(--U)); text-align: center; }
+.p-lista_itens .itens { display: flex; gap: calc(3.2 * var(--U)); justify-content: center; width: 100%; }
+.vertical .p-lista_itens .itens { flex-direction: column; gap: calc(2.2 * var(--U)); }
+.p-lista_itens .item { flex: 1; max-width: calc(48 * var(--U)); padding: calc(3.6 * var(--U)) calc(3.6 * var(--U)) calc(4 * var(--U)); text-align: left; opacity: 0;
+  border-radius: calc(1.6 * var(--U) * var(--R, 1)); background: color-mix(in srgb, var(--texto) 6%, transparent); border: 1px solid color-mix(in srgb, var(--texto) 12%, transparent);
+  box-shadow: 0 calc(2.8 * var(--U)) calc(6.5 * var(--U)) rgba(0,0,0,.45); }
+.vertical .p-lista_itens .item { max-width: none; padding: calc(2.6 * var(--U)) calc(3.4 * var(--U)); }
+.p-lista_itens .item:last-child { border-color: var(--destaque); background: color-mix(in srgb, var(--destaque) 8%, transparent); }
+.p-lista_itens .item .n { font: 700 calc(2 * var(--U)) var(--fM); letter-spacing: .15em; color: var(--destaque); }
+.p-lista_itens .item .v { margin-top: calc(1.6 * var(--U)); font: 800 calc(7 * var(--U))/1 var(--fD); letter-spacing: -.03em; }
+.p-lista_itens .itens.n4 .item .v { font-size: calc(5.6 * var(--U)); }
+.p-lista_itens .itens.n5 .item .v { font-size: calc(5.6 * var(--U)); }
+.p-lista_itens .item .t { margin-top: calc(1.4 * var(--U)); font: 700 calc(3.2 * var(--U))/1.2 var(--fT); }
+.vertical .p-lista_itens .item .t { font-size: calc(4.2 * var(--U)); }
+.al-esquerda .p-lista_itens .lista { align-items: flex-start; text-align: left; }
+.al-esquerda .p-lista_itens .itens { justify-content: flex-start; }
+.cartao-contorno .p-lista_itens .item { background: transparent; backdrop-filter: none; box-shadow: none;
+  border: calc(.25 * var(--U)) solid color-mix(in srgb, var(--destaque) 70%, transparent); }
+.cartao-solido .p-lista_itens .item { background: var(--fundo2); backdrop-filter: none; border-color: transparent; }

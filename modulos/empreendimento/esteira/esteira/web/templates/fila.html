@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block titulo %}Produção · Esteira dark{% endblock %}
+{% block corpo %}
+<div class="flex items-end justify-between gap-4 mb-6">
+  <div>
+    <p class="font-mono text-xs tracking-[.25em] text-azul-400 uppercase">Fila</p>
+    <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white">Produção</h1>
+    <p class="mt-2 text-sm text-slate-400">Um processo por vez na máquina (GPU, LLM local, renders). Só o que roda com o Claude (curar ou roteiro "com Claude") anda em paralelo. Atualiza sozinho.</p>
+  </div>
+  <form method="post" action="/fila/limpar"><button class="text-sm px-3 py-2 rounded-md border border-white/10 hover:bg-white/5">Limpar concluídas</button></form>
+</div>
+<form method="post" action="/fila/roteiro" class="cartao rounded-xl p-4 mb-5 flex flex-wrap items-end gap-3 text-sm">
+  <div><label class="block text-xs text-slate-400 mb-1">Roteiro do plano</label>
+    <input name="alvo" placeholder="finlumia:51" required class="w-36 rounded-md bg-white/5 border border-white/10 px-2 py-1.5 font-mono"></div>
+  <div><label class="block text-xs text-slate-400 mb-1">até (opcional)</label>
+    <input name="ate" placeholder="55" class="w-20 rounded-md bg-white/5 border border-white/10 px-2 py-1.5 font-mono"></div>
+  <div><label class="block text-xs text-slate-400 mb-1">motor</label>
+    <select name="motor" class="rounded-md bg-white/5 border border-white/10 px-2 py-1.5">
+      <option value="local">LLM local (ocupa a máquina)</option>
+      <option value="claude">Claude (em paralelo; conta no teto)</option>
+    </select></div>
+  <button class="px-3 py-1.5 rounded-md bg-azul-500/20 border border-azul-400/40 hover:bg-azul-500/30">Pôr na fila</button>
+</form>
+<div hx-get="/_fila" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+{% endblock %}

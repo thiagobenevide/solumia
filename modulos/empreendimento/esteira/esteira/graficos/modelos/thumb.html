@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{# Thumbnail 1280x720: fundo gerado/foto, vinheta, texto gigante com contorno, número/selo, seta. Quadro único. #}
+{% block estilo %}
+.palco { animation: none !important; }
+.fundo { position: absolute; inset: 0; background: #000 url("{{ fundo }}") center/cover no-repeat;
+  filter: contrast(1.18) saturate(1.15) brightness(.92); }
+.vinheta { position: absolute; inset: 0;
+  background: radial-gradient(ellipse at {{ '72%' if layout == 'rosto_direita' else '28%' if layout == 'rosto_esquerda' else '50%' }} 45%, transparent 30%, rgba(0,0,0,.78) 100%),
+              linear-gradient({{ '90deg' if layout != 'rosto_esquerda' else '270deg' }}, rgba(0,0,0,.88) 0%, rgba(0,0,0,.55) 38%, transparent 62%); }
+.borda { position: absolute; inset: 0; box-shadow: inset 0 0 0 10px {{ alerta }}; opacity: .0; }
+.texto { position: absolute; top: 50%; transform: translateY(-52%);
+  {{ 'left: 56px; text-align: left;' if layout != 'rosto_esquerda' else 'right: 56px; text-align: right;' }}
+  width: {{ '640px' if layout != 'numero' else '1160px' }};
+  font: 900 {{ tamanho }}px/0.92 Inter; letter-spacing: -.035em; text-transform: uppercase; color: #fff;
+  -webkit-text-stroke: {{ (tamanho * 0.06)|round|int }}px #000; paint-order: stroke fill;
+  text-shadow: 0 10px 0 rgba(0,0,0,.55), 0 0 60px rgba(0,0,0,.8); }
+.texto .d { color: {{ cor_d }}; }
+.selo { display: inline-block; margin-bottom: 18px; padding: 10px 18px 12px; background: {{ alerta }}; color: #000;
+  font: 900 44px/1 Inter; letter-spacing: -.02em; -webkit-text-stroke: 0; text-shadow: none; transform: rotate(-3deg); }
+.seta { position: absolute; {{ seta_pos }}; width: 220px; height: 220px; }
+{% endblock %}
+{% block corpo %}
+<div class="fundo"></div>
+<div class="vinheta"></div>
+<div class="texto">{% if selo %}<span class="selo">{{ selo }}</span><br>{% endif %}{% for p in palavras %}<span class="{{ 'd' if p.d }}">{{ p.t }}</span>{{ ' ' }}{% endfor %}</div>
+{% if seta %}
+<svg class="seta" viewBox="0 0 200 200"><path d="M20 30 C 90 40, 130 80, 150 150" stroke="{{ alerta }}" stroke-width="16" fill="none" stroke-linecap="round"/>
+<path d="M118 140 L 152 160 L 166 118" stroke="{{ alerta }}" stroke-width="16" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+{% endif %}
+{% endblock %}

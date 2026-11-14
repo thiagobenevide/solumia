@@ -1,0 +1,91 @@
+{
+ "id": "planos_camera",
+ "versao": 1,
+ "origem": "etapa7",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma ideia-chave com palavras em planos de profundidade que a câmera atravessa",
+ "intencoes": [
+  "destaque",
+  "transicao",
+  "conceito"
+ ],
+ "exemplos_sim": [
+  "No fundo, tudo se resume a uma palavra: controle.",
+  "E é aqui que a história muda.",
+  "Juros, prazo e parcela: só um importa de verdade.",
+  "Esse é o conceito que separa quem enriquece de quem se endivida.",
+  "A resposta está no tempo."
+ ],
+ "exemplos_nao": [
+  "81% das famílias estão endividadas.",
+  "Passo 1: anote os gastos.",
+  "Em 1994 veio o Plano Real."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 7.0,
+ "tela_cheia": true,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "a ideia-chave, nítida no fim",
+   "obrigatorio": true,
+   "max_car": 36,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Tudo se resume a *controle*"
+  },
+  {
+   "nome": "palavras",
+   "tipo": "itens",
+   "descricao": "palavras que a câmera atravessa (do assunto)",
+   "obrigatorio": true,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 2,
+   "max_itens": 4,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "juros",
+    "prazo",
+    "parcela"
+   ]
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "profundidade",
+   "valores": [
+    "normal",
+    "funda"
+   ],
+   "padrao": "normal",
+   "descricao": "distância entre os planos"
+  }
+ ],
+ "batidas": [
+  "titulo"
+ ],
+ "sfx": {
+  "entrada": "riser"
+ },
+ "notas": "Peça 2,5D de referência (etapa 7)."
+}

@@ -1,0 +1,15 @@
+/* Número de impacto: só variáveis da pele do kit (cores, fontes, --U). */
+.p-numero_impacto { display: flex; align-items: center; justify-content: center; }
+.p-numero_impacto .ni-corpo { display: flex; flex-direction: column; align-items: center; max-width: calc(150 * var(--U)); text-align: center; }
+.p-numero_impacto.ni-esq { justify-content: flex-start; padding-left: calc(10 * var(--U)); }
+.p-numero_impacto.ni-esq .ni-corpo { align-items: flex-start; text-align: left; }
+.p-numero_impacto .ni-n { position: relative; font: 800 calc(24 * var(--U) * var(--esc, 1))/1 var(--fD); color: var(--destaque);
+  letter-spacing: -.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.p-numero_impacto .ni-n small { font-size: .42em; margin-left: .08em; color: var(--texto); }
+.p-numero_impacto .ni-anel { position: absolute; inset: -18% -10%; border: calc(.5 * var(--U)) solid var(--destaque);
+  border-radius: 999px; opacity: 0; }
+.p-numero_impacto .ni-ctx { margin-top: calc(3 * var(--U)); font: 500 calc(4.2 * var(--U))/1.25 var(--fT); color: var(--texto);
+  max-width: calc(110 * var(--U)); }
+.p-numero_impacto .ni-ctx .d { color: var(--destaque); }
+.vertical .p-numero_impacto .ni-n { font-size: calc(17 * var(--U) * var(--esc, 1)); }
+.vertical .p-numero_impacto .ni-ctx { font-size: calc(5.6 * var(--U)); max-width: calc(88 * var(--U)); }

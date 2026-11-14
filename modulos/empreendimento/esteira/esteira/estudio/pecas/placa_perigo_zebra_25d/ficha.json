@@ -1,0 +1,89 @@
+{
+ "id": "placa_perigo_zebra_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um aviso ou dado perigoso numa placa que cai em perspectiva e quica, com faixas zebradas deslizando em camadas e o texto que treme uma vez no impacto; nível atenção (cuidado) ou perigo (risco sério)",
+ "intencoes": [
+  "alerta"
+ ],
+ "exemplos_sim": [
+  "Cuidado: esse golpe já enganou mais de 2 milhões de brasileiros.",
+  "Atenção! Nunca compartilhe o código que chega por SMS.",
+  "Perigo: o rotativo do cartão pode passar de 400% ao ano.",
+  "Fique atento: o investimento sem garantia pode perder todo o valor aplicado.",
+  "Isso aqui é um erro grave, e muita gente comete sem perceber.",
+  "Cuidado com o link falso: o banco nunca pede sua senha por mensagem.",
+  "Alerta: misturar essas duas substâncias pode ser fatal.",
+  "Atenção ao prazo: depois do dia 30, a multa dobra."
+ ],
+ "exemplos_nao": [
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "Vamos ver como funciona esse processo, passo a passo.",
+  "Compare o CDB com a poupança.",
+  "Se inscreva no canal e ative o sino."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 6.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "o aviso em poucas palavras, como título da placa",
+   "obrigatorio": true,
+   "max_car": 28,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Golpe do falso boleto"
+  },
+  {
+   "nome": "texto",
+   "tipo": "texto",
+   "descricao": "uma frase curta que explica o risco; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 90,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Confira sempre o *beneficiário* antes de pagar."
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "nivel",
+   "valores": [
+    "atencao",
+    "perigo"
+   ],
+   "padrao": "perigo",
+   "descricao": "atencao: cor de apoio, sem clarão no impacto, tremor leve; perigo: cor de destaque, clarão e tremor forte"
+  }
+ ],
+ "batidas": [
+  "titulo"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Complementa placa_alerta_25d e placa_zebra_25d com dois níveis de gravidade e faixas zebradas em quatro camadas de profundidade."
+}

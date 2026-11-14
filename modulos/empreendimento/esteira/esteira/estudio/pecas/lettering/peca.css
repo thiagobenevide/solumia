@@ -1,0 +1,8 @@
+/* Migrada do kit (cena lettering). */
+.p-lettering .letreiro { gap: calc(.6 * var(--U)); }
+.p-lettering .ll { position: relative; overflow: hidden; padding: 0 .1em; font: 900 calc(13 * var(--U) * var(--esc, 1))/1.02 var(--fD); text-transform: uppercase; letter-spacing: -.03em; }
+.p-lettering .ll.fina { font-weight: 500; font-size: calc(9 * var(--U) * var(--esc, 1)); color: var(--acento); }
+.p-lettering .ll span { position: relative; z-index: 1; display: inline-block; }
+.p-lettering .ll.d { color: var(--destaque); }
+.p-lettering .ll .hl { position: absolute; left: 0; right: 0; bottom: .08em; height: .26em; background: color-mix(in srgb, var(--destaque) 30%, transparent); transform-origin: 0 50%; }
+.vertical .p-lettering .ll { font-size: calc(15 * var(--U) * var(--esc, 1)); }

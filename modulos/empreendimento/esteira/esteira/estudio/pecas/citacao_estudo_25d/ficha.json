@@ -1,0 +1,136 @@
+{
+ "id": "citacao_estudo_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um trecho de artigo científico em inglês sublinhado numa folha em perspectiva, com a tradução em português num cartão à frente e autor e ano num selo",
+ "intencoes": [
+  "citacao"
+ ],
+ "exemplos_sim": [
+  "Um estudo publicado em 2019 mostrou que dormir menos de seis horas por noite piora a memória.",
+  "Kahneman e Tversky escreveram, em 1979, que a dor da perda pesa mais que o prazer de um ganho igual.",
+  "Olha o que os autores dizem no artigo original: 'attention is a limited resource'.",
+  "Na revista Science, em 2015, pesquisadores alertaram que boa parte dos estudos de psicologia não se repete.",
+  "Esse trecho é do estudo de Killingsworth, de 2021: dinheiro compra felicidade, mas só até certo ponto.",
+  "Em 2020, a Nature publicou que o jejum intermitente reduziu marcadores de inflamação.",
+  "Leia o que está no paper: a meditação diminuiu o estresse em oito semanas.",
+  "Veja a frase exata do artigo, no original em inglês, e logo depois a tradução."
+ ],
+ "exemplos_nao": [
+  "Segundo o Banco Central, a inadimplência subiu 12% no ano.",
+  "Vou deixar o link do artigo na descrição do vídeo.",
+  "Uma pesquisa mostrou que 8 em cada 10 pessoas não poupam.",
+  "Vamos ver o que a ciência diz sobre isso."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 4.5,
+ "duracao_max": 9.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "trecho_en",
+   "tipo": "texto",
+   "descricao": "o trecho original do artigo, em inglês; *palavras* entre asteriscos recebem o marca-texto (sem asteriscos, o trecho inteiro é marcado)",
+   "obrigatorio": true,
+   "max_car": 110,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Sleep deprivation significantly impairs *memory consolidation* in young adults."
+  },
+  {
+   "nome": "traducao",
+   "tipo": "texto",
+   "descricao": "a tradução do trecho para o português; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 120,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "A privação de sono prejudica de forma significativa a *consolidação da memória* em jovens adultos."
+  },
+  {
+   "nome": "autor",
+   "tipo": "texto",
+   "descricao": "autor ou autores do estudo, como citado no vídeo",
+   "obrigatorio": true,
+   "max_car": 26,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Silva e Costa"
+  },
+  {
+   "nome": "ano",
+   "tipo": "texto",
+   "descricao": "ano de publicação, só os quatro dígitos",
+   "obrigatorio": true,
+   "max_car": 4,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "2021"
+  },
+  {
+   "nome": "revista",
+   "tipo": "texto",
+   "descricao": "nome da revista ou periódico, no cabeçalho da folha",
+   "obrigatorio": false,
+   "max_car": 36,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Journal of Sleep Research"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "inclinacao",
+   "valores": [
+    "suave",
+    "forte"
+   ],
+   "padrao": "suave",
+   "descricao": "quanto a folha fica deitada sobre a mesa"
+  },
+  {
+   "nome": "marcador",
+   "valores": [
+    "destaque",
+    "acento"
+   ],
+   "padrao": "destaque",
+   "descricao": "cor do marca-texto"
+  }
+ ],
+ "batidas": [
+  "traducao"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Rascunho 2,5D: palco com perspective, câmera aproxima por z e rotação; mesa só em tela cheia; selo carimba no fim."
+}

@@ -1,0 +1,113 @@
+{
+ "id": "cta_cursor_sino",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "chamada final para se inscrever, comentar ou ver o próximo vídeo, com elemento gráfico: cursor apertando o botão, sino balançando e contador de inscritos subindo",
+ "intencoes": [
+  "chamada"
+ ],
+ "exemplos_sim": [
+  "Se esse vídeo te ajudou, se inscreve no canal e ativa o sininho.",
+  "Já somos mais de 120 mil por aqui, vem fazer parte.",
+  "Deixa nos comentários qual dessas dívidas você pagaria primeiro.",
+  "Quer entender como funciona o Tesouro Direto? O próximo vídeo está aí do lado.",
+  "Clica no sino para não perder o vídeo da semana que vem.",
+  "Me conta aqui embaixo: você já caiu nesse golpe?",
+  "Assiste agora ao vídeo sobre como sair do rotativo do cartão.",
+  "Se inscreve que toda semana tem vídeo novo."
+ ],
+ "exemplos_nao": [
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Vamos entender por que isso acontece.",
+  "Você sabe o que é inflação?"
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 8.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "texto",
+   "tipo": "texto",
+   "descricao": "a chamada dita, curta; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 50,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Gostou? *Inscreva-se* no canal"
+  },
+  {
+   "nome": "acao",
+   "tipo": "texto",
+   "descricao": "qual chamada: inscrever, comentar ou proximo_video",
+   "obrigatorio": true,
+   "max_car": 14,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [
+    "inscrever",
+    "comentar",
+    "proximo_video"
+   ],
+   "exemplo": "inscrever"
+  },
+  {
+   "nome": "detalhe",
+   "tipo": "texto",
+   "descricao": "inscrever: número de inscritos (ex.: 128 mil inscritos); comentar: a pergunta; proximo_video: título do próximo vídeo",
+   "obrigatorio": false,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "128 mil inscritos"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "contador",
+   "valores": [
+    "sim",
+    "nao"
+   ],
+   "padrao": "sim",
+   "descricao": "na ação inscrever, conta o número do detalhe subindo (nao mostra o detalhe como texto)"
+  },
+  {
+   "nome": "profundidade",
+   "valores": [
+    "plana",
+    "cartao_3d"
+   ],
+   "padrao": "plana",
+   "descricao": "no próximo vídeo, o cartão chega do fundo com sombra e inclinação (2,5D)"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh",
+  "clique": "tick"
+ },
+ "notas": "Rascunho. Variação 2,5D embutida no botão profundidade (só afeta proximo_video); se a direção quiser, pode virar peça 2_5d separada."
+}

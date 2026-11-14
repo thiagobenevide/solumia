@@ -1,0 +1,30 @@
+/* Estrada do tempo: só variáveis da pele do kit. */
+.p-estrada_tempo_25d .et-cena { position: absolute; inset: 0; perspective: calc(130 * var(--U)); overflow: hidden; }
+.p-estrada_tempo_25d .et-palco { position: absolute; inset: 0; transform-style: preserve-3d; }
+.p-estrada_tempo_25d .et-chao { position: absolute; left: 50%; top: 50%; width: calc(80 * var(--U)); height: calc(420 * var(--U));
+  margin-left: calc(-40 * var(--U)); margin-top: calc(24 * var(--U) - 420 * var(--U));
+  background: linear-gradient(to bottom, transparent 0%, color-mix(in srgb, var(--fundo2) 92%, transparent) 55%);
+  border-left: calc(1 * var(--U)) solid color-mix(in srgb, var(--destaque) 70%, transparent);
+  border-right: calc(1 * var(--U)) solid color-mix(in srgb, var(--destaque) 70%, transparent); }
+.vertical .p-estrada_tempo_25d .et-chao { margin-top: calc(48 * var(--U) - 420 * var(--U)); }
+.p-estrada_tempo_25d .et-eixo { position: absolute; left: 50%; top: 0; bottom: 0; }
+.p-estrada_tempo_25d .et-m-tracejada { width: calc(1.4 * var(--U)); margin-left: calc(-.7 * var(--U));
+  background: repeating-linear-gradient(to bottom, var(--texto) 0 calc(10 * var(--U)), transparent calc(10 * var(--U)) calc(20 * var(--U))); }
+.p-estrada_tempo_25d .et-m-dupla { width: calc(3 * var(--U)); margin-left: calc(-1.5 * var(--U));
+  border-left: calc(.6 * var(--U)) solid var(--apoio); border-right: calc(.6 * var(--U)) solid var(--apoio); }
+.p-estrada_tempo_25d .et-m-nenhuma { display: none; }
+.p-estrada_tempo_25d .et-card { position: absolute; left: 50%; top: 50%; width: calc(72 * var(--U)); box-sizing: border-box;
+  padding: calc(3 * var(--U)) calc(4 * var(--U)); text-align: center; background: var(--fundo2); border-radius: var(--R);
+  border: calc(.5 * var(--U)) solid color-mix(in srgb, var(--destaque) 50%, transparent);
+  box-shadow: 0 calc(2 * var(--U)) calc(6 * var(--U)) rgba(0,0,0,.5); }
+.vertical .p-estrada_tempo_25d .et-card { width: calc(84 * var(--U)); }
+.p-estrada_tempo_25d .et-foco { border-color: var(--destaque);
+  box-shadow: 0 0 calc(5 * var(--U)) color-mix(in srgb, var(--destaque) 45%, transparent), 0 calc(2 * var(--U)) calc(6 * var(--U)) rgba(0,0,0,.5); }
+.p-estrada_tempo_25d .et-espera { width: auto; padding: calc(1.5 * var(--U)) calc(3 * var(--U)); }
+.p-estrada_tempo_25d .et-ano { font: 800 calc(9 * var(--U) * var(--esc, 1))/1 var(--fD); color: var(--destaque);
+  letter-spacing: -.02em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.p-estrada_tempo_25d .et-rot { margin-top: calc(1.5 * var(--U)); font: 600 calc(4.4 * var(--U))/1.2 var(--fT); color: var(--texto); }
+.p-estrada_tempo_25d .et-foto { width: 100%; height: calc(26 * var(--U)); margin-bottom: calc(2.5 * var(--U));
+  border-radius: var(--R); overflow: hidden; background: var(--fundo); }
+.vertical .p-estrada_tempo_25d .et-foto { height: calc(34 * var(--U)); }
+.p-estrada_tempo_25d .et-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }

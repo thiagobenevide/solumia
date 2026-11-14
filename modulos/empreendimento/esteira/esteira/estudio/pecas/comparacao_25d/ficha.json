@@ -1,0 +1,108 @@
+{
+ "id": "comparacao_25d",
+ "versao": 2,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "dois valores comparados em cartões-pilar que giram de frente para a câmera, com o maior avançando em profundidade",
+ "intencoes": [
+  "comparacao",
+  "numero"
+ ],
+ "exemplos_sim": [
+  "O CDB rende 12,5% ao ano, enquanto a poupança rende só 6,2%.",
+  "Quem investe cedo junta 480 mil; quem começa tarde, 190 mil.",
+  "O cartão cobra 400% ao ano, o empréstimo pessoal, 90%.",
+  "Em São Paulo o aluguel médio é 3.200 reais, em Recife, 1.800.",
+  "Os homens poupam 14% da renda e as mulheres, 19%.",
+  "O carro a combustão gasta 60 reais por semana; o elétrico, 15.",
+  "Em 2010 eram 30 milhões de pessoas conectadas; hoje são 150 milhões.",
+  "A taxa do banco A é 2,1% e a do banco B, 0,9%."
+ ],
+ "exemplos_nao": [
+  "Vamos entender como funciona o rendimento.",
+  "Compare o CDB com a poupança e escolha o melhor.",
+  "Primeiro anote os gastos, depois defina uma meta.",
+  "Os juros subiram em 2022, 2023 e 2024."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.5,
+ "duracao_max": 8.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "lados",
+   "tipo": "pares",
+   "descricao": "exatamente dois itens comparados; rótulo curto de quem é comparado e o valor com unidade, como dito",
+   "obrigatorio": true,
+   "max_car": 18,
+   "max_valor": 9,
+   "min_itens": 2,
+   "max_itens": 2,
+   "unidade": true,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "CDB",
+     "valor": "12,5%"
+    },
+    {
+     "rotulo": "Poupança",
+     "valor": "6,2%"
+    }
+   ]
+  },
+  {
+   "nome": "unidade",
+   "tipo": "texto",
+   "descricao": "o que os valores medem, em poucas palavras (kicker acima dos cartões)",
+   "obrigatorio": false,
+   "max_car": 24,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "rendimento ao ano"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "giro",
+   "valores": [
+    "suave",
+    "marcado"
+   ],
+   "padrao": "suave",
+   "descricao": "inclinação dos cartões voltados ao centro (14° ou 26°)"
+  },
+  {
+   "nome": "ritmo",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": "velocidade de entrada, contagem e avanço do vencedor"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Reconstruída (v2): leitura numérica pt-BR (1.234,5), textos via textContent, cartões estreitos no 9:16 para caber na área segura, destaque do vencedor por halo. Vencedor = maior valor numérico; em empate nenhum avança. Altura do pilar proporcional ao valor."
+}

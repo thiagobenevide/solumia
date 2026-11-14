@@ -1,0 +1,46 @@
+/* Etiqueta numerada: só variáveis da pele do kit. Fundo transparente (por cima da mídia). */
+.p-etiqueta_numerada .et-cena { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-start;
+  padding: 0 calc(6 * var(--U)); perspective: calc(130 * var(--U)); box-sizing: border-box; }
+.p-etiqueta_numerada.et-dir .et-cena { justify-content: flex-end; }
+.p-etiqueta_numerada .et-col { display: flex; flex-direction: column; align-items: flex-start; gap: calc(2.4 * var(--U));
+  max-width: 100%; min-width: 0; transform-style: preserve-3d; }
+.p-etiqueta_numerada.et-dir .et-col { align-items: flex-end; text-align: right; }
+.p-etiqueta_numerada .et-linha { display: flex; align-items: center; max-width: 100%; min-width: 0; }
+.p-etiqueta_numerada.et-dir .et-linha { flex-direction: row-reverse; }
+
+.p-etiqueta_numerada .et-cart { position: relative; overflow: hidden; display: flex; align-items: center;
+  gap: calc(2.4 * var(--U)); padding: calc(2.2 * var(--U)) calc(4 * var(--U)); box-sizing: border-box;
+  max-width: calc(84 * var(--U)); min-width: 0; border-radius: calc(5 * var(--U));
+  background: color-mix(in srgb, var(--fundo) 92%, transparent);
+  border: calc(.25 * var(--U)) solid color-mix(in srgb, var(--destaque) 60%, transparent);
+  box-shadow: 0 calc(1 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.4); }
+.p-etiqueta_numerada.et-vidro .et-cart { background: color-mix(in srgb, var(--fundo) 55%, transparent);
+  -webkit-backdrop-filter: blur(calc(1.4 * var(--U))); backdrop-filter: blur(calc(1.4 * var(--U)));
+  border-color: color-mix(in srgb, var(--texto) 32%, transparent);
+  box-shadow: 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5); }
+.p-etiqueta_numerada .et-n { font: 800 calc(7 * var(--U) * var(--esc, 1))/1 var(--fD); color: var(--destaque);
+  font-variant-numeric: tabular-nums; letter-spacing: -.02em; white-space: nowrap; flex: none; }
+.p-etiqueta_numerada .et-sep { flex: none; width: calc(.25 * var(--U)); height: calc(5 * var(--U));
+  background: color-mix(in srgb, var(--texto) 35%, transparent); }
+.p-etiqueta_numerada .et-p { font: 800 calc(4.8 * var(--U) * var(--esc, 1))/1.1 var(--fD); color: var(--texto);
+  text-transform: uppercase; letter-spacing: .08em; min-width: 0; overflow-wrap: anywhere; }
+.p-etiqueta_numerada .et-brilho { position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 35%, color-mix(in srgb, var(--texto) 28%, transparent) 50%, transparent 65%); }
+
+.p-etiqueta_numerada .et-pino { display: flex; align-items: center; flex: none; }
+.p-etiqueta_numerada.et-dir .et-pino { flex-direction: row-reverse; }
+.p-etiqueta_numerada .et-fio { width: calc(8 * var(--U)); height: calc(.35 * var(--U)); background: var(--destaque);
+  transform-origin: left center; }
+.p-etiqueta_numerada.et-dir .et-fio { transform-origin: right center; }
+.p-etiqueta_numerada .et-ponto { width: calc(1.6 * var(--U)); height: calc(1.6 * var(--U)); border-radius: 50%;
+  background: var(--destaque); box-shadow: 0 0 0 calc(.6 * var(--U)) color-mix(in srgb, var(--destaque) 30%, transparent); }
+
+.p-etiqueta_numerada .et-ctx { font: 600 calc(3.8 * var(--U) * var(--esc, 1))/1.25 var(--fT); color: var(--texto);
+  max-width: calc(70 * var(--U)); text-shadow: 0 calc(.2 * var(--U)) calc(.8 * var(--U)) rgba(0,0,0,.6); }
+.p-etiqueta_numerada .et-ctx .d { color: var(--destaque); }
+
+.vertical .p-etiqueta_numerada .et-cart { max-width: calc(72 * var(--U)); padding: calc(2 * var(--U)) calc(3.4 * var(--U)); }
+.vertical .p-etiqueta_numerada .et-n { font-size: calc(6.6 * var(--U) * var(--esc, 1)); }
+.vertical .p-etiqueta_numerada .et-p { font-size: calc(4.6 * var(--U) * var(--esc, 1)); }
+.vertical .p-etiqueta_numerada .et-ctx { font-size: calc(4.8 * var(--U) * var(--esc, 1)); max-width: calc(80 * var(--U)); }
+.vertical .p-etiqueta_numerada .et-fio { width: calc(6 * var(--U)); }

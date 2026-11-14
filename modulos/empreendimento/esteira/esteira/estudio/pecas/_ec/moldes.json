@@ -1,0 +1,504 @@
+[
+  {
+    "id": "numero",
+    "descricao": "número grande que conta, traço que se desenha e o que ele mede",
+    "intencoes": ["numero", "destaque", "alerta", "dado_temporal"],
+    "slots": [
+      {"nome": "numero", "tipos": ["numero"], "obrigatorio": true, "dicas": ["numero", "valor", "total"]},
+      {"nome": "rotulo", "tipos": ["texto", "tematico", "icone"], "dicas": ["rotulo", "legenda", "mede", "unidade"]},
+      {"nome": "contexto", "tipos": ["texto"], "dicas": ["contexto", "fonte", "explica", "descricao", "nota"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "chamada", "tema"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": [
+          {"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}]},
+        {"tipo": "caixa", "nome": "Centro", "regiao": "centro", "disposicao": "coluna", "pesos": [3, 0.3, 1.2],
+         "espaco": 0.015, "filhos": [
+          {"tipo": "texto", "nome": "Numero", "conteudo": "{{$numero}}", "nivel": "numero", "fonte": "fD", "peso": 800,
+           "cor": "destaque", "numero": true},
+          {"tipo": "retangulo", "nome": "Traco", "w": 0.35, "h": 0.008, "cor": "destaque"},
+          {"tipo": "texto", "nome": "Rotulo", "conteudo": "{{$rotulo}}", "nivel": "destaque", "peso": 600}]},
+        {"tipo": "caixa", "nome": "Base", "regiao": "base", "filhos": [
+          {"tipo": "texto", "nome": "Contexto", "conteudo": "{{$contexto}}", "nivel": "corpo"}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Numero", "de": "escala", "t": 0.1, "dur": "0.6v"},
+        {"anim": "contar", "alvo": "Numero", "t": 0.1, "dur": "1.1v"},
+        {"anim": "tracar", "alvo": "Traco", "t": 0.6, "dur": "0.6v"},
+        {"anim": "entrar", "alvo": "Rotulo", "de": "baixo", "t": 0.7, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Contexto", "de": "aparecer", "t": 1.0, "dur": "0.6v"}
+      ]
+    }
+  },
+  {
+    "id": "percentual_grade",
+    "descricao": "percentual em grade de 100 pontos (os N primeiros acesos) ao lado do número",
+    "intencoes": ["numero", "comparacao", "dado_temporal"],
+    "condicao": "percentual",
+    "bonus": 1,
+    "slots": [
+      {"nome": "numero", "tipos": ["numero"], "obrigatorio": true, "dicas": ["numero", "percentual", "valor"]},
+      {"nome": "rotulo", "tipos": ["texto", "tematico"], "dicas": ["rotulo", "legenda", "mede"]},
+      {"nome": "contexto", "tipos": ["texto"], "dicas": ["contexto", "fonte", "explica", "nota"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "chamada"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": [
+          {"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}]},
+        {"tipo": "caixa", "nome": "Grade", "regiao": "esquerda", "disposicao": "grade", "colunas": 10, "espaco": 0.006,
+         "filhos": [
+          {"tipo": "repetir", "nome": "Pontos", "quantidade": 100, "ativos": "$numero", "cor_ativa": "destaque",
+           "intervalo": 0.008, "elementos": [{"tipo": "elipse", "nome": "Ponto", "cor": "fundo2"}],
+           "animacoes": [{"anim": "entrar", "alvo": "Ponto", "de": "escala", "t": 0.1, "dur": "0.3v"}]}]},
+        {"tipo": "caixa", "nome": "Leitura", "regiao": "direita", "disposicao": "coluna", "pesos": [2, 1, 1],
+         "alinhar": "inicio", "filhos": [
+          {"tipo": "texto", "nome": "Numero", "conteudo": "{{$numero}}", "nivel": "numero", "fonte": "fD", "peso": 800,
+           "cor": "destaque", "numero": true},
+          {"tipo": "texto", "nome": "Rotulo", "conteudo": "{{$rotulo}}", "nivel": "corpo", "peso": 600},
+          {"tipo": "texto", "nome": "Contexto", "conteudo": "{{$contexto}}", "nivel": "rotulo"}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"},
+        {"anim": "contar", "alvo": "Numero", "t": 0.2, "dur": "1.0v"},
+        {"anim": "entrar", "alvo": "Numero", "de": "baixo", "t": 0.2, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Rotulo", "de": "baixo", "t": 0.5, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Contexto", "de": "aparecer", "t": 1.0, "dur": "0.6v"}
+      ]
+    }
+  },
+  {
+    "id": "dois_numeros",
+    "descricao": "dois números lado a lado (antes e depois, um contra o outro), o segundo em destaque",
+    "intencoes": ["comparacao", "numero", "narrativa_passado", "dado_temporal"],
+    "slots": [
+      {"nome": "numero_a", "tipos": ["numero"], "obrigatorio": true, "dicas": ["antes", "a", "inicial", "de", "primeiro"]},
+      {"nome": "numero_b", "tipos": ["numero"], "obrigatorio": true, "dicas": ["depois", "b", "final", "para", "segundo"]},
+      {"nome": "rotulo_a", "tipos": ["texto"], "dicas": ["rotulo_a", "antes", "esquerda", "legenda_a"]},
+      {"nome": "rotulo_b", "tipos": ["texto"], "dicas": ["rotulo_b", "depois", "direita", "legenda_b"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "tema"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": [
+          {"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}]},
+        {"tipo": "caixa", "nome": "LadoA", "regiao": "esquerda", "disposicao": "coluna", "pesos": [2, 1], "filhos": [
+          {"tipo": "texto", "nome": "NumeroA", "conteudo": "{{$numero_a}}", "nivel": "numero", "fonte": "fD",
+           "peso": 700, "cor": "apoio", "numero": true},
+          {"tipo": "texto", "nome": "RotuloA", "conteudo": "{{$rotulo_a}}", "nivel": "corpo"}]},
+        {"tipo": "caixa", "nome": "LadoB", "regiao": "direita", "disposicao": "coluna", "pesos": [2, 1], "filhos": [
+          {"tipo": "texto", "nome": "NumeroB", "conteudo": "{{$numero_b}}", "nivel": "numero", "fonte": "fD",
+           "peso": 800, "cor": "destaque", "numero": true},
+          {"tipo": "texto", "nome": "RotuloB", "conteudo": "{{$rotulo_b}}", "nivel": "corpo", "peso": 600}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "NumeroA", "de": "esq", "t": 0.1, "dur": "0.5v"},
+        {"anim": "contar", "alvo": "NumeroA", "t": 0.1, "dur": "0.8v"},
+        {"anim": "entrar", "alvo": "RotuloA", "de": "aparecer", "t": 0.4, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "NumeroB", "de": "escala", "t": 0.9, "dur": "0.5v"},
+        {"anim": "contar", "alvo": "NumeroB", "t": 0.9, "dur": "0.9v"},
+        {"anim": "entrar", "alvo": "RotuloB", "de": "aparecer", "t": 1.2, "dur": "0.5v"}
+      ]
+    }
+  },
+  {
+    "id": "barras",
+    "descricao": "barras em pé proporcionais aos valores, com valor em cima e rótulo embaixo",
+    "intencoes": ["comparacao", "numero", "dado_temporal", "lista"],
+    "slots": [
+      {"nome": "pares", "tipos": ["pares"], "obrigatorio": true, "dicas": ["barras", "valores", "pares", "itens", "dados"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "tema", "pergunta"]},
+      {"nome": "fonte", "tipos": ["texto"], "dicas": ["fonte", "contexto", "nota", "rodape"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": [
+          {"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}]},
+        {"tipo": "caixa", "nome": "Grafico", "regiao": "centro", "disposicao": "linha", "espaco": 0.03, "filhos": [
+          {"tipo": "repetir", "nome": "Barras", "encaixe": "$pares", "maximo": 6, "intervalo": 0.12,
+           "disposicao_item": "coluna", "pesos_item": [1, 4, 1],
+           "elementos": [
+             {"tipo": "texto", "nome": "Valor", "conteudo": "{{item.valor}}", "nivel": "corpo", "fonte": "fD",
+              "peso": 700, "cor": "destaque"},
+             {"tipo": "retangulo", "nome": "Barra", "proporcional": true, "w": 0.13, "cor": "destaque", "raio": 0.006},
+             {"tipo": "texto", "nome": "Rotulo", "conteudo": "{{item.rotulo}}", "nivel": "rotulo"}],
+           "animacoes": [
+             {"anim": "entrar", "alvo": "Barra", "de": "baixo", "t": 0.2, "dur": "0.6v"},
+             {"anim": "entrar", "alvo": "Valor", "de": "aparecer", "t": 0.6, "dur": "0.4v"},
+             {"anim": "entrar", "alvo": "Rotulo", "de": "aparecer", "t": 0.3, "dur": "0.4v"}]}]},
+        {"tipo": "caixa", "nome": "Base", "regiao": "base", "filhos": [
+          {"tipo": "texto", "nome": "Fonte", "conteudo": "{{$fonte}}", "nivel": "rotulo", "cor": "apoio"}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Fonte", "de": "aparecer", "t": 1.2, "dur": "0.5v"}
+      ]
+    }
+  },
+  {
+    "id": "rosca",
+    "descricao": "rosca de fatias proporcionais com o total no furo e legenda colorida ao lado",
+    "intencoes": ["comparacao", "numero"],
+    "condicao": "percentual",
+    "slots": [
+      {"nome": "pares", "tipos": ["pares"], "obrigatorio": true, "dicas": ["fatias", "partes", "pares", "valores"]},
+      {"nome": "total", "tipos": ["numero", "texto"], "dicas": ["total", "centro", "numero"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "tema"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": [
+          {"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}]},
+        {"tipo": "caixa", "nome": "Rosca", "regiao": "esquerda", "disposicao": "camadas", "filhos": [
+          {"tipo": "repetir", "nome": "Fatias", "encaixe": "$pares", "maximo": 5, "intervalo": 0.15,
+           "elementos": [{"tipo": "elipse", "nome": "Fatia", "fatia": true, "contorno": 0.07}],
+           "animacoes": [{"anim": "entrar", "alvo": "Fatia", "de": "escala", "t": 0.2, "dur": "0.6v"}]},
+          {"tipo": "texto", "nome": "Total", "conteudo": "{{$total}}", "nivel": "destaque", "fonte": "fD", "peso": 800}]},
+        {"tipo": "caixa", "nome": "Legenda", "regiao": "direita", "alinhar": "inicio", "filhos": [
+          {"tipo": "repetir", "nome": "Itens", "encaixe": "$pares", "maximo": 5, "intervalo": 0.15,
+           "disposicao_item": "linha", "pesos_item": [3, 1],
+           "elementos": [
+             {"tipo": "texto", "nome": "Rotulo", "conteudo": "{{item.rotulo}}", "nivel": "corpo"},
+             {"tipo": "texto", "nome": "Valor", "conteudo": "{{item.valor}}", "nivel": "corpo", "cor": "destaque",
+              "peso": 700}],
+           "animacoes": [{"anim": "entrar", "alvo": "Rotulo", "de": "esq", "t": 0.4, "dur": "0.5v"},
+                         {"anim": "entrar", "alvo": "Valor", "de": "aparecer", "t": 0.5, "dur": "0.5v"}]}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Total", "de": "escala", "t": 0.8, "dur": "0.5v"}
+      ]
+    }
+  },
+  {
+    "id": "linha_do_tempo",
+    "descricao": "marcos lado a lado (coluna no 9:16): data em destaque, trilho que se desenha e o evento",
+    "intencoes": ["narrativa_passado", "dado_temporal", "processo"],
+    "slots": [
+      {"nome": "pares", "tipos": ["pares"], "obrigatorio": true, "dicas": ["marcos", "eventos", "datas", "linha", "pares"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "tema", "periodo"]},
+      {"nome": "fonte", "tipos": ["texto"], "dicas": ["fonte", "contexto", "nota"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": [
+          {"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}]},
+        {"tipo": "caixa", "nome": "Linha", "regiao": "centro", "disposicao": "fluxo", "espaco": 0.01, "filhos": [
+          {"tipo": "repetir", "nome": "Marcos", "encaixe": "$pares", "maximo": 6, "intervalo": 0.25,
+           "disposicao_item": "coluna", "pesos_item": [1, 0.35, 1.6],
+           "elementos": [
+             {"tipo": "texto", "nome": "Data", "conteudo": "{{item.valor}}", "nivel": "destaque", "fonte": "fD",
+              "peso": 800, "cor": "destaque"},
+             {"tipo": "retangulo", "nome": "Trilho", "h": 0.006, "cor": "destaque"},
+             {"tipo": "texto", "nome": "Evento", "conteudo": "{{item.rotulo}}", "nivel": "corpo"}],
+           "animacoes": [
+             {"anim": "tracar", "alvo": "Trilho", "t": 0.2, "dur": "0.4v"},
+             {"anim": "entrar", "alvo": "Data", "de": "baixo", "t": 0.3, "dur": "0.5v"},
+             {"anim": "entrar", "alvo": "Evento", "de": "aparecer", "t": 0.45, "dur": "0.5v"}]}]},
+        {"tipo": "caixa", "nome": "Base", "regiao": "base", "filhos": [
+          {"tipo": "texto", "nome": "Fonte", "conteudo": "{{$fonte}}", "nivel": "rotulo", "cor": "apoio"}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Fonte", "de": "aparecer", "t": 1.5, "dur": "0.5v"}
+      ]
+    }
+  },
+  {
+    "id": "lista",
+    "descricao": "lista vertical: marcador de cor que cresce e o texto de cada item entrando em sequência",
+    "intencoes": ["lista", "processo", "conceito"],
+    "slots": [
+      {"nome": "itens", "tipos": ["itens"], "obrigatorio": true, "dicas": ["itens", "lista", "topicos", "etapas", "passos"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "tema", "pergunta"]},
+      {"nome": "fonte", "tipos": ["texto"], "dicas": ["fonte", "contexto", "nota", "conclusao"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "alinhar": "inicio", "filhos": [
+          {"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}]},
+        {"tipo": "caixa", "nome": "Lista", "regiao": "centro", "disposicao": "coluna", "espaco": 0.012,
+         "alinhar": "inicio", "filhos": [
+          {"tipo": "repetir", "nome": "Itens", "encaixe": "$itens", "maximo": 6, "intervalo": 0.18,
+           "disposicao_item": "linha", "pesos_item": [0.05, 1],
+           "elementos": [
+             {"tipo": "retangulo", "nome": "Marcador", "w": 0.012, "h": 0.045, "cor": "destaque", "raio": 0.004},
+             {"tipo": "texto", "nome": "Item", "conteudo": "{{item}}", "nivel": "corpo"}],
+           "animacoes": [
+             {"anim": "entrar", "alvo": "Marcador", "de": "escala", "t": 0.2, "dur": "0.4v"},
+             {"anim": "entrar", "alvo": "Item", "de": "esq", "t": 0.25, "dur": "0.5v"}]}]},
+        {"tipo": "caixa", "nome": "Base", "regiao": "base", "alinhar": "inicio", "filhos": [
+          {"tipo": "texto", "nome": "Fonte", "conteudo": "{{$fonte}}", "nivel": "rotulo", "cor": "apoio"}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Fonte", "de": "aparecer", "t": 1.4, "dur": "0.5v"}
+      ]
+    }
+  },
+  {
+    "id": "etapas",
+    "descricao": "etapas de um processo em cartões lado a lado (empilhados no 9:16), um depois do outro",
+    "intencoes": ["processo", "lista", "conceito", "narrativa_passado"],
+    "slots": [
+      {"nome": "itens", "tipos": ["itens"], "obrigatorio": true, "dicas": ["etapas", "passos", "fases", "itens"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "tema"]},
+      {"nome": "fonte", "tipos": ["texto"], "dicas": ["fonte", "contexto", "nota", "conclusao", "resultado"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": [
+          {"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}]},
+        {"tipo": "caixa", "nome": "Etapas", "regiao": "centro", "disposicao": "fluxo", "espaco": 0.025, "filhos": [
+          {"tipo": "repetir", "nome": "Cartoes", "encaixe": "$itens", "maximo": 5, "intervalo": 0.3,
+           "disposicao_item": "camadas",
+           "elementos": [
+             {"tipo": "retangulo", "nome": "Cartao", "cor": "fundo2", "raio": 0.02},
+             {"tipo": "retangulo", "nome": "Faixa", "h": 0.008, "cor": "destaque"},
+             {"tipo": "texto", "nome": "Etapa", "conteudo": "{{item}}", "nivel": "corpo", "peso": 600}],
+           "animacoes": [
+             {"anim": "entrar", "alvo": "Cartao", "de": "baixo", "t": 0.2, "dur": "0.5v"},
+             {"anim": "tracar", "alvo": "Faixa", "t": 0.5, "dur": "0.4v"},
+             {"anim": "entrar", "alvo": "Etapa", "de": "aparecer", "t": 0.45, "dur": "0.4v"}]}]},
+        {"tipo": "caixa", "nome": "Base", "regiao": "base", "filhos": [
+          {"tipo": "texto", "nome": "Fonte", "conteudo": "{{$fonte}}", "nivel": "corpo", "cor": "apoio"}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Fonte", "de": "aparecer", "t": 1.8, "dur": "0.5v"}
+      ]
+    }
+  },
+  {
+    "id": "frase",
+    "descricao": "frase forte com barra de destaque que se desenha, chamada em cima e autoria embaixo",
+    "intencoes": ["citacao", "destaque", "pergunta", "chamada", "alerta", "conceito"],
+    "slots": [
+      {"nome": "frase", "tipos": ["texto", "numero", "tematico"], "obrigatorio": true,
+       "dicas": ["frase", "citacao", "texto", "pergunta", "chamada", "titulo", "mensagem", "ideia", "conceito"]},
+      {"nome": "autor", "tipos": ["texto"], "dicas": ["autor", "fonte", "quem", "assinatura", "contexto", "detalhe"]},
+      {"nome": "kicker", "tipos": ["texto", "tematico", "icone"], "dicas": ["kicker", "rotulo", "categoria", "data", "selo", "tema"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "alinhar": "inicio", "filhos": [
+          {"tipo": "texto", "nome": "Kicker", "conteudo": "{{$kicker}}", "nivel": "rotulo", "cor": "destaque",
+           "peso": 700, "caps": true, "tracking": 120}]},
+        {"tipo": "caixa", "nome": "Centro", "regiao": "centro", "disposicao": "linha", "pesos": [0.04, 1],
+         "espaco": 0.03, "alinhar": "inicio", "filhos": [
+          {"tipo": "retangulo", "nome": "Barra", "w": 0.012, "cor": "destaque", "raio": 0.004},
+          {"tipo": "texto", "nome": "Frase", "conteudo": "{{$frase}}", "nivel": "destaque", "fonte": "fD", "peso": 700}]},
+        {"tipo": "caixa", "nome": "Base", "regiao": "base", "alinhar": "inicio", "filhos": [
+          {"tipo": "texto", "nome": "Autor", "conteudo": "{{$autor}}", "nivel": "corpo", "cor": "apoio"}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Kicker", "de": "aparecer", "t": 0, "dur": "0.4v"},
+        {"anim": "tracar", "alvo": "Barra", "t": 0.1, "dur": "0.6v", "vertical": true},
+        {"anim": "entrar", "alvo": "Frase", "de": "baixo", "t": 0.25, "dur": "0.7v"},
+        {"anim": "entrar", "alvo": "Autor", "de": "aparecer", "t": 0.9, "dur": "0.5v"}
+      ]
+    }
+  },
+  {
+    "id": "capitulo",
+    "descricao": "abertura de capítulo: bloco colorido com o número e, ao lado (embaixo no 9:16), rótulo, título, apoio e traço",
+    "intencoes": ["capitulo", "transicao"],
+    "slots": [
+      {"nome": "numero", "tipos": ["texto", "numero"], "obrigatorio": true,
+       "dicas": ["numero", "capitulo", "ordem", "parte", "indice", "n"]},
+      {"nome": "titulo", "tipos": ["texto", "tematico"], "obrigatorio": true,
+       "dicas": ["titulo", "nome", "tema", "frase", "chamada"]},
+      {"nome": "subtitulo", "tipos": ["texto"], "dicas": ["subtitulo", "apoio", "contexto", "descricao", "linha", "detalhe"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Centro", "regiao": "centro", "disposicao": "linha", "pesos": [0.36, 1],
+         "espaco": 0.05, "alinhar": "inicio", "vertical": {"disposicao": "coluna", "pesos": [1, 1.6]}, "filhos": [
+          {"tipo": "caixa", "nome": "BlocoNumero", "disposicao": "camadas", "alinhar": "centro", "filhos": [
+            {"tipo": "retangulo", "nome": "FundoNumero", "w": 0.39, "h": 0.39, "cor": "destaque", "raio": 0.03,
+             "vertical": {"w": 0.33, "h": 0.33}},
+            {"tipo": "texto", "nome": "Numero", "conteudo": "{{$numero}}", "nivel": "numero", "fonte": "fD",
+             "peso": 800, "cor": "fundo"}]},
+          {"tipo": "caixa", "nome": "ConteudoTexto", "disposicao": "coluna", "pesos": [0.75, 2.6, 1.2, 0.2],
+           "espaco": 0.02, "alinhar": "inicio", "vertical": {"alinhar": "centro"}, "filhos": [
+            {"tipo": "texto", "nome": "Kicker", "conteudo": "Capítulo", "nivel": "corpo", "cor": "destaque",
+             "peso": 700, "caps": true, "tracking": 120},
+            {"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700},
+            {"tipo": "texto", "nome": "Subtitulo", "conteudo": "{{$subtitulo}}", "nivel": "corpo", "cor": "apoio"},
+            {"tipo": "retangulo", "nome": "Traco", "h": 0.006, "cor": "destaque", "vertical": {"w": 0.3}}]}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "FundoNumero", "de": "escala", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Numero", "de": "escala", "t": 0.15, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Kicker", "de": "aparecer", "t": 0.3, "dur": "0.4v"},
+        {"anim": "entrar", "alvo": "Titulo", "de": "baixo", "t": 0.4, "dur": "0.6v"},
+        {"anim": "entrar", "alvo": "Subtitulo", "de": "aparecer", "t": 0.7, "dur": "0.5v"},
+        {"anim": "tracar", "alvo": "Traco", "t": 0.8, "dur": "0.6v"}
+      ]
+    }
+  },
+  {
+    "id": "anel",
+    "descricao": "anel que preenche até a porcentagem, com o número contando no furo e o que ele mede ao lado",
+    "intencoes": ["numero", "destaque", "comparacao"],
+    "condicao": "percentual",
+    "slots": [
+      {"nome": "percentual", "tipos": ["pares"], "obrigatorio": true, "dicas": ["percentual", "valores", "proporcao"]},
+      {"nome": "fonte", "tipos": ["texto"], "dicas": ["fonte", "contexto", "nota"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "tema"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": [{"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}]},
+        {"tipo": "caixa", "nome": "Centro", "regiao": "centro", "disposicao": "fluxo", "pesos": [1, 1.3], "espaco": 0.05, "filhos": [{"tipo": "caixa", "nome": "Anel", "disposicao": "camadas", "filhos": [{"tipo": "elipse", "nome": "Trilho", "d": 0.42, "contorno": 0.05, "cor": "fundo2"}, {"tipo": "repetir", "nome": "Arco", "encaixe": "$percentual", "maximo": 1, "elementos": [{"tipo": "elipse", "nome": "Fatia", "d": 0.42, "fatia": true, "contorno": 0.05, "cor": "destaque"}], "animacoes": [{"anim": "entrar", "alvo": "Fatia", "de": "escala", "t": 0.1, "dur": "0.7v"}]}, {"tipo": "texto", "nome": "Numero", "conteudo": "{{$percentual.valor}}", "nivel": "numero", "fonte": "fD", "peso": 800, "alinhar": "centro"}]}, {"tipo": "caixa", "nome": "Leitura", "disposicao": "coluna", "pesos": [2, 1], "alinhar": "centro", "filhos": [{"tipo": "texto", "nome": "Rotulo", "conteudo": "{{$percentual.rotulo}}", "nivel": "titulo", "fonte": "fD", "peso": 700}, {"tipo": "texto", "nome": "Fonte", "conteudo": "{{$fonte}}", "nivel": "rotulo", "cor": "apoio"}]}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Numero", "de": "escala", "t": 0.3, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Rotulo", "de": "baixo", "t": 0.5, "dur": "0.6v"},
+        {"anim": "entrar", "alvo": "Fonte", "de": "aparecer", "t": 1.0, "dur": "0.5v"}
+      ]
+    }
+  },
+  {
+    "id": "pergunta",
+    "descricao": "pergunta em destaque ocupando o centro, com um '?' gigante pulsando atrás",
+    "intencoes": ["pergunta", "chamada", "destaque"],
+    "slots": [
+      {"nome": "pergunta", "tipos": ["texto"], "obrigatorio": true, "dicas": ["pergunta", "frase", "texto", "titulo"]},
+      {"nome": "kicker", "tipos": ["texto"], "dicas": ["kicker", "rotulo", "tema", "contexto"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Centro", "regiao": "centro", "disposicao": "coluna", "pesos": [0.4, 2.6, 1.3], "espaco": 0.02, "alinhar": "centro", "filhos": [{"tipo": "texto", "nome": "Kicker", "conteudo": "{{$kicker}}", "nivel": "rotulo", "cor": "destaque", "peso": 700, "caps": true, "tracking": 120, "alinhar": "centro"}, {"tipo": "texto", "nome": "Pergunta", "conteudo": "{{$pergunta}}", "nivel": "titulo", "fonte": "fD", "peso": 800, "alinhar": "centro"}, {"tipo": "texto", "nome": "Marca", "conteudo": "?", "nivel": "numero", "fonte": "fD", "peso": 900, "cor": "destaque", "alinhar": "centro"}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Marca", "de": "escala", "t": 0.7, "dur": "0.5v"},
+        {"anim": "chaves", "alvo": "Marca", "prop": "escala", "pares": [[1.2, 100], [1.6, 112], [2.0, 100], [2.4, 112], [2.8, 100]]},
+        {"anim": "entrar", "alvo": "Kicker", "de": "aparecer", "t": 0.15, "dur": "0.4v"},
+        {"anim": "entrar", "alvo": "Pergunta", "de": "baixo", "t": 0.25, "dur": "0.7v"}
+      ]
+    }
+  },
+  {
+    "id": "chamada",
+    "descricao": "chamada para ação: frase grande e um botão com a ação embaixo, que pulsa",
+    "intencoes": ["chamada"],
+    "slots": [
+      {"nome": "frase", "tipos": ["texto"], "obrigatorio": true, "dicas": ["frase", "texto", "chamada", "titulo", "mensagem"]},
+      {"nome": "acao", "tipos": ["texto"], "obrigatorio": true, "dicas": ["acao", "botao", "verbo"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Centro", "regiao": "centro", "disposicao": "coluna", "pesos": [2.2, 0.25, 1], "espaco": 0.03, "alinhar": "centro", "filhos": [{"tipo": "texto", "nome": "Frase", "conteudo": "{{$frase}}", "nivel": "titulo", "fonte": "fD", "peso": 800, "alinhar": "centro"}, {"tipo": "retangulo", "nome": "Traco", "w": 0.12, "h": 0.006, "cor": "destaque"}, {"tipo": "caixa", "nome": "Botao", "disposicao": "camadas", "filhos": [{"tipo": "retangulo", "nome": "FundoBotao", "w": 0.5, "h": 0.13, "cor": "destaque", "raio": 0.065, "vertical": {"w": 0.62, "h": 0.12}}, {"tipo": "texto", "nome": "Acao", "conteudo": "{{$acao}}", "nivel": "destaque", "peso": 800, "cor": "fundo", "alinhar": "centro", "caps": true, "tracking": 60}]}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Frase", "de": "baixo", "t": 0, "dur": "0.6v"},
+        {"anim": "tracar", "alvo": "Traco", "t": 0.4, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "FundoBotao", "de": "escala", "t": 0.6, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Acao", "de": "aparecer", "t": 0.75, "dur": "0.4v"},
+        {"anim": "chaves", "alvo": "FundoBotao", "prop": "escala", "pares": [[1.2, 100], [1.6, 106], [2.0, 100], [2.4, 106], [2.8, 100]]}
+      ]
+    }
+  },
+  {
+    "id": "termo",
+    "descricao": "termo técnico em verbete: o termo grande, traço e a definição logo abaixo",
+    "intencoes": ["conceito"],
+    "slots": [
+      {"nome": "termo", "tipos": ["texto"], "obrigatorio": true, "dicas": ["termo", "nome", "conceito", "titulo", "palavra"]},
+      {"nome": "definicao", "tipos": ["texto"], "obrigatorio": true, "dicas": ["definicao", "significado", "explica", "descricao"]},
+      {"nome": "kicker", "tipos": ["texto"], "dicas": ["kicker", "rotulo", "categoria", "classe"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Centro", "regiao": "centro", "disposicao": "coluna", "pesos": [0.45, 1.6, 0.15, 1.6], "espaco": 0.02, "alinhar": "inicio", "filhos": [{"tipo": "texto", "nome": "Kicker", "conteudo": "{{$kicker}}", "nivel": "rotulo", "cor": "destaque", "peso": 700, "caps": true, "tracking": 120}, {"tipo": "texto", "nome": "Termo", "conteudo": "{{$termo}}", "nivel": "titulo", "fonte": "fD", "peso": 800}, {"tipo": "retangulo", "nome": "Traco", "h": 0.008, "cor": "destaque"}, {"tipo": "texto", "nome": "Definicao", "conteudo": "{{$definicao}}", "nivel": "destaque", "cor": "apoio"}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Kicker", "de": "aparecer", "t": 0, "dur": "0.4v"},
+        {"anim": "entrar", "alvo": "Termo", "de": "baixo", "t": 0.1, "dur": "0.6v"},
+        {"anim": "tracar", "alvo": "Traco", "t": 0.5, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Definicao", "de": "aparecer", "t": 0.8, "dur": "0.6v"}
+      ]
+    }
+  },
+  {
+    "id": "riscado",
+    "descricao": "o que deixar de fazer: cada item entra e um traço o risca por cima",
+    "intencoes": ["lista", "alerta"],
+    "slots": [
+      {"nome": "itens", "tipos": ["itens"], "obrigatorio": true, "dicas": ["itens", "cortar", "lista", "riscar"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "tema"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": [{"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}], "alinhar": "inicio"},
+        {"tipo": "caixa", "nome": "Lista", "regiao": "centro", "disposicao": "coluna", "espaco": 0.02, "alinhar": "inicio", "filhos": [{"tipo": "repetir", "nome": "Itens", "encaixe": "$itens", "maximo": 4, "intervalo": 0.35, "disposicao_item": "camadas", "elementos": [{"tipo": "texto", "nome": "Item", "conteudo": "{{item}}", "nivel": "destaque", "fonte": "fD", "peso": 700}, {"tipo": "retangulo", "nome": "Risco", "h": 0.01, "cor": "destaque"}], "animacoes": [{"anim": "entrar", "alvo": "Item", "de": "esq", "t": 0.2, "dur": "0.5v"}, {"anim": "tracar", "alvo": "Risco", "t": 0.6, "dur": "0.4v"}]}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"}
+      ]
+    }
+  },
+  {
+    "id": "passo",
+    "descricao": "um passo do método: círculo com o número do passo e a frase dele ao lado (embaixo no 9:16)",
+    "intencoes": ["processo"],
+    "slots": [
+      {"nome": "numero", "tipos": ["texto", "numero"], "obrigatorio": true, "dicas": ["numero", "passo", "ordem", "etapa"]},
+      {"nome": "frase", "tipos": ["texto"], "obrigatorio": true, "dicas": ["frase", "texto", "acao", "titulo", "regra"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Centro", "regiao": "centro", "disposicao": "fluxo", "pesos": [0.35, 1], "espaco": 0.05, "alinhar": "centro", "filhos": [{"tipo": "caixa", "nome": "Marcador", "disposicao": "camadas", "filhos": [{"tipo": "elipse", "nome": "Circulo", "d": 0.3, "cor": "destaque", "vertical": {"d": 0.26}}, {"tipo": "texto", "nome": "Numero", "conteudo": "{{$numero}}", "nivel": "numero", "fonte": "fD", "peso": 800, "cor": "fundo", "alinhar": "centro"}]}, {"tipo": "caixa", "nome": "Texto", "disposicao": "coluna", "pesos": [0.45, 2], "espaco": 0.015, "alinhar": "centro", "filhos": [{"tipo": "texto", "nome": "Kicker", "conteudo": "Passo", "nivel": "rotulo", "cor": "destaque", "peso": 700, "caps": true, "tracking": 120}, {"tipo": "texto", "nome": "Frase", "conteudo": "{{$frase}}", "nivel": "titulo", "fonte": "fD", "peso": 700}]}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Circulo", "de": "escala", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Numero", "de": "escala", "t": 0.15, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Kicker", "de": "aparecer", "t": 0.3, "dur": "0.4v"},
+        {"anim": "entrar", "alvo": "Frase", "de": "baixo", "t": 0.4, "dur": "0.6v"}
+      ]
+    }
+  },
+  {
+    "id": "ranking",
+    "descricao": "ranking em barras deitadas do maior para o menor: rótulo e valor em cima, barra proporcional embaixo",
+    "intencoes": ["comparacao", "lista"],
+    "slots": [
+      {"nome": "pares", "tipos": ["pares"], "obrigatorio": true, "dicas": ["ranking", "valores", "pares", "itens"]},
+      {"nome": "titulo", "tipos": ["texto"], "dicas": ["titulo", "kicker", "tema"]},
+      {"nome": "fonte", "tipos": ["texto"], "dicas": ["fonte", "contexto", "nota"]}
+    ],
+    "n1": {
+      "fundo_tela_cheia": "tela",
+      "elementos": [
+        {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": [{"tipo": "texto", "nome": "Titulo", "conteudo": "{{$titulo}}", "nivel": "destaque", "fonte": "fD", "peso": 700}], "alinhar": "inicio"},
+        {"tipo": "caixa", "nome": "Grafico", "regiao": "centro", "disposicao": "coluna", "espaco": 0.02, "alinhar": "inicio", "filhos": [{"tipo": "repetir", "nome": "Linhas", "encaixe": "$pares", "maximo": 5, "intervalo": 0.15, "disposicao_item": "coluna", "pesos_item": [1, 0.7], "elementos": [{"tipo": "texto", "nome": "Rotulo", "conteudo": "{{item.rotulo}}  ·  {{item.valor}}", "nivel": "corpo", "peso": 600}, {"tipo": "retangulo", "nome": "Barra", "proporcional": true, "h": 0.03, "cor": "destaque", "raio": 0.006}], "animacoes": [{"anim": "entrar", "alvo": "Rotulo", "de": "aparecer", "t": 0.2, "dur": "0.4v"}, {"anim": "tracar", "alvo": "Barra", "t": 0.3, "dur": "0.6v"}]}]},
+        {"tipo": "caixa", "nome": "Base", "regiao": "base", "alinhar": "inicio", "filhos": [{"tipo": "texto", "nome": "Fonte", "conteudo": "{{$fonte}}", "nivel": "rotulo", "cor": "apoio"}]}
+      ],
+      "animacoes": [
+        {"anim": "entrar", "alvo": "Titulo", "de": "aparecer", "t": 0, "dur": "0.5v"},
+        {"anim": "entrar", "alvo": "Fonte", "de": "aparecer", "t": 1.2, "dur": "0.5v"}
+      ]
+    }
+  }
+]

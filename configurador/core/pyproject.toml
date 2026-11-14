@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "solumia-configurador"
+version = "0.1.0"
+description = "Núcleo do configurador do Solumia: manifesto, cofre, plano/aplicação, VPS por SSH e Craft Apps."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+    "pydantic>=2.9,<3.0",
+    "tomli-w>=1.0",
+    "cryptography>=43",
+    "keyring>=25",
+    "paramiko>=3.5",
+    "httpx>=0.27",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "ruff>=0.7"]
+
+[project.scripts]
+solumia-configurador = "solumia_configurador.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/solumia_configurador"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101", "S603", "S607", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S"]
+"src/solumia_configurador/papeis/*" = ["E501"]  # comandos de shell longos ficam legíveis inteiros
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

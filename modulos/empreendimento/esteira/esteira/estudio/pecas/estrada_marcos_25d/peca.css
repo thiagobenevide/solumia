@@ -1,0 +1,41 @@
+/* Estrada de marcos 2,5D: só variáveis da pele do kit. */
+.p-estrada_marcos_25d { overflow: hidden; }
+.p-estrada_marcos_25d .es25-cena { position: absolute; inset: 0; perspective: calc(130 * var(--U)); perspective-origin: 50% 45%; }
+.p-estrada_marcos_25d .es25-giro,
+.p-estrada_marcos_25d .es25-palco { position: absolute; inset: 0; transform-style: preserve-3d; }
+
+.p-estrada_marcos_25d .es25-estrada { position: absolute; left: 50%; top: 50%; width: calc(48 * var(--U)); height: calc(620 * var(--U));
+  margin-left: calc(-24 * var(--U)); box-sizing: border-box; transform-origin: 50% 0;
+  transform: translate3d(0, calc(24 * var(--U)), calc(150 * var(--U))) rotateX(-90deg);
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--texto) 10%, var(--fundo2)), color-mix(in srgb, var(--fundo2) 8%, transparent) 90%);
+  border-left: calc(.7 * var(--U)) solid color-mix(in srgb, var(--destaque) 70%, transparent);
+  border-right: calc(.7 * var(--U)) solid color-mix(in srgb, var(--destaque) 70%, transparent); }
+.p-estrada_marcos_25d .es25-faixa { position: absolute; left: 50%; top: 0; bottom: 0; width: calc(.8 * var(--U)); margin-left: calc(-.4 * var(--U));
+  background: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--apoio) 80%, transparent) 0 calc(5 * var(--U)), transparent calc(5 * var(--U)) calc(11 * var(--U))); }
+.p-estrada_marcos_25d.es25-leve .es25-estrada { opacity: .55; }
+
+.p-estrada_marcos_25d .es25-m { position: absolute; left: 50%; top: 50%; width: calc(38 * var(--U)); }
+.p-estrada_marcos_25d .es25-poste { position: absolute; left: 50%; top: 50%; width: calc(.6 * var(--U)); margin-left: calc(-.3 * var(--U));
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--destaque) 80%, transparent), color-mix(in srgb, var(--destaque) 10%, transparent)); }
+.p-estrada_marcos_25d .es25-card { position: relative; box-sizing: border-box; padding: calc(2 * var(--U)) calc(2.4 * var(--U)) calc(2.2 * var(--U));
+  background: color-mix(in srgb, var(--fundo2) 94%, transparent); border: calc(.4 * var(--U)) solid color-mix(in srgb, var(--destaque) 55%, transparent);
+  border-radius: var(--R); box-shadow: 0 calc(1.5 * var(--U)) calc(4 * var(--U)) rgba(0,0,0,.5); }
+.p-estrada_marcos_25d .es25-ano { font: 800 calc(5 * var(--U) * var(--esc, 1))/1 var(--fD); color: var(--destaque); white-space: nowrap; letter-spacing: -.02em; }
+.p-estrada_marcos_25d .es25-rot { margin-top: calc(1 * var(--U)); font: 500 calc(3.2 * var(--U))/1.25 var(--fT); color: var(--texto); overflow-wrap: anywhere; }
+
+.p-estrada_marcos_25d .es25-hero { width: calc(52 * var(--U)); }
+.p-estrada_marcos_25d .es25-hero .es25-card { padding: calc(2.4 * var(--U)); border-color: var(--destaque);
+  box-shadow: 0 0 calc(6 * var(--U)) color-mix(in srgb, var(--destaque) 45%, transparent), 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5); }
+.p-estrada_marcos_25d .es25-hero .es25-ano { font-size: calc(7.5 * var(--U) * var(--esc, 1)); }
+.p-estrada_marcos_25d .es25-hero .es25-rot { font-size: calc(4.2 * var(--U)); }
+.p-estrada_marcos_25d .es25-foto { width: 100%; aspect-ratio: 16 / 9; margin-bottom: calc(1.6 * var(--U)); border-radius: var(--R);
+  background: var(--fundo) center / cover no-repeat; border: calc(.3 * var(--U)) solid color-mix(in srgb, var(--destaque) 50%, transparent); box-sizing: border-box; }
+
+.vertical .p-estrada_marcos_25d .es25-estrada { width: calc(70 * var(--U)); margin-left: calc(-35 * var(--U));
+  transform: translate3d(0, calc(34 * var(--U)), calc(150 * var(--U))) rotateX(-90deg); }
+.vertical .p-estrada_marcos_25d .es25-m { width: calc(40 * var(--U)); }
+.vertical .p-estrada_marcos_25d .es25-ano { font-size: calc(6.6 * var(--U) * var(--esc, 1)); }
+.vertical .p-estrada_marcos_25d .es25-rot { font-size: calc(4.4 * var(--U)); }
+.vertical .p-estrada_marcos_25d .es25-hero { width: calc(84 * var(--U)); }
+.vertical .p-estrada_marcos_25d .es25-hero .es25-ano { font-size: calc(12 * var(--U) * var(--esc, 1)); }
+.vertical .p-estrada_marcos_25d .es25-hero .es25-rot { font-size: calc(6 * var(--U)); }

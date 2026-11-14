@@ -1,0 +1,36 @@
+/* Abertura de capítulo "travessia": só variáveis da pele do kit. */
+.p-capitulo_travessia { display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.p-capitulo_travessia .ct-cena { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+.p-capitulo_travessia.ct-cam .ct-cena { perspective: calc(130 * var(--U)); }
+.p-capitulo_travessia .ct-palco { display: flex; flex-direction: column; align-items: center; gap: calc(7 * var(--U)); }
+.p-capitulo_travessia.ct-cam .ct-palco,
+.p-capitulo_travessia.ct-cam .ct-corpo,
+.p-capitulo_travessia.ct-cam .ct-num { transform-style: preserve-3d; }
+.p-capitulo_travessia .ct-corpo { display: flex; align-items: center; gap: calc(6 * var(--U)); }
+.p-capitulo_travessia .ct-num { position: relative; flex: none; line-height: 0; }
+.p-capitulo_travessia .ct-svg { display: block; overflow: visible; }
+.p-capitulo_travessia .ct-t { font: 800 100px/1 var(--fD); fill: var(--destaque); fill-opacity: 0; stroke: var(--destaque);
+  stroke-width: 2.4; stroke-linejoin: round; stroke-dasharray: 2000; stroke-dashoffset: 2000; font-variant-numeric: tabular-nums; }
+.p-capitulo_travessia .ct-gh { position: absolute; left: 0; top: 0; opacity: 0; }
+.p-capitulo_travessia .ct-svg-gh .ct-t { fill: none; fill-opacity: 0; stroke: var(--texto); }
+.p-capitulo_travessia .ct-col { display: flex; flex-direction: column; align-items: flex-start; border-left: calc(.6 * var(--U)) solid var(--destaque);
+  padding-left: calc(5 * var(--U)); max-width: calc(80 * var(--U)); text-align: left; }
+.p-capitulo_travessia .ct-tit { margin-top: calc(1.5 * var(--U)); font: 700 calc(6.4 * var(--U) * var(--esc, 1))/1.12 var(--fD); color: var(--texto); }
+.p-capitulo_travessia .ct-tit .d { color: var(--destaque); }
+.p-capitulo_travessia .ct-bar { display: flex; gap: calc(1 * var(--U)); width: calc(100 * var(--U)); }
+.p-capitulo_travessia .ct-seg { position: relative; flex: 1; height: calc(1.2 * var(--U)); border-radius: var(--R, 999px); overflow: hidden;
+  background: color-mix(in srgb, var(--texto) 22%, transparent); }
+.p-capitulo_travessia .ct-seg.feito { background: color-mix(in srgb, var(--destaque) 55%, transparent); }
+.p-capitulo_travessia .ct-pre { position: absolute; inset: 0; background: var(--acento); transform-origin: left center; transform: scaleX(0); }
+.p-capitulo_travessia .ct-seg.on { overflow: visible; background: color-mix(in srgb, var(--texto) 22%, transparent); }
+.p-capitulo_travessia .ct-seg.on .ct-pre { background: var(--destaque); box-shadow: 0 0 calc(2 * var(--U)) color-mix(in srgb, var(--destaque) 70%, transparent); }
+.p-capitulo_travessia .ct-varre { position: absolute; z-index: 0; opacity: 0; background: var(--destaque);
+  box-shadow: 0 0 calc(3 * var(--U)) color-mix(in srgb, var(--destaque) 60%, transparent); }
+.p-capitulo_travessia .ct-varre.ct-horizontal { left: 0; top: 50%; width: 100%; height: calc(.5 * var(--U)); }
+.p-capitulo_travessia .ct-varre.ct-vertical { left: 0; top: 0; width: calc(.6 * var(--U)); height: 100%; }
+.vertical .p-capitulo_travessia .ct-palco, .vertical.p-capitulo_travessia .ct-palco { gap: calc(9 * var(--U)); }
+.vertical .p-capitulo_travessia .ct-corpo, .vertical.p-capitulo_travessia .ct-corpo { flex-direction: column; gap: calc(5 * var(--U)); }
+.vertical .p-capitulo_travessia .ct-col, .vertical.p-capitulo_travessia .ct-col { align-items: center; text-align: center; border-left: 0;
+  padding-left: 0; border-top: calc(.6 * var(--U)) solid var(--destaque); padding-top: calc(4 * var(--U)); max-width: calc(84 * var(--U)); }
+.vertical .p-capitulo_travessia .ct-tit, .vertical.p-capitulo_travessia .ct-tit { font-size: calc(7.6 * var(--U) * var(--esc, 1)); }
+.vertical .p-capitulo_travessia .ct-bar, .vertical.p-capitulo_travessia .ct-bar { width: calc(84 * var(--U)); }

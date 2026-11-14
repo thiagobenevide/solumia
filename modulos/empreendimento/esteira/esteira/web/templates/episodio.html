@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block titulo %}{{ ep }} · Esteira dark{% endblock %}
+{% block corpo %}
+{% set aba = "geral" %}{% include "_abas_ep.html" %}
+
+<div class="mt-6 cartao rounded-2xl p-6">
+  <div class="flex flex-wrap items-start justify-between gap-6">
+    <div class="min-w-0 max-w-3xl">
+      <div class="flex flex-wrap gap-2 text-[11px]">
+        <span class="px-2 py-1 rounded-md bg-azul-500/10 text-azul-300 ring-1 ring-azul-400/20">{{ rot.canal or 'episódio' }}</span>
+        <span class="px-2 py-1 rounded-md {{ 'bg-violet-500/15 text-violet-300 ring-1 ring-violet-400/20' if vertical else 'bg-white/5 text-slate-300' }}">{{ 'Short · 9:16' if vertical else 'Longo · 16:9' }}</span>
+        <span class="px-2 py-1 rounded-md {{ 'bg-teal-500/15 text-teal-300 ring-1 ring-teal-400/20' if modo == 'apresentador' else 'bg-slate-500/15 text-slate-300' }}"
+              title="{{ 'câmera na V1 + B-roll dos bancos' if modo == 'apresentador' else 'narração + bancos de imagens' }}">{{ '🎥 Apresentador' if modo == 'apresentador' else '🎙 Dark' }}</span>
+        {% if modo == 'apresentador' %}<span class="px-2 py-1 rounded-md {{ 'bg-white/5 text-slate-300' if camera else 'bg-rose-500/15 text-rose-300' }}">
+          {% if camera %}câmera {{ camera.largura }}×{{ camera.altura }}{% if camera.confianca_sync is defined %} · sync {{ '%+.2f' % camera.offset }}s ({{ (camera.confianca_sync * 100)|round|int }}%){% endif %}{% else %}sem vídeo da câmera{% endif %}</span>{% endif %}
+        {% if rot.capitulos %}<span class="px-2 py-1 rounded-md bg-white/5 text-slate-300">{{ rot.capitulos|length }} partes</span>{% endif %}
+        {% if rot.notas %}<span class="px-2 py-1 rounded-md bg-white/5 text-slate-300">{{ rot.notas|length }} notas de cena</span>{% endif %}
+        <span class="px-2 py-1 rounded-md bg-amarelo-400/10 text-amarelo-300">{% set nc = (rot.citacoes or [])|length %}❝ {{ nc }} citaç{{ 'ão' if nc == 1 else 'ões' }} com PDF</span>
+        <span class="px-2 py-1 rounded-md bg-white/5 text-slate-300">{{ (rot.fontes or [])|length }} fontes</span>
+      </div>
+      <h1 class="mt-3 text-3xl font-semibold tracking-tight text-white leading-tight">{{ rot.titulo or ep }}</h1>
+      {% set pct = (100 * prog.feitas / prog.total)|round|int %}
+      <div class="mt-5 flex items-center gap-4">
+        <div class="h-2 flex-1 max-w-md rounded-full bg-white/5 overflow-hidden">
+          <div class="h-full rounded-full {{ 'bg-rose-500' if prog.erro else 'bg-gradient-to-r from-azul-500 to-sky-400' }}" style="width: {{ pct }}%"></div></div>
+        <span class="text-sm text-slate-300 tabular-nums">{{ prog.feitas }}/{{ prog.total }} etapas</span>
+        {% if prog.final and prog.desatualizado %}<span class="text-sm px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300" title="roteiro, cenas ou gráficos mudaram depois da exportação">⚠ vídeo desatualizado: rode Montagem</span>
+        {% elif prog.final %}<span class="text-sm text-sky-300">✓ vídeo pronto</span>{% elif prog.rodando %}<span class="text-sm text-azul-300 animate-pulse">{{ NOMES.get(prog.rodando, prog.rodando) }}…</span>{% endif %}
+      </div>
+    </div>
+    <div class="flex flex-col items-end gap-2">
+      <form method="post" action="/ep/{{ ep }}/rodar/tudo">
+        <button class="px-5 py-2.5 rounded-xl bg-azul-500 text-white font-semibold hover:bg-azul-400 shadow-[0_8px_24px_-8px_#2563eb]">▶ Produzir tudo</button></form>
+      <form method="post" action="/ep/{{ ep }}/rodar/tudo"
+            onsubmit="return confirm('Refazer o vídeo do zero?\n\nA transcrição e os cortes da narração são decididos de novo (ajustes de corte feitos no painel se perdem), a curadoria é refeita e todas as etapas rodam outra vez. Gráficos e thumbs editados à mão são mantidos.')">
+        <input type="hidden" name="refazer" value="1">
+        <button class="px-4 py-2 rounded-xl border border-amber-400/40 text-amber-200 text-sm hover:bg-amber-500/10"
+                title="retranscreve, decide os cortes de novo, refaz curadoria e todas as etapas">↻ Refazer tudo do zero</button></form>
+      <a href="/opcoes" class="text-[11px] text-slate-500 hover:text-azul-300">IA: {{ motor_ia() }} · trocar em Opções</a>
+    </div>
+  </div>
+</div>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-[1fr_380px]">
+  <div>
+    <h2 class="mb-3 text-sm font-semibold text-slate-300">Etapas da esteira</h2>
+    <div hx-get="/ep/{{ ep }}/_etapas" hx-trigger="load, every 2s" hx-swap="innerHTML"></div>
+  </div>
+  <aside class="space-y-4">
+    {% if final %}
+    <div class="cartao rounded-2xl overflow-hidden">
+      <video src="/arq/{{ ep }}/final.mp4" controls preload="metadata" class="w-full {{ 'aspect-[9/16] max-h-[640px]' if vertical else 'aspect-video' }} bg-black"></video>
+      <div class="px-4 py-3 text-xs text-slate-400 flex justify-between"><span class="font-mono">final.mp4</span><a href="/arq/{{ ep }}/final.mp4" download class="text-azul-300 hover:text-azul-200">baixar ↓</a></div>
+    </div>
+    {% endif %}
+    <div class="cartao rounded-2xl p-5">
+      <p class="text-sm font-semibold text-white">Edição manual</p>
+      <p class="mt-1 text-xs text-slate-400">Tudo é criado automaticamente; aqui você abre cada arquivo na ferramenta, ajusta e salva (Ctrl+S).
+        O painel percebe o arquivo salvo e refaz só o que mudou.</p>
+      <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
+        {% if fcproj %}
+        <form method="post" action="/ep/{{ ep }}/abrir"><button class="w-full px-3 py-2 rounded-lg border border-azul-400/25 text-slate-200 hover:bg-azul-500/10">Vídeo no FilmCraft</button></form>
+        <form method="post" action="/ep/{{ ep }}/rodar/exportar"><button class="w-full px-3 py-2 rounded-lg bg-azul-500/15 text-azul-200 ring-1 ring-azul-400/30 hover:bg-azul-500/25">Reexportar vídeo</button></form>
+        {% endif %}
+        <a href="/ep/{{ ep }}/graficos" class="text-center px-3 py-2 rounded-lg border border-azul-400/25 text-slate-200 hover:bg-azul-500/10">Gráficos no EffectCraft</a>
+        <a href="/ep/{{ ep }}/thumbs" class="text-center px-3 py-2 rounded-lg border border-azul-400/25 text-slate-200 hover:bg-azul-500/10">Thumbs no PhotoCraft</a>
+      </div>
+      {% if manuais %}<p class="mt-3 text-[11px] text-slate-500">Edições manuais guardadas: {{ manuais|join(', ') }}</p>{% endif %}
+    </div>
+    {% if thumb %}
+    <div class="cartao rounded-2xl overflow-hidden"><img src="/arq/{{ ep }}/thumb.png" class="w-full aspect-video object-cover">
+      <p class="px-4 py-3 text-xs text-slate-400">Thumbnail principal (variantes em <span class="font-mono">thumb_1..3.png</span>)</p></div>
+    {% endif %}
+    {% if rot.fontes %}
+    <div class="cartao rounded-2xl p-5">
+      <div class="flex items-center justify-between"><p class="text-sm font-semibold text-white">Fontes do roteiro</p>
+        <a href="/ep/{{ ep }}/roteiro#fontes" class="text-xs text-azul-300 hover:text-azul-200">ver todas →</a></div>
+      <ul class="mt-3 space-y-2.5 text-sm">
+        {% for f in rot.fontes[:6] %}<li class="leading-snug"><span class="text-slate-200">{{ f.autores }} ({{ f.ano }})</span><br><span class="text-xs text-slate-500 italic">{{ f.revista }}</span></li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

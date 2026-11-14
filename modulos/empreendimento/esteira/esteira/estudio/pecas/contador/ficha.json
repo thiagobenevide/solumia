@@ -1,0 +1,83 @@
+{
+ "id": "contador",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um número dito em destaque, contando até o valor",
+ "intencoes": [
+  "numero",
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "Em setembro, 81,7% das famílias estavam endividadas.",
+  "Hoje são 72 milhões de inadimplentes no Brasil.",
+  "O rotativo passa de 400% ao ano.",
+  "Isso custa R$ 1.200 por mês a uma família média.",
+  "A dívida média chegou a 5 mil reais."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "Pense nisso antes de assinar qualquer contrato.",
+  "Esse é o ponto mais importante do vídeo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 1.5,
+ "duracao_max": 7.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Endividadas"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "1º par: número dito e o que ele mede; 2º opcional com rótulo 'Fonte'",
+   "obrigatorio": false,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 0,
+   "max_itens": 2,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "das famílias brasileiras",
+     "valor": "81,7%"
+    },
+    {
+     "rotulo": "Fonte",
+     "valor": "CNC, 2024"
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

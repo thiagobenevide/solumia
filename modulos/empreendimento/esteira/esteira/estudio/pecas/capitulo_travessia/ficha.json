@@ -1,0 +1,110 @@
+{
+ "id": "capitulo_travessia",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "o início de um novo capítulo: número desenhado a traço, título ao lado, linha que varre a tela e barra de progresso com o capítulo atual aceso",
+ "intencoes": [
+  "capitulo",
+  "transicao"
+ ],
+ "exemplos_sim": [
+  "Capítulo dois: como funciona o juro composto.",
+  "Vamos para a parte 3, onde o dinheiro realmente muda de lugar.",
+  "Agora, o segundo passo da nossa jornada: montar a reserva.",
+  "Chegamos ao capítulo 4: os erros mais caros do iniciante.",
+  "Na parte final, quinto e último bloco, vamos colocar tudo em prática.",
+  "Capítulo um: de onde vem a inflação.",
+  "Seguindo para o terceiro bloco: o que a história ensina sobre bolhas."
+ ],
+ "exemplos_nao": [
+  "81% das famílias brasileiras estão endividadas.",
+  "Compare o CDB com a poupança.",
+  "E você, já passou por isso?",
+  "Inscreva-se no canal e ative o sininho."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 6.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "numero",
+   "tipo": "texto",
+   "descricao": "número do capítulo atual, só dígitos (1 ou 2 dígitos)",
+   "obrigatorio": true,
+   "max_car": 2,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "02"
+  },
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "título do capítulo, curto; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Como o *juro composto* trabalha"
+  },
+  {
+   "nome": "total",
+   "tipo": "texto",
+   "descricao": "quantos capítulos o vídeo tem, só dígitos (a barra mostra até 12 segmentos)",
+   "obrigatorio": false,
+   "max_car": 2,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "5"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "perspectiva",
+   "valores": [
+    "plana",
+    "camera"
+   ],
+   "padrao": "plana",
+   "descricao": "camera: a câmera atravessa o contorno do número em perspectiva (2,5D)"
+  },
+  {
+   "nome": "varredura",
+   "valores": [
+    "horizontal",
+    "vertical",
+    "nenhuma"
+   ],
+   "padrao": "horizontal",
+   "descricao": "linha que varre a tela na abertura"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Complementa abertura_capitulo (que tem barra de progresso e traço no número) com a varredura da tela e a variação de câmera atravessando o número em CSS 3D. Ficha em 2_5d porque o botão perspectiva=camera usa perspective/rotateX/Y/z; com perspectiva=plana a peça é 2D."
+}

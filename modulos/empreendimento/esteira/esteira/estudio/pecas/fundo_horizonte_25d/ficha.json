@@ -1,0 +1,79 @@
+{
+ "id": "fundo_horizonte_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "fundo animado sem texto: um piso em perspectiva que corre até o horizonte, com pulsos de luz e partículas em profundidade, atrás da narração quando não há mídia",
+ "intencoes": [
+  "fundo"
+ ],
+ "exemplos_sim": [
+  "Agora eu vou te explicar com calma como isso funciona.",
+  "Imagine que você está começando do zero, sem nenhuma experiência.",
+  "Esse assunto parece complicado, mas tem uma lógica simples por trás.",
+  "Pense nisso como uma estrada longa: cada passo te leva um pouco mais longe.",
+  "Antes de continuar, quero te contar uma história rápida.",
+  "O futuro da tecnologia depende de decisões que estamos tomando agora.",
+  "Vamos olhar para o cenário completo, sem pressa."
+ ],
+ "exemplos_nao": [
+  "81% das famílias brasileiras estão endividadas.",
+  "Inscreva-se no canal e ative o sininho.",
+  "Em 1969, o homem pisou na Lua pela primeira vez."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "calma"
+ ],
+ "energia": "baixa",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 30.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "assunto",
+   "tipo": "texto",
+   "descricao": "palavra-chave do assunto da fala; não aparece na tela, só varia a posição dos pulsos e das partículas",
+   "obrigatorio": false,
+   "max_car": 30,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "tecnologia"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "forma",
+   "valores": [
+    "grade",
+    "pista"
+   ],
+   "padrao": "grade",
+   "descricao": "grade: piso quadriculado; pista: só linhas que convergem ao horizonte"
+  },
+  {
+   "nome": "ritmo",
+   "valores": [
+    "lento",
+    "normal"
+   ],
+   "padrao": "lento",
+   "descricao": "velocidade com que o piso corre e as partículas sobem"
+  }
+ ],
+ "batidas": [],
+ "sfx": {},
+ "notas": "Fundo discreto: linhas a no máximo ~30% de opacidade e máscara no horizonte, para a legenda continuar legível. Sem texto na tela; o encaixe assunto só muda a semente do aleatório."
+}

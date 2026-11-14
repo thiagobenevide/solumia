@@ -1,0 +1,59 @@
+{
+ "id": "passo_a_passo",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um passo, regra ou etapa de um método",
+ "intencoes": [
+  "processo"
+ ],
+ "exemplos_sim": [
+  "Passo 1: anote todos os seus gastos do mês.",
+  "O segundo passo é cortar as assinaturas que você não usa.",
+  "Regra número três: nunca pague só o mínimo da fatura.",
+  "Depois, negocie a dívida mais cara primeiro.",
+  "Etapa final: monte uma reserva de três meses."
+ ],
+ "exemplos_nao": [
+  "81% das famílias estão endividadas.",
+  "Vamos entender por que isso acontece.",
+  "Poupança ou Tesouro?"
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.0,
+ "duracao_max": 7.0,
+ "tela_cheia": false,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 44,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Passo 1: anote todos os gastos"
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "pop"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

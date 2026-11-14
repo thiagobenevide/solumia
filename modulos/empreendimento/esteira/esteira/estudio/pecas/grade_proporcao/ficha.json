@@ -1,0 +1,78 @@
+{
+ "id": "grade_proporcao",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "proporção 'N em cada M' ou porcentagem como grade 10 × 10 que acende",
+ "intencoes": [
+  "numero",
+  "comparacao"
+ ],
+ "exemplos_sim": [
+  "Três em cada dez jovens não têm reserva nenhuma.",
+  "34% dos brasileiros já atrasaram uma conta este ano.",
+  "Sete em cada dez compras no cartão são parceladas.",
+  "Um quarto da população nunca investiu.",
+  "Nove em cada dez empresas fecham sem planejamento."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "Pense nisso antes de assinar qualquer contrato.",
+  "Esse é o ponto mais importante do vídeo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.0,
+ "duracao_max": 7.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "jovens sem reserva"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "porcentagem dita (ou 'N em cada M' no título)",
+   "obrigatorio": true,
+   "max_car": 30,
+   "max_valor": 10,
+   "min_itens": 1,
+   "max_itens": 2,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "jovens sem reserva",
+     "valor": "34%"
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "tick"
+ },
+ "notas": "Migrada do kit na etapa 3. Sem o dado necessário, cai em contador."
+}

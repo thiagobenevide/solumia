@@ -1,0 +1,25 @@
+/* Pergunta no canto: só variáveis da pele do kit (cores, fontes, --U). */
+.p-pergunta_canto { position: absolute; }
+.p-pergunta_canto .pg-corpo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; transform-origin: 0 0; }
+.p-pergunta_canto.pg-dir .pg-corpo { transform-origin: 100% 0; }
+.p-pergunta_canto .pg-cena { perspective: calc(130 * var(--U)); display: flex; justify-content: center; max-width: calc(140 * var(--U)); }
+.p-pergunta_canto .pg-cart { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center;
+  transform-style: preserve-3d; }
+.p-pergunta_canto .pg-frase { font: 800 calc(7.2 * var(--U) * var(--esc, 1))/1.18 var(--fD); color: var(--texto);
+  letter-spacing: -.01em; }
+.p-pergunta_canto .pg-w { position: relative; display: inline-block; margin: 0 .14em; }
+.p-pergunta_canto .pg-d { color: var(--destaque); }
+.p-pergunta_canto .pg-sub { position: absolute; left: 0; right: 0; bottom: -.08em; height: calc(.8 * var(--U)); background: var(--destaque);
+  border-radius: 999px; transform-origin: 0 50%; transform: scaleX(0); }
+.p-pergunta_canto .pg-q { margin-top: calc(1 * var(--U)); font: 800 calc(22 * var(--U) * var(--esc, 1))/.85 var(--fD);
+  color: var(--destaque); opacity: 0; }
+.p-pergunta_canto.pg-cartao .pg-cart { padding: calc(5 * var(--U)) calc(7 * var(--U)); background: var(--fundo2);
+  border: calc(.4 * var(--U)) solid color-mix(in srgb, var(--destaque) 50%, transparent);
+  border-left: calc(1.2 * var(--U)) solid var(--destaque); border-radius: var(--R);
+  box-shadow: 0 calc(3 * var(--U)) calc(8 * var(--U)) rgba(0,0,0,.5); opacity: 0; }
+.p-pergunta_canto.pg-cartao .pg-frase { font-size: calc(6.6 * var(--U) * var(--esc, 1)); }
+.vertical .p-pergunta_canto .pg-cena { max-width: calc(90 * var(--U)); }
+.vertical .p-pergunta_canto .pg-frase { font-size: calc(6.6 * var(--U) * var(--esc, 1)); }
+.vertical .p-pergunta_canto .pg-q { font-size: calc(24 * var(--U) * var(--esc, 1)); }
+.vertical .p-pergunta_canto.pg-cartao .pg-cart { padding: calc(5 * var(--U)); }
+.vertical .p-pergunta_canto.pg-cartao .pg-frase { font-size: calc(6 * var(--U) * var(--esc, 1)); }

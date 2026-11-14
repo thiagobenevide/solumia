@@ -1,0 +1,23 @@
+/* Migrada do kit (cena versus). */
+.area.split .p-versus .lado { width: 40%; }
+.vertical .p-versus .area.split .lado { width: auto; }
+.p-versus .versus { position: absolute; inset: 0; }
+.p-versus .lado { position: absolute; top: 28%; width: 38%; opacity: 0; }
+.p-versus .lado.l0 { left: 8%; }
+.p-versus .lado.l1 { right: 8%; text-align: right; }
+.vertical .p-versus .lado { width: auto; left: 8%; right: 8%; text-align: left; }
+.vertical .p-versus .lado.l0 { top: 18%; }
+.vertical .p-versus .lado.l1 { top: 58%; }
+.p-versus .lk { font: 700 calc(2.4 * var(--U)) var(--fM); letter-spacing: .3em; color: var(--acento); }
+.p-versus .lrot { margin-top: calc(2 * var(--U)); font: 800 calc(8.4 * var(--U))/1.02 var(--fD); letter-spacing: -.03em; }
+.vertical .p-versus .lk { font-size: calc(3 * var(--U)); }
+.vertical .p-versus .lrot { font-size: calc(11 * var(--U)); }
+.vertical .p-versus .lval { font-size: calc(16 * var(--U)); }
+.p-versus .lado.l1 .lrot { color: var(--destaque); }
+.p-versus .lado.l1 .lval { color: var(--destaque); }
+.p-versus .lval { margin-top: calc(2.4 * var(--U)); font: 800 calc(11 * var(--U))/1 var(--fD); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.p-versus .lado.l0 .lval { color: var(--texto); }
+.p-versus .vs { position: absolute; left: 50%; top: 30%; transform: translateX(-50%); font: italic 700 calc(6 * var(--U)) var(--fE); color: var(--acento); opacity: 0; }
+.p-versus .versus .eixo { position: absolute; left: 50%; top: 42%; width: 2px; height: 36%; background: color-mix(in srgb, var(--texto) 18%, transparent); transform-origin: 50% 0; }
+.vertical .p-versus .vs { left: 8%; top: 46%; transform: none; font-size: calc(8 * var(--U)); }
+.vertical .p-versus .versus .eixo { left: 22%; top: 50.5%; width: 70%; height: 2px; transform-origin: 0 50%; }

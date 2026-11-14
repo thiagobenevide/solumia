@@ -1,0 +1,30 @@
+/* Número de impacto 2,5D: só variáveis da pele do kit. */
+.p-numero_impacto_25d { display: flex; align-items: center; justify-content: center; }
+.p-numero_impacto_25d .n25-cena { perspective: calc(140 * var(--U)); width: 100%; display: flex; justify-content: center; }
+.p-numero_impacto_25d .n25-palco { transform-style: preserve-3d; display: flex; flex-direction: column; align-items: center;
+  max-width: calc(140 * var(--U)); text-align: center; }
+.p-numero_impacto_25d .n25-linha { transform-style: preserve-3d; display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: center; column-gap: calc(2.5 * var(--U)); row-gap: calc(2 * var(--U)); }
+.p-numero_impacto_25d .n25-bloco { font: 800 calc(17 * var(--U) * var(--esc, 1))/1.05 var(--fD); color: var(--destaque);
+  letter-spacing: -.03em; white-space: nowrap; font-variant-numeric: tabular-nums; transform-style: preserve-3d;
+  text-shadow:
+    calc(.3 * var(--U)) calc(.3 * var(--U)) 0 color-mix(in srgb, var(--destaque) 70%, var(--fundo)),
+    calc(.6 * var(--U)) calc(.6 * var(--U)) 0 color-mix(in srgb, var(--destaque) 62%, var(--fundo)),
+    calc(.9 * var(--U)) calc(.9 * var(--U)) 0 color-mix(in srgb, var(--destaque) 54%, var(--fundo)),
+    calc(1.2 * var(--U)) calc(1.2 * var(--U)) 0 color-mix(in srgb, var(--destaque) 46%, var(--fundo)),
+    calc(1.5 * var(--U)) calc(1.5 * var(--U)) 0 color-mix(in srgb, var(--destaque) 38%, var(--fundo)),
+    calc(2.2 * var(--U)) calc(2.6 * var(--U)) calc(2.6 * var(--U)) rgba(0,0,0,.5); }
+.p-numero_impacto_25d .n25-uni { font: 700 calc(6 * var(--U) * var(--esc, 1))/1.1 var(--fT); color: var(--texto);
+  white-space: nowrap; text-shadow: calc(.4 * var(--U)) calc(.5 * var(--U)) calc(.8 * var(--U)) rgba(0,0,0,.5); }
+.p-numero_impacto_25d .n25-plano { margin-top: calc(7 * var(--U)); transform-style: preserve-3d; }
+.p-numero_impacto_25d .n25-leg { font: 500 calc(4 * var(--U))/1.25 var(--fT); color: var(--texto);
+  max-width: calc(90 * var(--U)); padding: calc(1.4 * var(--U)) calc(3 * var(--U));
+  background: color-mix(in srgb, var(--fundo2) 80%, transparent); border-left: calc(.6 * var(--U)) solid var(--acento);
+  border-radius: var(--R); box-shadow: 0 calc(1.5 * var(--U)) calc(4 * var(--U)) rgba(0,0,0,.5); }
+.p-numero_impacto_25d .n25-leg .d { color: var(--destaque); }
+.vertical .p-numero_impacto_25d .n25-palco { max-width: calc(90 * var(--U)); }
+.vertical .p-numero_impacto_25d .n25-bloco { font-size: calc(13 * var(--U) * var(--esc, 1)); }
+.vertical .p-numero_impacto_25d .n25-linha { flex-direction: column; align-items: center; row-gap: calc(3 * var(--U)); }
+.vertical .p-numero_impacto_25d .n25-uni { font-size: calc(6 * var(--U) * var(--esc, 1)); }
+.vertical .p-numero_impacto_25d .n25-plano { margin-top: calc(10 * var(--U)); }
+.vertical .p-numero_impacto_25d .n25-leg { font-size: calc(4.8 * var(--U)); max-width: calc(80 * var(--U)); }

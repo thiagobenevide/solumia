@@ -1,0 +1,134 @@
+{
+ "id": "barras_prisma_fonte",
+ "versao": 2,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "dois valores comparados em prismas 3D que crescem e contam, com a fonte em caixa alta, uma frase citada e o rodapé da fonte num card de vidro sobre a mídia",
+ "intencoes": [
+  "comparacao",
+  "numero",
+  "citacao"
+ ],
+ "exemplos_sim": [
+  "Segundo a própria Anthropic, o desempenho saltou de 12% para 47% em um ano.",
+  "De acordo com o IBGE, a renda média foi de 2.400 reais em 2019 para 3.100 em 2023.",
+  "Um estudo da USP mostra que quem dorme bem acerta 80% das questões contra 55% de quem dorme mal.",
+  "A Receita afirma que a arrecadação foi de 180 bilhões, contra 140 bilhões no ano anterior.",
+  "Segundo o Banco Central, os juros do cartão chegam a 440% ao ano, contra 11% do consignado.",
+  "A empresa admite: o tempo de resposta caiu de 9 para 3 segundos.",
+  "Pesquisadores de Stanford compararam: 62% de acerto com a ferramenta e 38% sem ela."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "O dólar fechou em alta de 2% nesta terça.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Compare o CDB, a poupança e o Tesouro Direto."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 4.0,
+ "duracao_max": 9.0,
+ "tela_cheia": false,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "fonte",
+   "tipo": "texto",
+   "descricao": "quem diz ou publica o dado, curto; vira caixa alta na cor de destaque",
+   "obrigatorio": true,
+   "max_car": 28,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "A própria Anthropic"
+  },
+  {
+   "nome": "citacao",
+   "tipo": "texto",
+   "descricao": "frase citada; *trecho* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 90,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "O modelo ficou *quase quatro vezes* melhor em um ano"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "exatamente dois valores comparados, rótulo e número com unidade",
+   "obrigatorio": true,
+   "max_car": 14,
+   "max_valor": 9,
+   "min_itens": 2,
+   "max_itens": 2,
+   "unidade": true,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Antes",
+     "valor": "12%"
+    },
+    {
+     "rotulo": "Depois",
+     "valor": "47%"
+    }
+   ]
+  },
+  {
+   "nome": "rodape",
+   "tipo": "texto",
+   "descricao": "fonte técnica do dado, em uma linha",
+   "obrigatorio": false,
+   "max_car": 48,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Fonte: relatório anual, 2026"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "layout",
+   "valores": [
+    "direita",
+    "esquerda",
+    "flutuante"
+   ],
+   "padrao": "direita",
+   "descricao": "card lateral à direita, à esquerda ou flutuando no centro"
+  },
+  {
+   "nome": "eixo",
+   "valores": [
+    "marcas",
+    "nenhuma"
+   ],
+   "padrao": "marcas",
+   "descricao": "eixo com marcas de escala ao lado dos prismas"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Variante lateral das barras 3D com citação: prismas oblíquos em CSS 2D (skew) dentro de card de vidro em perspectiva; fundo do card quase opaco e textos secundários ≥3U para legibilidade."
+}

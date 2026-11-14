@@ -1,0 +1,84 @@
+{
+ "id": "transicao_formas_paleta",
+ "versao": 1,
+ "origem": "estudio",
+ "motor": "html",
+ "estado": "revisao",
+ "comunica": "uma virada curta entre blocos: painéis diagonais, uma íris ou faixas nas cores da paleta cobrem a tela e se abrem para a próxima cena, com uma palavra opcional no meio",
+ "intencoes": [
+  "transicao"
+ ],
+ "exemplos_sim": [
+  "Pronto, essa é a primeira parte. Agora vamos para a prática.",
+  "Deixa eu mudar de assunto e falar do outro lado da história.",
+  "Bom, chega de teoria. Vamos ver como isso funciona na vida real.",
+  "Agora vem a parte que realmente importa.",
+  "Mas isso foi só o começo. Vamos ao próximo ponto.",
+  "Voltando ao passado: em 1990 a história era bem diferente.",
+  "Passada a introdução, vamos direto ao resultado."
+ ],
+ "exemplos_nao": [
+  "81% das famílias brasileiras estão endividadas.",
+  "Compare o CDB com a poupança.",
+  "Capítulo 3: como montar a reserva de emergência.",
+  "Será que vale a pena investir agora?"
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica",
+  "leve"
+ ],
+ "energia": "alta",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 0.6,
+ "duracao_max": 1.2,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "palavra",
+   "tipo": "texto",
+   "descricao": "uma palavra ou expressão curta que marca a virada (opcional); aparece em pílula no instante em que a tela está coberta",
+   "obrigatorio": false,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Agora, a prática"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "forma",
+   "valores": [
+    "diagonal",
+    "iris",
+    "faixas"
+   ],
+   "padrao": "diagonal",
+   "descricao": "forma que varre a tela: três painéis diagonais, discos de íris ou seis faixas horizontais"
+  },
+  {
+   "nome": "sentido",
+   "valores": [
+    "normal",
+    "inverso"
+   ],
+   "padrao": "normal",
+   "descricao": "lado de onde a varredura vem (diagonal e faixas espelham; íris sai do canto em vez do centro)"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Cobre em ~45% do tempo, segura ~10% e descobre nos ~45% finais; duração efetiva limitada a 1,2 s. Painéis em destaque/apoio/acento (nunca no tom do fundo) e palavra em pílula grande de alto contraste."
+}

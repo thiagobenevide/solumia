@@ -1,0 +1,119 @@
+{
+ "id": "foto_epoca",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um momento do passado mostrado em foto de época (porta-retrato ou recorte de jornal) em sépia, com a data carimbada e uma legenda datilografada",
+ "intencoes": [
+  "narrativa_passado"
+ ],
+ "exemplos_sim": [
+  "Em 1964, a praça central ainda era de terra batida.",
+  "Esta foto foi tirada em março de 1958, na inauguração da fábrica.",
+  "Em 1929, a Bolsa de Nova York quebrou e levou o mundo junto.",
+  "Nos anos 80, famílias inteiras se reuniam em volta de uma única televisão.",
+  "Era assim o porto de Santos no começo do século passado.",
+  "Na década de 1950, o café ainda sustentava a economia do país.",
+  "Naquela época, o dinheiro perdia valor de um dia para o outro."
+ ],
+ "exemplos_nao": [
+  "Hoje a inflação está em 4,5% ao ano.",
+  "Compare o CDB com a poupança.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Vamos entender por que isso acontece."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.5,
+ "duracao_max": 9.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "midia",
+   "tipo": "imagem",
+   "descricao": "foto de época, recorte de jornal ou documento antigo",
+   "obrigatorio": true,
+   "max_car": 60,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "praca_central_1964.jpg"
+  },
+  {
+   "nome": "data",
+   "tipo": "texto",
+   "descricao": "a data ou o ano do registro, como foi dito (vira carimbo)",
+   "obrigatorio": true,
+   "max_car": 14,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "12 MAR 1958"
+  },
+  {
+   "nome": "legenda",
+   "tipo": "texto",
+   "descricao": "legenda curta da cena; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 90,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Inauguração da *primeira fábrica* da cidade"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "moldura",
+   "valores": [
+    "porta_retrato",
+    "jornal"
+   ],
+   "padrao": "porta_retrato",
+   "descricao": "moldura branca de porta-retrato ou recorte de jornal com linhas de texto"
+  },
+  {
+   "nome": "camadas",
+   "valores": [
+    "unica",
+    "empilhada"
+   ],
+   "padrao": "unica",
+   "descricao": "uma foto só ou fotos empilhadas em profundidade com a câmera girando (2,5D)"
+  },
+  {
+   "nome": "grao",
+   "valores": [
+    "leve",
+    "forte"
+   ],
+   "padrao": "leve",
+   "descricao": "intensidade do grão de filme"
+  }
+ ],
+ "batidas": [
+  "data"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Variação empilhada usa CSS 3D leve (perspective, rotationY, z); as camadas de trás repetem a mesma mídia."
+}

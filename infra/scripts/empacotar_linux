@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Gera o app Linux (release) apontado para a VPS e empacota em plataforma/app/build/agent-linux.tar.gz,
+# com instalar.sh (sem sudo: ~/.local/opt/agent + atalho no menu). Precisa do libmpv-dev para compilar.
+#
+#   infra/scripts/empacotar_linux [URL_DA_API]       # padrão: https://agent.thiagobenevide.com
+#   tar -xzf agent-linux.tar.gz && agent/instalar.sh  # no PC de destino
+set -euo pipefail
+
+url="${1:-https://agent.thiagobenevide.com}"
+raiz="$(cd "$(dirname "$0")/../.." && pwd)"
+app="$raiz/plataforma/app"
+flutter="$(command -v flutter || echo "$HOME/development/flutter/bin/flutter")"
+
+pkg-config --exists mpv || { echo "Falta o libmpv-dev: sudo apt install -y libmpv-dev" >&2; exit 1; }
+
+cd "$app"
+# Cache de um configure que falhou deixa CMAKE_INSTALL_PREFIX=/usr/local e quebra o install.
+grep -qs 'CMAKE_INSTALL_PREFIX:PATH=/usr/local' build/linux/x64/release/CMakeCache.txt && rm -rf build/linux
+# BUILD (posto pelo publicar_app) vira o número da versão que o botão "Atualizar app" compara.
+"$flutter" build linux --release --dart-define=API_URL="$url" \
+    ${BUILD:+--dart-define=BUILD=$BUILD --build-number=$BUILD}
+
+pacote="$app/build/pacote"
+rm -rf "$pacote" && mkdir -p "$pacote/agent"
+cp -r build/linux/x64/release/bundle/. "$pacote/agent/"
+cp "$raiz/plataforma/app_core/assets/logo.png" "$pacote/agent/agent.png"
+
+cat > "$pacote/agent/instalar.sh" <<'EOF'
+#!/usr/bin/env bash
+# Instala o Agent para o usuário atual (sem sudo): ~/.local/opt/agent + atalho no menu.
+set -euo pipefail
+origem="$(cd "$(dirname "$0")" && pwd)"
+destino="$HOME/.local/opt/agent"
+if ldd "$origem"/lib/*.so | grep -q 'not found'; then
+    echo "! Faltam bibliotecas (player de vídeo): sudo apt install -y libmpv2"
+fi
+rm -rf "$destino"
+mkdir -p "$destino" "$HOME/.local/share/applications" "$HOME/.local/bin"
+cp -r "$origem/." "$destino/"
+ln -sf "$destino/agent" "$HOME/.local/bin/agent"
+# Nome do .desktop e StartupWMClass = APPLICATION_ID (classe da janela), senão o painel não liga a janela ao atalho.
+rm -f "$HOME/.local/share/applications/agent.desktop"
+cat > "$HOME/.local/share/applications/com.thiagobenevide.agent.desktop" <<DESK
+[Desktop Entry]
+Type=Application
+Name=Agent
+Comment=Agent
+Exec=$destino/agent
+Icon=$destino/agent.png
+Terminal=false
+Categories=Office;Utility;
+StartupWMClass=com.thiagobenevide.agent
+DESK
+update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+echo "Agent instalado: procure 'Agent' no menu ou rode 'agent'."
+EOF
+chmod +x "$pacote/agent/instalar.sh"
+
+tar -czf "$app/build/agent-linux.tar.gz" -C "$pacote" agent
+echo "Pacote: $app/build/agent-linux.tar.gz ($(du -h "$app/build/agent-linux.tar.gz" | cut -f1))"

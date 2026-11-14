@@ -1,0 +1,96 @@
+{
+ "id": "fonte_dado",
+ "versao": 1,
+ "origem": "graficos",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "de onde vem o dado que está sendo falado, discreto no terço inferior",
+ "intencoes": [
+  "citacao"
+ ],
+ "exemplos_sim": [
+  "Segundo a pesquisa da CNC de setembro de 2024.",
+  "Os dados são do Banco Central, relatório de crédito de 2023.",
+  "Quem diz isso é o IBGE, na PNAD Contínua.",
+  "Esse número vem da Serasa Experian.",
+  "Fonte: Ministério da Fazenda, boletim de outubro."
+ ],
+ "exemplos_nao": [
+  "Passo 1: anote os gastos.",
+  "Poupança ou Tesouro?",
+  "Comenta aqui sua maior dívida."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "calma",
+  "didatica"
+ ],
+ "energia": "baixa",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.0,
+ "duracao_max": 7.0,
+ "tela_cheia": false,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "linha1",
+   "tipo": "texto",
+   "descricao": "quem publicou e o quê",
+   "obrigatorio": true,
+   "max_car": 64,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Pesquisa de Endividamento e Inadimplência (CNC)"
+  },
+  {
+   "nome": "linha2",
+   "tipo": "texto",
+   "descricao": "data, amostra ou edição",
+   "obrigatorio": false,
+   "max_car": 56,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "setembro de 2024 · 18 mil entrevistas"
+  },
+  {
+   "nome": "rotulo",
+   "tipo": "texto",
+   "descricao": "rótulo (padrão: Fonte)",
+   "obrigatorio": false,
+   "max_car": 14,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Fonte"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "link",
+   "valores": [
+    "sim",
+    "nao"
+   ],
+   "padrao": "sim",
+   "descricao": "selo 'link na descrição'"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "click"
+ },
+ "notas": "Portada do gráfico antigo na etapa 3."
+}

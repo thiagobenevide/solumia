@@ -1,0 +1,85 @@
+{
+ "id": "lista_itens",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "itens enumerados entrando um a um",
+ "intencoes": [
+  "lista"
+ ],
+ "exemplos_sim": [
+  "Três sinais de alerta: fatura no mínimo, cheque especial todo mês e empréstimo para pagar outro.",
+  "Os documentos são: RG, comprovante de renda e de residência.",
+  "Você precisa de três coisas: tempo, método e paciência.",
+  "Os quatro tipos de juros mais comuns são estes.",
+  "Existem cinco erros que quase todo mundo comete."
+ ],
+ "exemplos_nao": [
+  "O rotativo cobra 430% ao ano.",
+  "Passo 1: anote seus gastos.",
+  "Vamos entender por que isso acontece."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 9.0,
+ "tela_cheia": false,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Três sinais de alerta"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "um par por item tirado da fala (valor opcional, curto); no mínimo dois itens",
+   "obrigatorio": true,
+   "max_car": 26,
+   "max_valor": 8,
+   "min_itens": 2,
+   "max_itens": 5,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Fatura no mínimo",
+     "valor": ""
+    },
+    {
+     "rotulo": "Cheque especial todo mês",
+     "valor": ""
+    },
+    {
+     "rotulo": "Empréstimo para pagar outro",
+     "valor": ""
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "pop"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

@@ -1,0 +1,87 @@
+{
+ "id": "linha_do_tempo",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "datas ou anos em sequência",
+ "intencoes": [
+  "dado_temporal",
+  "narrativa_passado"
+ ],
+ "exemplos_sim": [
+  "Em 1994 veio o Plano Real, em 2008 a crise global e em 2020 a pandemia.",
+  "Tudo começou em 1971, quando o dólar deixou o ouro.",
+  "De 2015 a 2017 o país viveu a pior recessão da história.",
+  "A lei mudou em 2003, de novo em 2012 e em 2021.",
+  "No século XIX surgiram os primeiros bancos populares."
+ ],
+ "exemplos_nao": [
+  "81% estão endividadas.",
+  "Passo 1: anote os gastos.",
+  "Pense nisso antes de assinar qualquer contrato."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "calma"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 9.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "A escalada dos juros"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "um par por marco: data (valor) e o que aconteceu",
+   "obrigatorio": true,
+   "max_car": 22,
+   "max_valor": 6,
+   "min_itens": 2,
+   "max_itens": 5,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Plano Real",
+     "valor": "1994"
+    },
+    {
+     "rotulo": "Crise global",
+     "valor": "2008"
+    },
+    {
+     "rotulo": "Pandemia",
+     "valor": "2020"
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "swoosh"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

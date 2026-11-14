@@ -1,0 +1,46 @@
+# Bola de neve ou avalanche? Qual dívida pagar primeiro
+
+Imagina que você tem três dívidas e sobrou um dinheiro extra no mês. Qual você paga primeiro?
+Pesquisadores fizeram essa pergunta para milhares de pessoas. Não numa enquete: olhando o que elas *realmente* fizeram com o dinheiro delas.
+A matemática tem uma resposta clara. E quase ninguém segue.
+Só que tem um estudo que diz que quem desobedece a matemática pode ter mais chance de sair das dívidas. Hoje a gente vai colocar os dois lados frente a frente, e no fim você sai com um método que usa o melhor de cada um.
+Os dois métodos começam igual: você paga o mínimo de todas as dívidas para não atrasar nenhuma. A diferença é para onde vai o dinheiro que sobra.
+Na *bola de neve*, o extra vai para a dívida de *menor saldo*. Quitou, você pega o que pagava nela e soma na próxima. A bola cresce.
+Na *avalanche*, o extra vai para a dívida de *maior juro*. Quitou, vai para a segunda mais cara.
+A bola de neve ficou famosa nos livros de autoajuda financeira. A avalanche é o que qualquer professor de finanças ensina. E os dois lados se acusam: um diz que o outro ignora a matemática, o outro diz que o primeiro ignora o ser humano.
+Vamos começar pela matemática, porque aqui não tem debate.
+O juro é cobrado sobre o saldo de cada dívida. Cada real que você tira da dívida mais cara deixa de gerar o juro mais alto. Então, para pagar *menos juros no total*, a resposta é sempre a avalanche.
+Desde 2024 existe um limite: no rotativo e no parcelamento da fatura, os juros e encargos não podem passar de 100% do valor que você devia. Ajuda. Mas uma dívida que pode dobrar ainda é, de longe, a mais cara que existe.
+Então a matemática é clara. A pergunta é: o que as pessoas fazem de verdade?
+Em 2019, quatro economistas publicaram na *American Economic Review*, uma das revistas mais importantes do mundo, um estudo com dados de cerca de 1,4 milhão de pessoas no Reino Unido que tinham mais de um cartão de crédito.
+Eles olharam para onde ia o dinheiro que cada pessoa pagava *além do mínimo*. Para quem tinha dois cartões, o ideal seria colocar praticamente tudo, uns 97%, no cartão mais caro.
+Sabe quanto as pessoas colocavam? Cerca de metade. 51%.
+E não era aleatório. As pessoas dividiam o pagamento na proporção do *saldo*: se um cartão tinha 70% da dívida, recebia uns 70% do pagamento. Os autores chamaram isso de 'casar o saldo'.
+E um detalhe importante: o erro não diminuía quando tinha mais dinheiro em jogo. Ou seja, não é preguiça de fazer conta para economizar pouco. É o jeito que o cérebro organiza o problema.
+Um outro grupo, que incluía o psicólogo Dan Ariely, fez experimentos em laboratório: as pessoas jogavam um jogo com várias dívidas, e ganhavam dinheiro de verdade quanto menos juros pagassem.
+Mesmo assim, elas quitavam primeiro as dívidas *pequenas*, mesmo quando as grandes cobravam mais juros. Os autores deram um nome: *aversão a contas de dívida*. A gente quer ver menos boletos, mesmo que isso custe mais.
+Então, até aqui, parece que a bola de neve é só um erro. Mas aí vem a reviravolta.
+Em 2012, os pesquisadores David Gal e Blake McShane conseguiram os dados de uma empresa de renegociação de dívidas nos Estados Unidos. Cerca de seis mil clientes.
+Nessas empresas, quem decide a ordem de pagamento não é o cliente, é a negociação com cada credor. Isso criou uma espécie de experimento natural: algumas pessoas, por acaso, quitavam as contas pequenas primeiro, outras não.
+E o resultado: quanto mais *contas* a pessoa fechava pelo caminho, mais chance ela tinha de quitar *todas* as dívidas no fim do programa. Não importava o valor dessas contas, importava quantas ela riscava da lista.
+A explicação é motivação. Riscar uma dívida da lista dá a sensação de progresso. E quem sente progresso continua.
+Em 2016, um outro grupo mostrou um detalhe ainda mais interessante. O cérebro mede o progresso pela *porcentagem* que você quitou de uma conta, e não pelo valor em reais.
+Pagar 400 reais e zerar uma dívida de 400 parece muito mais progresso do que pagar os mesmos 400 numa dívida de 6 mil. O valor é igual. A sensação é completamente diferente.
+E eles viram que *concentrar* o pagamento em uma dívida, em vez de espalhar um pouquinho em cada uma, aumentava a motivação de sair do vermelho.
+Então, quem está certo?
+Primeiro, o que é *consenso*: a avalanche paga menos juros. Isso é aritmética.
+Segundo, o que também é bem documentado: as pessoas não seguem a avalanche, e espalham o pagamento de um jeito que custa caro.
+Terceiro, o que está em *debate*: se a motivação da bola de neve compensa os juros a mais. O estudo de Gal e McShane sugere que sim para algumas pessoas, mas é um estudo com dados de um tipo específico de empresa, nos Estados Unidos. Não é um experimento sorteado, e outros pesquisadores já criticaram isso.
+E tem uma conclusão que os quatro estudos compartilham, e que quase ninguém fala: o pior método não é nem bola de neve nem avalanche. É *espalhar* o dinheiro extra um pouco em cada dívida. Que é justamente o que a maioria faz.
+E quanto custa a motivação da bola de neve? Em 2023, um economista fez essa conta com dados das famílias americanas: a bola de neve fazia a família média pagar de 2% a 4% a mais de juros. Lá, onde o cartão cobra uns 20% ao ano, é um preço pequeno. Aqui, com o rotativo acima de 400%, escolher a ordem errada pode sair muito mais caro.
+Então, juntando a matemática e a psicologia, um caminho que respeita os dois:
+*Passo um:* faz a lista. Todas as dívidas, com saldo e taxa mensal. A taxa está no contrato, na fatura ou no aplicativo do banco, no campo do Custo Efetivo Total, o CET.
+*Passo dois:* paga o mínimo de todas, para não entrar em atraso. Atraso traz multa, juros de mora e pode sujar o nome.
+*Passo três:* se existe dívida no rotativo, no cheque especial ou parcelada na fatura, ela vai primeiro. No Brasil, a diferença de juros é tão grande que a matemática ganha por goleada.
+*Passo quatro:* entre dívidas com juros parecidos, aí sim vale a bola de neve: começa pela menor e ganha a vitória rápida.
+*Passo cinco:* *concentra*. Todo o dinheiro extra vai numa dívida por vez. Nada de espalhar.
+E uma possibilidade concreta, que depende do seu caso: trocar uma dívida muito cara por uma mais barata. Um consignado ou um crédito com garantia costuma ter juros bem menores que o rotativo. Mas isso só funciona se você *não* voltar a usar o cartão no rotativo. Senão, você fica com as duas dívidas.
+E se as dívidas já são maiores do que você consegue pagar, existe uma lei, a do superendividamento, que permite renegociar tudo de uma vez. Eu tenho um vídeo só sobre ela.
+Resumindo: a matemática diz 'avalanche'. A psicologia diz 'vitórias pequenas motivam'. E os dados dizem que o pior de tudo é espalhar.
+Me conta nos comentários: você já usou algum desses métodos? Qual funcionou para você?
+E se você está se perguntando por que tanta gente no Brasil chegou nessa situação de ter várias dívidas ao mesmo tempo, o próximo vídeo é sobre isso: oito em cada dez famílias brasileiras estão endividadas. Mas endividado não é o que você pensa. Te vejo lá.

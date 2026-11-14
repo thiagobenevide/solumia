@@ -1,0 +1,28 @@
+name: agent_arquivos
+description: "Telas do módulo Arquivos: PDF, DOCX e PPTX com anotação; CSV em tabela e XML em árvore."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  agent_core:
+    path: ../../../plataforma/app_core
+  file_picker: ^13.3.0
+  pdfrx: ^2.10.1
+  record: ^7.1.2
+  xml: ^7.1.0
+  flutter_quill: ^11.6.0
+  archive: ^4.5.2
+  webview_flutter: ^4.14.1
+  url_launcher: ^6.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

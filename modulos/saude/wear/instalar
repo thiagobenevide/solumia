@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Compila o app do relógio (Wear OS), instala por ADB e grava endereço e chave no relógio.
+#
+#   modulos/saude/wear/instalar <ip:porta do relógio> [url]
+#
+# No relógio: Configurações › Opções do desenvolvedor › Depuração por Wi‑Fi (o IP:porta aparece lá;
+# na primeira vez, `adb pair ip:porta-de-pareamento` com o código). A chave é uma das CLIENT_API_KEYS
+# da VPS: vem de $CHAVE ou é pedida sem eco (de preferência uma `relogio:<chave>`, que só abre as
+# rotas do relógio; aqui vai só a parte depois de `relogio:`). A url padrão é a do .env.prd (DOMINIO).
+# Trocar a chave de um relógio já configurado: CHAVE_ATUAL=<a antiga> (o app só aceita trocar
+# provando a atual, para outro app do relógio não conseguir desviar os dados).
+set -euo pipefail
+
+aqui="$(cd "$(dirname "$0")" && pwd)"
+raiz="$(cd "$aqui/../../.." && pwd)"
+alvo="${1:?uso: instalar <ip:porta do relógio> [url]}"
+dominio="$(grep -E '^DOMINIO=' "$raiz/.env.prd" 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
+url="${2:-https://${dominio:-agent.thiagobenevide.com}}"
+chave="${CHAVE:-}"
+if [[ -z "$chave" ]]; then read -rsp "Chave de cliente (CLIENT_API_KEYS): " chave; echo; fi
+
+[[ -f "$aqui/local.properties" ]] || echo "sdk.dir=${ANDROID_HOME:-$HOME/Android/Sdk}" > "$aqui/local.properties"
+echo "▶ Compilando"
+(cd "$aqui" && ./gradlew -q assembleRelease -Pbuild="${BUILD:-$(( $(date +%s) / 60 ))}")
+echo "▶ Instalando em $alvo"
+adb connect "$alvo" >/dev/null
+adb -s "$alvo" install -r "$aqui/app/build/outputs/apk/release/app-release.apk" >/dev/null
+adb -s "$alvo" shell am start -n com.thiagobenevide.agent.relogio/.MainActivity \
+  --es url "$url" --es chave "$chave" ${CHAVE_ATUAL:+--es chave_atual "$CHAVE_ATUAL"} >/dev/null
+echo "✔ Pronto: abra o app Agent no relógio ($url)"

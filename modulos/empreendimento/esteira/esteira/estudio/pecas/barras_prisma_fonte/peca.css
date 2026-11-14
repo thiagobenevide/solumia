@@ -1,0 +1,51 @@
+/* Barras prisma com citação: card de vidro em perspectiva; só variáveis da pele. Texto secundário >= 2.4U e contraste forte. */
+.p-barras_prisma_fonte { display: flex; align-items: center; justify-content: flex-end; padding: calc(3.5 * var(--U)) calc(5 * var(--U)); box-sizing: border-box; }
+.p-barras_prisma_fonte.bp-esquerda { justify-content: flex-start; }
+.p-barras_prisma_fonte.bp-flutuante { justify-content: center; }
+.p-barras_prisma_fonte .bp-card { perspective: calc(160 * var(--U)); width: calc(96 * var(--U)); max-width: 100%; }
+.p-barras_prisma_fonte .bp-painel { transform-style: preserve-3d; box-sizing: border-box; width: 100%;
+  padding: calc(3 * var(--U)) calc(3.6 * var(--U)); display: flex; flex-direction: column; gap: calc(1.6 * var(--U));
+  background: color-mix(in srgb, var(--fundo) 90%, transparent);
+  backdrop-filter: blur(calc(1.2 * var(--U)));
+  border: calc(.3 * var(--U)) solid color-mix(in srgb, var(--destaque) 60%, transparent);
+  border-radius: calc(var(--R, 2) * var(--U) * 1.2);
+  box-shadow: 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5); }
+.p-barras_prisma_fonte .bp-fonte { font: 800 calc(3.6 * var(--U))/1.1 var(--fD); color: var(--destaque);
+  text-transform: uppercase; letter-spacing: .05em; }
+.p-barras_prisma_fonte .bp-citacao { font: 700 calc(4.4 * var(--U))/1.22 var(--fT); color: var(--texto); }
+.p-barras_prisma_fonte .bp-citacao .d { color: var(--destaque); }
+.p-barras_prisma_fonte .bp-area { position: relative; height: calc(32 * var(--U)); padding-left: calc(8 * var(--U)); }
+.p-barras_prisma_fonte .bp-marca { position: absolute; left: 0; right: 0; height: 0;
+  border-top: calc(.25 * var(--U)) dashed color-mix(in srgb, var(--texto) 55%, transparent); }
+.p-barras_prisma_fonte .bp-marca span { position: absolute; left: 0; top: calc(-1.8 * var(--U)); font: 700 calc(3 * var(--U))/1 var(--fM);
+  color: var(--texto); }
+.p-barras_prisma_fonte .bp-cols { position: absolute; left: calc(10 * var(--U)); right: calc(4 * var(--U)); bottom: 0; top: 0;
+  display: flex; justify-content: space-around; align-items: flex-end; }
+.p-barras_prisma_fonte .bp-col { display: flex; flex-direction: column; align-items: center; width: calc(28 * var(--U)); }
+.p-barras_prisma_fonte .bp-val { font: 800 calc(6.2 * var(--U))/1 var(--fD); color: var(--destaque); margin-bottom: calc(4 * var(--U));
+  white-space: nowrap; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.p-barras_prisma_fonte .bp-val small { font-size: .55em; margin-left: .08em; color: var(--texto); }
+.p-barras_prisma_fonte .bp-prisma { position: relative; width: calc(14 * var(--U)); height: 0;
+  background: color-mix(in srgb, var(--apoio) 85%, var(--fundo)); }
+.p-barras_prisma_fonte .bp-vence .bp-prisma { background: var(--destaque); }
+.p-barras_prisma_fonte .bp-topo { position: absolute; left: 0; top: calc(-3 * var(--U)); width: 100%; height: calc(3 * var(--U));
+  transform-origin: 0 100%; transform: skewX(-45deg); background: color-mix(in srgb, var(--texto) 40%, var(--apoio)); }
+.p-barras_prisma_fonte .bp-vence .bp-topo { background: color-mix(in srgb, var(--texto) 40%, var(--destaque)); }
+.p-barras_prisma_fonte .bp-lado { position: absolute; right: calc(-3 * var(--U)); top: 0; width: calc(3 * var(--U)); height: 100%;
+  transform-origin: 0 0; transform: skewY(-45deg); background: color-mix(in srgb, var(--fundo) 45%, var(--apoio)); }
+.p-barras_prisma_fonte .bp-vence .bp-lado { background: color-mix(in srgb, var(--fundo) 45%, var(--destaque)); }
+.p-barras_prisma_fonte .bp-rots { display: flex; justify-content: space-around; padding-left: calc(10 * var(--U)); padding-right: calc(4 * var(--U));
+  margin-top: calc(1.2 * var(--U)); border-top: calc(.4 * var(--U)) solid var(--texto); padding-top: calc(1.2 * var(--U)); }
+.p-barras_prisma_fonte .bp-rot { width: calc(28 * var(--U)); text-align: center; font: 800 calc(3.8 * var(--U))/1.1 var(--fT); color: var(--texto); }
+.p-barras_prisma_fonte .bp-rodape { font: 600 calc(3.1 * var(--U))/1.2 var(--fM); color: var(--texto);
+  padding-top: calc(1.2 * var(--U)); border-top: calc(.25 * var(--U)) solid color-mix(in srgb, var(--texto) 50%, transparent); }
+.vertical .p-barras_prisma_fonte { justify-content: center; align-items: flex-end; padding: calc(8 * var(--U)) calc(3 * var(--U)) calc(24 * var(--U)); }
+.vertical .p-barras_prisma_fonte .bp-card { width: calc(94 * var(--U)); }
+.vertical .p-barras_prisma_fonte .bp-painel { padding: calc(3.4 * var(--U)) calc(3.4 * var(--U)); gap: calc(2.2 * var(--U)); }
+.vertical .p-barras_prisma_fonte .bp-citacao { font-size: calc(5.4 * var(--U)); }
+.vertical .p-barras_prisma_fonte .bp-fonte { font-size: calc(4.2 * var(--U)); }
+.vertical .p-barras_prisma_fonte .bp-area { height: calc(40 * var(--U)); }
+.vertical .p-barras_prisma_fonte .bp-val { font-size: calc(7 * var(--U)); }
+.vertical .p-barras_prisma_fonte .bp-marca span { font-size: calc(3.4 * var(--U)); }
+.vertical .p-barras_prisma_fonte .bp-rot { font-size: calc(4.4 * var(--U)); }
+.vertical .p-barras_prisma_fonte .bp-rodape { font-size: calc(3.5 * var(--U)); }

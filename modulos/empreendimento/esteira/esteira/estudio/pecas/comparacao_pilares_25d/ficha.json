@@ -1,0 +1,146 @@
+{
+ "id": "comparacao_pilares_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "dois valores comparados em pilares que giram de frente para a câmera, crescem até o número e o vencedor avança em profundidade",
+ "intencoes": [
+  "comparacao",
+  "numero"
+ ],
+ "exemplos_sim": [
+  "O cartão cobra 400% ao ano; o CDB rende 12%.",
+  "A poupança rendeu 7%, enquanto o Tesouro Selic pagou 11%.",
+  "Em 2020 eram 38 milhões de pessoas; hoje são 72 milhões.",
+  "O plano A custa 89 reais por mês e o plano B, 129.",
+  "Quem investe cedo chega a 500 mil; quem começa tarde, a 210 mil.",
+  "O carro por assinatura sai por 2 mil reais, contra 3,5 mil do financiado.",
+  "A Selic está em 10,5%, e a inflação, em 4,2%."
+ ],
+ "exemplos_nao": [
+  "Vamos comparar três tipos de investimento.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "81% das famílias estão endividadas.",
+  "Esse é o melhor caminho, na minha opinião."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.5,
+ "duracao_max": 8.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "rotulo_a",
+   "tipo": "texto",
+   "descricao": "o que o primeiro valor mede ou quem ele é, em poucas palavras",
+   "obrigatorio": true,
+   "max_car": 20,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Poupança"
+  },
+  {
+   "nome": "valor_a",
+   "tipo": "numero",
+   "descricao": "o primeiro número como foi dito (sem a unidade compartilhada)",
+   "obrigatorio": true,
+   "max_car": 8,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "7,5"
+  },
+  {
+   "nome": "rotulo_b",
+   "tipo": "texto",
+   "descricao": "o que o segundo valor mede ou quem ele é, em poucas palavras",
+   "obrigatorio": true,
+   "max_car": 20,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Tesouro Selic"
+  },
+  {
+   "nome": "valor_b",
+   "tipo": "numero",
+   "descricao": "o segundo número como foi dito (sem a unidade compartilhada)",
+   "obrigatorio": true,
+   "max_car": 8,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "11,2"
+  },
+  {
+   "nome": "unidade",
+   "tipo": "texto",
+   "descricao": "unidade comum aos dois valores, curta (% ao ano, R$ mil, milhões)",
+   "obrigatorio": false,
+   "max_car": 12,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "% ao ano"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "vencedor",
+   "valores": [
+    "maior",
+    "menor"
+   ],
+   "padrao": "maior",
+   "descricao": "quem avança: o maior valor ou o menor (juros, custo, dívida)"
+  },
+  {
+   "nome": "giro",
+   "valores": [
+    "suave",
+    "marcado"
+   ],
+   "padrao": "suave",
+   "descricao": "ângulo com que os pilares giram para a câmera"
+  },
+  {
+   "nome": "velocidade",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": ""
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Complementa comparacao_25d (cartões-pilar): aqui são pilares de altura proporcional que crescem, com botão para o vencedor ser o menor valor."
+}

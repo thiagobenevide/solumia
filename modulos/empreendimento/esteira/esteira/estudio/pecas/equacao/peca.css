@@ -1,0 +1,11 @@
+/* Migrada do kit (cena equacao). */
+.p-equacao .eqlinha { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: calc(2.4 * var(--U)); margin-top: calc(4 * var(--U)); }
+.p-equacao .eqt { padding: calc(2.4 * var(--U)) calc(3.4 * var(--U)); border-radius: calc(1.6 * var(--U) * var(--R, 1)); opacity: 0; text-align: center;
+  background: color-mix(in srgb, var(--texto) 6%, transparent); border: 1px solid color-mix(in srgb, var(--texto) 14%, transparent); }
+.p-equacao .eqt .ev { font: 800 calc(9 * var(--U) * var(--esc, 1))/1 var(--fD); letter-spacing: -.03em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.p-equacao .eqt .er { margin-top: calc(1 * var(--U)); font: 600 calc(2.2 * var(--U)) var(--fM); letter-spacing: .14em; text-transform: uppercase; color: var(--acento); }
+.p-equacao .eqt.res { border-color: var(--destaque); background: color-mix(in srgb, var(--destaque) 12%, transparent); }
+.p-equacao .eqt.res .ev { color: var(--destaque); }
+.p-equacao .eqop { font: 300 calc(8 * var(--U)) var(--fT); color: var(--acento); opacity: 0; }
+.p-equacao .eqop.ig { color: var(--destaque); }
+.vertical .p-equacao .eqt .ev { font-size: calc(10 * var(--U) * var(--esc, 1)); }

@@ -1,0 +1,107 @@
+{
+ "id": "linha_do_tempo_estrada_ec",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "effectcraft",
+ "estado": "aprovada",
+ "comunica": "uma sequência de marcos no tempo (ano e rótulo) numa estrada em perspectiva: os marcos vêm de longe e o atual para no centro em destaque",
+ "intencoes": [
+  "dado_temporal",
+  "narrativa_passado"
+ ],
+ "exemplos_sim": [
+  "Em 1986 veio o Plano Cruzado, em 1989 o Plano Verão e, em 1994, o Plano Real.",
+  "A empresa foi fundada em 2004, abriu capital em 2011 e chegou ao Brasil em 2018.",
+  "Primeiro vieram as moedas de metal, depois o papel-moeda, e só em 1970 o cartão de crédito.",
+  "Em 1969 o homem pisou na Lua; em 1981 voou o primeiro ônibus espacial; em 1998 começou a Estação Espacial.",
+  "Em 2008 estourou a crise, em 2010 vieram os juros baixos e em 2015 a inflação voltou.",
+  "A internet comercial chegou ao Brasil em 1995, o Pix só em 2020.",
+  "De 1500 até hoje, a moeda brasileira já mudou de nome oito vezes.",
+  "Foi assim: 2019 o lançamento, 2021 a virada e 2024 o recorde de usuários."
+ ],
+ "exemplos_nao": [
+  "Compare o CDB com a poupança.",
+  "81% das famílias brasileiras estão endividadas.",
+  "Vamos entender por que isso acontece.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 4.0,
+ "duracao_max": 10.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "marcos",
+   "tipo": "pares",
+   "descricao": "os marcos em ordem cronológica: rotulo = ano ou data, valor = o que aconteceu, em poucas palavras",
+   "obrigatorio": true,
+   "max_car": 9,
+   "max_valor": 22,
+   "min_itens": 2,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "1986",
+     "valor": "Plano Cruzado"
+    },
+    {
+     "rotulo": "1989",
+     "valor": "Plano Verão"
+    },
+    {
+     "rotulo": "1990",
+     "valor": "Plano Collor"
+    },
+    {
+     "rotulo": "1994",
+     "valor": "Plano Real"
+    }
+   ]
+  },
+  {
+   "nome": "destaque",
+   "tipo": "texto",
+   "descricao": "o ano do marco que fica em destaque, igual a um dos anos de marcos; vazio = o último",
+   "obrigatorio": false,
+   "max_car": 9,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "1994"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "lados",
+   "valores": [
+    "alternados",
+    "direita"
+   ],
+   "padrao": "alternados",
+   "descricao": "em que lado da estrada ficam os marcos ao longe"
+  }
+ ],
+ "batidas": [
+  "destaque"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Profundidade por perspectiva de ponto de fuga (posição, escala e opacidade), sem câmera 3D. A foto opcional do marco atual ficou de fora desta versão (o núcleo ainda não tem utilitário de mídia); entra numa próxima revisão."
+}
