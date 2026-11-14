@@ -1,0 +1,22 @@
+/* Pergunta em palavras 2,5D: só variáveis da pele do kit. */
+.p-pergunta_palavras_25d { display: flex; align-items: center; justify-content: center; }
+.p-pergunta_palavras_25d .pp-cena { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: calc(130 * var(--U)); max-width: 100%; perspective: calc(130 * var(--U)); }
+.p-pergunta_palavras_25d .pp-palco { position: relative; width: 100%; display: flex; align-items: center; justify-content: center;
+  transform-style: preserve-3d; }
+.p-pergunta_palavras_25d .pp-q { position: absolute; left: 50%; top: 50%; translate: -50% -50%;
+  font: 800 calc(70 * var(--U) * var(--esc, 1))/1 var(--fD); color: color-mix(in srgb, var(--destaque) 22%, transparent);
+  opacity: 0; pointer-events: none; }
+.p-pergunta_palavras_25d .pp-texto { position: relative; transform-style: preserve-3d; display: flex; flex-wrap: wrap;
+  justify-content: center; gap: calc(1.2 * var(--U)) calc(2.2 * var(--U)); text-align: center; }
+.p-pergunta_palavras_25d .pp-w { display: inline-block; font: 800 calc(8.6 * var(--U) * var(--esc, 1))/1.15 var(--fD);
+  color: var(--texto); text-shadow: 0 calc(.6 * var(--U)) calc(2 * var(--U)) rgba(0,0,0,.5); opacity: 0; }
+.p-pergunta_palavras_25d .pp-k { color: var(--destaque); }
+.p-pergunta_palavras_25d .pp-traco { margin-top: calc(3 * var(--U)); width: calc(40 * var(--U)); }
+.p-pergunta_palavras_25d .pp-apoio { margin-top: calc(3 * var(--U)); font: 600 calc(4 * var(--U))/1.25 var(--fT);
+  color: var(--texto); text-align: center; max-width: calc(110 * var(--U)); text-shadow: 0 calc(.4 * var(--U)) calc(1.5 * var(--U)) rgba(0,0,0,.5); }
+.p-pergunta_palavras_25d .pp-apoio .d { color: var(--destaque); }
+.vertical .p-pergunta_palavras_25d .pp-cena { width: calc(88 * var(--U)); perspective: calc(120 * var(--U)); }
+.vertical .p-pergunta_palavras_25d .pp-w { font-size: calc(8.4 * var(--U) * var(--esc, 1)); }
+.vertical .p-pergunta_palavras_25d .pp-q { font-size: calc(80 * var(--U) * var(--esc, 1)); }
+.vertical .p-pergunta_palavras_25d .pp-apoio { font-size: calc(4.8 * var(--U)); max-width: calc(84 * var(--U)); }

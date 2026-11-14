@@ -1,0 +1,86 @@
+{
+ "id": "transicao_varredura",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma virada curta entre blocos: formas da paleta (faixas, diagonal ou íris) varrem a tela e revelam a próxima cena, com uma palavra opcional",
+ "intencoes": [
+  "transicao"
+ ],
+ "exemplos_sim": [
+  "Agora que você entendeu o problema, vamos para a solução.",
+  "Mudando de assunto: e os investimentos?",
+  "Passado o susto, vamos aos números do segundo trimestre.",
+  "Chega de teoria, hora de colocar a mão na massa.",
+  "Isso foi o primeiro erro. Vamos ao segundo.",
+  "Mas calma, que a história não termina aqui.",
+  "Já falamos do que deu errado, agora vamos ao que deu certo.",
+  "Dito isso, vamos para a parte prática."
+ ],
+ "exemplos_nao": [
+  "81% das famílias brasileiras estão endividadas.",
+  "Capítulo 3: como montar a reserva de emergência.",
+  "Compare o CDB com a poupança.",
+  "Se inscreva no canal e ative o sininho."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 0.6,
+ "duracao_max": 1.2,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "palavra",
+   "tipo": "texto",
+   "descricao": "uma palavra opcional que aparece no meio da virada (ex.: Depois, Agora, Prático)",
+   "obrigatorio": false,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Agora"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "direcao",
+   "valores": [
+    "esquerda_direita",
+    "direita_esquerda",
+    "cima_baixo",
+    "baixo_cima"
+   ],
+   "padrao": "esquerda_direita",
+   "descricao": "para onde as formas varrem a tela"
+  },
+  {
+   "nome": "forma",
+   "valores": [
+    "diagonal",
+    "faixas",
+    "iris"
+   ],
+   "padrao": "diagonal",
+   "descricao": "tipo de forma que varre: camadas em diagonal, faixas paralelas ou círculo (íris)"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Complementa transicao_formas: três formas selecionáveis e quatro direções; toda a animação cabe entre c.t e c.ate."
+}

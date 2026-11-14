@@ -1,0 +1,36 @@
+/* Abertura de capítulo: só variáveis da pele do kit. */
+.p-abertura_capitulo { display: flex; align-items: center; justify-content: center; }
+.p-abertura_capitulo.ac-3d { perspective: calc(140 * var(--U)); }
+.p-abertura_capitulo .ac-corpo { display: flex; flex-direction: column; align-items: flex-start; transform-style: preserve-3d;
+  max-width: calc(160 * var(--U)); }
+.p-abertura_capitulo .ac-linhan { display: flex; align-items: center; gap: calc(5 * var(--U)); transform-style: preserve-3d; }
+.p-abertura_capitulo .ac-num { display: flex; gap: calc(1 * var(--U)); transform-style: preserve-3d; }
+.p-abertura_capitulo .ac-dig svg { display: block; height: calc(30 * var(--U) * var(--esc, 1)); width: auto; overflow: visible; }
+.p-abertura_capitulo .ac-dig path { fill: none; stroke: var(--destaque); stroke-width: 7; stroke-linecap: round;
+  stroke-linejoin: round; stroke-dasharray: 1 1; stroke-dashoffset: 1;
+  filter: drop-shadow(0 0 calc(1.2 * var(--U)) color-mix(in srgb, var(--destaque) 45%, transparent)); }
+.p-abertura_capitulo .ac-titulo { font: 800 calc(7 * var(--U) * var(--esc, 1))/1.1 var(--fD); color: var(--texto);
+  max-width: calc(82 * var(--U)); letter-spacing: -.01em; }
+.p-abertura_capitulo .ac-titulo .d { color: var(--destaque); }
+.p-abertura_capitulo .ac-linha { position: absolute; left: 0; right: 0; bottom: calc(26 * var(--U)); height: calc(.7 * var(--U));
+  overflow: hidden; background: color-mix(in srgb, var(--texto) 12%, transparent); }
+.p-abertura_capitulo .ac-fio { position: absolute; inset: 0; background: var(--destaque); transform-origin: left center; }
+.p-abertura_capitulo .ac-cab { position: absolute; top: 0; bottom: 0; left: 0; width: calc(14 * var(--U));
+  background: linear-gradient(90deg, transparent, var(--texto)); }
+.p-abertura_capitulo .ac-barra { position: absolute; left: 50%; bottom: calc(13 * var(--U)); transform: translateX(-50%);
+  display: flex; gap: calc(1.2 * var(--U)); width: calc(100 * var(--U)); }
+.p-abertura_capitulo .ac-seg { position: relative; flex: 1; height: calc(1.2 * var(--U)); border-radius: var(--R, 999px);
+  background: color-mix(in srgb, var(--texto) 40%, transparent); opacity: var(--inativo, .4); overflow: hidden; }
+.p-abertura_capitulo .ac-seg.ac-feito { background: color-mix(in srgb, var(--destaque) 55%, transparent); }
+.p-abertura_capitulo .ac-seg.ac-on { background: color-mix(in srgb, var(--texto) 25%, transparent); }
+.p-abertura_capitulo .ac-fill { position: absolute; inset: 0; background: var(--destaque); transform-origin: left center; }
+.p-abertura_capitulo.ac-pontos .ac-barra { gap: calc(2.4 * var(--U)); justify-content: center; width: calc(80 * var(--U)); }
+.p-abertura_capitulo.ac-pontos .ac-seg { flex: 0 0 calc(2 * var(--U)); width: calc(2 * var(--U)); height: calc(2 * var(--U));
+  border-radius: 50%; }
+.vertical .p-abertura_capitulo .ac-linhan { flex-direction: column; align-items: flex-start; gap: calc(4 * var(--U)); }
+.vertical .p-abertura_capitulo .ac-corpo { padding: 0 calc(6 * var(--U)); }
+.vertical .p-abertura_capitulo .ac-dig svg { height: calc(26 * var(--U) * var(--esc, 1)); }
+.vertical .p-abertura_capitulo .ac-titulo { font-size: calc(7.4 * var(--U) * var(--esc, 1)); max-width: calc(86 * var(--U)); }
+.vertical .p-abertura_capitulo .ac-linha { bottom: calc(34 * var(--U)); }
+.vertical .p-abertura_capitulo .ac-barra { bottom: calc(20 * var(--U)); width: calc(84 * var(--U)); }
+.vertical .p-abertura_capitulo.ac-pontos .ac-barra { width: calc(70 * var(--U)); }

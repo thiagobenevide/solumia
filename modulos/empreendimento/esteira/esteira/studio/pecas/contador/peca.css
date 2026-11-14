@@ -1,0 +1,12 @@
+/* Migrada do kit (cena contador). */
+.p-contador .num .kicker i { display: none; }
+.p-contador .numero { margin-top: calc(1.6 * var(--U)); font: 800 calc(23 * var(--U))/1 var(--fD); letter-spacing: -.04em; font-variant-numeric: tabular-nums;
+  color: var(--texto); white-space: nowrap; opacity: 0; }
+.p-contador .numero small { font-size: .42em; font-weight: 700; color: var(--destaque); margin-left: .08em; }
+.vertical .p-contador .numero { font-size: calc(19 * var(--U)); }
+.p-contador .legenda { margin-top: calc(3.2 * var(--U)); max-width: calc(120 * var(--U)); font: 500 calc(4.3 * var(--U))/1.3 var(--fT); color: var(--acento); opacity: 0; }
+.p-contador .legenda b { font-weight: 700; }
+.vertical .p-contador .legenda { font-size: calc(4.6 * var(--U)); }
+.p-contador .fonte { position: absolute; left: 0; right: 0; bottom: calc(8 * var(--U)); font: 500 calc(2 * var(--U)) var(--fM); color: color-mix(in srgb, var(--acento) 70%, transparent); opacity: 0; }
+.vertical .p-contador .fonte { bottom: calc(40 * var(--U)); }
+.al-esquerda .p-contador .num .kicker i { display: block; }

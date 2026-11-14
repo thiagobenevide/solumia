@@ -1,0 +1,116 @@
+{
+ "id": "cta_botao_sino",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "chamada para se inscrever, comentar ou ver o próximo vídeo: cursor aperta o botão, o sino balança e o contador sobe (ou o cartão do próximo vídeo chega do fundo)",
+ "intencoes": [
+  "chamada"
+ ],
+ "exemplos_sim": [
+  "Se esse vídeo te ajudou, se inscreve no canal e ativa o sininho.",
+  "Inscreva-se para não perder o próximo vídeo da série.",
+  "Já somos 12 mil inscritos e você ainda não está aqui, bora se inscrever.",
+  "Deixa nos comentários qual investimento você quer que eu analise.",
+  "Comenta aqui embaixo a sua maior dúvida sobre o assunto.",
+  "Quer entender como sair do rotativo? Clica no próximo vídeo que está aparecendo aqui.",
+  "No próximo vídeo eu mostro o passo a passo completo, é só clicar na tela.",
+  "Antes de ir, aperta o botão de inscrever-se e ativa as notificações."
+ ],
+ "exemplos_nao": [
+  "O rotativo do cartão passa de 400% ao ano.",
+  "Vamos entender por que isso acontece.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Esse é o nome técnico do produto."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 8.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "texto",
+   "tipo": "texto",
+   "descricao": "a chamada em poucas palavras; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 50,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Gostou? *Inscreva-se* e ative o sino"
+  },
+  {
+   "nome": "acao",
+   "tipo": "texto",
+   "descricao": "o que o espectador deve fazer; define o botão e o ícone",
+   "obrigatorio": true,
+   "max_car": 14,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [
+    "inscrever",
+    "comentar",
+    "proximo_video"
+   ],
+   "exemplo": "inscrever"
+  },
+  {
+   "nome": "detalhe",
+   "tipo": "texto",
+   "descricao": "em inscrever, o total de inscritos com número (ex.: 12 mil inscritos), que sobe contando; em proximo_video, o título do próximo vídeo; em comentar, a pergunta ou o tema do comentário",
+   "obrigatorio": false,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "12 mil inscritos"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "cenario",
+   "valores": [
+    "plano",
+    "cartao_25d"
+   ],
+   "padrao": "plano",
+   "descricao": "plano = botão, sino e contador; cartao_25d = só com acao proximo_video: cartão do vídeo vem do fundo, inclinado e com sombra (nas outras ações cai em plano)"
+  },
+  {
+   "nome": "velocidade",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": ""
+  }
+ ],
+ "batidas": [
+  "acao"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Complementa cta (só texto) e cta_cursor_sino (revisão): aqui a ação muda por encaixe e o clique pode sincronizar com a palavra da ação. A variação 2,5D é o botão cenario=cartao_25d, dentro da mesma peça, com peso 2d na ficha."
+}

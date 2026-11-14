@@ -1,0 +1,91 @@
+{
+ "id": "capitulo_faixa_ec",
+ "versao": 1,
+ "origem": "fabrica_local",
+ "motor": "effectcraft",
+ "estado": "aprovada",
+ "comunica": "o começo de um novo capítulo: uma faixa varre a tela com o número do capítulo num bloco colorido, o título e uma linha de apoio",
+ "intencoes": [
+  "capitulo",
+  "transicao"
+ ],
+ "exemplos_sim": [
+  "Capítulo 1: como funciona o juro composto.",
+  "Agora vamos para a segunda parte: onde o dinheiro realmente some.",
+  "Parte três: o que fazer a partir de hoje.",
+  "Passo um, entender de onde vem a dívida.",
+  "Chegamos ao capítulo final: como sair do vermelho.",
+  "Vamos ao primeiro bloco: o que é inflação.",
+  "Na quarta parte, a gente fala de investimentos.",
+  "Começando pelo básico: o que é a taxa Selic."
+ ],
+ "exemplos_nao": [
+  "81% das famílias brasileiras estão endividadas.",
+  "Se inscreva no canal e ative o sininho.",
+  "Compare o CDB com a poupança.",
+  "Você já parou para pensar nisso?"
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.0,
+ "duracao_max": 5.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "numero",
+   "tipo": "texto",
+   "descricao": "o número do capítulo, só o algarismo (1, 2, 03)",
+   "obrigatorio": true,
+   "max_car": 3,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "2"
+  },
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "o título do capítulo, curto; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 36,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Onde o dinheiro *some*"
+  },
+  {
+   "nome": "subtitulo",
+   "tipo": "texto",
+   "descricao": "uma linha de apoio que situa o capítulo",
+   "obrigatorio": false,
+   "max_car": 56,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "os custos que ninguém enxerga"
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": ""
+}

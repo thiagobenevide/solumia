@@ -1,0 +1,99 @@
+{
+ "id": "finlumia-apresentador",
+ "nome": "Finlumia · apresentador",
+ "canal": "finlumia",
+ "modo": "apresentador",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "pele": {
+  "fundo": "#0b0b0d",
+  "fundo2": "#2a2210",
+  "texto": "#ffffff",
+  "destaque": "#f5c518",
+  "apoio": "#ffe08a",
+  "acento": "#b8b2a3",
+  "fonte_destaque": "Plus Jakarta Sans",
+  "fonte_texto": "Plus Jakarta Sans",
+  "fonte_tecnica": "JetBrains Mono"
+ },
+ "regras": {
+  "cenas": [
+   "contador",
+   "barras_comparacao",
+   "versus",
+   "passo_a_passo",
+   "lista_itens",
+   "linha_do_tempo",
+   "citacao_estudo",
+   "conceito_icone",
+   "pergunta_destaque",
+   "titulo_capitulo",
+   "frase_destaque",
+   "cta",
+   "midia"
+  ],
+  "takeover_max": 0.55,
+  "dur_min": 1.2,
+  "takeover_max_s": 6.0,
+  "sfx_por_s": 0.8,
+  "sfx_volume": 0.45,
+  "sfx": {
+   "contador": "whoosh",
+   "barras_comparacao": "swoosh",
+   "versus": "whoosh",
+   "passo_a_passo": "pop",
+   "lista_itens": "pop",
+   "linha_do_tempo": "swoosh",
+   "citacao_estudo": "click",
+   "conceito_icone": "pop",
+   "pergunta_destaque": "ding",
+   "titulo_capitulo": "shimmer",
+   "frase_destaque": "swoosh",
+   "cta": "click"
+  },
+  "legenda": {
+   "16:9": false,
+   "9:16": true
+  },
+  "lufs": -14.0,
+  "pico": -1.0,
+  "apresentador": {
+   "tela_max": 0.07,
+   "broll": 0.3,
+   "punch": 1.06,
+   "punch_impacto": 1.16
+  }
+ },
+ "guia": "Finanças pessoais para o público brasileiro. Tom sóbrio, calmo e confiável, sem sensacionalismo. Dourado só para o que importa: números, a palavra-chave e o passo atual. Todo número dito vira cena; comparações viram barras ou versus; estudos citados aparecem com autor e ano. Mídia ilustrativa quando a frase descreve uma situação do dia a dia.\n\nModo apresentador: o apresentador nunca some por muito tempo. Número, comparação, lista e processo viram peça ao lado dele (SPLIT); frase de impacto e pergunta ficam na câmera cheia com punch-in; capítulo pode tirar a câmera. B-roll só quando a imagem mostra o que ele diz.",
+ "exemplos": [
+  {
+   "frase": "A taxa média do cheque especial chegou a 132% ao ano.",
+   "cena": "contador",
+   "titulo": "Cheque especial"
+  },
+  {
+   "frase": "No consignado você paga 24% ao ano; no rotativo, mais de 400%.",
+   "cena": "barras_comparacao",
+   "titulo": "Juros ao ano"
+  },
+  {
+   "frase": "Um estudo de Harvard acompanhou 2 mil famílias por dez anos.",
+   "cena": "citacao_estudo",
+   "titulo": "Harvard · 2 mil famílias"
+  },
+  {
+   "frase": "Imagine chegar no fim do mês com a geladeira vazia.",
+   "cena": "midia",
+   "titulo": ""
+  },
+  {
+   "frase": "Agora vem a parte que ninguém te conta.",
+   "cena": "titulo_capitulo",
+   "titulo": "O que ninguém conta"
+  }
+ ],
+ "versao": 1,
+ "travado": false
+}

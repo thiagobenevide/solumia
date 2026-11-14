@@ -1,0 +1,36 @@
+/* Chamada em cartão 2,5D: só variáveis da pele do kit. */
+.p-chamada_cartao_25d { display: flex; align-items: center; justify-content: center; }
+.p-chamada_cartao_25d .cc-cena { perspective: calc(130 * var(--U)); width: 100%; display: flex; align-items: center; justify-content: center; }
+.p-chamada_cartao_25d .cc-palco { position: relative; transform-style: preserve-3d; width: calc(118 * var(--U)); max-width: 94%; }
+.p-chamada_cartao_25d .cc-card { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: calc(2.4 * var(--U)); padding: calc(4 * var(--U)) calc(5 * var(--U));
+  background: color-mix(in srgb, var(--fundo2) 90%, transparent);
+  border: calc(.4 * var(--U)) solid color-mix(in srgb, var(--destaque) 55%, transparent);
+  border-radius: var(--R, calc(2 * var(--U))); box-shadow: 0 calc(2 * var(--U)) calc(6 * var(--U)) rgba(0,0,0,.5); }
+.p-chamada_cartao_25d .cc-atras { position: absolute; inset: 0; opacity: 0; border-radius: var(--R, calc(2 * var(--U)));
+  border: calc(.4 * var(--U)) solid color-mix(in srgb, var(--apoio) 55%, transparent);
+  background: color-mix(in srgb, var(--fundo2) 70%, transparent); }
+.p-chamada_cartao_25d .cc-a1 { transform: translate(calc(2 * var(--U)), calc(2 * var(--U))); }
+.p-chamada_cartao_25d .cc-a2 { transform: translate(calc(4 * var(--U)), calc(4 * var(--U))); }
+.p-chamada_cartao_25d .cc-acao { font: 800 calc(7.6 * var(--U) * var(--esc, 1))/1.08 var(--fD); color: var(--texto); letter-spacing: -.02em; }
+.p-chamada_cartao_25d .cc-acao .d { color: var(--destaque); }
+.p-chamada_cartao_25d .cc-det { font: 500 calc(3.6 * var(--U))/1.25 var(--fT); color: var(--texto); max-width: calc(104 * var(--U)); }
+.p-chamada_cartao_25d .cc-det .d { color: var(--destaque); }
+.p-chamada_cartao_25d .cc-botao { position: relative; display: flex; align-items: center; gap: calc(1.8 * var(--U));
+  margin-top: calc(1 * var(--U)); padding: calc(1.8 * var(--U)) calc(4.4 * var(--U)); border-radius: 999px;
+  background: var(--destaque); color: var(--fundo); box-shadow: 0 calc(1 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.5); }
+.p-chamada_cartao_25d .cc-ico { display: inline-flex; width: calc(4.6 * var(--U)); height: calc(4.6 * var(--U)); }
+.p-chamada_cartao_25d .cc-ico svg { width: 100%; height: 100%; }
+.p-chamada_cartao_25d .cc-bt { font: 800 calc(4 * var(--U))/1 var(--fD); white-space: nowrap; }
+.p-chamada_cartao_25d .cc-onda { position: absolute; inset: 0; border-radius: 999px; opacity: 0; pointer-events: none;
+  border: calc(.6 * var(--U)) solid var(--destaque); }
+.p-chamada_cartao_25d .cc-cursor { position: absolute; right: calc(30 * var(--U)); bottom: calc(1 * var(--U));
+  width: calc(5.4 * var(--U)); height: calc(5.4 * var(--U)); opacity: 0; filter: drop-shadow(0 calc(.4 * var(--U)) calc(.8 * var(--U)) rgba(0,0,0,.5)); }
+.p-chamada_cartao_25d .cc-cursor svg { width: 100%; height: 100%; }
+.vertical .p-chamada_cartao_25d .cc-palco { width: calc(88 * var(--U)); }
+.vertical .p-chamada_cartao_25d .cc-card { padding: calc(6 * var(--U)) calc(5 * var(--U)); gap: calc(3.4 * var(--U)); }
+.vertical .p-chamada_cartao_25d .cc-acao { font-size: calc(7.4 * var(--U) * var(--esc, 1)); }
+.vertical .p-chamada_cartao_25d .cc-det { font-size: calc(4.6 * var(--U)); max-width: calc(76 * var(--U)); }
+.vertical .p-chamada_cartao_25d .cc-bt { font-size: calc(5 * var(--U)); }
+.vertical .p-chamada_cartao_25d .cc-ico { width: calc(5.6 * var(--U)); height: calc(5.6 * var(--U)); }
+.vertical .p-chamada_cartao_25d .cc-cursor { right: calc(10 * var(--U)); }

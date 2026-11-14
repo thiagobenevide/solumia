@@ -1,0 +1,19 @@
+/* Fundo horizonte: só variáveis da pele do kit. */
+.p-fundo_horizonte_25d .fg-cena { position: absolute; inset: 0; overflow: hidden; perspective: calc(150 * var(--U)); perspective-origin: 50% 50%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 44%, var(--texto) 64%);
+  mask-image: linear-gradient(to bottom, transparent 44%, var(--texto) 64%); }
+.p-fundo_horizonte_25d .fg-palco { position: absolute; inset: 0; transform-style: preserve-3d; }
+.p-fundo_horizonte_25d .fg-chao { position: absolute; left: 50%; top: 50%; width: calc(400 * var(--U)); height: calc(120 * var(--U));
+  background-size: calc(10 * var(--U)) calc(10 * var(--U));
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--destaque) 30%, transparent) 0, color-mix(in srgb, var(--destaque) 30%, transparent) calc(.5 * var(--U)), transparent calc(.5 * var(--U))),
+    linear-gradient(to bottom, color-mix(in srgb, var(--destaque) 30%, transparent) 0, color-mix(in srgb, var(--destaque) 30%, transparent) calc(.5 * var(--U)), transparent calc(.5 * var(--U))); }
+.p-fundo_horizonte_25d.fg-pista .fg-chao { background-size: calc(14 * var(--U)) calc(14 * var(--U));
+  background-image: linear-gradient(to right, color-mix(in srgb, var(--destaque) 26%, transparent) 0, color-mix(in srgb, var(--destaque) 26%, transparent) calc(.5 * var(--U)), transparent calc(.5 * var(--U))); }
+.p-fundo_horizonte_25d .fg-pulso { position: absolute; top: calc(-14 * var(--U)); width: calc(.9 * var(--U)); height: calc(14 * var(--U)); opacity: 0;
+  background: linear-gradient(to bottom, transparent, var(--acento)); border-radius: 999px; }
+.p-fundo_horizonte_25d .fg-brilho { position: absolute; left: 0; right: 0; top: 30%; height: 40%;
+  background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--destaque) 22%, transparent), transparent 65%); }
+.p-fundo_horizonte_25d .fg-ponto { position: absolute; left: 50%; top: 50%; width: calc(1 * var(--U)); height: calc(1 * var(--U)); margin: calc(-.5 * var(--U));
+  border-radius: 50%; background: var(--apoio); opacity: 0; box-shadow: 0 0 calc(2 * var(--U)) color-mix(in srgb, var(--apoio) 60%, transparent); }
+.vertical .p-fundo_horizonte_25d .fg-ponto { width: calc(1.4 * var(--U)); height: calc(1.4 * var(--U)); margin: calc(-.7 * var(--U)); }

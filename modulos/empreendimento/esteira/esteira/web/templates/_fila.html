@@ -1,0 +1,37 @@
+{% from "_motor.html" import motor %}
+<div class="grid sm:grid-cols-2 gap-3 mb-5">
+{% for v, d in vagas.items() %}
+  <div class="cartao rounded-xl px-4 py-3 flex items-center gap-3">
+    <span class="h-2 w-2 rounded-full {{ 'bg-sky-400 animate-pulse' if d else 'bg-emerald-400' }}"></span>
+    <span class="text-xs font-mono uppercase tracking-wider text-slate-400">{{ 'Máquina (GPU/local)' if v == 'machine' else 'Claude' }}</span>
+    <span class="text-xs text-slate-300 truncate">{% if d %}ocupada: <span class="font-mono">{{ d.command }}</span>{% if d.process %} · <a href="/processos/{{ d.process }}" class="text-azul-400 hover:underline">ver</a>{% endif %}{% else %}livre{% endif %}</span>
+  </div>
+{% endfor %}
+</div>
+{% if not tarefas %}
+<div class="cartao rounded-xl p-10 text-center text-slate-400">Nada na fila. Selecione roteiros na <a href="/" class="text-azul-400 hover:underline">biblioteca</a>.</div>
+{% endif %}
+<div class="space-y-3">
+{% for t in tarefas %}
+  {% set cor = {"rodando": "text-sky-300", "ok": "text-emerald-400", "erro": "text-rose-400", "na fila": "text-slate-400", "cancelado": "text-slate-500", "interrompido": "text-amber-400"}[t.estado] %}
+  <div class="cartao rounded-xl p-4 flex flex-wrap items-center gap-4">
+    <div class="w-28 text-xs font-mono uppercase tracking-wider {{ cor }} {{ 'animate-pulse' if t.estado == 'rodando' }}">{{ t.estado }}</div>
+    <div class="flex-1 min-w-[200px]">
+      {% if ':' in t.ep %}<span class="text-white">{{ t.ep }}</span>{% else %}<a href="/ep/{{ t.ep }}" class="text-white hover:text-azul-300">{{ t.ep }}</a>{% endif %}
+      <span class="ml-2 font-mono text-xs text-slate-500">./dark {{ t.comando }} {{ t.args|join(' ') }}</span>
+      <span class="ml-2 inline-flex gap-1 align-middle">{% if t.vaga == 'claude' %}{{ motor([("claude", "Claude")]) }}{% else %}{{ motor(MOTORES.get(t.comando, [])) }}{% endif %}</span>
+      {% if t.proc %}<a href="/processos/{{ t.proc }}" class="ml-2 text-xs text-azul-400 hover:underline">monitor do processo →</a>{% endif %}
+      {% if t.prog and t.comando == 'all' %}
+      <div class="mt-2 flex items-center gap-3">
+        <div class="h-1.5 w-56 rounded-full bg-white/5 overflow-hidden"><div class="h-full bg-azul-400 transition-all" style="width: {{ (100 * t.prog.feitas / t.prog.total)|round }}%"></div></div>
+        <span class="text-xs text-slate-400">{{ t.prog.feitas }}/{{ t.prog.total }}{% if t.prog.rodando %} · {{ NOMES.get(t.prog.rodando, t.prog.rodando) }}{% endif %}</span>
+      </div>
+      {% endif %}
+    </div>
+    <div class="text-xs text-slate-500 font-mono">{{ (t.inicio or t.criado)[11:16] }}{% if t.fim %}–{{ t.fim[11:16] }}{% endif %}</div>
+    {% if t.estado in ('na fila', 'rodando') %}
+    <form method="post" action="/fila/{{ t.id }}/cancelar"><button class="text-xs px-2.5 py-1.5 rounded-md border border-white/10 hover:bg-rose-500/10 hover:text-rose-300">{{ 'Parar' if t.estado == 'rodando' else 'Cancelar' }}</button></form>
+    {% endif %}
+  </div>
+{% endfor %}
+</div>

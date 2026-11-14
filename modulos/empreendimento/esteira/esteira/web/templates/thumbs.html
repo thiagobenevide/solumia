@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_motor.html" import motor %}
+{% block titulo %}Thumbs · {{ ep }}{% endblock %}
+{% block corpo %}
+{% set aba = "thumbs" %}{% include "_abas_ep.html" %}
+<div class="mt-6 flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <h1 class="text-3xl font-semibold tracking-tight text-white">Thumbnails</h1>
+    <p class="mt-2 text-sm text-slate-400 max-w-2xl">As geradas pela etapa e as feitas no editor. Edite qualquer uma (texto, destaque, layout,
+      fundo, caixas de texto) e escolha as 3 do teste A/B do YouTube.</p>
+    <p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Etapa thumb: {{ motor(MOTORES.thumb) }} · editar, enviar fundo e escolher vaga: {{ motor([('py', 'Python')]) }}</p>
+  </div>
+  <div class="flex flex-wrap items-center gap-2 text-sm">
+    <form method="post" action="/ep/{{ ep }}/thumbs/fundo" enctype="multipart/form-data" class="flex items-center gap-2">
+      <input type="file" name="arquivo" accept="image/png,image/jpeg,image/webp" required class="text-xs text-slate-400 file:mr-2 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-white/5 file:text-slate-200">
+      <button class="px-3 py-2 rounded-lg bg-white/5 text-slate-200 hover:bg-white/10">Enviar fundo</button>
+    </form>
+    {% if fundos %}<a href="/ep/{{ ep }}/thumbs/editar" class="px-4 py-2 rounded-lg bg-azul-500 text-white font-medium hover:bg-azul-400">+ Nova thumb</a>{% endif %}
+  </div>
+</div>
+
+{% if vagas %}
+<h2 class="mt-8 text-sm font-semibold text-slate-300">No teste A/B</h2>
+<div class="mt-3 grid gap-4 sm:grid-cols-3">
+  {% for k, v in vagas %}
+  <div class="cartao rounded-xl overflow-hidden"><img src="/arq/{{ ep }}/thumb_{{ k }}.png?v={{ v }}" class="w-full aspect-video object-cover">
+    <p class="px-3 py-2 text-xs text-slate-400">thumb {{ k }}{{ ' · principal (thumb.png)' if k == 1 }}</p></div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2 class="mt-8 text-sm font-semibold text-slate-300">Todas ({{ thumbs|length }})</h2>
+{% if not thumbs %}<div class="mt-3 cartao rounded-xl p-8 text-center text-slate-400">Nenhuma thumb ainda: rode a etapa thumb{{ ' ou crie uma nova' if fundos else ' ou envie um fundo' }}.</div>{% endif %}
+<div class="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+  {% for t in thumbs %}
+  <div class="cartao rounded-xl overflow-hidden flex flex-col">
+    <img src="/arq/{{ ep }}/thumbs/{{ t.arquivo }}" loading="lazy" class="w-full aspect-video object-cover">
+    <div class="p-3 text-xs flex flex-wrap items-center gap-2">
+      <span class="px-1.5 py-0.5 rounded {{ 'bg-amarelo-400/15 text-amarelo-300' if t.origem == 'editor' else 'bg-white/5 text-slate-300' }}">{{ t.origem }}</span>
+      {% if t.nota is not none %}<span class="text-slate-500">nota {{ t.nota }}</span>{% endif %}
+      {% if t.pc_editado %}<span class="px-1.5 py-0.5 rounded bg-violet-400/15 text-violet-300" title="PNG refeito a partir do .pcraft salvo">editado no PhotoCraft</span>{% endif %}
+      <a href="/ep/{{ ep }}/thumbs/editar?arq={{ t.arquivo }}" class="ml-auto px-2.5 py-1 rounded-lg bg-azul-500/15 text-azul-200 hover:bg-azul-500/25">Editar</a>
+      <form method="post" action="/ep/{{ ep }}/thumbs/photocraft"><input type="hidden" name="arq" value="{{ t.arquivo }}">
+        <button class="px-2.5 py-1 rounded-lg bg-white/5 text-slate-300 hover:bg-white/10" title="abre a thumb em camadas (.pcraft) no PhotoCraft">PhotoCraft</button></form>
+      {% for k in (1, 2, 3) %}
+      <form method="post" action="/ep/{{ ep }}/thumbs/usar"><input type="hidden" name="arq" value="{{ t.arquivo }}"><input type="hidden" name="k" value="{{ k }}">
+        <button class="px-2 py-1 rounded-lg bg-white/5 text-slate-300 hover:bg-white/10" title="usar como thumb {{ k }}">{{ k }}</button></form>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,84 @@
+{
+ "id": "linha_do_tempo_3d",
+ "versao": 1,
+ "motor": "html",
+ "estado": "rascunho",
+ "comunica": "uma sequência de eventos ou datas dispostos em profundidade, onde a câmera percorre o tempo",
+ "intencoes": [
+  "narrativa_passado",
+  "dado_temporal",
+  "processo"
+ ],
+ "exemplos_sim": [
+  "Em 1994, o Plano Real foi lançado.",
+  "A crise começou em 2008 e durou até 2012.",
+  "Primeiro veio a descoberta, depois a expansão e por fim a consolidação.",
+  "O Brasil mudou de patamar entre 2010 e 2020.",
+  "A tecnologia evoluiu de 1980 para 2024.",
+  "O ciclo de vida do produto vai de janeiro a dezembro.",
+  "A inflação subiu em março, caiu em maio e estabilizou em agosto."
+ ],
+ "exemplos_nao": [
+  "O preço do arroz subiu muito.",
+  "Existem várias datas importantes para o país.",
+  "Vamos ver o que aconteceu no passado."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "narrativa"
+ ],
+ "energia": "baixa",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 10.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "eventos",
+   "tipo": "itens",
+   "descricao": "lista de eventos, cada um com data e descrição",
+   "obrigatorio": true,
+   "max_car": 30,
+   "max_valor": 50,
+   "min_itens": 2,
+   "max_itens": 5,
+   "exemplo": "2023: O ano da IA"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "direcao",
+   "valores": [
+    "frente",
+    "reverso"
+   ],
+   "padrao": "frente",
+   "descricao": "se a câmera avança no tempo ou recua"
+  },
+  {
+   "nome": "estilo",
+   "valores": [
+    "minimalista",
+    "impacto"
+   ],
+   "padrao": "minimalista",
+   "descricao": "estilo visual da linha e dos cartões"
+  }
+ ],
+ "batidas": [
+  "eventos"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "passagem": "click"
+ },
+ "notas": "Peça 2,5D que utiliza perspectiva para criar uma sensação de jornada temporal através de cartões que passam pela câmera.",
+ "origem": "fabrica"
+}

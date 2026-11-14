@@ -1,0 +1,109 @@
+{
+ "id": "pergunta_palavras_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma pergunta retórica ao espectador cujas palavras chegam de profundidades diferentes e se alinham, com a palavra-chave em destaque à frente e um ponto de interrogação gigante ao fundo",
+ "intencoes": [
+  "pergunta"
+ ],
+ "exemplos_sim": [
+  "Mas será que vale a pena pagar à vista?",
+  "Você sabe para onde vai o seu dinheiro todo mês?",
+  "E se eu te dissesse que a poupança perde para a inflação?",
+  "Por que *ninguém* fala sobre isso?",
+  "Quanto você teria hoje se tivesse começado aos 20 anos?",
+  "Será que dá para viver só de renda passiva?",
+  "O que acontece com o seu dinheiro quando o banco quebra?",
+  "Afinal, o que é *inflação*?"
+ ],
+ "exemplos_nao": [
+  "A inflação subiu 4,5% no último ano.",
+  "Primeiro, anote todas as suas despesas.",
+  "Se inscreva no canal e ative o sininho.",
+  "Compare o CDB com a poupança."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 6.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "pergunta",
+   "tipo": "texto",
+   "descricao": "a pergunta como foi dita; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 70,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Mas será que vale a pena *pagar à vista*?"
+  },
+  {
+   "nome": "palavra_chave",
+   "tipo": "texto",
+   "descricao": "palavra da pergunta a destacar, se não houver asteriscos",
+   "obrigatorio": false,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "vale"
+  },
+  {
+   "nome": "apoio",
+   "tipo": "texto",
+   "descricao": "uma linha curta que sugere o caminho da resposta",
+   "obrigatorio": false,
+   "max_car": 50,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "a resposta muda o seu bolso"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "entrada",
+   "valores": [
+    "profundidade",
+    "giro"
+   ],
+   "padrao": "profundidade",
+   "descricao": "palavras vêm do fundo ou giram de lado até ficar de frente"
+  },
+  {
+   "nome": "inclinacao",
+   "valores": [
+    "esquerda",
+    "direita"
+   ],
+   "padrao": "esquerda",
+   "descricao": "lado para onde o palco começa inclinado"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Complementa pergunta_planos_25d: aqui o protagonismo é de cada palavra em profundidade própria, sem cartão."
+}

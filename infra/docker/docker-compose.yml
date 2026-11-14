@@ -1,0 +1,100 @@
+services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/backend/Dockerfile
+    image: llm-gateway/gateway:dev
+    env_file:
+      - path: ../../plataforma/backend/.env
+        required: false
+    environment:
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: 48080
+      # A VPS roda em UTC; o código usa a hora local como horário de Brasília (agenda, cotações,
+      # "hoje" dos prompts, notas).
+      TZ: America/Sao_Paulo
+    ports:
+      # Publicado só em localhost: em produção o tráfego externo entra pelo
+      # nginx (80/443); o gateway não deve ficar acessível direto da internet.
+      - "127.0.0.1:48080:48080"
+    volumes:
+      # Notas e biblioteca de arquivos (anotações incluídas) sobrevivem à recriação do contêiner.
+      - agent-data:/home/gateway/agent-data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:48080/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Túnel SSH reverso: o PC publica a esteira aqui (infra/scripts/conectar_vps). O nginx a serve em
+  # /esteira/ só com o token do login; a 18765 em localhost é para o nginx do host (Cenário B).
+  tunel:
+    build: ./tunel
+    image: agent/tunel:dev
+    ports:
+      - "${TUNEL_PORTA:-2222}:2222"
+      - "127.0.0.1:18765:8765"
+    volumes:
+      - ./tunel/authorized_keys:/config/authorized_keys:ro
+      - tunel-chaves:/etc/ssh/chaves
+    restart: unless-stopped
+
+  # Collabora Online (CODE): edita DOCX/XLSX/PPTX no app por WOPI, com o gateway como host.
+  # O nginx serve /browser, /hosting/* e /cool/ no mesmo domínio; o gateway precisa de
+  # GATEWAY_COLLABORA_URL=https://<domínio>, GATEWAY_COLLABORA_INTERNO_URL=http://collabora:9980,
+  # GATEWAY_WOPI_BASE_URL=http://gateway:48080 e GATEWAY_WOPI_SECRET no .env.
+  collabora:
+    # Versão fixa (digest) gravada pelo instalar_vps em infra/docker/imagens.env.
+    image: ${COLLABORA_IMAGEM:-collabora/code:latest}
+    cap_add:
+      - MKNOD
+    environment:
+      # Só aceita WOPISrc do gateway (rede interna do compose).
+      aliasgroup1: http://gateway:48080
+      # TLS termina no nginx; o Collabora fala HTTP por dentro.
+      extra_params: --o:ssl.enable=false --o:ssl.termination=true
+      server_name: ${COLLABORA_DOMINIO:-}
+      dictionaries: pt_BR en_US
+      username: ${COLLABORA_ADMIN_USUARIO:-admin}
+      password: ${COLLABORA_ADMIN_SENHA:-}
+    ports:
+      # Só para o nginx do host (Cenário B); o nginx do compose usa collabora:9980.
+      - "127.0.0.1:9980:9980"
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - gateway
+      - tunel
+      - collabora
+    # Recarrega a cada 6h para pegar o certificado renovado pelo serviço `certbot`.
+    command: ["/bin/sh", "-c", "while :; do sleep 6h; nginx -s reload; done & exec nginx -g 'daemon off;'"]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # nginx.conf real (com seu domínio) não é versionado — veja
+      # infra/docker/nginx/nginx.conf.example para gerar o seu.
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # IP real atrás da Cloudflare e limite do login (contexto http, antes do site).
+      - ./nginx/seguranca-http.conf:/etc/nginx/conf.d/00-seguranca.conf:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-etc:/etc/letsencrypt:ro
+    restart: unless-stopped
+
+  certbot:
+    image: ${CERTBOT_IMAGEM:-certbot/certbot:latest}
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-etc:/etc/letsencrypt
+    entrypoint: >
+      sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h; done"
+
+volumes:
+  agent-data:
+  certbot-www:
+  certbot-etc:
+  tunel-chaves:

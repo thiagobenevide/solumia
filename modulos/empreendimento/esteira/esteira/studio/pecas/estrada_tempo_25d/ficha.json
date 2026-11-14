@@ -1,0 +1,124 @@
+{
+ "id": "estrada_tempo_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma sequência de marcos no tempo (ano e rótulo) numa estrada em perspectiva: os marcos vêm de longe pela via, passam um a um e o marco atual para no centro em destaque, com foto opcional",
+ "intencoes": [
+  "dado_temporal",
+  "narrativa_passado"
+ ],
+ "exemplos_sim": [
+  "Em 1994 veio o Plano Real, em 1999 o câmbio flutuante e em 2016 o teto de gastos.",
+  "A internet comercial chegou ao Brasil em 1995; em 2007 o iPhone mudou tudo.",
+  "Do Fusca de 1959 ao carro elétrico de 2024, a indústria passou por várias eras.",
+  "A empresa nasceu em 2010, abriu capital em 2015 e hoje é a maior do setor.",
+  "Primeiro veio a máquina a vapor, depois a eletricidade e, em 1970, o computador.",
+  "A moeda mudou de nome seis vezes entre 1942 e 1994.",
+  "Em 1969 o homem pisou na Lua, e só em 2023 voltamos a mirar o satélite.",
+  "Esse foi o caminho: 2008 a crise, 2012 a recuperação, 2020 a pandemia."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "81% das famílias brasileiras estão endividadas.",
+  "Compare o CDB com a poupança.",
+  "Anote suas despesas e corte o supérfluo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 4.0,
+ "duracao_max": 12.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "marcos",
+   "tipo": "pares",
+   "descricao": "marcos em ordem cronológica: rotulo = ano ou data; valor = o que aconteceu, em poucas palavras",
+   "obrigatorio": true,
+   "max_car": 9,
+   "max_valor": 36,
+   "min_itens": 2,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "1994",
+     "valor": "Plano Real"
+    },
+    {
+     "rotulo": "1999",
+     "valor": "Câmbio flutuante"
+    },
+    {
+     "rotulo": "2016",
+     "valor": "Teto de gastos"
+    }
+   ]
+  },
+  {
+   "nome": "destaque",
+   "tipo": "texto",
+   "descricao": "o ano (igual ao de um marco) que fica em destaque no centro; vazio = o último marco",
+   "obrigatorio": false,
+   "max_car": 9,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "2016"
+  },
+  {
+   "nome": "foto",
+   "tipo": "imagem",
+   "descricao": "foto opcional do marco em destaque",
+   "obrigatorio": false,
+   "max_car": 1,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": ""
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "marcacao",
+   "valores": [
+    "tracejada",
+    "dupla",
+    "nenhuma"
+   ],
+   "padrao": "tracejada",
+   "descricao": "marcação no eixo da estrada"
+  },
+  {
+   "nome": "camera",
+   "valores": [
+    "respira",
+    "fixa"
+   ],
+   "padrao": "respira",
+   "descricao": "a câmera gira alguns graus durante a fala ou fica parada"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Complementa linha_do_tempo_estrada_ec e estrada_marcos_25d com HTML/CSS 3D: eixo tracejado animado, marcos anteriores passam e somem, posteriores esperam ao fundo só com o ano."
+}

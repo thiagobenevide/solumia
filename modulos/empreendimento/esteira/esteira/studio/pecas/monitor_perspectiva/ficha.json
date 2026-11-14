@@ -1,0 +1,113 @@
+{
+ "id": "monitor_perspectiva",
+ "versao": 1,
+ "origem": "etapa7",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um conteúdo apresentado numa tela em perspectiva, como se fosse o monitor do apresentador",
+ "intencoes": [
+  "conceito",
+  "lista",
+  "processo"
+ ],
+ "exemplos_sim": [
+  "Olha o que aparece quando você abre o aplicativo do banco.",
+  "No site da Receita, a primeira coisa é conferir o CPF.",
+  "A planilha tem três colunas: entrada, saída e saldo.",
+  "Esse é o painel que eu uso todo mês para acompanhar os gastos.",
+  "Na tela de simulação você vê o custo efetivo total."
+ ],
+ "exemplos_nao": [
+  "81% das famílias estão endividadas.",
+  "Comenta aqui sua maior dívida.",
+  "Parte dois: o efeito bola de neve."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "calma"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 9.0,
+ "tela_cheia": true,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "o que a tela mostra; *palavra* em destaque",
+   "obrigatorio": true,
+   "max_car": 44,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Simulação do *empréstimo*"
+  },
+  {
+   "nome": "rotulo",
+   "tipo": "texto",
+   "descricao": "origem da tela (app, site, planilha)",
+   "obrigatorio": false,
+   "max_car": 20,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "aplicativo do banco"
+  },
+  {
+   "nome": "itens",
+   "tipo": "itens",
+   "descricao": "linhas que aparecem na tela",
+   "obrigatorio": false,
+   "max_car": 38,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 3,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "Valor pedido: R$ 5 mil",
+    "Juros de 4% ao mês",
+    "Custo total: R$ 7.800"
+   ]
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "lado",
+   "valores": [
+    "direita",
+    "esquerda"
+   ],
+   "padrao": "direita",
+   "descricao": "para onde a tela gira"
+  },
+  {
+   "nome": "inclinacao",
+   "valores": [
+    "leve",
+    "forte"
+   ],
+   "padrao": "leve",
+   "descricao": "ângulo da perspectiva"
+  }
+ ],
+ "batidas": [
+  "titulo"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Peça 2,5D de referência (etapa 7): CSS 3D com perspective na cena e rotationY/rotationX/z do GSAP."
+}

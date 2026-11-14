@@ -1,0 +1,26 @@
+name: agent_estudos
+description: "Telas do módulo Estudos: leituras, grafo do conhecimento, trilhas de idiomas A1–C2 e concursos."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  agent_concursos:
+    path: ../../concursos/app
+  agent_core:
+    path: ../../../plataforma/app_core
+  agent_notas:
+    path: ../../../plataforma/app_notas
+  file_picker: ^13.3.0
+  http: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

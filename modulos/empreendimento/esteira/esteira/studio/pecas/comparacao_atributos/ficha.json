@@ -1,0 +1,143 @@
+{
+ "id": "comparacao_atributos",
+ "versao": 1,
+ "origem": "graficos",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "dois métodos ou opções frente a frente, cada um com até três atributos",
+ "intencoes": [
+  "comparacao"
+ ],
+ "exemplos_sim": [
+  "Bola de neve: paga a menor dívida primeiro, motiva rápido. Avalanche: paga a de juros maiores, economiza mais.",
+  "Alugar dá flexibilidade e menos custo inicial; comprar dá patrimônio e estabilidade.",
+  "O CDB tem garantia do FGC e liquidez diária; a LCI é isenta de imposto mas tem carência.",
+  "No plano A você paga menos por mês; no plano B quita em metade do tempo.",
+  "Cartão de débito: sem juros e sem limite extra. Crédito: prazo, pontos e risco de juros."
+ ],
+ "exemplos_nao": [
+  "Poupança rende 6% e o Tesouro 11%.",
+  "81% das famílias estão endividadas.",
+  "Passo 1: anote os gastos."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 10.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "nome_a",
+   "tipo": "texto",
+   "descricao": "nome do lado A",
+   "obrigatorio": true,
+   "max_car": 18,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Bola de neve"
+  },
+  {
+   "nome": "nome_b",
+   "tipo": "texto",
+   "descricao": "nome do lado B",
+   "obrigatorio": true,
+   "max_car": 18,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Avalanche"
+  },
+  {
+   "nome": "rotulo_a",
+   "tipo": "texto",
+   "descricao": "rótulo pequeno acima do nome A",
+   "obrigatorio": false,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Método A"
+  },
+  {
+   "nome": "rotulo_b",
+   "tipo": "texto",
+   "descricao": "rótulo pequeno acima do nome B",
+   "obrigatorio": false,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Método B"
+  },
+  {
+   "nome": "itens_a",
+   "tipo": "itens",
+   "descricao": "atributos do lado A",
+   "obrigatorio": true,
+   "max_car": 34,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 3,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "Paga a menor dívida primeiro",
+    "Motivação rápida",
+    "Paga mais juros no total"
+   ]
+  },
+  {
+   "nome": "itens_b",
+   "tipo": "itens",
+   "descricao": "atributos do lado B",
+   "obrigatorio": true,
+   "max_car": 34,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 3,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "Paga a de juros maiores",
+    "Resultado mais lento",
+    "Economiza mais no total"
+   ]
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "destaque",
+   "valores": [
+    "b",
+    "a",
+    "nenhum"
+   ],
+   "padrao": "b",
+   "descricao": "lado vencedor na cor de destaque"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Portada do gráfico antigo na etapa 3."
+}

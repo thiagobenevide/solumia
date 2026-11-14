@@ -1,0 +1,20 @@
+.venv/
+.env
+__pycache__/
+
+# Episódios: versiona só o texto (roteiro, plano, config, créditos); mídia e renders ficam fora
+projetos/**
+!projetos/*/
+!projetos/*/*/
+!projetos/*/*/roteiro.txt
+!projetos/*/*/plano.json
+!projetos/*/*/config.toml
+!projetos/*/*/creditos.txt
+!projetos/*/*/roteiro.json
+!projetos/*/*/cortes.json
+!projetos/*/*/graficos.json
+
+.venv-img/
+cache/
+acervo/
+esteira/estudio/pecas/*/prova/

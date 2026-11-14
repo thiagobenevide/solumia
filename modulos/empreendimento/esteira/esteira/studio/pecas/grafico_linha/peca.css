@@ -1,0 +1,13 @@
+/* Migrada do kit (cena grafico_linha). */
+.p-grafico_linha .glinha { gap: calc(2 * var(--U)); }
+.p-grafico_linha .gcab { display: flex; align-items: flex-end; justify-content: space-between; width: 82%; gap: calc(4 * var(--U)); text-align: left; }
+.p-grafico_linha .gcab .ngr { font-size: calc(11 * var(--U) * var(--esc, 1)); }
+.p-grafico_linha .gl { width: 82%; overflow: visible; }
+.vertical .p-grafico_linha .gl { width: 92%; }
+.vertical .p-grafico_linha .gcab { width: 92%; }
+.p-grafico_linha .gl .gr { stroke: var(--texto); stroke-width: .2; opacity: .15; stroke-dasharray: 1 1.4; }
+.p-grafico_linha .gl .gline { fill: none; stroke: var(--destaque); stroke-width: 1.1; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1;
+  filter: drop-shadow(0 0 1.2px var(--destaque)); }
+.p-grafico_linha .gl .gp { fill: var(--fundo); stroke: var(--destaque); stroke-width: .7; }
+.p-grafico_linha .gl .gp.ult { fill: var(--destaque); }
+.p-grafico_linha .gl .gtx { fill: var(--acento); font: 600 3.6px var(--fM); letter-spacing: .1em; }

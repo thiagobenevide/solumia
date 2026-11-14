@@ -1,0 +1,134 @@
+{
+ "id": "barras_vidro_fonte",
+ "versao": 1,
+ "origem": "fabrica",
+ "motor": "html",
+ "estado": "rascunho",
+ "comunica": "dois valores comparados em barras 3D que crescem e contam, com a fonte em caixa alta, uma frase citada e o rodapé da fonte, num card de vidro em perspectiva sobre a mídia",
+ "intencoes": [
+  "comparacao",
+  "numero",
+  "citacao"
+ ],
+ "exemplos_sim": [
+  "Segundo a própria Anthropic, o modelo acerta 94% dos testes, contra 71% da versão anterior.",
+  "De acordo com o IBGE, o salário médio dos homens é de 3.300 reais, contra 2.700 das mulheres.",
+  "Um estudo da USP mostra que quem dorme bem rende 40% mais do que quem dorme mal.",
+  "A pesquisa do Banco Central aponta que 68% pagam no pix e só 12% usam o boleto.",
+  "Conforme o relatório da ONU, a energia solar cresceu 24% em 2023, enquanto o carvão caiu 3%.",
+  "Os dados da Fiocruz indicam 82% de adesão à vacina em 2020 e apenas 61% em 2023.",
+  "A própria empresa admite: o tempo de resposta caiu de 8 segundos para 2."
+ ],
+ "exemplos_nao": [
+  "Vamos entender como isso funciona na prática.",
+  "Compare três opções de investimento: CDB, poupança e Tesouro.",
+  "Em 1990, 2000 e 2010 o número foi crescendo aos poucos.",
+  "Dizem que isso é muito perigoso."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 5.0,
+ "duracao_max": 10.0,
+ "tela_cheia": false,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "fonte",
+   "tipo": "texto",
+   "descricao": "título curto de quem diz ou de onde vem o dado (vira caixa alta na cor de destaque)",
+   "obrigatorio": false,
+   "max_car": 26,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "A própria Anthropic"
+  },
+  {
+   "nome": "citacao",
+   "tipo": "texto",
+   "descricao": "a frase citada, sem aspas; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 110,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "O novo modelo errou *três vezes menos* que o anterior nos testes de segurança"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "os dois valores comparados: rótulo de cada barra e o número com unidade",
+   "obrigatorio": true,
+   "max_car": 14,
+   "max_valor": 7,
+   "min_itens": 2,
+   "max_itens": 2,
+   "unidade": true,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Antes",
+     "valor": "71%"
+    },
+    {
+     "rotulo": "Agora",
+     "valor": "94%"
+    }
+   ]
+  },
+  {
+   "nome": "rodape",
+   "tipo": "texto",
+   "descricao": "a fonte técnica do dado, em letra pequena no rodapé do card",
+   "obrigatorio": false,
+   "max_car": 56,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Fonte: relatório de segurança, 2025"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "layout",
+   "valores": [
+    "lateral",
+    "flutuante"
+   ],
+   "padrao": "lateral",
+   "descricao": "lateral: card encostado na direita (topo no vertical); flutuante: card centralizado que oscila devagar"
+  },
+  {
+   "nome": "velocidade",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": "ritmo da subida das barras e da contagem"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Fundo transparente (só o vidro do card). Prismas com face frontal, topo e lateral em CSS 3D; o maior avança em profundidade no fim. Eixo com marcas 0, metade e topo calculadas do maior valor."
+}

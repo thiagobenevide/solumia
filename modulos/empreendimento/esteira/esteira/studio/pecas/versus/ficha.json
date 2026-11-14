@@ -1,0 +1,82 @@
+{
+ "id": "versus",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "duas opções lado a lado (A × B), com ou sem número",
+ "intencoes": [
+  "comparacao"
+ ],
+ "exemplos_sim": [
+  "Poupança ou Tesouro Selic: qual rende mais?",
+  "De um lado o aluguel, do outro o financiamento.",
+  "Cartão de crédito contra dinheiro vivo.",
+  "Quem paga à vista economiza 10%; quem parcela paga 25% a mais.",
+  "Renda fixa versus renda variável."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "Pense nisso antes de assinar qualquer contrato.",
+  "Esse é o ponto mais importante do vídeo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.0,
+ "duracao_max": 7.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Poupança x Tesouro"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "dois lados (A e B), com ou sem número",
+   "obrigatorio": false,
+   "max_car": 22,
+   "max_valor": 10,
+   "min_itens": 0,
+   "max_itens": 2,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Poupança",
+     "valor": "6%"
+    },
+    {
+     "rotulo": "Tesouro Selic",
+     "valor": "11%"
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

@@ -1,0 +1,136 @@
+{
+ "id": "estudo_folha_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um estudo científico citado: o trecho original em inglês sublinhado a marca-texto numa folha sobre a mesa, a tradução em português num cartão à frente e autor e ano num selo",
+ "intencoes": [
+  "citacao"
+ ],
+ "exemplos_sim": [
+  "Um estudo de 2006, publicado na Psychological Science, mostrou que testar a si mesmo ensina mais do que reler.",
+  "Segundo Roediger e Karpicke, quem praticou espaçado lembrou muito mais depois de uma semana.",
+  "Em 2012, pesquisadores de Stanford escreveram que a força de vontade depende do que a pessoa acredita sobre ela.",
+  "Esse trabalho saiu na Nature em 2019 e concluiu que dormir mal por uma semana já prejudica a glicemia.",
+  "A pesquisa de Kahneman e Tversky, de 1979, diz literalmente que as pessoas sentem a perda mais do que o ganho.",
+  "Olha o que os autores escreveram no artigo: o hábito se forma em média em 66 dias, não em 21.",
+  "Um artigo do Journal of Finance, de 2000, afirma que quem negocia demais tem retorno menor.",
+  "Vou mostrar o trecho original do estudo, que está em inglês, e já traduzo para vocês."
+ ],
+ "exemplos_nao": [
+  "Compare o CDB com a poupança.",
+  "81% das famílias brasileiras estão endividadas.",
+  "Vamos entender por que isso acontece.",
+  "Segundo a pesquisa, 40% dos jovens não têm reserva."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 4.0,
+ "duracao_max": 10.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "trecho_en",
+   "tipo": "texto",
+   "descricao": "trecho original do artigo, em inglês; o que estiver entre *asteriscos* é sublinhado pelo marca-texto (sem asteriscos, sublinha tudo)",
+   "obrigatorio": true,
+   "max_car": 170,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Students who *spaced their practice over several weeks* retained far more than those who crammed."
+  },
+  {
+   "nome": "traducao",
+   "tipo": "texto",
+   "descricao": "tradução do trecho para o português, direta e curta; *palavra* vai em destaque",
+   "obrigatorio": true,
+   "max_car": 140,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Estudantes que *espaçaram a prática ao longo de semanas* retiveram muito mais do que quem estudou de última hora."
+  },
+  {
+   "nome": "autor",
+   "tipo": "texto",
+   "descricao": "autor ou autores do estudo, como citados",
+   "obrigatorio": true,
+   "max_car": 28,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Roediger & Karpicke"
+  },
+  {
+   "nome": "ano",
+   "tipo": "texto",
+   "descricao": "ano de publicação, só os quatro dígitos",
+   "obrigatorio": false,
+   "max_car": 4,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "2006"
+  },
+  {
+   "nome": "revista",
+   "tipo": "texto",
+   "descricao": "revista ou periódico onde saiu, no cabeçalho da folha",
+   "obrigatorio": false,
+   "max_car": 32,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Psychological Science"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "marcador",
+   "valores": [
+    "destaque",
+    "acento"
+   ],
+   "padrao": "destaque",
+   "descricao": "cor do marca-texto e do selo"
+  },
+  {
+   "nome": "camera",
+   "valores": [
+    "aproxima",
+    "orbita"
+   ],
+   "padrao": "aproxima",
+   "descricao": "aproxima: desce sobre a mesa de frente; orbita: chega girando de lado"
+  }
+ ],
+ "batidas": [
+  "traducao"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Variante da citação de estudo com folha inclinada sobre a mesa. Câmera aproxima, marca-texto varre o trecho, cartão da tradução vem à frente (z), selo carimba por último."
+}

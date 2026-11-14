@@ -1,0 +1,10 @@
+/* Migrada do kit (cena conceito_icone). */
+.p-conceito_icone .conceito { position: absolute; left: calc(7 * var(--U)); right: calc(7 * var(--U)); bottom: calc(9 * var(--U)); display: flex; align-items: center; gap: calc(3.4 * var(--U)); }
+.vertical .p-conceito_icone .conceito { flex-direction: column; text-align: center; bottom: auto; top: 56%; }
+.p-conceito_icone .conceito .ci { flex: none; width: calc(15 * var(--U)); height: calc(15 * var(--U)); border-radius: 50%; display: grid; place-items: center; opacity: 0;
+  color: var(--destaque); background: color-mix(in srgb, var(--fundo) 80%, transparent); border: calc(.3 * var(--U)) solid var(--destaque);
+  box-shadow: 0 0 calc(4 * var(--U)) color-mix(in srgb, var(--destaque) 30%, transparent); }
+.p-conceito_icone .conceito .ci svg { width: 56%; height: 56%; }
+.p-conceito_icone .conceito .ci svg * { stroke-dasharray: 1; }
+.p-conceito_icone .conceito .cp { font: 800 calc(7 * var(--U))/1.05 var(--fD); letter-spacing: -.02em; text-transform: uppercase; }
+.area.split .p-conceito_icone .conceito { top: 30%; bottom: auto; }

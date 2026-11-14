@@ -1,0 +1,131 @@
+{
+ "id": "diagrama_convergencia_vidro",
+ "versao": 1,
+ "origem": "fabrica",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "capacidades (ícones com rótulo) convergem num ponto e alimentam um resultado: painel de trilhas percorridas por um cursor de tempo, num card de vidro em perspectiva",
+ "intencoes": [
+  "conceito",
+  "processo"
+ ],
+ "exemplos_sim": [
+  "A IA enxerga, ouve e entende o vídeo, e com isso monta a edição inteira.",
+  "Visão, áudio e contexto se juntam para decidir cada corte.",
+  "Três sentidos alimentam uma só ferramenta: o que ela vê, o que ela ouve e o que ela entende.",
+  "Ela lê a imagem, escuta a fala e entende o assunto, e daí sai corte, legenda e animação.",
+  "Reunindo dados, regras e histórico, o sistema chega numa decisão única.",
+  "Tudo isso converge numa linha do tempo com corte, legenda, 3D e animação.",
+  "Os três sensores trabalham juntos e o resultado aparece em cada trilha da edição."
+ ],
+ "exemplos_nao": [
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "Compare o CDB com a poupança.",
+  "Me conta nos comentários o que você achou.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 4.0,
+ "duracao_max": 12.0,
+ "tela_cheia": false,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "entradas",
+   "tipo": "itens",
+   "descricao": "os dois ou três elementos que convergem, uma palavra cada (viram ícone + rótulo)",
+   "obrigatorio": true,
+   "max_car": 10,
+   "max_valor": 16,
+   "min_itens": 2,
+   "max_itens": 3,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "Enxerga",
+    "Ouve",
+    "Entende"
+   ]
+  },
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "título do painel que recebe o resultado",
+   "obrigatorio": true,
+   "max_car": 14,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "A edição"
+  },
+  {
+   "nome": "trilhas",
+   "tipo": "itens",
+   "descricao": "as trilhas do painel, uma palavra cada",
+   "obrigatorio": true,
+   "max_car": 10,
+   "max_valor": 16,
+   "min_itens": 2,
+   "max_itens": 5,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "Corte",
+    "Legenda",
+    "3D",
+    "Animação"
+   ]
+  },
+  {
+   "nome": "selo",
+   "tipo": "texto",
+   "descricao": "número ou expressão curta em destaque no canto do painel",
+   "obrigatorio": false,
+   "max_car": 7,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "3 em 1"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "layout",
+   "valores": [
+    "lateral",
+    "flutuante"
+   ],
+   "padrao": "lateral",
+   "descricao": "lateral: card encostado à direita; flutuante: card centralizado mais inclinado"
+  },
+  {
+   "nome": "velocidade",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": "ritmo das entradas"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Card de vidro em perspectiva sobre a mídia, sem fundo cheio. Texto secundário ≥ 2,8 U. Alternativa mais leve às versões anteriores de diagrama_convergencia."
+}

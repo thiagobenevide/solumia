@@ -1,0 +1,59 @@
+{
+ "id": "frase_destaque",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "frase curta de impacto em tipografia grande",
+ "intencoes": [
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "Dívida não é falta de caráter.",
+  "O problema nunca foi o salário.",
+  "Quem não controla o dinheiro é controlado por ele.",
+  "O cartão não é dinheiro extra.",
+  "Pequenos gastos fazem grandes buracos."
+ ],
+ "exemplos_nao": [
+  "81% estão endividadas.",
+  "Passo 1: anote os gastos.",
+  "Em 1994 veio o Real."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica"
+ ],
+ "energia": "alta",
+ "peso": "texto",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 1.5,
+ "duracao_max": 6.0,
+ "tela_cheia": false,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 60,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Dívida não é falta de *caráter*"
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "swoosh"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

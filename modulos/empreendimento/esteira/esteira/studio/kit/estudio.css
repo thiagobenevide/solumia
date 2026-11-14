@@ -1,0 +1,185 @@
+/* Kit de cenas do Estúdio: tudo em var(--U) (1% do lado menor), cores e fontes da pele do estilo. */
+
+html, body { margin: 0; background: #000; }
+/* @font-face vêm de fontes.css (só as fontes do estilo); sem negrito/itálico falso em fonte de peso único */
+#root { font-synthesis: none; position: relative; overflow: hidden; background: var(--fundo); color: var(--texto); font-family: var(--fT); }
+#root > div { position: absolute; inset: 0; }
+/* caixa de cada peça do acervo (estudio/pecas): a peça posiciona o conteúdo dentro dela */
+.peca { position: absolute; inset: 0; }
+.peca .cena3d { position: absolute; inset: 0; width: 100%; height: 100%; }
+#ec { pointer-events: none; }
+#ec .peca-ec { position: absolute; inset: 0; width: 100%; height: 100%; }
+#midia .m { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* modo apresentador: a câmera numa caixa que muda de layout; a peça do SPLIT na área livre */
+#cam { pointer-events: none; }
+.camcaixa { position: absolute; overflow: hidden; box-shadow: 0 calc(1 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.55); }
+.camcaixa .camv { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* o zoom só reduz as peças; a caixa fica nas medidas da área (o Chromium não escala largura em %) */
+.area.split { position: absolute; left: 0; top: 0; width: 60%; height: 100%; zoom: .82; }
+.vertical .area.split { width: 100%; height: 58%; zoom: .8; }
+/* lateral / flutuante / sólido: os dados no lado livre da gravação (lado-esquerda | lado-direita) */
+.solta { position: absolute; top: 0; height: 100%; width: 54%; }
+.solta.lado-esquerda { left: 0; } .solta.lado-direita { right: 0; }
+.solta .area.soltas { position: absolute; inset: 0; zoom: .78; }
+.solta.lateral.lado-esquerda { background: linear-gradient(to right, rgba(0,0,0,.88), rgba(0,0,0,.72) 70%, transparent); }
+.solta.lateral.lado-direita { background: linear-gradient(to left, rgba(0,0,0,.88), rgba(0,0,0,.72) 70%, transparent); }
+.solta.flutuante, .solta.solido { top: 14%; height: 66%; width: 44%; overflow: hidden;
+  border-radius: calc(2.4 * var(--U)); border: calc(.35 * var(--U)) solid rgba(255,255,255,.85);
+  background: linear-gradient(160deg, rgba(40,44,56,.62), rgba(12,12,18,.82) 40%);
+  box-shadow: 0 0 calc(4 * var(--U)) color-mix(in srgb, var(--destaque) 55%, transparent),
+              0 calc(2 * var(--U)) calc(7 * var(--U)) rgba(0,0,0,.65); }
+.solta.solido { background: linear-gradient(160deg, color-mix(in srgb, var(--fundo2) 85%, #fff), var(--fundo2)); }
+.solta.flutuante.lado-esquerda { left: 5%; }
+.solta.flutuante.lado-direita { right: 5%; }
+.solta.solido.lado-esquerda, .solta.solido.lado-direita { left: 13%; right: auto; top: 11%; width: 74%; height: 74%; }
+.solta.flutuante .area.soltas { zoom: .6; }
+.solta.solido .area.soltas { zoom: .82; }
+.solido-fundo { position: absolute; inset: 0; background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--destaque) 18%, var(--fundo)), var(--fundo) 70%); }
+.solido-fundo .grade { position: absolute; inset: 0; opacity: calc(.5 * var(--gradeF, 1));
+  background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size: calc(6 * var(--U)) calc(6 * var(--U)); }
+/* 9:16: os dados em cima (o rosto costuma ficar no meio/baixo da gravação vertical) */
+.vertical .solta { left: 0; right: auto; width: 100%; height: 52%; }
+.vertical .solta.lateral { background: linear-gradient(to bottom, rgba(0,0,0,.74), rgba(0,0,0,.4) 65%, transparent); }
+.vertical .solta.flutuante, .vertical .solta.solido { left: 6%; right: auto; top: 6%; width: 88%; height: 44%; }
+
+#veu { background: linear-gradient(180deg, rgba(0,0,0,.25), rgba(0,0,0,.05) 35%, rgba(0,0,0,.45)); pointer-events: none; }
+#vinheta { background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55)); pointer-events: none; }
+#fx { background: #fff; opacity: 0; mix-blend-mode: screen; }
+
+/* ── cenas: linguagem das peças da esteira (graficos/modelos) ── */
+#root b { color: var(--destaque); font-weight: inherit; }
+
+/* véu das cenas só de motion: escurece e desfoca a mídia por trás */
+.tkfundo { position: absolute; inset: 0; opacity: 0; overflow: hidden; backdrop-filter: blur(calc(1.4 * var(--U))) saturate(.7);
+  background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--fundo2) 70%, transparent), color-mix(in srgb, var(--fundo) 92%, transparent) 72%); }
+.tkfundo .grade { position: absolute; inset: -10%; opacity: calc(.05 * var(--gradeF, 1));
+  background-image: linear-gradient(var(--texto) 1px, transparent 1px), linear-gradient(90deg, var(--texto) 1px, transparent 1px);
+  background-size: calc(8 * var(--U)) calc(8 * var(--U));
+  mask-image: radial-gradient(ellipse at center, #000 20%, transparent 75%); }
+.tkfundo .brilho { position: absolute; width: 60%; height: 140%; top: -20%; left: 20%; opacity: calc(.14 * var(--brilhoF, 1));
+  background: radial-gradient(ellipse, var(--destaque), transparent 65%); filter: blur(calc(5 * var(--U))); }
+/* véu parcial das peças sobre a mídia */
+.veu { position: absolute; opacity: 0; pointer-events: none; }
+.veu.baixo { left: 0; right: 0; bottom: 0; height: 62%;
+  background: linear-gradient(0deg, color-mix(in srgb, var(--fundo) 88%, transparent), color-mix(in srgb, var(--fundo) 55%, transparent) 55%, transparent); }
+.vertical .veu.baixo { height: 72%; }
+.veu.cheio { inset: 0; background: color-mix(in srgb, var(--fundo) 82%, transparent); backdrop-filter: blur(calc(1 * var(--U))); }
+
+.centro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  padding: 0 calc(10 * var(--U)); }
+.vertical .centro { padding: 0 calc(7 * var(--U)); }
+/* rótulo: mono espaçado, caixa alta, com traço antes */
+.kicker { display: flex; align-items: center; gap: calc(2 * var(--U)); font: 700 calc(2.6 * var(--U))/1 var(--fM); letter-spacing: .3em;
+  text-transform: uppercase; color: var(--destaque); opacity: 0; }
+.kicker i { display: block; width: calc(7 * var(--U)); height: calc(.3 * var(--U)); background: var(--destaque); transform-origin: 0 50%; }
+.vertical .kicker { font-size: calc(3 * var(--U)); }
+.titulo { font: 800 calc(5.8 * var(--U))/1.1 var(--fD); letter-spacing: -.02em; opacity: 0; }
+.vertical .titulo { font-size: calc(7.4 * var(--U)); }
+
+/* contador: número gigante contando, traço, legenda e fonte */
+
+.traco { width: calc(48 * var(--U)); height: calc(.4 * var(--U)); margin-top: calc(3.2 * var(--U)); background: var(--destaque); }
+
+/* barras */
+
+/* versus: dois lados, "vs" em serifa itálica e eixo no meio */
+
+/* etiqueta (terço inferior): passo, citação — faixa na cor de destaque à esquerda */
+.tag { position: absolute; left: calc(7 * var(--U)); bottom: calc(9 * var(--U)); display: flex; align-items: stretch; max-width: 62%;
+  background: color-mix(in srgb, var(--fundo) 84%, transparent); border-radius: calc(.9 * var(--U) * var(--R, 1)); overflow: hidden;
+  box-shadow: 0 calc(1.8 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.45); backdrop-filter: blur(calc(.8 * var(--U))); opacity: 0; }
+.tag::before { content: ""; flex: none; width: calc(.6 * var(--U)); background: var(--destaque); }
+.vertical .tag { left: calc(6 * var(--U)); right: calc(6 * var(--U)); max-width: none; bottom: auto; top: 60%; }
+.tag .tx { padding: calc(2.2 * var(--U)) calc(3.4 * var(--U)) calc(2.4 * var(--U)) calc(2.6 * var(--U)); }
+.tag .tk { font: 700 calc(2.1 * var(--U)) var(--fM); letter-spacing: .25em; text-transform: uppercase; color: var(--destaque); }
+.vertical .tag .tk { font-size: calc(2.4 * var(--U)); }
+
+/* lista: cartões numerados entrando em sequência */
+
+/* linha do tempo */
+
+/* conceito: ícone desenhado num anel + palavra-chave */
+
+/* pergunta: "?" gigante em serifa itálica atrás */
+
+/* capítulo: rótulo com traço + título em serifa itálica, letra a letra */
+
+/* frase de impacto: palavras com desfoque, traço em cima */
+
+.pw { display: inline-block; margin: 0 .13em; opacity: 0; }
+.pw.d { color: var(--destaque); }
+
+/* variações do estilo (regras.visual) */
+.fundo-solido .tkfundo { backdrop-filter: none; background: radial-gradient(circle at 30% 35%, var(--fundo2), var(--fundo) 70%); }
+.fundo-gradiente .tkfundo { background: linear-gradient(135deg, color-mix(in srgb, var(--fundo2) 94%, transparent), color-mix(in srgb, var(--fundo) 97%, transparent) 70%); }
+.al-esquerda .centro { align-items: flex-start; text-align: left; }
+
+.al-esquerda .traco { transform-origin: 0 50%; }
+.cartao-contorno .tag { background: transparent; backdrop-filter: none; box-shadow: none;
+  border: calc(.25 * var(--U)) solid color-mix(in srgb, var(--destaque) 70%, transparent); }
+.cartao-solido .tag { background: var(--fundo2); backdrop-filter: none; border-color: transparent; }
+
+/* CTA */
+
+/* ── grupo de cada cena (cor do gatilho e ajuste da peça) + camadas de ambiente das telas de motion ── */
+.grupo { position: absolute; inset: 0; }
+.area.split .tag { top: 30%; bottom: auto; }
+.tkfundo .poeira { position: absolute; inset: 0; }
+.tkfundo .poeira i { position: absolute; border-radius: 50%; background: var(--texto); opacity: 0; filter: blur(.5px); }
+.tkfundo .luz { position: absolute; top: -20%; bottom: -20%; left: 20%; width: 45%; opacity: 0; mix-blend-mode: screen; transform: skewX(-18deg);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--destaque) 16%, transparent), transparent); }
+.ngr { font: 800 calc(19 * var(--U) * var(--esc, 1))/1 var(--fD); letter-spacing: -.04em; font-variant-numeric: tabular-nums; white-space: nowrap;
+  color: var(--destaque); opacity: 0; border-radius: calc(2 * var(--U)); }
+.ngr small { font-size: .5em; margin-left: .04em; }
+.kick2 { font: 600 calc(2.4 * var(--U)) var(--fM); letter-spacing: .25em; text-transform: uppercase; color: var(--acento); opacity: 0; }
+.ctx { margin-top: calc(1.8 * var(--U)); max-width: calc(70 * var(--U)); font: 500 calc(3.8 * var(--U))/1.25 var(--fT); color: var(--texto); opacity: 0; }
+
+/* anel de porcentagem: 60 marcas que acendem, trilho, arco que preenche com a ponta brilhando + número que conta */
+
+/* grade 10 × 10 que acende de baixo para cima */
+
+/* equação: termos entrando, operadores girando, resultado contando com aura */
+
+/* evolução no tempo: linha que se desenha, área em gradiente, pontos, último valor contando */
+
+/* ranking: posição, barra que cresce, valor contando; depois só o 1º aceso */
+
+/* termo técnico: cartão de dicionário, termo digitado com cursor, traço e definição */
+
+/* alerta / dica: ícone desenhado com pulso e frase */
+
+/* tipografia cinética: linhas reveladas por máscara, destaque com marca-texto, leve aproximação */
+
+/* riscado: pílulas que levam um risco e apagam */
+
+/* carimbo: entra batendo, com onda */
+
+/* legenda */
+#cap .pal { position: absolute; left: 6%; right: 6%; bottom: 8%; text-align: center; opacity: 0;
+  font-family: var(--fL); font-weight: 800; font-size: calc(5 * var(--U) * var(--capT, 1)); text-shadow: 0 0 calc(1.4 * var(--U)) #000, 0 calc(.4 * var(--U)) calc(2 * var(--U)) #000; }
+.vertical #cap .pal { bottom: 24%; font-size: calc(7.4 * var(--U) * var(--capT, 1)); }
+#cap.meio .pal { bottom: auto; top: 50%; transform: translateY(-50%); }
+#cap.alta .pal { text-transform: uppercase; letter-spacing: .02em; }
+#cap.contorno .pal { text-shadow: none; -webkit-text-stroke: calc(.5 * var(--U)) #000; paint-order: stroke fill; }
+#cap.caixa .pal { text-shadow: none; }
+#cap.caixa .pal span { background: rgba(0,0,0,.72); padding: .06em .32em; border-radius: .18em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+#cap .pal .ch { color: var(--destaque); font-weight: inherit; }
+
+/* galeria: cards de vidro com as mídias do episódio em volta do apresentador */
+.gcard { position: absolute; overflow: hidden; border-radius: calc(1.8 * var(--U)); border: calc(.3 * var(--U)) solid rgba(255,255,255,.85);
+  box-shadow: 0 0 calc(3.5 * var(--U)) color-mix(in srgb, var(--destaque) 50%, transparent), 0 calc(1.5 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.6); }
+.gcard .clip { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* selo de progresso fixo no canto (layouts.selo) */
+.selo { position: absolute; top: calc(4 * var(--U)); display: flex; align-items: center; gap: calc(1.2 * var(--U));
+  padding: calc(.9 * var(--U)) calc(1.8 * var(--U)); border-radius: 999px; background: rgba(10,10,14,.62);
+  border: 1px solid rgba(255,255,255,.18); font: 700 calc(2 * var(--U))/1 var(--fT); letter-spacing: .12em; color: #fff; overflow: hidden; }
+.selo.lado-esquerda { left: calc(4 * var(--U)); } .selo.lado-direita { right: calc(4 * var(--U)); }
+.selo i { width: calc(.9 * var(--U)); height: calc(.9 * var(--U)); border-radius: 50%; background: var(--destaque); box-shadow: 0 0 calc(1 * var(--U)) var(--destaque); }
+.selo b { text-transform: uppercase; }
+.selo .selo-caps { position: relative; display: grid; font-weight: 600; letter-spacing: .02em; }
+.selo .selo-caps:not(:empty) { padding-left: calc(1.2 * var(--U)); border-left: 1px solid rgba(255,255,255,.25); }
+.selo .selo-cap { grid-area: 1 / 1; white-space: nowrap; }
+.selo .selo-cap small { font: 600 calc(1.7 * var(--U))/1 var(--fM); color: var(--destaque); margin-right: calc(.6 * var(--U)); }
+.selo em { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255,255,255,.08); }
+.selo em u { position: absolute; inset: 0; background: var(--destaque); transform-origin: 0 50%; }

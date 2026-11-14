@@ -1,0 +1,7 @@
+/* Migrada do kit (cena grade_proporcao). */
+.p-grade_proporcao .gradep { gap: calc(3 * var(--U)); }
+.p-grade_proporcao .gtopo { display: flex; flex-direction: column; align-items: center; }
+.p-grade_proporcao .gtopo .ngr { font-size: calc(13 * var(--U) * var(--esc, 1)); }
+.p-grade_proporcao .grade10 { display: grid; grid-template-columns: repeat(10, 1fr); gap: calc(.9 * var(--U)); width: calc(48 * var(--U)); }
+.p-grade_proporcao .grade10 i { position: relative; aspect-ratio: 1; border-radius: calc(.5 * var(--U) * var(--R, 1)); background: color-mix(in srgb, var(--texto) 10%, transparent); overflow: hidden; }
+.p-grade_proporcao .grade10 i b { position: absolute; inset: 0; background: var(--destaque); box-shadow: 0 0 calc(1 * var(--U)) var(--destaque); transform: scale(0); }

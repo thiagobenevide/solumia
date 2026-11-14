@@ -1,0 +1,112 @@
+{
+ "id": "abertura_capitulo",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "o início de um novo capítulo do vídeo: número do capítulo desenhado a traço, título ao lado e barra de progresso com o capítulo atual aceso",
+ "intencoes": [
+  "capitulo",
+  "transicao"
+ ],
+ "exemplos_sim": [
+  "Capítulo dois: como os juros compostos trabalham a seu favor.",
+  "Vamos para a segunda parte: onde o seu dinheiro realmente vai.",
+  "Agora, o passo três: montar a reserva de emergência.",
+  "Chegamos ao quarto bloco: os erros que mais custam caro.",
+  "Parte cinco: o que fazer a partir de hoje.",
+  "Primeiro, entenda como o cartão de crédito cobra você.",
+  "Na etapa seguinte, vamos falar de investimentos de baixo risco."
+ ],
+ "exemplos_nao": [
+  "81% das famílias brasileiras estão endividadas.",
+  "Compare o CDB com a poupança.",
+  "Não esqueça de se inscrever no canal.",
+  "Cuidado com golpes de falsa central de atendimento."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.0,
+ "duracao_max": 5.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "numero",
+   "tipo": "texto",
+   "descricao": "número do capítulo atual, só dígitos (até dois)",
+   "obrigatorio": true,
+   "max_car": 2,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "02"
+  },
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "título do capítulo, curto; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Como os juros *compostos* trabalham"
+  },
+  {
+   "nome": "total",
+   "tipo": "texto",
+   "descricao": "quantidade total de capítulos do vídeo, só dígitos (até 12); vazio esconde a barra",
+   "obrigatorio": false,
+   "max_car": 2,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "05"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "camera",
+   "valores": [
+    "plana",
+    "atravessa"
+   ],
+   "padrao": "plana",
+   "descricao": "plana = entrada 2D; atravessa = a câmera atravessa o número em perspectiva (2,5D)"
+  },
+  {
+   "nome": "progresso",
+   "valores": [
+    "segmentos",
+    "pontos"
+   ],
+   "padrao": "segmentos",
+   "descricao": "formato da barra de progresso dos capítulos"
+  }
+ ],
+ "batidas": [
+  "numero"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Variação 2,5D pelo botão camera: CSS 3D com perspective no box e leve giro contínuo até o fim."
+}

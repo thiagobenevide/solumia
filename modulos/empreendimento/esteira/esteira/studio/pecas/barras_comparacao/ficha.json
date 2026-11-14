@@ -1,0 +1,86 @@
+{
+ "id": "barras_comparacao",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "dois ou mais valores comparados em barras",
+ "intencoes": [
+  "comparacao",
+  "numero"
+ ],
+ "exemplos_sim": [
+  "O consignado cobra 24% ao ano, o cheque especial 130% e o rotativo 430%.",
+  "Em 2010 eram 18 milhões, em 2020 já eram 40 milhões.",
+  "Homens gastam 30% e mulheres 45% da renda com isso.",
+  "A poupança rendeu 6%, o CDB 11% e o Tesouro 12%.",
+  "São Paulo tem 9 mil casos e o Rio, 5 mil."
+ ],
+ "exemplos_nao": [
+  "Um em cada três jovens não tem reserva.",
+  "Primeiro, anote seus gastos.",
+  "Quer saber mais? Comenta aqui."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 8.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 48,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Juros ao ano por tipo de crédito"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "um par por barra; o último fica em destaque",
+   "obrigatorio": true,
+   "max_car": 24,
+   "max_valor": 10,
+   "min_itens": 2,
+   "max_itens": 4,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Consignado",
+     "valor": "24%"
+    },
+    {
+     "rotulo": "Cheque especial",
+     "valor": "130%"
+    },
+    {
+     "rotulo": "Rotativo",
+     "valor": "430%"
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "swoosh"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

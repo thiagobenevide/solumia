@@ -1,0 +1,10 @@
+{% for nome, s in baixando.items() %}
+<div class="flex items-center gap-3 text-xs py-1">
+  <span class="font-mono text-slate-300 w-48 truncate">{{ nome }}</span>
+  {% if s.estado == 'baixando' %}
+  <div class="h-1.5 flex-1 max-w-xs rounded-full bg-white/5 overflow-hidden"><div class="h-full bg-sky-400" style="width: {{ (100 * s.feito / s.total)|round if s.total else 0 }}%"></div></div>
+  <span class="text-slate-400">{{ s.msg }}{% if s.total %} · {{ '%.1f' % (s.feito / 1e9) }}/{{ '%.1f' % (s.total / 1e9) }} GB{% endif %}</span>
+  {% elif s.estado == 'ok' %}<span class="text-emerald-300">✓ instalado (recarregue a página para escolher)</span>
+  {% else %}<span class="text-rose-300">✗ {{ s.msg }}</span>{% endif %}
+</div>
+{% endfor %}

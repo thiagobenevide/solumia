@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-financas"
+version = "0.1.0"
+description = "Backend do módulo Finanças: extrato, orçamento, metas, cartões, carteira e análise de empresas."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "pydantic>=2.9,<3.0",
+    "python-multipart>=0.0.12",
+    # extratos em planilha: Itaú/Inter/Mercado Pago (XLSX) e Itaú antigo (XLS)
+    "openpyxl>=3.1",
+    "xlrd>=2.0",
+    # baixar documentos da CVM para o módulo Arquivos
+    "httpx>=0.27",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/financas"]

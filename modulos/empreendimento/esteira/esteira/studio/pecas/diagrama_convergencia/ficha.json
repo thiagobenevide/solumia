@@ -1,0 +1,137 @@
+{
+ "id": "diagrama_convergencia",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "vários sentidos ou capacidades (ícones com rótulo) que convergem num ponto e alimentam um resultado, mostrado num painel com título e trilhas rotuladas percorridas por um cursor de tempo",
+ "intencoes": [
+  "conceito",
+  "processo"
+ ],
+ "exemplos_sim": [
+  "A IA enxerga, ouve e entende o vídeo ao mesmo tempo.",
+  "Ela junta imagem, som e texto para decidir onde cortar.",
+  "Tudo isso converge numa só etapa: a edição.",
+  "A edição reúne corte, legenda, 3D e animação na mesma linha do tempo.",
+  "São três fontes de informação alimentando um único resultado.",
+  "O sistema lê o roteiro, escuta a voz e olha a imagem; só então monta o vídeo.",
+  "Cada trilha trabalha em paralelo, e o cursor passa por todas elas."
+ ],
+ "exemplos_nao": [
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "Compare o CDB com a poupança.",
+  "Vamos entender por que isso acontece.",
+  "Primeiro anote suas despesas; depois corte o supérfluo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 5.0,
+ "duracao_max": 12.0,
+ "tela_cheia": false,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "entradas",
+   "tipo": "pares",
+   "descricao": "as duas ou três capacidades que convergem: rótulo curto em verbo ou substantivo e a palavra do ícone",
+   "obrigatorio": true,
+   "max_car": 8,
+   "max_valor": 12,
+   "min_itens": 2,
+   "max_itens": 3,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "ENXERGA",
+     "valor": "olho"
+    },
+    {
+     "rotulo": "OUVE",
+     "valor": "ouvido"
+    },
+    {
+     "rotulo": "ENTENDE",
+     "valor": "cérebro"
+    }
+   ]
+  },
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "o resultado para onde tudo converge, título do painel (*palavra* entre asteriscos vai em destaque)",
+   "obrigatorio": true,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "A *EDIÇÃO*"
+  },
+  {
+   "nome": "trilhas",
+   "tipo": "itens",
+   "descricao": "as trilhas do painel, uma palavra cada, em ordem",
+   "obrigatorio": true,
+   "max_car": 9,
+   "max_valor": 16,
+   "min_itens": 2,
+   "max_itens": 5,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "CORTE",
+    "LEGENDA",
+    "3D",
+    "ANIMAÇÃO"
+   ]
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "layout",
+   "valores": [
+    "flutuante",
+    "lateral"
+   ],
+   "padrao": "flutuante",
+   "descricao": "flutuante = card de vidro em perspectiva; lateral = diagrama plano, só o painel com fundo"
+  },
+  {
+   "nome": "lado",
+   "valores": [
+    "direita",
+    "esquerda"
+   ],
+   "padrao": "direita",
+   "descricao": "de que lado da imagem fica o diagrama"
+  },
+  {
+   "nome": "cursor",
+   "valores": [
+    "varre",
+    "nenhum"
+   ],
+   "padrao": "varre",
+   "descricao": "varre = cursor de tempo percorre as trilhas e acende os trechos; nenhum = trechos acendem em sequência"
+  }
+ ],
+ "batidas": [
+  "titulo"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Fundo transparente: sem fundo cheio, para ir sobre o apresentador ou a mídia. Largura do card por --w (64 no 16:9, 84 no 9:16)."
+}

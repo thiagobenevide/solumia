@@ -1,0 +1,122 @@
+"""Dependências do motor de render (HyperFrames): Node, pacotes npm, Chromium e ffmpeg.
+
+Tudo fica fora do repositório e sem sudo: Node em `~/development/node` (ou `ESTUDIO_NODE`), pacotes em
+`$AGENT_DATA/empreendimento/estudio/motor/node_modules` (cada produção aponta para ele) e o Chromium do Playwright em
+`~/.cache/ms-playwright`. `estado()` diz o que falta; `instalar()` resolve (botão na aba Estúdio).
+"""
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import tarfile
+from pathlib import Path
+
+import requests
+
+from esteira.project import DATA
+
+NODE = Path(os.environ.get("ESTUDIO_NODE", "~/development/node")).expanduser()
+ENGINE = DATA / "estudio" / "motor"
+PACKAGES = {"hyperframes": "0.7.109", "playwright": "1.59.1"}
+
+
+def _chromium():
+    found = sorted(Path("~/.cache/ms-playwright").expanduser().glob("chromium-*/chrome-linux*/chrome"))
+    return str(found[-1]) if found else None
+
+
+def environment():
+    """Variáveis para rodar node/npx: Node na frente do PATH, Chromium e telemetria desligada."""
+    env = dict(os.environ, PATH=f"{NODE / 'bin'}:{os.environ.get('PATH', '')}", HYPERFRAMES_NO_TELEMETRY="1",
+               DO_NOT_TRACK="1")
+    if c := _chromium():
+        env["CHROME"] = c
+    return env
+
+
+def _version_node():
+    try:
+        return subprocess.run([str(NODE / "bin" / "node"), "-v"], capture_output=True, text=True, timeout=10).stdout.strip()
+    except OSError:
+        return None
+
+
+def state():
+    from esteira.ai import llama, local
+    ids = {m["id"] for m in llama.models() or []}
+    return {
+        "node": _version_node(),
+        "pacotes": (ENGINE / "node_modules" / "hyperframes").is_dir(),
+        "chromium": _chromium(),
+        "ffmpeg": bool(shutil.which("ffmpeg")),
+        "opencv": _opencv(),  # rosto no modo apresentador
+        "llama": llama.models() is not None,
+        "modelo_texto": local.TEXT if local.TEXT in ids else None,
+        "modelo_visao": local.VISION if local.VISION in ids else None,
+    }
+
+
+def _opencv():
+    import importlib.util
+    return importlib.util.find_spec("cv2") is not None
+
+
+def ready():
+    e = state()
+    return bool(e["node"] and e["pacotes"] and e["chromium"] and e["ffmpeg"])
+
+
+def _install_node(progresso):
+    versions = requests.get("https://nodejs.org/dist/index.json", timeout=30).json()
+    v = next(x["version"] for x in versions if x["version"].startswith("v22.") and x.get("lts"))
+    name = f"node-{v}-linux-x64.tar.xz"
+    somas = requests.get(f"https://nodejs.org/dist/{v}/SHASUMS256.txt", timeout=30).text
+    expected = next(line.split()[0] for line in somas.splitlines() if line.endswith(name))
+    progresso(f"baixando Node {v}")
+    tmp = NODE.parent / name
+    NODE.parent.mkdir(parents=True, exist_ok=True)
+    h = hashlib.sha256()
+    with requests.get(f"https://nodejs.org/dist/{v}/{name}", stream=True, timeout=60) as r, open(tmp, "wb") as f:
+        r.raise_for_status()
+        for block in r.iter_content(1 << 20):
+            f.write(block)
+            h.update(block)
+    if h.hexdigest() != expected:
+        tmp.unlink()
+        raise RuntimeError("Node baixado com checksum errado")
+    with tarfile.open(tmp) as t:
+        t.extractall(NODE.parent, filter="data")
+    tmp.unlink()
+    (NODE.parent / name.removesuffix(".tar.xz")).rename(NODE)
+
+
+def install(progresso=print):
+    """Instala o que faltar, na ordem: Node → pacotes npm → Chromium. Devolve o estado final."""
+    if not _version_node():
+        _install_node(progresso)
+    env = environment()
+    if not (ENGINE / "node_modules" / "hyperframes").is_dir():
+        progresso("instalando hyperframes e playwright (npm)")
+        ENGINE.mkdir(parents=True, exist_ok=True)
+        (ENGINE / "package.json").write_text(json.dumps({"name": "estudio-motor", "private": True, "type": "module",
+                                                        "devDependencies": PACKAGES}, indent=1))
+        subprocess.run(["npm", "install", "--no-audit", "--no-fund", "--silent"], cwd=ENGINE, env=env, check=True)
+    if not _chromium():
+        progresso("baixando o Chromium do Playwright")
+        subprocess.run(["npx", "playwright", "install", "chromium"], cwd=ENGINE, env=env, check=True)
+    if not _opencv():
+        import sys
+        progresso("instalando o OpenCV (rosto do apresentador)")
+        uv = shutil.which("uv") or str(Path.home() / ".local/bin/uv")
+        subprocess.run([uv, "pip", "install", "--python", sys.executable, "opencv-python-headless<5"], check=True)
+    return state()
+
+
+def npx(args, cwd, log=None):
+    """Roda `npx <args>` na pasta da produção (que tem node_modules → MOTOR/node_modules)."""
+    target = Path(cwd) / "node_modules"
+    if not target.exists():
+        target.symlink_to(ENGINE / "node_modules")
+    return subprocess.run(["npx", *args], cwd=cwd, env=environment(), stdout=log, stderr=subprocess.STDOUT if log else None,
+                          text=True, check=True)

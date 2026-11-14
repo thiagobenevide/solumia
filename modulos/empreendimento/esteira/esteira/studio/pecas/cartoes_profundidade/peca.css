@@ -1,0 +1,18 @@
+/* Cartões em profundidade: só variáveis da pele do kit. */
+.p-cartoes_profundidade .cp-cena { position: absolute; inset: 0; perspective: calc(140 * var(--U)); perspective-origin: 50% 40%; }
+.p-cartoes_profundidade .cp-palco { position: absolute; left: 50%; top: 56%; transform-style: preserve-3d; }
+.p-cartoes_profundidade .cp-tit { position: absolute; left: 0; right: 0; top: 14%; text-align: center; padding: 0 calc(8 * var(--U));
+  font: 800 calc(5.6 * var(--U) * var(--esc, 1))/1.1 var(--fD); letter-spacing: -.02em; opacity: 0; }
+.p-cartoes_profundidade .cp-card { position: absolute; width: calc(34 * var(--U)); margin-left: calc(-17 * var(--U));
+  margin-top: calc(-12 * var(--U)); padding: calc(3.4 * var(--U)); border-radius: calc(1.8 * var(--U) * var(--R, 1)); opacity: 0;
+  background: color-mix(in srgb, var(--fundo2) 88%, transparent); backdrop-filter: blur(calc(.6 * var(--U)));
+  border: calc(.2 * var(--U)) solid color-mix(in srgb, var(--texto) 14%, transparent);
+  box-shadow: 0 calc(3 * var(--U)) calc(8 * var(--U)) rgba(0,0,0,.5); }
+.p-cartoes_profundidade .cp-ult { border-color: var(--destaque);
+  box-shadow: 0 0 calc(4 * var(--U)) color-mix(in srgb, var(--destaque) 35%, transparent), 0 calc(3 * var(--U)) calc(8 * var(--U)) rgba(0,0,0,.5); }
+.p-cartoes_profundidade .cp-n { font: 700 calc(2.2 * var(--U)) var(--fM); letter-spacing: .2em; color: var(--destaque); }
+.p-cartoes_profundidade .cp-tx { margin-top: calc(1.4 * var(--U)); font: 700 calc(3.6 * var(--U))/1.2 var(--fT); color: var(--texto); }
+.vertical .p-cartoes_profundidade .cp-card { width: calc(70 * var(--U)); margin-left: calc(-35 * var(--U)); }
+.vertical .p-cartoes_profundidade .cp-tit { top: 12%; font-size: calc(7.6 * var(--U) * var(--esc, 1)); }
+.vertical .p-cartoes_profundidade .cp-tx { font-size: calc(4.8 * var(--U)); }
+.vertical .p-cartoes_profundidade .cp-palco { top: 52%; }

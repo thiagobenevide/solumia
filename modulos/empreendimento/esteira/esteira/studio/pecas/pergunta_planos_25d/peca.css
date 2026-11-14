@@ -1,0 +1,16 @@
+/* Pergunta em planos 2,5D: só variáveis da pele do kit. */
+.p-pergunta_planos_25d { display: flex; align-items: center; justify-content: center; }
+.p-pergunta_planos_25d .pq-cena { position: absolute; inset: 0; perspective: calc(140 * var(--U)); display: flex; align-items: center; justify-content: center; }
+.p-pergunta_planos_25d .pq-palco { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; display: flex; align-items: center; justify-content: center; }
+.p-pergunta_planos_25d .pq-fio { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; transform-style: preserve-3d; pointer-events: none; }
+.p-pergunta_planos_25d .pq-marca { font: 800 calc(52 * var(--U)) / 1 var(--fD); color: color-mix(in srgb, var(--destaque) 28%, transparent); max-width: calc(60 * var(--U)); max-height: calc(60 * var(--U)); overflow: hidden; text-align: center; }
+.p-pergunta_planos_25d .pq-anel { border: calc(.9 * var(--U)) solid color-mix(in srgb, var(--destaque) 38%, transparent); border-radius: 999px; opacity: 0; }
+.p-pergunta_planos_25d .pq-card { position: relative; max-width: calc(104 * var(--U)); padding: calc(5.5 * var(--U)) calc(7 * var(--U)); text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: calc(2.5 * var(--U));
+  background: color-mix(in srgb, var(--fundo2) 90%, transparent); border: calc(.4 * var(--U)) solid color-mix(in srgb, var(--destaque) 55%, transparent);
+  border-radius: var(--R); box-shadow: 0 calc(3 * var(--U)) calc(8 * var(--U)) rgba(0,0,0,.5); opacity: 0; }
+.p-pergunta_planos_25d .pq-q { font: 800 calc(7.2 * var(--U) * var(--esc, 1)) / 1.2 var(--fD); color: var(--texto); letter-spacing: -.01em; }
+.p-pergunta_planos_25d .pq-q .d { color: var(--destaque); }
+.vertical .p-pergunta_planos_25d .pq-card { max-width: calc(88 * var(--U)); padding: calc(6 * var(--U)) calc(5 * var(--U)); }
+.vertical .p-pergunta_planos_25d .pq-q { font-size: calc(6.4 * var(--U) * var(--esc, 1)); }
+.vertical .p-pergunta_planos_25d .pq-marca { font-size: calc(64 * var(--U)); }

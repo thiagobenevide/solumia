@@ -1,0 +1,8 @@
+/* Migrada do kit (cena frase_destaque). */
+.p-frase_destaque .frase { position: absolute; left: calc(13 * var(--U)); right: calc(13 * var(--U)); bottom: calc(13 * var(--U)); text-align: center;
+  font: 800 calc(8.4 * var(--U))/1.08 var(--fD); letter-spacing: -.02em; text-transform: uppercase; }
+.vertical .p-frase_destaque .frase { left: calc(6.5 * var(--U)); right: calc(6.5 * var(--U)); bottom: auto; top: 50%; font-size: calc(9.6 * var(--U)); }
+.p-frase_destaque .frase .barra { display: block; width: calc(11 * var(--U)); height: calc(.55 * var(--U)); margin: 0 auto calc(3 * var(--U)); background: var(--destaque); transform-origin: 50% 50%; }
+.al-esquerda .p-frase_destaque .frase { text-align: left; }
+.al-esquerda .p-frase_destaque .frase .barra { margin-left: 0; transform-origin: 0 50%; }
+.area.split .p-frase_destaque .frase { top: 30%; bottom: auto; }

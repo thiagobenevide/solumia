@@ -1,0 +1,44 @@
+/* CTA gráfico: só variáveis da pele do kit. */
+.p-cta_cursor_sino { display: flex; align-items: center; justify-content: center; }
+.p-cta_cursor_sino .cc-corpo { display: flex; flex-direction: column; align-items: center; gap: calc(4 * var(--U));
+  max-width: calc(130 * var(--U)); text-align: center; }
+.p-cta_cursor_sino .cc-texto { font: 800 calc(7.2 * var(--U) * var(--esc, 1))/1.12 var(--fD); color: var(--texto); max-width: calc(120 * var(--U)); }
+.p-cta_cursor_sino .cc-texto .d { color: var(--destaque); }
+.p-cta_cursor_sino .cc-palco { display: flex; flex-direction: column; align-items: center; }
+.p-cta_cursor_sino .cc-linha { display: flex; align-items: center; gap: calc(3 * var(--U)); }
+.p-cta_cursor_sino .cc-bt { position: relative; display: grid; padding: calc(2.6 * var(--U)) calc(5.5 * var(--U));
+  border-radius: calc(1.4 * var(--U)); background: var(--destaque); color: var(--fundo);
+  font: 800 calc(4.6 * var(--U))/1 var(--fD); white-space: nowrap; box-shadow: 0 calc(1 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.5); }
+.p-cta_cursor_sino .cc-ok { position: absolute; inset: 0; border-radius: inherit; background: var(--texto); opacity: 0; }
+.p-cta_cursor_sino .cc-l1, .p-cta_cursor_sino .cc-l2 { grid-area: 1 / 1; position: relative; z-index: 1; text-align: center; }
+.p-cta_cursor_sino .cc-l2 { opacity: 0; }
+.p-cta_cursor_sino .cc-cursor { position: absolute; left: 62%; top: 58%; width: calc(5.5 * var(--U)); height: calc(5.5 * var(--U));
+  z-index: 3; pointer-events: none; opacity: 0; filter: drop-shadow(0 calc(.4 * var(--U)) calc(.6 * var(--U)) rgba(0,0,0,.5)); }
+.p-cta_cursor_sino .cc-cursor svg { width: 100%; height: 100%; display: block; }
+.p-cta_cursor_sino .cc-sino { width: calc(8 * var(--U)); height: calc(8 * var(--U)); color: var(--destaque); }
+.p-cta_cursor_sino .cc-sino svg { width: 100%; height: 100%; display: block; }
+.p-cta_cursor_sino .cc-det { font: 800 calc(10 * var(--U))/1 var(--fD); color: var(--destaque); letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
+.p-cta_cursor_sino .cc-det small { font: 600 calc(4.4 * var(--U))/1 var(--fT); color: var(--texto); margin-left: .4em; letter-spacing: 0; }
+.p-cta_cursor_sino .cc-det.cc-txt { font: 600 calc(4.6 * var(--U))/1.25 var(--fT); color: var(--apoio); white-space: normal; max-width: calc(100 * var(--U)); }
+.p-cta_cursor_sino .cc-bolha { position: relative; display: flex; gap: calc(1.4 * var(--U)); padding: calc(3 * var(--U)) calc(4.5 * var(--U));
+  background: var(--destaque); border-radius: calc(3 * var(--U)); }
+.p-cta_cursor_sino .cc-bolha::after { content: ""; position: absolute; left: calc(4 * var(--U)); bottom: calc(-2.4 * var(--U));
+  border: calc(1.8 * var(--U)) solid transparent; border-top-color: var(--destaque); border-bottom: 0; border-left-width: calc(1.2 * var(--U)); }
+.p-cta_cursor_sino .cc-bolha span { width: calc(2 * var(--U)); height: calc(2 * var(--U)); border-radius: 50%; background: var(--fundo); display: block; }
+.p-cta_cursor_sino .cc-cena.cc-3d { perspective: calc(130 * var(--U)); }
+.p-cta_cursor_sino .cc-cartao { width: calc(58 * var(--U)); padding: calc(1.6 * var(--U)); background: var(--fundo2);
+  border: calc(.4 * var(--U)) solid color-mix(in srgb, var(--destaque) 50%, transparent); border-radius: var(--R, calc(1.4 * var(--U)));
+  box-shadow: 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5); text-align: left; transform-style: preserve-3d; }
+.p-cta_cursor_sino .cc-mini { aspect-ratio: 16 / 9; display: grid; place-items: center; border-radius: calc(.8 * var(--U));
+  background: color-mix(in srgb, var(--destaque) 35%, var(--fundo2)); }
+.p-cta_cursor_sino .cc-play { width: 0; height: 0; border-left: calc(6 * var(--U)) solid var(--destaque);
+  border-top: calc(3.6 * var(--U)) solid transparent; border-bottom: calc(3.6 * var(--U)) solid transparent; display: block; }
+.p-cta_cursor_sino .cc-tit { margin-top: calc(1.4 * var(--U)); font: 700 calc(3.6 * var(--U))/1.2 var(--fT); color: var(--texto); }
+.vertical .p-cta_cursor_sino .cc-corpo { max-width: calc(92 * var(--U)); }
+.vertical .p-cta_cursor_sino .cc-texto { font-size: calc(6.2 * var(--U) * var(--esc, 1)); max-width: calc(90 * var(--U)); }
+.vertical .p-cta_cursor_sino .cc-bt { font-size: calc(5 * var(--U)); padding: calc(2.8 * var(--U)) calc(5 * var(--U)); }
+.vertical .p-cta_cursor_sino .cc-det { font-size: calc(11 * var(--U)); }
+.vertical .p-cta_cursor_sino .cc-det.cc-txt { font-size: calc(5.2 * var(--U)); max-width: calc(88 * var(--U)); }
+.vertical .p-cta_cursor_sino .cc-cartao { width: calc(76 * var(--U)); }
+.vertical .p-cta_cursor_sino .cc-tit { font-size: calc(4.6 * var(--U)); }

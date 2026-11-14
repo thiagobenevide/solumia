@@ -1,0 +1,7 @@
+/* Fonte do dado: etiqueta do núcleo (.tag) com as linhas da fonte; só variáveis da pele. */
+.p-fonte_dado .fd-l1 { margin-top: calc(1 * var(--U)); font: 600 calc(3.4 * var(--U))/1.25 var(--fT); }
+.p-fonte_dado .fd-l2 { margin-top: calc(.6 * var(--U)); font: 500 calc(2.2 * var(--U))/1.3 var(--fM); color: var(--acento); }
+.p-fonte_dado .fd-link { display: inline-block; margin-top: calc(1.4 * var(--U)); padding: calc(.7 * var(--U)) calc(1.2 * var(--U));
+  border-radius: calc(.6 * var(--U)); background: var(--destaque); color: var(--fundo); font: 700 calc(1.8 * var(--U)) var(--fM);
+  letter-spacing: .12em; text-transform: uppercase; }
+.vertical .p-fonte_dado .fd-l1 { font-size: calc(4.4 * var(--U)); }

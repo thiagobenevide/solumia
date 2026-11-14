@@ -1,0 +1,158 @@
+{
+ "id": "citacao_pagina_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um estudo científico citado: página do artigo em perspectiva, câmera aproxima do trecho grifado, com autores, título, revista, trecho original e tradução",
+ "intencoes": [
+  "citacao"
+ ],
+ "exemplos_sim": [
+  "Um estudo da Universidade de Harvard, publicado na Nature em 2023, mostrou que o jejum reduz a glicemia.",
+  "Segundo pesquisadores da USP, quem dorme menos de seis horas tem o dobro de risco de ansiedade.",
+  "Esse artigo, publicado no The Lancet, acompanhou dez mil pessoas durante vinte anos.",
+  "Olha o que diz o trecho do paper: exercício regular melhora a memória em idosos.",
+  "A pesquisa de Kahneman e Tversky mostra que sentimos a perda duas vezes mais que o ganho.",
+  "Um estudo da revista Science concluiu que o excesso de telas atrapalha o sono das crianças.",
+  "Está no artigo original, vou deixar o link na descrição: a meditação reduziu o estresse em oito semanas.",
+  "Em 2021, pesquisadores de Oxford publicaram um trabalho sobre a eficácia da vacina em adolescentes."
+ ],
+ "exemplos_nao": [
+  "Muita gente acha que investir é complicado.",
+  "Pesquisas mostram que 70% dos brasileiros não têm reserva.",
+  "Vamos ver o passo a passo para montar a planilha.",
+  "Se inscreva no canal e ative o sininho."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 6.0,
+ "duracao_max": 16.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "pagina",
+   "tipo": "pagina",
+   "descricao": "a página do artigo (imagem) com os retângulos dos trechos grifados, em px da imagem, uma linha por retângulo",
+   "obrigatorio": true,
+   "max_car": 300,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": ""
+  },
+  {
+   "nome": "autores",
+   "tipo": "texto",
+   "descricao": "autores do estudo, no formato de citação",
+   "obrigatorio": false,
+   "max_car": 45,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Silva, M.; Oliveira, R.; Costa, T. et al."
+  },
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "título do artigo",
+   "obrigatorio": true,
+   "max_car": 70,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Efeitos do jejum intermitente sobre a glicemia em adultos"
+  },
+  {
+   "nome": "revista",
+   "tipo": "texto",
+   "descricao": "revista e ano de publicação",
+   "obrigatorio": false,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Nature Medicine · 2023"
+  },
+  {
+   "nome": "trecho_en",
+   "tipo": "texto",
+   "descricao": "o trecho original em inglês, como está no artigo",
+   "obrigatorio": true,
+   "max_car": 140,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Intermittent fasting reduced fasting glucose by 12% over eight weeks."
+  },
+  {
+   "nome": "traducao",
+   "tipo": "texto",
+   "descricao": "tradução em português do trecho; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 140,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "O jejum intermitente reduziu a glicemia de jejum em *12%* ao longo de oito semanas."
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "lado",
+   "valores": [
+    "direita",
+    "esquerda"
+   ],
+   "padrao": "direita",
+   "descricao": "lado em que a ficha do estudo aparece (a página fica no lado oposto); só vale no 16:9"
+  },
+  {
+   "nome": "perspectiva",
+   "valores": [
+    "leve",
+    "forte"
+   ],
+   "padrao": "leve",
+   "descricao": "intensidade da inclinação 3D da página"
+  },
+  {
+   "nome": "selo",
+   "valores": [
+    "sim",
+    "nao"
+   ],
+   "padrao": "sim",
+   "descricao": "selo 'link na descrição'"
+  }
+ ],
+ "batidas": [
+  "trecho_en"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Sem imagem de página, desenha uma folha com linhas no lugar. O encaixe pagina aceita objeto {img,w,h,rects} (px da imagem ou frações 0–1) ou só o endereço da imagem."
+}

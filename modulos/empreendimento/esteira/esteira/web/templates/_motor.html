@@ -1,0 +1,2 @@
+{# Selo de quem faz a operação: Python, LLM local, GPU (outro modelo) ou Claude. #}
+{% macro motor(lista) %}{% for m, txt in lista %}<span class="inline-flex items-center text-[10px] px-1.5 py-0.5 rounded-md ring-1 {{ {'py': 'bg-slate-500/10 text-slate-300 ring-slate-400/20', 'local': 'bg-teal-500/10 text-teal-300 ring-teal-400/25', 'gpu': 'bg-orange-500/10 text-orange-300 ring-orange-400/25', 'claude': 'bg-violet-500/10 text-violet-300 ring-violet-400/25'}[m] }}">{{ txt }}</span>{% endfor %}{% endmacro %}

@@ -1,0 +1,7 @@
+# Eletrônica embarcada: laranja de solda, cortes rápidos.
+[graficos]
+cor = "#ff7a1a"
+[thumb]
+cor_texto = "#ff7a1a"
+[efeitos.transicao]
+dado = ["push", "cross_dissolve", "slide"]

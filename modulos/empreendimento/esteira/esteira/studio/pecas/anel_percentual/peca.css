@@ -1,0 +1,13 @@
+/* Migrada do kit (cena anel_percentual). */
+.p-anel_percentual .anelp { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: calc(6 * var(--U)); padding: 0 calc(8 * var(--U)); }
+.vertical .p-anel_percentual .anelp { flex-direction: column; gap: calc(4 * var(--U)); }
+.p-anel_percentual .aneis { flex: none; width: calc(46 * var(--U) * var(--esc, 1)); height: calc(46 * var(--U) * var(--esc, 1)); overflow: visible; opacity: 0; }
+.p-anel_percentual .aneis .mk { stroke: var(--texto); stroke-width: .8; stroke-linecap: round; opacity: .12; }
+.p-anel_percentual .aneis .trilha { fill: none; stroke: color-mix(in srgb, var(--fundo2) 85%, var(--texto)); stroke-width: 7; }
+.p-anel_percentual .aneis .arco { fill: none; stroke: var(--destaque); stroke-width: 7; stroke-linecap: round; filter: drop-shadow(0 0 2px var(--destaque)); }
+.p-anel_percentual .aneis .ponta { fill: var(--texto); filter: drop-shadow(0 0 3px var(--destaque)); }
+.p-anel_percentual .anelt { display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
+.vertical .p-anel_percentual .anelt { align-items: center; text-align: center; }
+.p-anel_percentual .barrap { width: calc(44 * var(--U)); height: calc(1 * var(--U)); margin-top: calc(1.6 * var(--U)); border-radius: 99px; opacity: 0;
+  background: color-mix(in srgb, var(--texto) 12%, transparent); overflow: hidden; }
+.p-anel_percentual .barrap i { display: block; height: 100%; background: var(--destaque); transform-origin: 0 50%; }

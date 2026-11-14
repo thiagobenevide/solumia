@@ -1,0 +1,71 @@
+{
+ "id": "cosmoatomico-dark",
+ "nome": "Cosmoatomico · dark",
+ "canal": "cosmoatomico",
+ "modo": "dark",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "pele": {
+  "fundo": "#0c0806",
+  "fundo2": "#2b1a10",
+  "texto": "#f4ebdf",
+  "destaque": "#e08a3c",
+  "apoio": "#f5c78e",
+  "acento": "#a38f7c",
+  "fonte_destaque": "Space Grotesk",
+  "fonte_texto": "Sora",
+  "fonte_tecnica": "JetBrains Mono",
+  "fonte_editorial": "Lora",
+  "fonte_legenda": "Space Grotesk"
+ },
+ "regras": {
+  "cenas": [
+   "contador",
+   "barras_comparacao",
+   "versus",
+   "passo_a_passo",
+   "lista_itens",
+   "linha_do_tempo",
+   "citacao_estudo",
+   "conceito_icone",
+   "pergunta_destaque",
+   "titulo_capitulo",
+   "frase_destaque",
+   "cta",
+   "midia"
+  ],
+  "takeover_max": 0.55,
+  "dur_min": 1.2,
+  "takeover_max_s": 6.0,
+  "sfx_por_s": 0.8,
+  "sfx_volume": 0.45,
+  "sfx": {
+   "contador": "whoosh",
+   "barras_comparacao": "swoosh",
+   "versus": "whoosh",
+   "passo_a_passo": "pop",
+   "lista_itens": "pop",
+   "linha_do_tempo": "swoosh",
+   "citacao_estudo": "click",
+   "conceito_icone": "pop",
+   "pergunta_destaque": "ding",
+   "titulo_capitulo": "shimmer",
+   "frase_destaque": "swoosh",
+   "cta": "click"
+  },
+  "legenda": {
+   "16:9": false,
+   "9:16": true
+  },
+  "lufs": -14.0,
+  "pico": -1.0
+ },
+ "guia": "Canal Cosmoatomico: ciência, física e espaço em pt-BR. Tom de assombro e didático; números grandes (distâncias, idades, energias) merecem peça. Paleta de espaço profundo: preto amarronzado e cobre.",
+ "exemplos": [],
+ "versao": 1,
+ "travado": false,
+ "rotulo": "",
+ "salvo_em": ""
+}

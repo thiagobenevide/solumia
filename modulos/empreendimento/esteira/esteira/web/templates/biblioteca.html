@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% from "_motor.html" import motor %}
+{% block titulo %}Biblioteca · Esteira dark{% endblock %}
+{% block corpo %}
+{% set com_audio = itens|selectattr('audio')|list|length %}
+{% set projetos = itens|selectattr('ep')|list %}
+{% set prontos = projetos|selectattr('prog.final')|list|length %}
+{% set citacoes = itens|sum(attribute='citacoes') %}
+{% set shorts = itens|selectattr('formato', 'equalto', '9:16')|list|length %}
+
+<div class="flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <p class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Vault Obsidian · {{ canal }}</p>
+    <h1 class="mt-2 text-3xl sm:text-4xl font-semibold tracking-tight text-white">Roteiros para produzir</h1>
+<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Produzir: {{ motor(MOTORES["all"]) }} (cada etapa mostra o seu motor no episódio)</p>
+    <p class="mt-2 text-sm text-slate-400 max-w-2xl">Cada roteiro do vault vira um vídeo: marque os que já têm áudio gravado e envie para a esteira.
+      O que o roteiro define (falas, cenas, citações com PDF) aparece em cada episódio, na aba <b class="text-slate-200">Roteiro</b>.</p>
+  </div>
+  <form method="get" class="flex items-center gap-2 text-sm">
+    <input type="hidden" name="canal" value="{{ canal }}">
+    <select name="status_r" onchange="this.form.submit()" class="bg-tinta-850 border border-azul-400/20 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-azul-500/50">
+      <option value="">Todos os status</option>
+      {% for s in ["rascunho", "revisado", "gravado", "publicado"] %}<option value="{{ s }}" {{ 'selected' if s == status_r }}>{{ s }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+
+<div class="mt-6 flex gap-1.5 overflow-x-auto p-1 rounded-xl bg-tinta-900/70 border border-azul-400/10 w-fit max-w-full">
+  {% for c in canais %}
+  <a href="/?canal={{ c }}" class="shrink-0 px-4 py-2 rounded-lg text-sm transition {{ 'bg-azul-500 text-white shadow-[0_4px_16px_-4px_#2563eb]' if c == canal else 'text-slate-400 hover:text-white hover:bg-white/5' }}">
+    {{ c }} <span class="ml-1 text-xs font-mono {{ 'text-azul-100/80' if c == canal else 'text-slate-500' }}">{{ contagem[c] }}</span></a>
+  {% endfor %}
+</div>
+
+<div class="mt-6 grid grid-cols-2 lg:grid-cols-5 gap-3">
+  {% for rot, val, sub, cor in [("Roteiros", itens|length, "%d Shorts 9:16" % shorts, "text-white"),
+                                ("Com áudio", com_audio, "prontos para a esteira", "text-emerald-300"),
+                                ("Em projeto", projetos|length, "já importados", "text-azul-300"),
+                                ("Vídeos prontos", prontos, "final.mp4 exportado", "text-sky-300"),
+                                ("Citações com PDF", citacoes, "blocos [!cite] no vault", "text-amarelo-300")] %}
+  <div class="cartao rounded-xl px-4 py-3.5">
+    <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ rot }}</p>
+    <p class="mt-1 text-2xl font-semibold tabular-nums {{ cor }}">{{ val }}</p>
+    <p class="text-[11px] text-slate-500">{{ sub }}</p>
+  </div>
+  {% endfor %}
+</div>
+
+<form method="post" action="/produzir" id="selecao" class="mt-8">
+  {% if not itens %}
+  <div class="cartao rounded-xl p-10 text-center text-slate-400">Nenhum roteiro neste canal.</div>
+  {% endif %}
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    {% for r in itens %}
+    {% set pode = r.audio or r.ep %}
+    <label class="cartao group relative rounded-2xl p-5 flex flex-col cursor-pointer has-[:checked]:border-azul-400 has-[:checked]:bg-azul-500/[.08] has-[:checked]:ring-1 has-[:checked]:ring-azul-400/40 {{ 'opacity-55' if not pode }}">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+          <span class="grid place-items-center min-w-11 h-11 px-2 rounded-xl bg-tinta-800 border border-azul-400/15 font-mono text-sm font-semibold text-azul-300">
+            {{ ('%03d' % r.numero if r.numero else '—') ~ (r.short or '') }}</span>
+          <div class="flex flex-col gap-1 text-[11px]">
+            <span class="w-fit px-1.5 py-0.5 rounded-md {{ 'bg-violet-500/15 text-violet-300 ring-1 ring-violet-400/20' if r.formato == '9:16' else 'bg-azul-500/10 text-azul-300 ring-1 ring-azul-400/20' }}">
+              {{ 'Short · 9:16' if r.formato == '9:16' else 'Longo · 16:9' }}</span>
+            <span class="flex gap-1">
+              {% if r.modo_definido %}<span class="w-fit px-1.5 py-0.5 rounded-md {{ 'bg-teal-500/15 text-teal-300 ring-1 ring-teal-400/20' if r.modo == 'apresentador' else 'bg-slate-500/15 text-slate-300' }}">{{ '🎥 Apresentador' if r.modo == 'apresentador' else '🎙 Dark' }}</span>
+              {% else %}<span class="w-fit px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-300" title="defina modo: dark ou apresentador no roteiro">modo a definir</span>{% endif %}
+              <span class="w-fit px-1.5 py-0.5 rounded-md bg-white/5 text-slate-400">{{ r.status or 'sem status' }}</span></span>
+          </div>
+        </div>
+        <input type="checkbox" name="roteiro" value="{{ r.caminho }}" {{ 'disabled' if not pode }}
+               class="mt-1 w-5 h-5 rounded accent-[#3b82f6]" onchange="contar()">
+      </div>
+
+      <p class="mt-4 text-[15px] font-medium leading-snug text-white">{{ r.titulo }}</p>
+
+      <div class="mt-4 flex flex-wrap gap-2 text-[11px]">
+        {% if r.audio %}<span class="px-2 py-1 rounded-md bg-emerald-500/10 text-emerald-300">● áudio {{ r.audio.mb|round|int }} MB</span>
+        {% else %}<span class="px-2 py-1 rounded-md bg-white/5 text-slate-500">○ sem áudio</span>{% endif %}
+        {% if r.citacoes %}<span class="px-2 py-1 rounded-md bg-amarelo-400/10 text-amarelo-300" title="citações com PDF (blocos [!cite])">❝ {{ r.citacoes }} citaç{{ 'ão' if r.citacoes == 1 else 'ões' }}</span>
+        {% else %}<span class="px-2 py-1 rounded-md bg-white/5 text-slate-500">sem citação com PDF</span>{% endif %}
+      </div>
+
+      <div class="mt-auto pt-4">
+        {% if r.ep %}
+        {% set pct = (100 * r.prog.feitas / r.prog.total)|round|int %}
+        <div class="border-t border-white/5 pt-3">
+          <div class="flex items-center justify-between text-xs">
+            {% if r.prog.final and r.prog.desatualizado %}<span class="text-amber-300">⚠ vídeo desatualizado</span>
+            {% elif r.prog.final %}<span class="text-sky-300">✓ vídeo pronto</span>
+            {% elif r.prog.rodando %}<span class="text-azul-300 animate-pulse">{{ NOMES.get(r.prog.rodando, r.prog.rodando) }}…</span>
+            {% elif r.prog.erro %}<span class="text-rose-400">erro em {{ r.prog.erro }}</span>
+            {% else %}<span class="text-slate-400">{{ r.prog.feitas }}/{{ r.prog.total }} etapas</span>{% endif %}
+            <a href="/ep/{{ r.ep }}" class="text-azul-300 hover:text-azul-200 font-medium" onclick="event.stopPropagation()">abrir {{ r.ep }} →</a>
+          </div>
+          <div class="mt-2 h-1.5 rounded-full bg-white/5 overflow-hidden">
+            <div class="h-full rounded-full {{ 'bg-rose-500' if r.prog.erro else 'bg-gradient-to-r from-azul-500 to-sky-400' }}" style="width: {{ pct }}%"></div></div>
+        </div>
+        {% else %}
+        <p class="border-t border-white/5 pt-3 text-xs text-slate-500">{{ 'Pronto para importar e produzir' if r.audio else 'Grave e exporte o áudio para liberar' }}</p>
+        {% endif %}
+      </div>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div id="barra" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-30">
+    <div class="flex items-center gap-4 pl-5 pr-2 py-2 rounded-full bg-tinta-800/95 border border-azul-400/30 shadow-[0_20px_50px_-10px_rgba(37,99,235,.5)] backdrop-blur">
+      <span class="text-sm"><b id="n" class="text-white">0</b> selecionados</span>
+      <button class="px-5 py-2 rounded-full bg-azul-500 text-white font-semibold text-sm hover:bg-azul-400">Produzir vídeos</button>
+    </div>
+  </div>
+</form>
+<script>
+function contar() {
+  const n = document.querySelectorAll('input[name=roteiro]:checked').length;
+  document.getElementById('n').textContent = n;
+  document.getElementById('barra').classList.toggle('hidden', n === 0);
+}
+</script>
+{% endblock %}

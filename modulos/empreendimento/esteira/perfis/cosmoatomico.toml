@@ -1,0 +1,8 @@
+# Astronomia/física: azul-ciano, transições de luz.
+[graficos]
+cor = "#7cc4ff"
+[thumb]
+cor_texto = "#7cc4ff"
+[efeitos.transicao]
+revelacao = ["light_leak", "flash", "zoom_blur"]
+respiro = ["film_dissolve", "light_sweep"]

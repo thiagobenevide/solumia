@@ -1,0 +1,206 @@
+{
+ "versao": 1,
+ "fundo": "veu",
+ "fundo_tela_cheia": "tela",
+ "opacidade_veu": 0.6,
+ "elementos": [
+  {
+   "tipo": "retangulo",
+   "nome": "Moldura",
+   "x": 0.5,
+   "centralizar": true,
+   "y": 0.64,
+   "w": 0.86,
+   "h": 0.15,
+   "cor": "destaque",
+   "raio": 0.01,
+   "vertical": {
+    "y": 0.58
+   }
+  },
+  {
+   "tipo": "retangulo",
+   "nome": "Fundo da placa",
+   "x": 0.5,
+   "centralizar": true,
+   "y": 0.655,
+   "w": 0.83,
+   "h": 0.12,
+   "cor": "fundo",
+   "opacidade": 92,
+   "raio": 0.007,
+   "vertical": {
+    "y": 0.5884
+   }
+  },
+  {
+   "tipo": "elipse",
+   "nome": "Onda",
+   "x": 0.5,
+   "y": 0.715,
+   "d": 0.5,
+   "cor": "destaque",
+   "contorno": 0.004,
+   "vertical": {
+    "y": 0.62
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Título",
+   "conteudo": "{{titulo}}",
+   "x": 0.5,
+   "y": 0.736,
+   "fonte": "fD",
+   "peso": 900,
+   "tam": 0.06,
+   "cor": "texto",
+   "alinhar": "centro",
+   "caps": true,
+   "tracking": 20,
+   "vertical": {
+    "y": 0.632,
+    "tam": 0.055
+   }
+  },
+  {
+   "tipo": "retangulo",
+   "nome": "Traço",
+   "x": 0.5,
+   "centralizar": true,
+   "y": 0.81,
+   "w": 0.5,
+   "h": 0.005,
+   "cor": "acento",
+   "ancora_esq": true,
+   "vertical": {
+    "y": 0.676
+   }
+  }
+ ],
+ "animacoes": [
+  {
+   "anim": "entrar",
+   "alvo": "Moldura",
+   "de": "escala",
+   "t": "T0",
+   "dur": 0.26
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Fundo da placa",
+   "de": "escala",
+   "t": "T0",
+   "dur": 0.26
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Título",
+   "de": "escala",
+   "t": "T0",
+   "dur": 0.26
+  },
+  {
+   "anim": "desfocar",
+   "alvo": "Título",
+   "pares": [
+    [
+     0,
+     14
+    ],
+    [
+     0.26,
+     0
+    ]
+   ]
+  },
+  {
+   "anim": "desfocar",
+   "alvo": "Moldura",
+   "pares": [
+    [
+     0,
+     10
+    ],
+    [
+     0.26,
+     0
+    ]
+   ]
+  },
+  {
+   "anim": "chaves",
+   "alvo": "Moldura",
+   "prop": "escala",
+   "pares": [
+    [
+     0.26,
+     [
+      100,
+      100
+     ]
+    ],
+    [
+     0.34,
+     [
+      104,
+      104
+     ]
+    ],
+    [
+     0.5,
+     [
+      100,
+      100
+     ]
+    ]
+   ]
+  },
+  {
+   "anim": "chaves",
+   "alvo": "Onda",
+   "prop": "escala",
+   "pares": [
+    [
+     0.26,
+     [
+      60,
+      60
+     ]
+    ],
+    [
+     0.86,
+     [
+      170,
+      170
+     ]
+    ]
+   ]
+  },
+  {
+   "anim": "chaves",
+   "alvo": "Onda",
+   "prop": "opacidade",
+   "pares": [
+    [
+     0,
+     0
+    ],
+    [
+     0.26,
+     80
+    ],
+    [
+     0.86,
+     0
+    ]
+   ]
+  },
+  {
+   "anim": "tracar",
+   "alvo": "Traço",
+   "t": 0.35,
+   "dur": 0.5
+  }
+ ]
+}

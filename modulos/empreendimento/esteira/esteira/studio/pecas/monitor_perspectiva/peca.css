@@ -1,0 +1,27 @@
+/* Monitor em perspectiva: só variáveis da pele do kit; a profundidade vem do perspective da cena. */
+.p-monitor_perspectiva .mp-cena { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  perspective: calc(150 * var(--U)); perspective-origin: 50% 45%; }
+.p-monitor_perspectiva .mp-tela { position: relative; width: calc(118 * var(--U)); aspect-ratio: 16 / 10; overflow: hidden;
+  border-radius: calc(1.6 * var(--U) * var(--R, 1)); transform-style: preserve-3d; opacity: 0;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--fundo2) 92%, var(--texto)), var(--fundo));
+  border: calc(.25 * var(--U)) solid color-mix(in srgb, var(--texto) 16%, transparent);
+  box-shadow: 0 calc(6 * var(--U)) calc(14 * var(--U)) rgba(0,0,0,.55); }
+.p-monitor_perspectiva .mp-barra { display: flex; gap: calc(1 * var(--U)); padding: calc(1.6 * var(--U)) calc(2.4 * var(--U));
+  border-bottom: 1px solid color-mix(in srgb, var(--texto) 10%, transparent); }
+.p-monitor_perspectiva .mp-barra i { width: calc(1.3 * var(--U)); height: calc(1.3 * var(--U)); border-radius: 50%;
+  background: color-mix(in srgb, var(--texto) 25%, transparent); }
+.p-monitor_perspectiva .mp-barra i:first-child { background: var(--destaque); }
+.p-monitor_perspectiva .mp-conteudo { padding: calc(5 * var(--U)) calc(7 * var(--U)); text-align: left; }
+.p-monitor_perspectiva .mp-rot { font: 700 calc(2.2 * var(--U)) var(--fM); letter-spacing: .28em; text-transform: uppercase;
+  color: var(--destaque); opacity: 0; }
+.p-monitor_perspectiva .mp-tit { margin-top: calc(1.8 * var(--U)); font: 800 calc(6.2 * var(--U) * var(--esc, 1))/1.08 var(--fD);
+  letter-spacing: -.02em; color: var(--texto); opacity: 0; }
+.p-monitor_perspectiva .mp-item { position: relative; margin-top: calc(2.2 * var(--U)); padding-left: calc(3.6 * var(--U));
+  font: 500 calc(3.3 * var(--U))/1.3 var(--fT); color: color-mix(in srgb, var(--texto) 88%, transparent); opacity: 0; }
+.p-monitor_perspectiva .mp-item::before { content: ""; position: absolute; left: 0; top: .45em; width: calc(1.4 * var(--U));
+  height: calc(1.4 * var(--U)); border-radius: calc(.3 * var(--U)); background: var(--destaque); }
+.p-monitor_perspectiva .mp-reflexo { position: absolute; top: -20%; bottom: -20%; left: 20%; width: 30%; pointer-events: none;
+  transform: skewX(-18deg); background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--texto) 9%, transparent), transparent); }
+.vertical .p-monitor_perspectiva .mp-tela { width: calc(88 * var(--U)); aspect-ratio: 4 / 5; }
+.vertical .p-monitor_perspectiva .mp-tit { font-size: calc(8 * var(--U) * var(--esc, 1)); }
+.vertical .p-monitor_perspectiva .mp-item { font-size: calc(4.6 * var(--U)); }

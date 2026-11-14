@@ -1,0 +1,29 @@
+/* Placa zebra 2,5D: só variáveis da pele. */
+.p-placa_zebra_25d { display: flex; align-items: center; justify-content: center; --pz: var(--destaque); }
+.p-placa_zebra_25d.pz-atencao { --pz: var(--acento); }
+.p-placa_zebra_25d .pz-cena { position: relative; width: 100%; height: 100%; perspective: calc(140 * var(--U)); display: flex; align-items: center; justify-content: center; }
+.p-placa_zebra_25d .pz-palco { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; display: flex; align-items: center; justify-content: center; }
+.p-placa_zebra_25d .pz-faixa { position: absolute; left: 50%; width: calc(260 * var(--U)); margin-left: calc(-130 * var(--U)); height: calc(7 * var(--U)); overflow: hidden; }
+.p-placa_zebra_25d .pz-fx { position: absolute; top: 0; bottom: 0; left: calc(-100 * var(--U)); width: calc(460 * var(--U));
+  background: repeating-linear-gradient(-45deg, var(--pz) 0 calc(3 * var(--U)), var(--fundo) 0 calc(6 * var(--U))); }
+.p-placa_zebra_25d .pz-f1 { top: 10%; height: calc(6 * var(--U)); }
+.p-placa_zebra_25d .pz-f3 { bottom: 20%; height: calc(4 * var(--U)); }
+.p-placa_zebra_25d .pz-f2 { bottom: 8%; height: calc(8 * var(--U)); }
+.p-placa_zebra_25d .pz-placa { position: relative; width: calc(112 * var(--U)); box-sizing: border-box; background: var(--fundo2);
+  border: calc(.8 * var(--U)) solid var(--pz); border-radius: var(--R, calc(1.5 * var(--U))); overflow: hidden;
+  box-shadow: 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5); text-align: center; opacity: 0; }
+.p-placa_zebra_25d .pz-topo { display: flex; align-items: center; justify-content: center; gap: calc(2.5 * var(--U)); background: var(--pz); color: var(--fundo); padding: calc(1.6 * var(--U)) 0; }
+.p-placa_zebra_25d .pz-ex { display: inline-flex; align-items: center; justify-content: center; width: calc(5 * var(--U)); height: calc(5 * var(--U)); border-radius: 50%;
+  background: var(--fundo); color: var(--pz); font: 800 calc(3.6 * var(--U))/1 var(--fD); }
+.p-placa_zebra_25d .pz-nv { font: 800 calc(3.6 * var(--U))/1 var(--fD); letter-spacing: .12em; }
+.p-placa_zebra_25d .pz-tit { margin: calc(3.5 * var(--U)) calc(4 * var(--U)) 0; font: 800 calc(7.2 * var(--U))/1.08 var(--fD); color: var(--texto); letter-spacing: -.01em; }
+.p-placa_zebra_25d .pz-tx { margin: calc(2.5 * var(--U)) calc(5 * var(--U)) calc(4.5 * var(--U)); font: 500 calc(4.2 * var(--U))/1.25 var(--fT); color: var(--texto); }
+.p-placa_zebra_25d .pz-tx .d { color: var(--pz); font-weight: 800; }
+.p-placa_zebra_25d .pz-tit:last-child { margin-bottom: calc(4.5 * var(--U)); }
+.vertical .p-placa_zebra_25d .pz-placa { width: calc(88 * var(--U)); }
+.vertical .p-placa_zebra_25d .pz-tit { font-size: calc(6.4 * var(--U)); }
+.vertical .p-placa_zebra_25d .pz-tx { font-size: calc(5.2 * var(--U)); }
+.vertical .p-placa_zebra_25d .pz-nv, .vertical .p-placa_zebra_25d .pz-ex { font-size: calc(4 * var(--U)); }
+.vertical .p-placa_zebra_25d .pz-f1 { top: 12%; }
+.vertical .p-placa_zebra_25d .pz-f3 { bottom: 24%; }
+.vertical .p-placa_zebra_25d .pz-f2 { bottom: 12%; }

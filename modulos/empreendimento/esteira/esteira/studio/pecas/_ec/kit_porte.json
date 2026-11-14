@@ -1,0 +1,62 @@
+{
+  "contador": {"molde": "numero", "encaixes": [
+    {"nome": "numero", "tipo": "numero", "descricao": "número dito, com a unidade (%, R$, mil)", "obrigatorio": true, "exemplo": "81,7%", "max_car": 10, "unidade": true},
+    {"nome": "rotulo", "tipo": "texto", "descricao": "o que o número mede", "obrigatorio": true, "exemplo": "das famílias brasileiras", "max_car": 36},
+    {"nome": "contexto", "tipo": "texto", "descricao": "fonte ou contexto curto", "obrigatorio": false, "exemplo": "Fonte: CNC, 2024", "max_car": 40},
+    {"nome": "titulo", "tipo": "texto", "descricao": "título curto da peça; *palavra* entre asteriscos vai em destaque", "obrigatorio": false, "exemplo": "Endividadas", "max_car": 30}]},
+  "grade_proporcao": {"molde": "percentual_grade", "encaixes": [
+    {"nome": "numero", "tipo": "numero", "descricao": "porcentagem dita (N em cada 100)", "obrigatorio": true, "exemplo": "34%", "max_car": 6, "unidade": true},
+    {"nome": "rotulo", "tipo": "texto", "descricao": "de quem é a proporção", "obrigatorio": true, "exemplo": "jovens sem reserva", "max_car": 36},
+    {"nome": "contexto", "tipo": "texto", "descricao": "fonte ou contexto curto", "obrigatorio": false, "exemplo": "Fonte: Serasa, 2024", "max_car": 40},
+    {"nome": "titulo", "tipo": "texto", "descricao": "título curto da peça; *palavra* entre asteriscos vai em destaque", "obrigatorio": false, "exemplo": "Sem reserva de emergência", "max_car": 36}]},
+  "anel_percentual": {"molde": "anel", "encaixes": [
+    {"nome": "percentual", "tipo": "pares", "descricao": "um par: o que mede (rótulo) e a porcentagem dita (valor)", "obrigatorio": true, "exemplo": [{"rotulo": "das famílias endividadas", "valor": "81,7%"}], "max_car": 36, "max_valor": 8, "min_itens": 1, "max_itens": 1},
+    {"nome": "fonte", "tipo": "texto", "descricao": "fonte do dado (instituição, ano)", "obrigatorio": false, "exemplo": "CNC, 2024", "max_car": 30},
+    {"nome": "titulo", "tipo": "texto", "descricao": "título curto da peça; *palavra* entre asteriscos vai em destaque", "obrigatorio": false, "exemplo": "Endividamento", "max_car": 30}]},
+  "barras_comparacao": {"molde": "barras", "encaixes": [
+    {"nome": "pares", "tipo": "pares", "descricao": "um par por barra, na ordem dita; o último fica em destaque", "obrigatorio": true, "exemplo": [{"rotulo": "Consignado", "valor": "24%"}, {"rotulo": "Cheque especial", "valor": "130%"}, {"rotulo": "Rotativo", "valor": "430%"}], "max_car": 18, "max_valor": 8, "min_itens": 2, "max_itens": 4},
+    {"nome": "titulo", "tipo": "texto", "descricao": "título curto da peça; *palavra* entre asteriscos vai em destaque", "obrigatorio": false, "exemplo": "Juros ao ano por tipo de crédito", "max_car": 48},
+    {"nome": "fonte", "tipo": "texto", "descricao": "fonte do dado (instituição, ano)", "obrigatorio": false, "exemplo": "Banco Central, 2024", "max_car": 30}]},
+  "ranking": {"molde": "ranking", "encaixes": [
+    {"nome": "pares", "tipo": "pares", "descricao": "itens com valor, do maior para o menor", "obrigatorio": true, "exemplo": [{"rotulo": "Rotativo do cartão", "valor": "430%"}, {"rotulo": "Cheque especial", "valor": "130%"}, {"rotulo": "Crédito pessoal", "valor": "90%"}], "max_car": 28, "max_valor": 8, "min_itens": 3, "max_itens": 5},
+    {"nome": "titulo", "tipo": "texto", "descricao": "título curto da peça; *palavra* entre asteriscos vai em destaque", "obrigatorio": false, "exemplo": "Juros mais caros do país", "max_car": 40},
+    {"nome": "fonte", "tipo": "texto", "descricao": "fonte do dado (instituição, ano)", "obrigatorio": false, "exemplo": "Banco Central, 2024", "max_car": 30}]},
+  "linha_do_tempo": {"molde": "linha_do_tempo", "encaixes": [
+    {"nome": "pares", "tipo": "pares", "descricao": "um par por marco: o que aconteceu (rótulo) e a data (valor)", "obrigatorio": true, "exemplo": [{"rotulo": "Plano Real", "valor": "1994"}, {"rotulo": "Crise global", "valor": "2008"}, {"rotulo": "Pandemia", "valor": "2020"}], "max_car": 24, "max_valor": 10, "min_itens": 2, "max_itens": 5},
+    {"nome": "titulo", "tipo": "texto", "descricao": "título curto da peça; *palavra* entre asteriscos vai em destaque", "obrigatorio": false, "exemplo": "A escalada dos juros", "max_car": 40}]},
+  "lista_itens": {"molde": "lista", "encaixes": [
+    {"nome": "itens", "tipo": "itens", "descricao": "itens tirados da fala, curtos", "obrigatorio": true, "exemplo": ["Fatura no mínimo", "Cheque especial todo mês", "Empréstimo para pagar outro"], "max_car": 36, "min_itens": 2, "max_itens": 5},
+    {"nome": "titulo", "tipo": "texto", "descricao": "título curto da peça; *palavra* entre asteriscos vai em destaque", "obrigatorio": false, "exemplo": "Três sinais de alerta", "max_car": 40}]},
+  "riscado": {"molde": "riscado", "encaixes": [
+    {"nome": "itens", "tipo": "itens", "descricao": "o que deixar de fazer ou de pagar, um por item", "obrigatorio": true, "exemplo": ["Assinaturas paradas", "Delivery diário", "Tarifa do banco"], "max_car": 28, "min_itens": 1, "max_itens": 4},
+    {"nome": "titulo", "tipo": "texto", "descricao": "título curto da peça; *palavra* entre asteriscos vai em destaque", "obrigatorio": false, "exemplo": "O que cortar primeiro", "max_car": 36}]},
+  "passo_a_passo": {"molde": "passo", "encaixes": [
+    {"nome": "numero", "tipo": "texto", "descricao": "número do passo (só o dígito)", "obrigatorio": true, "exemplo": "1", "max_car": 3},
+    {"nome": "frase", "tipo": "texto", "descricao": "o que fazer neste passo", "obrigatorio": true, "exemplo": "Anote todos os gastos do mês", "max_car": 44}]},
+  "cta": {"molde": "chamada", "encaixes": [
+    {"nome": "frase", "tipo": "texto", "descricao": "o pedido ao espectador", "obrigatorio": true, "exemplo": "Qual é a sua maior dívida?", "max_car": 40},
+    {"nome": "acao", "tipo": "texto", "descricao": "verbo curto do botão", "obrigatorio": true, "exemplo": "Comente", "max_car": 14}]},
+  "termo_tecnico": {"molde": "termo", "encaixes": [
+    {"nome": "termo", "tipo": "texto", "descricao": "termo técnico ou nome de produto", "obrigatorio": true, "exemplo": "Spread bancário", "max_car": 24},
+    {"nome": "definicao", "tipo": "texto", "descricao": "definição curta, em linguagem simples", "obrigatorio": true, "exemplo": "a diferença entre o que o banco paga e o que cobra", "max_car": 90},
+    {"nome": "kicker", "tipo": "texto", "descricao": "classe do termo", "obrigatorio": false, "exemplo": "Termo do mercado", "max_car": 20}]},
+  "pergunta_destaque": {"molde": "pergunta", "encaixes": [
+    {"nome": "pergunta", "tipo": "texto", "descricao": "pergunta ao espectador", "obrigatorio": true, "exemplo": "Por que a gente gasta mais do que ganha?", "max_car": 70},
+    {"nome": "kicker", "tipo": "texto", "descricao": "tema curto acima da pergunta", "obrigatorio": false, "exemplo": "Pensa nisso", "max_car": 20}]},
+  "frase_destaque": {"molde": "frase", "encaixes": [
+    {"nome": "frase", "tipo": "texto", "descricao": "frase curta de impacto; *palavra* em destaque", "obrigatorio": true, "exemplo": "Dívida não é falta de *caráter*", "max_car": 60},
+    {"nome": "autor", "tipo": "texto", "descricao": "quem disse, se for citação", "obrigatorio": false, "exemplo": "", "max_car": 30}]},
+  "alerta": {"molde": "frase", "encaixes": [
+    {"nome": "frase", "tipo": "texto", "descricao": "o aviso ou a dica; *palavra* em destaque", "obrigatorio": true, "exemplo": "Nunca pague só o *mínimo* da fatura", "max_car": 48},
+    {"nome": "kicker", "tipo": "texto", "descricao": "rótulo do aviso", "obrigatorio": false, "exemplo": "Atenção", "max_car": 14}]},
+  "titulo_capitulo": {"molde": "capitulo", "encaixes": [
+    {"nome": "numero", "tipo": "texto", "descricao": "número da parte (só o número)", "obrigatorio": true, "exemplo": "2", "max_car": 3},
+    {"nome": "titulo", "tipo": "texto", "descricao": "título do capítulo", "obrigatorio": true, "exemplo": "O efeito bola de neve", "max_car": 40},
+    {"nome": "subtitulo", "tipo": "texto", "descricao": "uma linha de apoio", "obrigatorio": false, "exemplo": "", "max_car": 50}]},
+  "versus": {"molde": "dois_numeros", "encaixes": [
+    {"nome": "rotulo_a", "tipo": "texto", "descricao": "lado A", "obrigatorio": true, "exemplo": "Poupança", "max_car": 20},
+    {"nome": "numero_a", "tipo": "numero", "descricao": "número do lado A", "obrigatorio": true, "exemplo": "6%", "max_car": 8, "unidade": true},
+    {"nome": "rotulo_b", "tipo": "texto", "descricao": "lado B", "obrigatorio": true, "exemplo": "Tesouro Selic", "max_car": 20},
+    {"nome": "numero_b", "tipo": "numero", "descricao": "número do lado B", "obrigatorio": true, "exemplo": "11%", "max_car": 8, "unidade": true},
+    {"nome": "titulo", "tipo": "texto", "descricao": "título curto da peça; *palavra* entre asteriscos vai em destaque", "obrigatorio": false, "exemplo": "Poupança × Tesouro", "max_car": 40}]}
+}

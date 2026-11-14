@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_motor.html" import motor %}
+{% block titulo %}Acervo · Esteira dark{% endblock %}
+{% block corpo %}
+<div class="flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <p class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Mídia reaproveitável</p>
+    <h1 class="mt-2 text-3xl sm:text-4xl font-semibold tracking-tight text-white">Acervo</h1>
+<p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Busca no acervo: {{ motor([('py', 'Python (SQLite)')]) }} · descrições: {{ motor([('local', 'visão local (GPU)')]) }}</p>
+    <p class="mt-2 text-sm text-slate-400 max-w-2xl">Toda imagem e vídeo baixado dos bancos fica aqui com crédito, licença, termos de busca,
+      descrição do modelo de visão e onde já foi usado. A busca de mídia consulta o acervo antes de chamar as APIs.</p>
+  </div>
+  <form method="get" class="flex flex-wrap items-center gap-2 text-sm">
+    <input name="q" value="{{ q }}" placeholder="buscar (inglês): credit card, debt, city night…"
+           class="w-72 bg-tinta-850 border border-azul-400/20 rounded-lg px-3 py-2 text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-azul-500/50">
+    <select name="tipo" onchange="this.form.submit()" class="bg-tinta-850 border border-azul-400/20 rounded-lg px-3 py-2 text-slate-200">
+      <option value="">Tudo</option><option value="video" {{ 'selected' if tipo == 'video' }}>Vídeos</option><option value="imagem" {{ 'selected' if tipo == 'imagem' }}>Imagens</option>
+    </select>
+    <button class="px-4 py-2 rounded-lg bg-azul-500 text-white font-medium hover:bg-azul-400">Buscar</button>
+  </form>
+</div>
+
+<div class="mt-6 grid grid-cols-2 lg:grid-cols-5 gap-3">
+  {% for rot, val, sub, cor in [("Itens", e.itens, "%.2f GB em disco" % e.gb, "text-white"),
+                                ("Vídeos", e.videos, "clipes guardados", "text-azul-300"),
+                                ("Imagens", e.imagens, "fotos guardadas", "text-sky-300"),
+                                ("Descritos", e.descritos, "pelo modelo de visão local", "text-teal-300"),
+                                ("Usos", e.usos, "%d mídias já usadas" % e.reusados, "text-amarelo-300")] %}
+  <div class="cartao rounded-xl px-4 py-3.5">
+    <p class="text-[11px] uppercase tracking-wider text-slate-500">{{ rot }}</p>
+    <p class="mt-1 text-2xl font-semibold tabular-nums {{ cor }}">{{ val }}</p>
+    <p class="text-[11px] text-slate-500">{{ sub }}</p>
+  </div>
+  {% endfor %}
+</div>
+
+{% if not itens %}
+<div class="mt-8 cartao rounded-xl p-10 text-center text-slate-400">{{ 'Nada encontrado para "%s".' % q if q else 'Acervo vazio: rode ./dark library import ou produza um episódio.' }}</div>
+{% endif %}
+<div class="mt-8 grid gap-4 grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+  {% for it in itens %}
+  <div class="cartao rounded-2xl overflow-hidden flex flex-col">
+    <div class="relative aspect-video bg-tinta-900">
+      <img src="/acervo/mini/{{ it.id }}" loading="lazy" class="w-full h-full object-cover">
+      <span class="absolute top-2 left-2 text-[10px] font-mono px-1.5 py-0.5 rounded bg-black/70 text-slate-200">{{ it.provedor }}</span>
+      <span class="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded {{ 'bg-azul-500/80 text-white' if it.tipo == 'video' else 'bg-black/70 text-slate-200' }}">
+        {{ ('▶ %.0fs' % it.duracao) if it.tipo == 'video' else 'foto' }}</span>
+      {% if it.usos %}<span class="absolute bottom-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-amarelo-400/90 text-black font-semibold">{{ it.usos|length }} uso{{ 's' if it.usos|length > 1 }}</span>{% endif %}
+    </div>
+    <div class="p-3 text-xs space-y-1.5 flex-1">
+      {% if it.descricao %}<p class="text-slate-200 leading-snug line-clamp-2">{{ it.descricao }}</p>{% endif %}
+      <p class="text-slate-400 line-clamp-2"><span class="text-slate-500">termos:</span> {{ it.termos|join(' · ') }}</p>
+      <p class="text-slate-500 font-mono">{{ it.largura }}×{{ it.altura }} · {{ it.orientacao }}</p>
+      {% if it.usos %}<p class="text-slate-500 truncate">usado em: {% for u in it.usos[:3] %}<a href="/ep/{{ u.ep }}" class="text-azul-300 hover:text-azul-200">{{ u.ep }}</a>{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

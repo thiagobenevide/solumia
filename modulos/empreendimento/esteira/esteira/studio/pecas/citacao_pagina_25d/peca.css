@@ -1,0 +1,50 @@
+/* Citação de estudo 2,5D: só variáveis da pele (cores, fontes, --U). */
+.p-citacao_pagina_25d .cp-cena { position: absolute; inset: 0; perspective: calc(130 * var(--U)); perspective-origin: 38% 50%; }
+.p-citacao_pagina_25d.cp-esq .cp-cena { perspective-origin: 62% 50%; }
+.p-citacao_pagina_25d .cp-janela { position: absolute; left: calc(7 * var(--U)); top: 50%; margin-top: calc(-42 * var(--U));
+  width: calc(62 * var(--U)); height: calc(84 * var(--U)); overflow: hidden; background: var(--fundo2);
+  border-radius: calc(1.2 * var(--U)); box-shadow: 0 calc(4 * var(--U)) calc(9 * var(--U)) rgba(0,0,0,.5);
+  outline: calc(.2 * var(--U)) solid color-mix(in srgb, var(--texto) 25%, transparent); opacity: 0; }
+.p-citacao_pagina_25d.cp-esq .cp-janela { left: auto; right: calc(7 * var(--U)); }
+.p-citacao_pagina_25d .cp-folha { position: relative; width: 100%; will-change: transform; }
+.p-citacao_pagina_25d .cp-camada { position: absolute; inset: 0; }
+.p-citacao_pagina_25d .cp-img { display: block; width: 100%; height: 100%; }
+.p-citacao_pagina_25d .cp-papel { position: absolute; inset: 0; background: color-mix(in srgb, var(--texto) 90%, var(--fundo)); }
+.p-citacao_pagina_25d .cp-linha { position: absolute; left: 12%; height: 1.1%; border-radius: 99px;
+  background: color-mix(in srgb, var(--fundo) 55%, transparent); }
+.p-citacao_pagina_25d .cp-marca { position: absolute; background: var(--destaque); opacity: 0; mix-blend-mode: multiply;
+  border-radius: calc(.4 * var(--U)); }
+.p-citacao_pagina_25d .cp-lupa { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 calc(12 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.35); }
+
+.p-citacao_pagina_25d .cp-ficha { position: absolute; left: calc(78 * var(--U)); width: calc(92 * var(--U)); top: 0; bottom: 0;
+  display: flex; flex-direction: column; justify-content: center; align-items: flex-start; }
+.p-citacao_pagina_25d.cp-esq .cp-ficha { left: calc(7 * var(--U)); }
+.p-citacao_pagina_25d .cp-autores { font: 700 calc(3.6 * var(--U))/1.2 var(--fT); color: var(--texto); }
+.p-citacao_pagina_25d .cp-titulo { margin-top: calc(1.2 * var(--U)); font: italic 600 calc(4.4 * var(--U))/1.15 var(--fE); color: var(--texto); }
+.p-citacao_pagina_25d .cp-revista { margin-top: calc(1 * var(--U)); font: 500 calc(2.8 * var(--U))/1.3 var(--fM);
+  color: color-mix(in srgb, var(--texto) 88%, transparent); }
+.p-citacao_pagina_25d .cp-leg { margin-top: calc(2.8 * var(--U)); font: 700 calc(2.5 * var(--U))/1.2 var(--fM);
+  letter-spacing: .2em; color: var(--destaque); }
+.p-citacao_pagina_25d .cp-en { margin-top: calc(.8 * var(--U)); font: italic 400 calc(3.2 * var(--U))/1.3 var(--fT);
+  color: color-mix(in srgb, var(--texto) 90%, transparent); }
+.p-citacao_pagina_25d .cp-trad { margin-top: calc(.8 * var(--U)); padding-left: calc(2.2 * var(--U));
+  border-left: calc(.5 * var(--U)) solid var(--destaque); font: 600 calc(4.2 * var(--U))/1.28 var(--fE); color: var(--texto); }
+.p-citacao_pagina_25d .cp-trad::before { content: "\201C"; color: var(--destaque); }
+.p-citacao_pagina_25d .cp-trad::after { content: "\201D"; color: var(--destaque); }
+.p-citacao_pagina_25d .cp-trad .d { color: var(--destaque); }
+.p-citacao_pagina_25d .cp-selo { margin-top: calc(2.6 * var(--U)); padding: calc(1 * var(--U)) calc(2 * var(--U));
+  border-radius: calc(.8 * var(--U)); background: var(--destaque); color: var(--fundo);
+  font: 700 calc(2.6 * var(--U))/1.2 var(--fM); letter-spacing: .12em; }
+
+.vertical .p-citacao_pagina_25d .cp-cena { perspective-origin: 50% 20%; }
+.vertical .p-citacao_pagina_25d .cp-janela { left: calc(8 * var(--U)); top: calc(6 * var(--U)); margin-top: 0;
+  width: calc(84 * var(--U)); height: calc(58 * var(--U)); }
+.vertical .p-citacao_pagina_25d.cp-esq .cp-janela { left: calc(8 * var(--U)); right: auto; }
+.vertical .p-citacao_pagina_25d .cp-ficha,
+.vertical .p-citacao_pagina_25d.cp-esq .cp-ficha { left: calc(8 * var(--U)); width: calc(84 * var(--U)); top: calc(68 * var(--U)); bottom: calc(5 * var(--U)); justify-content: flex-start; }
+.vertical .p-citacao_pagina_25d .cp-autores { font-size: calc(3.6 * var(--U)); }
+.vertical .p-citacao_pagina_25d .cp-titulo { font-size: calc(4.4 * var(--U)); }
+.vertical .p-citacao_pagina_25d .cp-leg { margin-top: calc(2.2 * var(--U)); }
+.vertical .p-citacao_pagina_25d .cp-en { font-size: calc(3.4 * var(--U)); }
+.vertical .p-citacao_pagina_25d .cp-trad { font-size: calc(4.6 * var(--U)); }
+.vertical .p-citacao_pagina_25d .cp-selo { margin-top: calc(2 * var(--U)); }

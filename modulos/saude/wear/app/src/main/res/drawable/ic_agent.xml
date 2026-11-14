@@ -1,0 +1,28 @@
+<!-- logo do Agent (a mesma do app do celular): gradiente azul→roxo com o nó central e três nós -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="256"
+    android:viewportHeight="256">
+    <path android:pathData="M128,0a128,128 0,1 0,0.01 0z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0" android:startY="0"
+                android:endX="256" android:endY="256">
+                <item android:offset="0" android:color="#FF356BEC" />
+                <item android:offset="0.5" android:color="#FF5557E8" />
+                <item android:offset="1" android:color="#FF7543E5" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="11"
+        android:strokeLineCap="round"
+        android:pathData="M128,136L128,79M128,136L73,175M128,136L183,175" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M128,61a18,18 0,1 0,0.01 0zM73,157a18,18 0,1 0,0.01 0zM183,157a18,18 0,1 0,0.01 0zM128,107a29,29 0,1 0,0.01 0z" />
+</vector>

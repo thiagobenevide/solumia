@@ -1,0 +1,10 @@
+/* Barras 3D: o canvas é do kit (.cena3d); rótulos HTML presos às barras, só com as variáveis da pele. */
+.p-barras_3d .b3-tit { position: absolute; left: 0; right: 0; top: 9%; text-align: center; padding: 0 calc(8 * var(--U));
+  font: 800 calc(5.4 * var(--U) * var(--esc, 1))/1.1 var(--fD); letter-spacing: -.02em; opacity: 0; }
+.p-barras_3d .b3-rot { position: absolute; transform: translate(-50%, -100%); text-align: center; white-space: nowrap; opacity: 0; }
+.p-barras_3d .b3-v { font: 800 calc(4.6 * var(--U) * var(--esc, 1))/1 var(--fD); color: var(--texto); font-variant-numeric: tabular-nums; }
+.p-barras_3d .b3-r { margin-top: calc(.6 * var(--U)); font: 600 calc(2.2 * var(--U)) var(--fM); letter-spacing: .12em;
+  text-transform: uppercase; color: var(--acento); }
+.p-barras_3d .b3-ult .b3-v { color: var(--destaque); }
+.vertical .p-barras_3d .b3-tit { top: 12%; font-size: calc(7 * var(--U) * var(--esc, 1)); }
+.vertical .p-barras_3d .b3-v { font-size: calc(5.4 * var(--U) * var(--esc, 1)); }

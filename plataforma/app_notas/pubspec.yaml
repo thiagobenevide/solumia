@@ -1,0 +1,20 @@
+name: agent_notas
+description: "Notas com links e relações (compatíveis com o Obsidian): editor, painéis de relações e de análise reutilizáveis pelos módulos."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  agent_core:
+    path: ../app_core
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

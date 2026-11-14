@@ -1,0 +1,23 @@
+.p-capitulo_degraus_25d { display: flex; align-items: center; justify-content: center; padding: calc(6 * var(--U)); box-sizing: border-box; }
+.p-capitulo_degraus_25d .cd-cena { perspective: calc(130 * var(--U)); width: 100%; display: flex; align-items: center; justify-content: center; }
+.p-capitulo_degraus_25d .cd-palco { transform-style: preserve-3d; display: flex; flex-direction: column; align-items: center; gap: calc(6 * var(--U)); max-width: 100%; }
+.p-capitulo_degraus_25d .cd-linha { transform-style: preserve-3d; display: flex; align-items: center; gap: calc(6 * var(--U)); }
+.p-capitulo_degraus_25d .cd-num { position: relative; transform-style: preserve-3d; flex: none; }
+.p-capitulo_degraus_25d .cd-ly { position: absolute; left: 0; top: 0; font: 800 calc(34 * var(--U) * var(--esc, 1))/1 var(--fD); color: var(--destaque); letter-spacing: -.03em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.p-capitulo_degraus_25d .cd-ly.cd-fr { position: relative; color: var(--destaque); text-shadow: 0 calc(1 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.5); }
+.p-capitulo_degraus_25d .cd-col { display: flex; flex-direction: column; align-items: flex-start; max-width: calc(78 * var(--U)); transform-style: preserve-3d; }
+.p-capitulo_degraus_25d .cd-titulo { margin-top: calc(2 * var(--U)); font: 800 calc(7.5 * var(--U) * var(--esc, 1))/1.1 var(--fD); color: var(--texto); }
+.p-capitulo_degraus_25d .cd-titulo .d { color: var(--destaque); }
+.p-capitulo_degraus_25d .cd-sub { margin-top: calc(2.5 * var(--U)); font: 500 calc(3.8 * var(--U))/1.25 var(--fT); color: var(--texto); }
+.p-capitulo_degraus_25d .cd-sub .d { color: var(--destaque); }
+.p-capitulo_degraus_25d .cd-trilha { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(2 * var(--U)); max-width: calc(150 * var(--U)); transform-style: preserve-3d; }
+.p-capitulo_degraus_25d .cd-et { font: 700 calc(3.2 * var(--U))/1.2 var(--fT); padding: calc(1.2 * var(--U)) calc(2.4 * var(--U)); border-radius: var(--R, 999px); color: var(--texto);
+  background: color-mix(in srgb, var(--fundo) 85%, transparent); border: calc(.35 * var(--U)) solid color-mix(in srgb, var(--texto) 60%, transparent); }
+.p-capitulo_degraus_25d .cd-et.cd-on { background: var(--destaque); color: var(--fundo); border-color: var(--destaque); }
+.vertical .p-capitulo_degraus_25d .cd-linha { flex-direction: column; gap: calc(3 * var(--U)); }
+.vertical .p-capitulo_degraus_25d .cd-ly { font-size: calc(26 * var(--U) * var(--esc, 1)); }
+.vertical .p-capitulo_degraus_25d .cd-col { align-items: center; text-align: center; max-width: calc(88 * var(--U)); }
+.vertical .p-capitulo_degraus_25d .cd-titulo { font-size: calc(8 * var(--U) * var(--esc, 1)); }
+.vertical .p-capitulo_degraus_25d .cd-sub { font-size: calc(4.6 * var(--U)); }
+.vertical .p-capitulo_degraus_25d .cd-et { font-size: calc(3.6 * var(--U)); }
+.vertical .p-capitulo_degraus_25d .cd-trilha { max-width: calc(88 * var(--U)); }

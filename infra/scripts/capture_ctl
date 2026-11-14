@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Studio shortcuts for keyboard/tablet buttons: capture_ctl draw | clear | undo | zoom-in | zoom-out |
+# zoom-reset | record | stop | scene NAME
+cd "$(dirname "$0")/../../modulos/empreendimento/capture"
+exec /usr/bin/python3 -m capture.ctl "$@"

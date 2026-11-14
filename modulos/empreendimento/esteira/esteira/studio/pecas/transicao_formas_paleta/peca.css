@@ -1,0 +1,19 @@
+/* Transição por formas: só variáveis da pele do kit. Painéis sempre em cores vivas, nunca no tom do fundo. */
+.p-transicao_formas_paleta { display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.p-transicao_formas_paleta .tf-diag { position: absolute; left: 50%; top: 50%; }
+.p-transicao_formas_paleta .tf-painel { position: absolute; inset: 0; transform: translateX(-101%); }
+.p-transicao_formas_paleta .tf-c1 { background: var(--destaque); }
+.p-transicao_formas_paleta .tf-c2 { background: var(--apoio); }
+.p-transicao_formas_paleta .tf-c3 { background: var(--acento); }
+.p-transicao_formas_paleta .tf-faixas { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.p-transicao_formas_paleta .tf-faixa { flex: 1 1 0; margin-bottom: -1px; transform: scaleX(0); transform-origin: 0% 50%; }
+.p-transicao_formas_paleta .tf-iris { position: absolute; inset: 0; overflow: hidden; }
+.p-transicao_formas_paleta .tf-disco { position: absolute; border-radius: 50%; width: 0; height: 0; }
+.p-transicao_formas_paleta .tf-furo { position: absolute; border-radius: 50%; width: 0; height: 0; visibility: hidden;
+  box-shadow: 0 0 0 calc(1.6 * var(--U)) var(--destaque), 0 0 0 calc(3.2 * var(--U)) var(--apoio), 0 0 0 calc(260 * var(--U)) var(--acento); }
+.p-transicao_formas_paleta .tf-pal { position: relative; z-index: 5; max-width: calc(120 * var(--U)); text-align: center;
+  padding: calc(2.6 * var(--U)) calc(5 * var(--U)); background: var(--fundo); color: var(--texto);
+  border: calc(.9 * var(--U)) solid var(--texto); border-radius: var(--R, 12px);
+  box-shadow: 0 calc(1 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.5);
+  font: 800 calc(9 * var(--U) * var(--esc, 1))/1.1 var(--fD); text-transform: uppercase; letter-spacing: .02em; opacity: 0; visibility: hidden; }
+.vertical .p-transicao_formas_paleta .tf-pal { font-size: calc(7 * var(--U) * var(--esc, 1)); max-width: calc(90 * var(--U)); padding: calc(2.6 * var(--U)) calc(4 * var(--U)); }

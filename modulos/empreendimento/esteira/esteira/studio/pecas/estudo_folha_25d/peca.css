@@ -1,0 +1,48 @@
+/* Citação de estudo 2,5D: só variáveis da pele do kit. */
+.p-estudo_folha_25d .ep-cena { position: absolute; inset: 0; perspective: calc(140 * var(--U)); perspective-origin: 50% 50%; }
+.p-estudo_folha_25d .ep-palco { position: absolute; inset: 0; transform-style: preserve-3d; }
+
+.p-estudo_folha_25d .ep-folha { position: absolute; left: 50%; top: 50%; width: calc(96 * var(--U)); height: calc(60 * var(--U));
+  margin: calc(-36 * var(--U)) 0 0 calc(-48 * var(--U)); box-sizing: border-box; padding: calc(5 * var(--U)) calc(6 * var(--U));
+  display: flex; flex-direction: column; gap: calc(2 * var(--U)); overflow: hidden;
+  background: var(--texto); color: var(--fundo); border-radius: calc(.6 * var(--U));
+  box-shadow: 0 calc(3 * var(--U)) calc(8 * var(--U)) rgba(0,0,0,.5); }
+.p-estudo_folha_25d .ep-cab { font: 600 calc(2.2 * var(--U))/1.1 var(--fM); text-transform: uppercase; letter-spacing: .12em;
+  padding-bottom: calc(1.6 * var(--U)); border-bottom: calc(.25 * var(--U)) solid color-mix(in srgb, var(--fundo) 35%, transparent);
+  min-height: calc(2.4 * var(--U)); overflow-wrap: anywhere; }
+.p-estudo_folha_25d .ep-fio { flex: none; height: calc(1.1 * var(--U)); border-radius: 999px;
+  background: color-mix(in srgb, var(--fundo) 16%, transparent); }
+.p-estudo_folha_25d .ep-tx { margin: calc(1.5 * var(--U)) 0; font: 500 calc(3.3 * var(--U))/1.5 var(--fE); color: var(--fundo);
+  overflow-wrap: anywhere; }
+.p-estudo_folha_25d .ep-m { color: inherit; padding: 0 .12em; background-color: transparent; background-repeat: no-repeat;
+  background-position: 0 88%; background-size: 0% 72%;
+  background-image: linear-gradient(color-mix(in srgb, var(--destaque) 62%, transparent), color-mix(in srgb, var(--destaque) 62%, transparent)); }
+.p-estudo_folha_25d.ep-acento .ep-m {
+  background-image: linear-gradient(color-mix(in srgb, var(--acento) 62%, transparent), color-mix(in srgb, var(--acento) 62%, transparent)); }
+
+.p-estudo_folha_25d .ep-card { position: absolute; left: 50%; top: 50%; width: calc(70 * var(--U)); box-sizing: border-box;
+  margin: calc(4 * var(--U)) 0 0 calc(-11 * var(--U)); padding: calc(3.5 * var(--U)) calc(4 * var(--U));
+  background: var(--fundo2); color: var(--texto); border-left: calc(1 * var(--U)) solid var(--destaque);
+  border-radius: var(--R, calc(1 * var(--U))); box-shadow: 0 calc(2 * var(--U)) calc(6 * var(--U)) rgba(0,0,0,.5); }
+.p-estudo_folha_25d .ep-rot { font: 700 calc(2.2 * var(--U))/1 var(--fM); text-transform: uppercase; letter-spacing: .14em;
+  color: var(--destaque); margin-bottom: calc(1 * var(--U)); }
+.p-estudo_folha_25d .ep-ct { font: 600 calc(3.4 * var(--U))/1.35 var(--fT); overflow-wrap: anywhere; }
+.p-estudo_folha_25d .ep-ct .d { color: var(--destaque); }
+.p-estudo_folha_25d.ep-acento .ep-card { border-left-color: var(--acento); }
+.p-estudo_folha_25d.ep-acento .ep-rot, .p-estudo_folha_25d.ep-acento .ep-ct .d { color: var(--acento); }
+
+.p-estudo_folha_25d .ep-selo { position: absolute; left: 50%; top: 50%; box-sizing: border-box; max-width: calc(38 * var(--U));
+  margin: calc(14 * var(--U)) 0 0 calc(-52 * var(--U)); padding: calc(1.8 * var(--U)) calc(3 * var(--U));
+  display: flex; flex-direction: column; align-items: flex-start; gap: calc(.4 * var(--U));
+  background: var(--destaque); color: var(--fundo); border-radius: calc(2 * var(--U));
+  box-shadow: 0 calc(1.5 * var(--U)) calc(4 * var(--U)) rgba(0,0,0,.5); }
+.p-estudo_folha_25d.ep-acento .ep-selo { background: var(--acento); }
+.p-estudo_folha_25d .ep-ano { font: 800 calc(6 * var(--U))/1 var(--fD); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.p-estudo_folha_25d .ep-aut { font: 700 calc(3 * var(--U))/1.15 var(--fT); overflow-wrap: anywhere; }
+
+.vertical .p-estudo_folha_25d .ep-folha { width: calc(86 * var(--U)); height: calc(74 * var(--U));
+  margin: calc(-66 * var(--U)) 0 0 calc(-43 * var(--U)); padding: calc(5 * var(--U)) calc(5 * var(--U)); }
+.vertical .p-estudo_folha_25d .ep-tx { font-size: calc(3.8 * var(--U)); }
+.vertical .p-estudo_folha_25d .ep-card { width: calc(74 * var(--U)); margin: calc(14 * var(--U)) 0 0 calc(-37 * var(--U)); }
+.vertical .p-estudo_folha_25d .ep-ct { font-size: calc(4.2 * var(--U)); }
+.vertical .p-estudo_folha_25d .ep-selo { margin: calc(58 * var(--U)) 0 0 calc(-40 * var(--U)); }

@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Cria o venv do XTTS-v2 (fala do worker) e baixa o modelo (~1,8 GB na primeira vez).
+set -euo pipefail
+dir="$(cd "$(dirname "$0")/../../plataforma/worker/xtts" && pwd)"
+uv="$(command -v uv || echo "$HOME/.local/bin/uv")"
+"$uv" venv -q -p 3.12 "$dir/.venv"
+"$uv" pip install -q -p "$dir/.venv/bin/python" --index-strategy unsafe-best-match -r "$dir/requirements.txt"
+teste="$(mktemp --suffix=.wav)"
+echo "{\"texto\": \"Pronto.\", \"saida\": \"$teste\"}" \
+    | "$dir/.venv/bin/python" "$dir/servidor.py" "Ana Florence" pt | tail -n 1
+rm -f "$teste"

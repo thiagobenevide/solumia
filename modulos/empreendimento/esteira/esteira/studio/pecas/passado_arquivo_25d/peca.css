@@ -1,0 +1,35 @@
+/* Passado em arquivo 2,5D: só variáveis da pele do kit. */
+.p-passado_arquivo_25d { display: flex; align-items: center; justify-content: center; }
+.p-passado_arquivo_25d .pa-cena { position: absolute; inset: 0; perspective: calc(130 * var(--U)); perspective-origin: 50% 45%; }
+.p-passado_arquivo_25d .pa-palco { position: absolute; inset: 0; display: grid; justify-content: center; align-content: center;
+  grid-template-columns: calc(110 * var(--U)); transform-style: preserve-3d; transform: translateY(calc(3 * var(--U))); }
+.p-passado_arquivo_25d .pa-palco > * { grid-area: 1 / 1; min-width: 0; }
+.p-passado_arquivo_25d .pa-cartao { position: relative; box-sizing: border-box; padding: calc(3.5 * var(--U)) calc(4.5 * var(--U));
+  border-radius: calc(var(--R, 2) * 1px); text-align: left; box-shadow: 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5); }
+.p-passado_arquivo_25d .pa-placa { box-sizing: border-box; padding: calc(.7 * var(--U)) calc(4.5 * var(--U)); border-radius: calc(var(--R, 2) * 1px);
+  font: 700 calc(2.4 * var(--U))/1 var(--fM); letter-spacing: .12em; box-shadow: 0 calc(1 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.5); }
+.p-passado_arquivo_25d .pa-ano { font: 800 calc(10 * var(--U) * var(--esc, 1))/1 var(--fD); white-space: nowrap; letter-spacing: -.02em; }
+.p-passado_arquivo_25d .pa-fio { height: calc(.6 * var(--U)); margin: calc(1.8 * var(--U)) 0; background: var(--destaque);
+  transform-origin: left center; }
+.p-passado_arquivo_25d .pa-titulo { font: 700 calc(4.6 * var(--U))/1.15 var(--fE, var(--fD)); }
+.p-passado_arquivo_25d .pa-legenda { margin-top: calc(1.5 * var(--U)); font: 500 calc(3.2 * var(--U))/1.3 var(--fT); }
+
+/* papel: cartão claro de arquivo */
+.p-passado_arquivo_25d.pa-papel .pa-cartao { background: color-mix(in srgb, var(--texto) 92%, var(--apoio)); color: var(--fundo); }
+.p-passado_arquivo_25d.pa-papel .pa-placa { background: color-mix(in srgb, var(--texto) 75%, var(--apoio)); color: var(--fundo); }
+.p-passado_arquivo_25d.pa-papel .d { background: color-mix(in srgb, var(--destaque) 55%, transparent); }
+
+/* vidro: cartão escuro translúcido com borda de destaque */
+.p-passado_arquivo_25d.pa-vidro .pa-cartao { background: color-mix(in srgb, var(--fundo2) 82%, transparent); color: var(--texto);
+  border: calc(.4 * var(--U)) solid color-mix(in srgb, var(--destaque) 60%, transparent); }
+.p-passado_arquivo_25d.pa-vidro .pa-ano { color: var(--destaque); }
+.p-passado_arquivo_25d.pa-vidro .pa-placa { background: color-mix(in srgb, var(--fundo2) 85%, transparent); color: var(--apoio);
+  border: calc(.3 * var(--U)) solid color-mix(in srgb, var(--apoio) 50%, transparent); }
+.p-passado_arquivo_25d.pa-vidro .d { color: var(--destaque); }
+
+.vertical .p-passado_arquivo_25d .pa-palco { grid-template-columns: calc(82 * var(--U)); transform: translateY(calc(5 * var(--U))); }
+.vertical .p-passado_arquivo_25d .pa-cartao { padding: calc(4 * var(--U)) calc(4 * var(--U)); }
+.vertical .p-passado_arquivo_25d .pa-placa { padding: calc(.9 * var(--U)) calc(4 * var(--U)); font-size: calc(3 * var(--U)); }
+.vertical .p-passado_arquivo_25d .pa-ano { font-size: calc(10 * var(--U) * var(--esc, 1)); }
+.vertical .p-passado_arquivo_25d .pa-titulo { font-size: calc(6 * var(--U)); }
+.vertical .p-passado_arquivo_25d .pa-legenda { font-size: calc(4.4 * var(--U)); }

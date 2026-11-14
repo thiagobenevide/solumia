@@ -1,0 +1,81 @@
+{
+ "id": "fundo_respira",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "fundo animado discreto, sem texto, que ocupa a tela atrás da narração quando não há mídia, e deixa a legenda legível",
+ "intencoes": [
+  "fundo"
+ ],
+ "exemplos_sim": [
+  "Agora eu vou te explicar isso só falando, sem nada na tela.",
+  "Respira fundo, porque essa parte é a mais importante.",
+  "Antes de mostrar os números, preciso te contar uma história.",
+  "Fica comigo até o final que eu explico tudo.",
+  "Pensa comigo por um instante.",
+  "Essa é a minha opinião, e eu vou te explicar o porquê.",
+  "Vamos conversar sobre dinheiro, sem pressa."
+ ],
+ "exemplos_nao": [
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "Compare o CDB com a poupança.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Olha aqui o gráfico da inflação."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "calma"
+ ],
+ "energia": "baixa",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 60.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "clima",
+   "tipo": "texto",
+   "descricao": "palavra-chave do assunto do trecho; não aparece na tela, só varia a composição do fundo (posição das manchas e partículas)",
+   "obrigatorio": false,
+   "max_car": 24,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "conversa tranquila"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "estilo",
+   "valores": [
+    "gradiente",
+    "particulas",
+    "grao"
+   ],
+   "padrao": "gradiente",
+   "descricao": "textura do fundo: manchas de gradiente, partículas luminosas ou grão fino"
+  },
+  {
+   "nome": "camadas",
+   "valores": [
+    "plana",
+    "paralaxe"
+   ],
+   "padrao": "plana",
+   "descricao": "paralaxe separa em três camadas que deslizam em velocidades diferentes (versão 2,5D leve)"
+  }
+ ],
+ "batidas": [],
+ "sfx": {},
+ "notas": "Não mostra texto. O encaixe opcional 'clima' só muda a semente da composição. Loop perfeito por yoyo senoidal de meio-ciclo de 7 s, repetido até cobrir a peça. Véu escuro embaixo e nas bordas protege a legenda."
+}

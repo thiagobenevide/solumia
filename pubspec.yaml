@@ -1,0 +1,23 @@
+# Pub workspace do monorepo: o app principal (plataforma/app), o núcleo comum (plataforma/app_core)
+# e o pacote Flutter de cada módulo (modulos/<m>/app). `flutter pub get` na raiz resolve todos juntos.
+name: agent_workspace
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+workspace:
+  - plataforma/app
+  - plataforma/app_core
+  - modulos/empreendimento/app
+  - plataforma/app_notas
+  - modulos/arquivos/app
+  - modulos/financas/app
+  - modulos/saude/app
+  - modulos/estudos/app
+  - modulos/concursos/app
+  - modulos/rotinas/app
+  - modulos/design/app
+  - modulos/eletronica/app
+  - modulos/codigo/app
+  - modulos/painel/app

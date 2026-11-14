@@ -1,0 +1,122 @@
+{
+ "id": "numero_impacto",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um número que impressiona, com o que ele mede e uma linha de contexto",
+ "intencoes": [
+  "numero",
+  "destaque",
+  "alerta"
+ ],
+ "exemplos_sim": [
+  "81% das famílias brasileiras estão endividadas.",
+  "O rotativo do cartão passa de 400% ao ano.",
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "Um em cada três jovens não tem nenhuma reserva.",
+  "A luz de uma estrela leva 4 anos para chegar aqui.",
+  "Esse investimento rendeu 12,5% no último ano."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Compare o CDB com a poupança."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.0,
+ "duracao_max": 7.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "numero",
+   "tipo": "numero",
+   "descricao": "o número como foi dito, com a unidade",
+   "obrigatorio": true,
+   "max_car": 10,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": true,
+   "opcoes": [],
+   "exemplo": "1.234,5%"
+  },
+  {
+   "nome": "rotulo",
+   "tipo": "texto",
+   "descricao": "o que o número mede, em poucas palavras (maiúsculas viram kicker)",
+   "obrigatorio": false,
+   "max_car": 24,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "famílias endividadas"
+  },
+  {
+   "nome": "contexto",
+   "tipo": "texto",
+   "descricao": "uma linha que explica; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 70,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "o maior nível desde o começo da pesquisa"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "alinhamento",
+   "valores": [
+    "centro",
+    "esquerda"
+   ],
+   "padrao": "centro",
+   "descricao": ""
+  },
+  {
+   "nome": "enfase",
+   "valores": [
+    "traco",
+    "anel",
+    "nenhuma"
+   ],
+   "padrao": "traco",
+   "descricao": "elemento que sublinha o número"
+  },
+  {
+   "nome": "velocidade",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": ""
+  }
+ ],
+ "batidas": [
+  "numero"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Peça de referência do formato (etapa 1); o contador do kit vira peça na migração (etapa 3)."
+}

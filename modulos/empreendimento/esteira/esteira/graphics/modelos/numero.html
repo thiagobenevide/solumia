@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{# Número grande contando até o valor, rótulo embaixo e a fonte do dado. #}
+{% block estilo %}
+.veu { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(8,9,12,.78) 0%, rgba(8,9,12,.9) 70%);
+  animation: aparecer .5s ease-out both; }
+.bloco { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-58%); text-align: center; }
+.bloco .rotulo { animation: entrar-baixo .7s .15s var(--suave) both; }
+.valor { margin-top: 18px; font: 800 250px/1 Inter; letter-spacing: -.04em; font-variant-numeric: tabular-nums;
+  color: #fff; animation: entrar-baixo .9s .25s var(--suave) both; }
+.valor small { font-size: .42em; font-weight: 700; color: var(--cor); margin-left: .08em; }
+.linha { width: 520px; height: 4px; margin: 34px auto 0; background: var(--cor); transform-origin: 50% 50%;
+  animation: traco .9s .7s var(--suave) both; }
+.legenda { margin: 34px auto 0; max-width: 1300px; font: 500 46px/1.3 Inter; color: #e9e4d8;
+  animation: entrar-baixo .8s .9s var(--suave) both; }
+.legenda b { color: var(--cor); font-weight: 700; }
+.fonte { position: absolute; left: 0; right: 0; bottom: 90px; text-align: center; font: 500 22px Mono, monospace;
+  color: #8f8a80; animation: aparecer .6s 1.3s both; }
+{% if vertical %}
+{% set n = (prefixo ~ valor ~ sufixo)|length %}
+.valor { font-size: {{ 200 if n <= 5 else 150 if n <= 8 else 118 }}px; }
+.legenda { max-width: none; padding: 0 90px; font-size: 48px; }
+.fonte { bottom: 440px; padding: 0 90px; }
+{% endif %}
+{% endblock %}
+{% block corpo %}
+<div class="veu"></div>
+<div class="bloco">
+  {% if rotulo %}<div class="rotulo">{{ rotulo }}</div>{% endif %}
+  <div class="valor"><span id="n">{{ prefixo }}0</span><small>{{ sufixo }}</small></div>
+  <div class="linha"></div>
+  <div class="legenda">{{ legenda | safe }}</div>
+</div>
+{% if fonte %}<div class="fonte">Fonte: {{ fonte }}</div>{% endif %}
+{% endblock %}
+{% block script %}
+const alvo = {{ valor }}, casas = {{ casas }}, ini = .35, dura = 1.6;
+const fmt = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
+const el = document.getElementById("n");
+window.__ganchos = window.__ganchos || [];
+window.__ganchos.push(t => {
+  const x = Math.min(Math.max((t - ini) / dura, 0), 1), e = 1 - Math.pow(1 - x, 4);
+  el.textContent = {{ prefixo | tojson }} + fmt.format(alvo * e);
+});
+{% endblock %}

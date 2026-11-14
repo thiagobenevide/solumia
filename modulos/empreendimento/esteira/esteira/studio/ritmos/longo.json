@@ -1,0 +1,42 @@
+{
+ "id": "longo",
+ "nome": "Longo (15–45 min)",
+ "descricao": "Vídeo do canal: blocos de 20–60 s, motion moderado, capítulos e uma virada visual a cada 20–40 s.",
+ "duracao_s": [
+  600,
+  2700
+ ],
+ "bloco_s": [
+  20,
+  60
+ ],
+ "virada_s": [
+  20,
+  40
+ ],
+ "gancho_s": null,
+ "anti_repeticao_s": 240,
+ "capitulos": true,
+ "peca_s": [
+  2.5,
+  8.0
+ ],
+ "regras": {
+  "trecho_max_s": 6.0,
+  "dur_min": 1.4,
+  "takeover_max_s": 7.0,
+  "sobreposicao_max_s": 6.0
+ },
+ "tetos": {
+  "takeover_max": 0.5
+ },
+ "presenca": {
+  "mudanca_s": [
+   3.0,
+   6.0
+  ],
+  "peca_parada_s": 6.0
+ },
+ "legenda": {},
+ "cota_3d_s": 300
+}

@@ -1,0 +1,81 @@
+{
+ "id": "fundo_ondas_2d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "fundo animado sem texto de linhas de onda que deslizam devagar atrás da narração quando não há mídia, deixando a legenda legível",
+ "intencoes": [
+  "fundo"
+ ],
+ "exemplos_sim": [
+  "Hoje eu vou te contar uma história que quase ninguém conhece.",
+  "Agora respira, porque a próxima parte é a mais importante.",
+  "Enquanto eu explico, pense no seu próprio dinheiro.",
+  "Vamos devagar, passo a passo, sem pressa nenhuma.",
+  "Imagine que você acabou de receber o seu primeiro salário.",
+  "Essa conversa vale para quem está começando do zero.",
+  "Segura essa ideia, porque ela volta mais pra frente.",
+  "Bom, deixa eu explicar como tudo isso funciona."
+ ],
+ "exemplos_nao": [
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "Compare o CDB com a poupança.",
+  "Se inscreva no canal e ative o sininho.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "calma"
+ ],
+ "energia": "baixa",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 60.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "assunto",
+   "tipo": "texto",
+   "descricao": "assunto do trecho em poucas palavras; não aparece na tela, só varia o desenho das ondas",
+   "obrigatorio": false,
+   "max_car": 24,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "educação financeira"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "ritmo",
+   "valores": [
+    "lento",
+    "normal"
+   ],
+   "padrao": "lento",
+   "descricao": "velocidade com que as ondas deslizam"
+  },
+  {
+   "nome": "densidade",
+   "valores": [
+    "poucas",
+    "muitas"
+   ],
+   "padrao": "poucas",
+   "descricao": "quantidade de linhas de onda na tela"
+  }
+ ],
+ "batidas": [],
+ "sfx": {},
+ "notas": "Fundo discreto sem texto; as ondas deslizam em laço e ficam em baixa opacidade para não competir com a legenda. O encaixe opcional assunto só muda a semente do desenho."
+}

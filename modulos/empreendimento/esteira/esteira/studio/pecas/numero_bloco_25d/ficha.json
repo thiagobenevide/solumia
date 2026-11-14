@@ -1,0 +1,115 @@
+{
+ "id": "numero_bloco_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um número que impressiona como bloco espesso que vem de longe e para no centro, com a unidade encaixando ao lado e uma legenda curta num plano à frente",
+ "intencoes": [
+  "numero",
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "72 milhões de brasileiros estavam com o nome sujo em 2023.",
+  "O rotativo do cartão passa de 400% ao ano.",
+  "81% das famílias brasileiras estão endividadas.",
+  "Esse fundo rendeu 12,5% nos últimos doze meses.",
+  "A luz dessa estrela leva 4 anos para chegar até nós.",
+  "Só 3 em cada 10 pessoas têm reserva de emergência.",
+  "O brasileiro gasta em média 9 horas por dia na frente de telas.",
+  "Foram 1,2 bilhão de reais em multas só neste ano."
+ ],
+ "exemplos_nao": [
+  "Vamos entender por que isso acontece.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Compare o CDB com a poupança.",
+  "De 2019 a 2024 a taxa saiu de 6% para 13%."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 7.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "valor",
+   "tipo": "numero",
+   "descricao": "o número como foi dito, sem a unidade (a unidade vai no encaixe próprio)",
+   "obrigatorio": true,
+   "max_car": 7,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "72"
+  },
+  {
+   "nome": "unidade",
+   "tipo": "texto",
+   "descricao": "a unidade que encaixa ao lado do número (%, milhões, anos, R$ mil)",
+   "obrigatorio": false,
+   "max_car": 10,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "milhões"
+  },
+  {
+   "nome": "legenda",
+   "tipo": "texto",
+   "descricao": "legenda curta que diz o que o número mede; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 48,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "de brasileiros com o *nome sujo*"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "inclinacao",
+   "valores": [
+    "direita",
+    "esquerda",
+    "frontal"
+   ],
+   "padrao": "direita",
+   "descricao": "lado de onde o bloco gira ao chegar e para onde a câmera respira"
+  },
+  {
+   "nome": "velocidade",
+   "valores": [
+    "lenta",
+    "normal",
+    "rapida"
+   ],
+   "padrao": "normal",
+   "descricao": "ritmo da chegada do bloco, da unidade e da legenda"
+  }
+ ],
+ "batidas": [
+  "valor"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Variante 2,5D de numero_impacto com unidade e legenda em encaixes separados; o bloco ganha espessura por camadas de text-shadow e a legenda fica em plano à frente (z)."
+}

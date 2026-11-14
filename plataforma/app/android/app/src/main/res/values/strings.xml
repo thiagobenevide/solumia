@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="vigia_descricao">Aplica as regras de consumo que você definiu: avisa qual app está aberto e classifica buscas por categoria (sem guardar o texto) para bloquear o que você escolheu segurar.</string>
+</resources>

@@ -1,0 +1,374 @@
+{
+ "versao": 1,
+ "fundo": "veu",
+ "fundo_tela_cheia": "tela",
+ "opacidade_veu": 0.85,
+ "batidas_padrao": {
+  "numero": 0.15
+ },
+ "botao_velocidade": "velocidade",
+ "elementos": [
+  {
+   "tipo": "texto",
+   "nome": "Rótulo",
+   "conteudo": "{{rotulo}}",
+   "se": [
+    {
+     "botao": "alinhamento",
+     "igual": "centro"
+    },
+    {
+     "encaixe": "rotulo"
+    }
+   ],
+   "x": 0,
+   "y": 0.29,
+   "largura": 1.0,
+   "fonte": "fM",
+   "peso": 700,
+   "tam": 0.026,
+   "cor": "destaque",
+   "alinhar": "centro",
+   "caps": true,
+   "tracking": 300,
+   "vertical": {
+    "y": 0.41141,
+    "tam": 0.03
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Rótulo",
+   "conteudo": "{{rotulo}}",
+   "se": [
+    {
+     "botao": "alinhamento",
+     "igual": "esquerda"
+    },
+    {
+     "encaixe": "rotulo"
+    }
+   ],
+   "x": 0.05625,
+   "y": 0.29,
+   "largura": 0.8875,
+   "fonte": "fM",
+   "peso": 700,
+   "tam": 0.026,
+   "cor": "destaque",
+   "alinhar": "esquerda",
+   "caps": true,
+   "tracking": 300,
+   "vertical": {
+    "x": 0.1,
+    "y": 0.41141,
+    "largura": 0.8,
+    "tam": 0.03
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Número (conta até o valor)",
+   "conteudo": "{{numero}}",
+   "numero": true,
+   "se": {
+    "botao": "alinhamento",
+    "igual": "centro"
+   },
+   "x": 0.5,
+   "y": 0.572,
+   "fonte": "fD",
+   "peso": 800,
+   "tam": 0.24,
+   "cor": "destaque",
+   "alinhar": "centro",
+   "tracking": -30,
+   "vertical": {
+    "y": 0.5286875,
+    "tam": 0.17
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Número (conta até o valor)",
+   "conteudo": "{{numero}}",
+   "numero": true,
+   "se": {
+    "botao": "alinhamento",
+    "igual": "esquerda"
+   },
+   "x": 0.05625,
+   "y": 0.572,
+   "fonte": "fD",
+   "peso": 800,
+   "tam": 0.24,
+   "cor": "destaque",
+   "alinhar": "esquerda",
+   "tracking": -30,
+   "vertical": {
+    "x": 0.1,
+    "y": 0.5286875,
+    "tam": 0.17
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Unidade",
+   "conteudo": "",
+   "unidade_de": "Número (conta até o valor)",
+   "se": {
+    "botao": "alinhamento",
+    "igual": "centro"
+   },
+   "apos": {
+    "nome": "Número (conta até o valor)",
+    "folga": 0.0144
+   },
+   "x": 0.5,
+   "y": 0.572,
+   "fonte": "fD",
+   "peso": 700,
+   "tam": 0.1008,
+   "cor": "texto",
+   "vertical": {
+    "y": 0.5286875,
+    "tam": 0.0714,
+    "apos": {
+     "nome": "Número (conta até o valor)",
+     "folga": 0.0102
+    }
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Unidade",
+   "conteudo": "",
+   "unidade_de": "Número (conta até o valor)",
+   "se": {
+    "botao": "alinhamento",
+    "igual": "esquerda"
+   },
+   "apos": {
+    "nome": "Número (conta até o valor)",
+    "folga": 0.0144
+   },
+   "x": 0.05625,
+   "y": 0.572,
+   "fonte": "fD",
+   "peso": 700,
+   "tam": 0.1008,
+   "cor": "texto",
+   "vertical": {
+    "x": 0.1,
+    "y": 0.5286875,
+    "tam": 0.0714,
+    "apos": {
+     "nome": "Número (conta até o valor)",
+     "folga": 0.0102
+    }
+   }
+  },
+  {
+   "tipo": "retangulo",
+   "nome": "Traço",
+   "se": [
+    {
+     "botao": "alinhamento",
+     "igual": "centro"
+    },
+    {
+     "botao": "enfase",
+     "igual": "traco"
+    }
+   ],
+   "x": 0.5,
+   "centralizar": true,
+   "y": 0.622,
+   "w": 0.48,
+   "h": 0.004,
+   "cor": "destaque",
+   "ancora_esq": true,
+   "vertical": {
+    "y": 0.556813
+   }
+  },
+  {
+   "tipo": "retangulo",
+   "nome": "Traço",
+   "se": [
+    {
+     "botao": "alinhamento",
+     "igual": "esquerda"
+    },
+    {
+     "botao": "enfase",
+     "igual": "traco"
+    }
+   ],
+   "x": 0.05625,
+   "centralizar": false,
+   "y": 0.622,
+   "w": 0.48,
+   "h": 0.004,
+   "cor": "destaque",
+   "ancora_esq": true,
+   "vertical": {
+    "y": 0.556813,
+    "x": 0.1
+   }
+  },
+  {
+   "tipo": "elipse",
+   "nome": "Anel",
+   "se": {
+    "botao": "enfase",
+    "igual": "anel"
+   },
+   "x": 0.5,
+   "y": 0.488,
+   "d": 0.576,
+   "cor": "destaque",
+   "contorno": 0.005,
+   "vertical": {
+    "y": 0.495219,
+    "d": 0.408
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Contexto",
+   "conteudo": "{{contexto}}",
+   "se": [
+    {
+     "botao": "alinhamento",
+     "igual": "centro"
+    },
+    {
+     "encaixe": "contexto"
+    }
+   ],
+   "x": 0.190625,
+   "y": 0.652,
+   "largura": 0.61875,
+   "fonte": "fT",
+   "peso": 500,
+   "tam": 0.042,
+   "cor": "texto",
+   "alinhar": "centro",
+   "entrelinha": 1.25,
+   "vertical": {
+    "x": 0.06,
+    "y": 0.573688,
+    "largura": 0.88,
+    "tam": 0.056
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Contexto",
+   "conteudo": "{{contexto}}",
+   "se": [
+    {
+     "botao": "alinhamento",
+     "igual": "esquerda"
+    },
+    {
+     "encaixe": "contexto"
+    }
+   ],
+   "x": 0.05625,
+   "y": 0.652,
+   "largura": 0.61875,
+   "fonte": "fT",
+   "peso": 500,
+   "tam": 0.042,
+   "cor": "texto",
+   "alinhar": "esquerda",
+   "entrelinha": 1.25,
+   "vertical": {
+    "x": 0.1,
+    "y": 0.573688,
+    "largura": 0.88,
+    "tam": 0.056
+   }
+  }
+ ],
+ "animacoes": [
+  {
+   "anim": "entrar",
+   "alvo": "Rótulo",
+   "de": "esq",
+   "t": "T0",
+   "dur": 0.6
+  },
+  {
+   "anim": "contar",
+   "alvo": "Número (conta até o valor)",
+   "t": "@numero+0.05",
+   "dur": "0.9v"
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Número (conta até o valor)",
+   "de": "baixo",
+   "t": "@numero",
+   "dur": 0.8
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Unidade",
+   "de": "baixo",
+   "t": "@numero+0.1",
+   "dur": 0.8
+  },
+  {
+   "anim": "tracar",
+   "alvo": "Traço",
+   "t": "@numero+0.5v",
+   "dur": "0.8v"
+  },
+  {
+   "anim": "chaves",
+   "alvo": "Anel",
+   "prop": "escala",
+   "pares": [
+    [
+     "@numero+0.2",
+     [
+      60,
+      60
+     ]
+    ],
+    [
+     "@numero+0.2+0.6v",
+     [
+      100,
+      100
+     ]
+    ]
+   ]
+  },
+  {
+   "anim": "chaves",
+   "alvo": "Anel",
+   "prop": "opacidade",
+   "pares": [
+    [
+     "@numero+0.2",
+     0
+    ],
+    [
+     "@numero+0.5",
+     100
+    ]
+   ]
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Contexto",
+   "de": "baixo",
+   "t": "@numero+0.6v",
+   "dur": 0.7
+  }
+ ]
+}

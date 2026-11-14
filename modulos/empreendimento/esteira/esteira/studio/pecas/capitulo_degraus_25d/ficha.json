@@ -1,0 +1,130 @@
+{
+ "id": "capitulo_degraus_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "o início de um novo capítulo: número espesso em camadas de profundidade que gira de frente para a câmera, título ao lado e trilha de etapas com o capítulo atual aceso",
+ "intencoes": [
+  "capitulo",
+  "transicao"
+ ],
+ "exemplos_sim": [
+  "Capítulo dois: como os juros compostos trabalham a seu favor.",
+  "Vamos à parte três: montando a sua reserva de emergência.",
+  "Agora, o passo mais importante: escolher onde investir.",
+  "Na primeira parte, vamos entender de onde vem a dívida.",
+  "Capítulo quatro: os erros que quase todo mundo comete.",
+  "Chegamos ao terceiro bloco, que trata de impostos.",
+  "Parte final: colocando tudo em prática.",
+  "Começando o capítulo um: o que é inflação de verdade."
+ ],
+ "exemplos_nao": [
+  "81% das famílias brasileiras estão endividadas.",
+  "Se você gostou, deixe o seu like e se inscreva.",
+  "Compare o CDB com a poupança.",
+  "Será que isso realmente funciona?"
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 6.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "numero",
+   "tipo": "texto",
+   "descricao": "número do capítulo, só algarismos",
+   "obrigatorio": true,
+   "max_car": 2,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "2"
+  },
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "título do capítulo; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Como os *juros* compostos funcionam"
+  },
+  {
+   "nome": "subtitulo",
+   "tipo": "texto",
+   "descricao": "uma linha que antecipa o que vem no capítulo",
+   "obrigatorio": false,
+   "max_car": 60,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "e por que o tempo pesa mais que o valor"
+  },
+  {
+   "nome": "etapas",
+   "tipo": "itens",
+   "descricao": "nomes curtos dos capítulos do vídeo, na ordem; o de posição igual ao número fica aceso",
+   "obrigatorio": false,
+   "max_car": 22,
+   "max_valor": 16,
+   "min_itens": 2,
+   "max_itens": 5,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    "Dívidas",
+    "Juros",
+    "Reserva",
+    "Investir"
+   ]
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "giro",
+   "valores": [
+    "direita",
+    "esquerda"
+   ],
+   "padrao": "direita",
+   "descricao": "lado para onde a câmera gira ao chegar"
+  },
+  {
+   "nome": "profundidade",
+   "valores": [
+    "suave",
+    "forte"
+   ],
+   "padrao": "suave",
+   "descricao": "espessura do número em camadas"
+  }
+ ],
+ "batidas": [
+  "titulo"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Complementa capitulo_travessia: aqui o número é um bloco espesso em camadas de Z e a câmera gira o palco inteiro."
+}

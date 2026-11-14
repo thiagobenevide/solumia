@@ -1,0 +1,11 @@
+/* Migrada do kit (cena termo_tecnico). */
+.area.split .p-termo_tecnico .termo { top: 30%; bottom: auto; }
+.p-termo_tecnico .termo { position: absolute; left: calc(7 * var(--U)); bottom: calc(10 * var(--U)); max-width: 60%; padding: calc(3 * var(--U)) calc(4 * var(--U)); opacity: 0;
+  border-radius: calc(1.4 * var(--U) * var(--R, 1)); background: color-mix(in srgb, var(--fundo) 86%, transparent); backdrop-filter: blur(calc(1 * var(--U)));
+  border: 1px solid color-mix(in srgb, var(--texto) 12%, transparent); box-shadow: 0 calc(2 * var(--U)) calc(6 * var(--U)) rgba(0,0,0,.5); }
+.vertical .p-termo_tecnico .termo { left: calc(6 * var(--U)); right: calc(6 * var(--U)); max-width: none; bottom: auto; top: 58%; }
+.p-termo_tecnico .tmk { font: 700 calc(2.1 * var(--U)) var(--fM); letter-spacing: .3em; text-transform: uppercase; color: var(--acento); }
+.p-termo_tecnico .tmw { margin-top: calc(1.2 * var(--U)); font: 800 calc(7 * var(--U) * var(--esc, 1))/1.05 var(--fD); letter-spacing: -.02em; color: var(--destaque); }
+.p-termo_tecnico .tmw .caret { display: inline-block; width: calc(.5 * var(--U)); height: .9em; margin-left: .06em; vertical-align: -.08em; background: var(--texto); }
+.p-termo_tecnico .tml { height: calc(.35 * var(--U)); margin-top: calc(1.6 * var(--U)); background: var(--destaque); transform-origin: 0 50%; }
+.p-termo_tecnico .tmd { margin-top: calc(1.6 * var(--U)); font: 500 calc(3.2 * var(--U))/1.3 var(--fT); color: var(--texto); opacity: 0; }

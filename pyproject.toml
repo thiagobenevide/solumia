@@ -1,0 +1,40 @@
+# Workspace uv do monorepo. Cada pacote Python (plataforma e módulos) é um membro.
+# A esteira (modulos/empreendimento/esteira) fica fora: tem venv próprio com CUDA/torch.
+[tool.uv.workspace]
+members = ["plataforma/backend", "plataforma/worker", "plataforma/shared", "modulos/saude/backend", "modulos/estudos/backend", "modulos/rotinas/backend", "modulos/design/backend", "modulos/eletronica/backend", "modulos/codigo/backend", "modulos/financas/backend", "modulos/painel/backend", "modulos/empreendimento/youtube", "modulos/concursos/backend"]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "httpx>=0.27", "ruff>=0.7", "mypy>=1.13"]
+# Voz do worker (Whisper na GPU + Piper) no sync padrão: um `uv sync` sem extras apagava o
+# faster-whisper do .venv e o cobrador ficava sem transcrição.
+voz = ["agent-worker[voz,voz-gpu]"]
+
+[tool.uv]
+default-groups = ["dev", "voz"]
+
+[tool.uv.sources]
+agent-worker = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["plataforma/*/src", "modulos/*/backend/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "SIM"]
+ignore = ["B008", "SIM108"]  # if/else explícito é preferido ao ternário
+
+[tool.ruff.lint.isort]
+known-first-party = ["backend", "worker", "shared", "saude", "estudos", "rotinas", "design", "eletronica", "codigo", "financas", "painel", "youtube", "concursos"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = ["plataforma/backend/src", "plataforma/worker/src", "plataforma/shared/src", "modulos/saude/backend/src", "modulos/estudos/backend/src", "modulos/rotinas/backend/src", "modulos/design/backend/src", "modulos/eletronica/backend/src", "modulos/codigo/backend/src", "modulos/financas/backend/src", "modulos/painel/backend/src", "modulos/empreendimento/youtube/src"]
+namespace_packages = true
+explicit_package_bases = true
+
+[tool.pytest.ini_options]
+testpaths = ["plataforma/backend/tests", "plataforma/worker/tests"]
+asyncio_mode = "auto"
+addopts = "-ra"

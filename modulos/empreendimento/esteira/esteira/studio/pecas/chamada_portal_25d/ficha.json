@@ -1,0 +1,125 @@
+{
+ "id": "chamada_portal_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "uma chamada para o espectador agir (inscrever-se, comentar, ver outro vídeo) num cartão que chega do fundo por anéis que pulsam, com botão e setas",
+ "intencoes": [
+  "chamada"
+ ],
+ "exemplos_sim": [
+  "Se esse conteúdo te ajudou, se inscreve no canal.",
+  "Deixa nos comentários qual é a sua maior dúvida sobre investimentos.",
+  "Clica no vídeo que está aparecendo na tela e continua comigo.",
+  "Entra na lista de espera, o link está na descrição.",
+  "Ativa o sininho para não perder o próximo vídeo.",
+  "Compartilha com alguém que precisa ouvir isso hoje.",
+  "Baixa a planilha gratuita, o link está aqui embaixo."
+ ],
+ "exemplos_nao": [
+  "Em 2023, 72 milhões de pessoas estavam com o nome sujo.",
+  "Primeiro, anote suas despesas; depois, corte o supérfluo.",
+  "Será que vale a pena investir agora?",
+  "Compare o CDB com a poupança."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "media",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 6.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "acao",
+   "tipo": "texto",
+   "descricao": "a ação pedida, em verbo no imperativo e poucas palavras",
+   "obrigatorio": true,
+   "max_car": 28,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Inscreva-se no canal"
+  },
+  {
+   "nome": "detalhe",
+   "tipo": "texto",
+   "descricao": "uma linha que explica o motivo ou o benefício; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 60,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "e *não perca* o próximo vídeo da série"
+  },
+  {
+   "nome": "botao",
+   "tipo": "texto",
+   "descricao": "texto curto do botão",
+   "obrigatorio": false,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Inscrever-se"
+  },
+  {
+   "nome": "destino",
+   "tipo": "texto",
+   "descricao": "onde a ação acontece: canal, link ou próximo vídeo, em etiqueta",
+   "obrigatorio": false,
+   "max_car": 22,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "link na descrição"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "giro",
+   "valores": [
+    "frente",
+    "virada"
+   ],
+   "padrao": "frente",
+   "descricao": "frente: o cartão chega do fundo quase de frente; virada: chega girado de lado e se endireita"
+  },
+  {
+   "nome": "fundo",
+   "valores": [
+    "aneis",
+    "grade",
+    "nenhum"
+   ],
+   "padrao": "aneis",
+   "descricao": "anéis que pulsam, grade de pontos em profundidade ou nada atrás do cartão"
+  }
+ ],
+ "batidas": [
+  "acao"
+ ],
+ "sfx": {
+  "entrada": "whoosh",
+  "contagem": "tick"
+ },
+ "notas": "Complementa chamada_cartao_25d (cursor que aperta o botão): aqui a ênfase é o cartão atravessando anéis de profundidade, sem cursor."
+}

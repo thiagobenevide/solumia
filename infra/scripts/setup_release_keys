@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Sets up the keys used by .github/workflows/release.yml, step by step and idempotent:
+#   1. GPG key "Solumia Release Signing Key" (primary only certifies; a signing subkey goes to CI)
+#   2. Android keystore ~/solumia-release.jks (PKCS12, alias solumia)
+#   3. Encrypted backup ~/solumia-release-backup.tar.gpg (primary GPG key + revocation + keystore)
+#   4. GitHub secrets and variable (only the GPG subkey leaves this PC)
+# Run it on your own PC (never on the VPS): infra/scripts/setup_release_keys
+# Passwords are always typed at a prompt: they never go into arguments or shell history.
+set -euo pipefail
+
+REPO="thiagobenevide/solumia"
+UID_NAME="Solumia Release Signing Key"
+KEYSTORE="$HOME/solumia-release.jks"
+ALIAS="solumia"
+BACKUP="$HOME/solumia-release-backup.tar.gpg"
+LOOSE_GPG="$HOME/solumia-gpg-principal.asc"
+
+step() { printf '\n\033[1m== %s\033[0m\n' "$1"; }
+ok() { printf '   ok: %s\n' "$1"; }
+fail() { printf '\n\033[31mERRO: %s\033[0m\n' "$1" >&2; exit 1; }
+
+for cmd in gpg keytool gh tar base64; do
+    command -v "$cmd" >/dev/null || fail "comando '$cmd' não encontrado"
+done
+gh auth status >/dev/null 2>&1 || fail "gh sem login: rode 'gh auth login' e tente de novo"
+
+# --- 1. GPG key ---------------------------------------------------------------------------------
+step "1/4 Chave GPG"
+FPR=$(gpg --list-secret-keys --with-colons "$UID_NAME" 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}' || true)
+if [ -z "$FPR" ]; then
+    echo "   Criando a chave principal. O gpg vai pedir uma senha: use uma forte e guarde no gerenciador."
+    gpg --quick-gen-key "$UID_NAME" ed25519 cert never
+    FPR=$(gpg --list-secret-keys --with-colons "$UID_NAME" | awk -F: '$1=="fpr"{print $10; exit}')
+fi
+ok "chave principal $FPR"
+has_sign_subkey=$(gpg --list-secret-keys --with-colons "$FPR" | awk -F: '$1=="ssb" && $12 ~ /s/ && $2 !~ /[erd]/ {print "yes"; exit}')
+if [ "$has_sign_subkey" != "yes" ]; then
+    echo "   Criando a subchave de assinatura (2 anos)."
+    gpg --quick-add-key "$FPR" ed25519 sign 2y
+fi
+ok "subchave de assinatura presente"
+
+# --- 2. Android keystore ------------------------------------------------------------------------
+step "2/4 Keystore do Android"
+if [ ! -f "$KEYSTORE" ]; then
+    echo "   O keytool vai pedir a senha da keystore duas vezes: use uma forte e guarde no gerenciador."
+    keytool -genkeypair -keystore "$KEYSTORE" -storetype PKCS12 -keyalg RSA -keysize 4096 \
+        -validity 10000 -alias "$ALIAS" -dname "CN=Solumia, C=BR"
+    chmod 600 "$KEYSTORE"
+fi
+ok "$KEYSTORE"
+
+# --- passwords (asked once, checked before any use) ---------------------------------------------
+step "Senhas"
+read -rsp "   Senha da chave GPG: " GPG_PASS; echo
+gpg-connect-agent reloadagent /bye >/dev/null 2>&1 || true  # forget cached passphrase so it is really checked
+if ! echo test | gpg --batch --quiet --pinentry-mode loopback --passphrase-fd 3 --local-user "$FPR" \
+        --sign --output /dev/null 3< <(printf '%s' "$GPG_PASS") 2>/dev/null; then
+    fail "senha da chave GPG incorreta"
+fi
+ok "senha da GPG confere"
+read -rsp "   Senha da keystore: " KS_PASS; echo
+export KS_PASS
+keytool -list -keystore "$KEYSTORE" -storepass:env KS_PASS -alias "$ALIAS" >/dev/null 2>&1 \
+    || fail "senha da keystore incorreta"
+ok "senha da keystore confere"
+
+# --- 3. encrypted backup ------------------------------------------------------------------------
+step "3/4 Backup criptografado"
+if [ ! -f "$BACKUP" ]; then
+    work=$(mktemp -d "$HOME/.solumia-backup.XXXXXX")
+    chmod 700 "$work"
+    gpg --batch --pinentry-mode loopback --passphrase-fd 3 --armor --export-secret-keys "$FPR" \
+        > "$work/solumia-gpg-principal.asc" 3< <(printf '%s' "$GPG_PASS")
+    cp "$HOME/.gnupg/openpgp-revocs.d/$FPR.rev" "$work/"
+    cp "$KEYSTORE" "$work/"
+    echo "   O gpg vai pedir uma senha NOVA só para o backup (guarde no gerenciador)."
+    tar -cf - -C "$work" . | gpg --symmetric --cipher-algo AES256 -o "$BACKUP"
+    shred -u "$work"/* && rmdir "$work"
+fi
+echo "   Conteúdo do backup (o gpg pode pedir a senha do backup):"
+gpg --quiet -d "$BACKUP" | tar -tf - | sed 's/^/     /'
+[ -f "$LOOSE_GPG" ] && shred -u "$LOOSE_GPG" && ok "cópia solta $LOOSE_GPG apagada"
+ok "$BACKUP"
+
+# --- 4. GitHub secrets --------------------------------------------------------------------------
+step "4/4 Segredos no GitHub ($REPO)"
+gpg --batch --pinentry-mode loopback --passphrase-fd 3 --armor --export-secret-subkeys "${FPR}!" \
+    3< <(printf '%s' "$GPG_PASS") | gh secret set RELEASE_GPG_PRIVATE_KEY -R "$REPO"
+printf '%s' "$GPG_PASS" | gh secret set RELEASE_GPG_PASSPHRASE -R "$REPO"
+gh variable set RELEASE_GPG_FINGERPRINT -R "$REPO" --body "$FPR"
+base64 -w0 "$KEYSTORE" | gh secret set ANDROID_KEYSTORE_BASE64 -R "$REPO"
+printf '%s' "$KS_PASS" | gh secret set ANDROID_KEYSTORE_PASSWORD -R "$REPO"
+printf '%s' "$KS_PASS" | gh secret set ANDROID_KEY_PASSWORD -R "$REPO"
+printf '%s' "$ALIAS" | gh secret set ANDROID_KEY_ALIAS -R "$REPO"
+unset GPG_PASS KS_PASS
+ok "segredos enviados"
+
+step "Pronto"
+cat <<EOF
+   Impressão digital (vai no configurador): $FPR
+   Falta só você:
+     1. copiar $BACKUP para um pendrive E para uma nuvem sua;
+     2. guardar no gerenciador de senhas: senha da GPG, senha da keystore e senha do backup.
+   Depois disso a keystore solta pode ser apagada: shred -u $KEYSTORE
+EOF

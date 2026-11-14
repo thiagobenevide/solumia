@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{# Peça só de caixas de texto (criada no editor): véu opcional para dar leitura sobre a cena. #}
+{% block estilo %}
+.veu { position: absolute; inset: 0; animation: aparecer .4s ease-out both; }
+.veu-baixo { background: linear-gradient(0deg, rgba(8,9,12,.85) 0%, rgba(8,9,12,.5) 45%, transparent 75%); }
+.veu-total { background: rgba(8,9,12,.62); }
+.veu-esquerda { background: linear-gradient(90deg, rgba(8,9,12,.88) 0%, rgba(8,9,12,.5) 45%, transparent 75%); }
+{% endblock %}
+{% block corpo %}{% if veu != 'nenhum' %}<div class="veu veu-{{ veu }}"></div>{% endif %}{% endblock %}

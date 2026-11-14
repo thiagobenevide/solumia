@@ -1,0 +1,46 @@
+/* Citação de estudo 2,5D: só variáveis da pele do kit (cores, fontes, --U). */
+.p-citacao_estudo_25d { display: flex; align-items: center; justify-content: center; }
+.p-citacao_estudo_25d .cx-cena { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  perspective: calc(140 * var(--U)); }
+.p-citacao_estudo_25d .cx-palco { position: relative; top: calc(-2 * var(--U)); width: calc(90 * var(--U)); height: calc(40 * var(--U));
+  transform-style: preserve-3d; }
+.p-citacao_estudo_25d .cx-mesa { position: absolute; inset: calc(-12 * var(--U)) calc(-14 * var(--U)); border-radius: calc(3 * var(--U));
+  background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--fundo2) 85%, transparent) 0%, transparent 72%); }
+.p-citacao_estudo_25d .cx-folha { position: absolute; inset: 0; overflow: hidden; box-sizing: border-box;
+  padding: calc(3 * var(--U)) calc(4 * var(--U));
+  background: linear-gradient(135deg, var(--texto), color-mix(in srgb, var(--texto) 88%, var(--fundo)));
+  color: var(--fundo); border-radius: calc(.6 * var(--U)); box-shadow: 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5); }
+.p-citacao_estudo_25d .cx-rev { font: 700 calc(2.1 * var(--U))/1.2 var(--fM); letter-spacing: .14em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--fundo) 65%, transparent); padding-bottom: calc(1.6 * var(--U)); margin-bottom: calc(2 * var(--U));
+  border-bottom: calc(.3 * var(--U)) solid color-mix(in srgb, var(--fundo) 25%, transparent); }
+.p-citacao_estudo_25d .cx-tr { margin: 0; font: 500 calc(3.3 * var(--U))/1.34 var(--fE); color: var(--fundo); }
+.p-citacao_estudo_25d .cx-mk { background-image: linear-gradient(color-mix(in srgb, var(--destaque) 62%, transparent), color-mix(in srgb, var(--destaque) 62%, transparent));
+  background-repeat: no-repeat; background-position: 0 80%; background-size: 0% 62%; }
+.p-citacao_estudo_25d.cx-m-acento .cx-mk { background-image: linear-gradient(color-mix(in srgb, var(--acento) 62%, transparent), color-mix(in srgb, var(--acento) 62%, transparent)); }
+.p-citacao_estudo_25d .cx-linhas { margin-top: calc(2.4 * var(--U)); display: grid; gap: calc(1.3 * var(--U)); }
+.p-citacao_estudo_25d .cx-linhas i { display: block; height: calc(.9 * var(--U)); border-radius: calc(.45 * var(--U));
+  background: color-mix(in srgb, var(--fundo) 16%, transparent); }
+.p-citacao_estudo_25d .cx-linhas i:nth-child(2) { width: 88%; }
+.p-citacao_estudo_25d .cx-linhas i:nth-child(3) { width: 64%; }
+.p-citacao_estudo_25d .cx-linhas i:nth-child(4) { width: 76%; }
+.p-citacao_estudo_25d .cx-cartao { position: absolute; right: calc(-4 * var(--U)); bottom: calc(-4 * var(--U)); width: calc(62 * var(--U));
+  box-sizing: border-box; padding: calc(3 * var(--U)) calc(3.4 * var(--U)); background: var(--fundo2); color: var(--texto);
+  border-left: calc(.9 * var(--U)) solid var(--destaque); border-radius: calc(.6 * var(--U));
+  box-shadow: 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5); font: 600 calc(3 * var(--U))/1.3 var(--fT); }
+.p-citacao_estudo_25d .cx-ctx .d { color: var(--destaque); }
+.p-citacao_estudo_25d .cx-pt { position: absolute; top: calc(-1.6 * var(--U)); left: calc(2.4 * var(--U)); padding: calc(.3 * var(--U)) calc(1 * var(--U));
+  background: var(--destaque); color: var(--fundo); border-radius: calc(.4 * var(--U)); font: 700 calc(1.9 * var(--U))/1.2 var(--fM); letter-spacing: .12em; }
+.p-citacao_estudo_25d .cx-selo { position: absolute; left: calc(-3 * var(--U)); bottom: calc(-4 * var(--U)); width: calc(30 * var(--U));
+  box-sizing: border-box; padding: calc(2 * var(--U)) calc(2.4 * var(--U)); text-align: center; background: var(--destaque); color: var(--fundo);
+  border-radius: calc(.8 * var(--U)); outline: calc(.35 * var(--U)) dashed color-mix(in srgb, var(--fundo) 55%, transparent);
+  outline-offset: calc(-1 * var(--U)); box-shadow: 0 calc(1.2 * var(--U)) calc(3 * var(--U)) rgba(0,0,0,.5); }
+.p-citacao_estudo_25d .cx-au { display: block; font: 700 calc(2.5 * var(--U))/1.25 var(--fM); text-transform: uppercase; letter-spacing: .06em; }
+.p-citacao_estudo_25d .cx-an { display: block; margin-top: calc(.6 * var(--U)); font: 800 calc(5.2 * var(--U))/1 var(--fD); }
+
+.vertical .p-citacao_estudo_25d .cx-palco { top: calc(2.5 * var(--U)); width: calc(46 * var(--U)); height: calc(74 * var(--U)); }
+.vertical .p-citacao_estudo_25d .cx-folha { padding: calc(8.5 * var(--U)) calc(3 * var(--U)) calc(3 * var(--U)); }
+.vertical .p-citacao_estudo_25d .cx-rev { font-size: calc(1.9 * var(--U)); }
+.vertical .p-citacao_estudo_25d .cx-tr { font-size: calc(3.1 * var(--U)); }
+.vertical .p-citacao_estudo_25d .cx-cartao { right: calc(1 * var(--U)); bottom: calc(-4 * var(--U)); width: calc(42 * var(--U));
+  padding: calc(2.6 * var(--U)) calc(2.8 * var(--U)); font-size: calc(3.1 * var(--U)); }
+.vertical .p-citacao_estudo_25d .cx-selo { left: auto; right: calc(2 * var(--U)); top: calc(-9 * var(--U)); bottom: auto; width: calc(28 * var(--U)); }

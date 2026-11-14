@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block titulo %}Processo {{ p.command }} · Esteira dark{% endblock %}
+{% block corpo %}
+<div class="flex flex-wrap items-end justify-between gap-4">
+  <div class="min-w-0">
+    <p class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase"><a href="/monitor" class="hover:underline">Monitor</a> · <a href="/processos" class="hover:underline">processos</a></p>
+    <h1 class="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight text-white font-mono break-all">./dark {{ p.command }} {{ p.args|join(' ') }}</h1>
+    <p id="cabeca" class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-400"></p>
+  </div>
+  <form id="parar" method="post" action="/processos/{{ p.id }}/parar" class="hidden"
+        onsubmit="return confirm('Parar este processo e tudo o que ele abriu?')">
+    <button class="text-sm px-3 py-2 rounded-md border border-rose-400/30 text-rose-300 hover:bg-rose-500/10">Parar processo</button>
+  </form>
+</div>
+
+<section id="agora" class="cartao rounded-2xl p-5 mt-6 hidden">
+  <h2 class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Agora</h2>
+  <div id="agora-corpo" class="mt-3 space-y-4"></div>
+</section>
+
+<div class="grid lg:grid-cols-3 gap-4 mt-4">
+  <section class="cartao rounded-2xl p-5 lg:col-span-2">
+    <h2 class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Caminho pela operação</h2>
+    <div id="caminho" class="mt-3 flex flex-wrap items-center gap-1.5 text-xs"></div>
+  </section>
+  <section class="cartao rounded-2xl p-5">
+    <h2 class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Recursos e LLM</h2>
+    <dl id="numeros" class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm"></dl>
+  </section>
+</div>
+
+<section class="cartao rounded-2xl p-5 mt-4">
+  <h2 class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Chamadas de LLM <span class="text-slate-500 normal-case tracking-normal">(últimas 30)</span></h2>
+  <div id="chamadas" class="mt-3 space-y-2 text-sm"></div>
+</section>
+
+<div class="grid lg:grid-cols-2 gap-4 mt-4">
+  <section class="cartao rounded-2xl p-5 min-w-0">
+    <h2 class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Eventos</h2>
+    <div id="eventos" class="mt-3 space-y-1 text-xs max-h-96 overflow-y-auto"></div>
+  </section>
+  <section class="cartao rounded-2xl p-5 min-w-0">
+    <h2 class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Log</h2>
+    <pre id="log" class="mt-3 text-[11px] leading-relaxed text-slate-300 font-mono whitespace-pre-wrap break-words max-h-96 overflow-y-auto"></pre>
+  </section>
+</div>
+
+<script>
+const ID = {{ p.id|tojson }};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const dur = s => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  return (h ? h + "h" : "") + (h || m ? String(m).padStart(h ? 2 : 1, "0") + "m" : "") + String(s % 60).padStart(2, "0") + "s"; };
+const hora = t => new Date(t * 1000).toLocaleTimeString("pt-BR");
+const COR = {running: "text-sky-300", ok: "text-emerald-400", error: "text-rose-400", cancelled: "text-slate-400", interrupted: "text-amber-400"};
+const ESTADO = {running: "rodando", ok: "ok", error: "erro", cancelled: "cancelado", interrupted: "interrompido"};
+const barra = (pct, cor = "bg-azul-400") => `<div class="h-1.5 rounded-full bg-white/5 overflow-hidden"><div class="h-full ${cor} transition-all ${pct == null ? "animate-pulse opacity-60" : ""}" style="width:${pct == null ? 100 : Math.min(100, pct)}%"></div></div>`;
+const tam = (v, u) => u === "bytes" ? (v / 2 ** 20).toFixed(1) + " MB" : v + (u ? " " + u : "");
+
+function cabeca(d) {
+  const p = d.processo, fim = p.end || Date.now() / 1000;
+  $("cabeca").innerHTML = `<span class="font-mono uppercase text-xs tracking-wider ${COR[p.state]} ${p.state === "running" ? "animate-pulse" : ""}">${ESTADO[p.state]}</span>
+    · <span>${p.slot === "claude" ? "vaga Claude (em paralelo)" : "vaga da máquina"}</span>
+    · <span>motor ${esc(p.engine)}</span> · <span>${p.queue ? "da fila" : "do terminal"}</span>
+    · <span class="font-mono">pid ${p.pid}</span> · <span>início ${hora(p.start)}</span>
+    · <span>duração ${dur(fim - p.start)}</span>${p.error ? ` · <span class="text-rose-300">${esc(p.error)}</span>` : ""}`;
+  $("parar").classList.toggle("hidden", p.state !== "running");
+}
+
+function agora(v) {
+  $("agora").classList.toggle("hidden", !v);
+  if (!v) return;
+  let h = `<div><p class="text-white">${esc(v.nome || v.node)}</p><p class="text-sm text-slate-400">${esc(v.detail)}</p></div>`;
+  if (v.progress) {
+    const g = v.progress;
+    h += `<div><div class="flex justify-between text-xs text-slate-400 mb-1"><span>${esc(g.message)}</span><span class="font-mono">${g.i}/${g.n}${g.remaining ? " · resta " + dur(g.remaining) : ""}</span></div>${barra(100 * g.i / g.n)}</div>`;
+  }
+  for (const t of Object.values(v.tasks || {})) {
+    const pct = t.total ? 100 * t.done / t.total : null, seg = (t.t - t.start) || 1;
+    h += `<div><div class="flex justify-between text-xs text-slate-400 mb-1"><span>${esc(t.label)}</span><span class="font-mono">${tam(t.done, t.unit)}${t.total ? " / " + tam(t.total, t.unit) : ""}${t.unit === "bytes" ? " · " + (t.done / seg / 1024).toFixed(0) + " KB/s" : ""}</span></div>${barra(pct, "bg-sky-400")}</div>`;
+  }
+  const c = v.call;
+  if (c) {
+    const gerando = c.first ? (Date.now() / 1000 - c.first) : 0;
+    const tps = gerando > 0.5 ? (c.tokens / gerando).toFixed(1) + " tok/s" : (c.engine === "claude" ? "aguardando o Claude" : "lendo o prompt");
+    const max = c.params?.num_predict;
+    h += `<div><div class="flex flex-wrap justify-between gap-2 text-xs text-slate-400 mb-1">
+        <span><span class="${c.engine === "claude" ? "text-violet-300" : "text-teal-300"}">${esc(c.engine)}</span> · ${esc(c.name)} · <span class="font-mono">${esc(c.model)}</span></span>
+        <span class="font-mono">${c.tokens || 0}${max ? "/" + max : ""} tokens · ${tps} · ${dur(Date.now() / 1000 - c.start)}</span></div>
+      ${barra(max ? 100 * (c.tokens || 0) / max : null, c.engine === "claude" ? "bg-violet-400" : "bg-teal-400")}
+      <pre id="parcial" class="mt-2 text-[11px] font-mono text-slate-300 whitespace-pre-wrap break-words max-h-48 overflow-y-auto bg-black/20 rounded-lg p-3">${esc(c.partial || "…")}</pre></div>`;
+  }
+  $("agora-corpo").innerHTML = h;
+  const pc = $("parcial"); if (pc) pc.scrollTop = pc.scrollHeight;
+}
+
+function caminho(lista, rodando) {
+  $("caminho").innerHTML = lista.length ? lista.map((n, i) => {
+    const atual = rodando && i === lista.length - 1;
+    return `${i ? '<span class="text-slate-600">→</span>' : ""}<span title="${esc(n.detalhe)}" class="px-2 py-1 rounded-md ring-1 ${atual ? "ring-azul-400/60 bg-azul-500/15 text-white animate-pulse" : "ring-white/10 text-slate-300"}">${esc(n.nome)} <span class="font-mono text-slate-500">${dur(n.seg)}</span></span>`;
+  }).join("") : '<span class="text-slate-500">Sem passos registrados (processo antigo ou etapa sem rastro).</span>';
+}
+
+function numeros(d) {
+  const r = d.recursos, s = d.resumo;
+  const linhas = [["CPU", r ? r.cpu.toFixed(0) + "%" : "—"], ["RAM", r ? r.ram_mb + " MB" : "—"], ["VRAM", r ? r.vram_mb + " MB" : "—"],
+    ["Chamadas", s.chamadas + (s.falhas ? ` (${s.falhas} falhas)` : "")], ["Do cache", s.cache], ["Tokens gerados", s.tokens_saida],
+    ["Tempo em LLM", dur(s.seg_llm)], ["Claude", "US$ " + s.custo_usd.toFixed(4)]];
+  $("numeros").innerHTML = linhas.map(([k, v]) => `<dt class="text-slate-500">${k}</dt><dd class="text-slate-200 font-mono text-right">${v}</dd>`).join("");
+}
+
+const abertas = new Set();
+document.addEventListener("toggle", e => { const id = e.target.dataset?.id; if (id) e.target.open ? abertas.add(id) : abertas.delete(id); }, true);
+function chamadas(lista) {
+  $("chamadas").innerHTML = lista.length ? lista.map(c => `<details data-id="${esc(c.id)}" ${abertas.has(String(c.id)) ? "open" : ""} class="rounded-lg ring-1 ring-white/10 px-3 py-2">
+      <summary class="cursor-pointer flex flex-wrap gap-x-3 text-xs"><span class="${c.ok ? "text-emerald-400" : "text-rose-400"}">${c.ok ? "ok" : "falhou"}</span>
+        <span class="${c.engine === "claude" ? "text-violet-300" : "text-teal-300"}">${esc(c.engine)}</span><span class="text-white">${esc(c.name)}</span>
+        <span class="font-mono text-slate-500">${esc(c.model)} · ${c.seconds}s${c.output_tokens ? " · " + c.output_tokens + " tok" : ""}${c.tok_s ? " · " + c.tok_s + " tok/s" : ""}${c.custo_usd ? " · US$ " + c.custo_usd.toFixed(4) : ""} · ${hora(c.t)}</span>
+        ${c.error ? `<span class="text-rose-300">${esc(c.error)}</span>` : ""}</summary>
+      <div class="grid md:grid-cols-2 gap-3 mt-2"><pre class="text-[11px] font-mono text-slate-400 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${esc(c.input)}</pre>
+        <pre class="text-[11px] font-mono text-slate-200 whitespace-pre-wrap break-words max-h-64 overflow-y-auto">${esc(c.output)}</pre></div></details>`).join("")
+    : '<p class="text-slate-500">Nenhuma chamada de LLM neste processo.</p>';
+}
+
+function eventos(lista) {
+  const cor = {error: "text-rose-400", warning: "text-amber-300", claude: "text-violet-300", start: "text-sky-300", end: "text-emerald-400"};
+  $("eventos").innerHTML = lista.length ? lista.map(e => `<div class="flex gap-2"><span class="font-mono text-slate-500">${e.t.slice(11, 19)}</span>
+    <span class="${cor[e.kind] || "text-slate-400"}">${esc(e.stage)}·${esc(e.kind)}</span><span class="text-slate-300 break-words min-w-0">${esc(e.message)}</span></div>`).join("")
+    : '<p class="text-slate-500">Sem eventos de episódio.</p>';
+}
+
+let fixoLog = true;
+$("log").addEventListener("scroll", e => { const l = e.target; fixoLog = l.scrollTop + l.clientHeight >= l.scrollHeight - 8; });
+
+async function atualizar() {
+  let d;
+  try { d = await (await fetch(`/api/processos/${ID}`)).json(); } catch { return setTimeout(atualizar, 3000); }
+  const rodando = d.processo.state === "running";
+  cabeca(d); agora(d.vivo); caminho(d.caminho, rodando); numeros(d); chamadas(d.chamadas); eventos(d.eventos);
+  $("log").textContent = d.log.join("\n") || "(sem log)";
+  if (fixoLog) $("log").scrollTop = $("log").scrollHeight;
+  if (rodando) setTimeout(atualizar, 1500);
+}
+atualizar();
+</script>
+{% endblock %}

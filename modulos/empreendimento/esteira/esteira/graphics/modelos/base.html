@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: Inter; src: url("{{ raiz }}/fontes/inter-latin-wght-normal.woff2"); font-weight: 100 900; }
+@font-face { font-family: Playfair; src: url("{{ raiz }}/fontes/playfair-display-latin-wght-normal.woff2"); font-weight: 400 900; }
+@font-face { font-family: Playfair; font-style: italic; src: url("{{ raiz }}/fontes/playfair-display-latin-wght-italic.woff2"); font-weight: 400 900; }
+@font-face { font-family: Mono; src: url("{{ raiz }}/fontes/jetbrains-mono-latin-wght-normal.woff2"); font-weight: 100 800; }
+:root {
+  --dur: {{ dur }}s; --cor: {{ cor }};
+  --saida: calc(var(--dur) - .55s);
+  --suave: cubic-bezier(.22, 1, .36, 1);
+  --camera: cubic-bezier(.65, 0, .35, 1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: {{ w }}px; height: {{ h }}px; background: transparent; overflow: hidden;
+  font-family: Inter, sans-serif; color: #f4f1ea; -webkit-font-smoothing: antialiased; }
+/* Efeitos da peça inteira (graficos.json → "efeito"): entrada opcional e saída nos últimos 0,55 s. */
+{% set ent = efeito.entrada or 'padrao' %}{% set sai = efeito.saida or 'padrao' %}{% set anims = [] %}
+{% if ent not in ('padrao', 'nenhuma') %}{% set _ = anims.append('ent-%s %ss var(--suave) both' % (ent, efeito.vel or 0.6)) %}{% endif %}
+{% if sai != 'nenhuma' %}{% set _ = anims.append('sai-%s .55s var(--saida) ease-in both' % sai) %}{% endif %}
+.palco { position: absolute; inset: 0; animation: {{ anims|join(', ') or 'none' }}; }
+@keyframes sai-padrao { to { opacity: 0; filter: blur(6px); } }
+@keyframes sai-fade { to { opacity: 0; } }
+@keyframes sai-zoom { to { opacity: 0; transform: scale(1.12); } }
+@keyframes sai-deslizar { to { opacity: 0; transform: translateX(12%); } }
+@keyframes sai-descer { to { opacity: 0; transform: translateY(8%); } }
+@keyframes ent-fade { from { opacity: 0; } }
+@keyframes ent-subir { from { opacity: 0; transform: translateY(6%); } }
+@keyframes ent-zoom { from { opacity: 0; transform: scale(.86); } }
+@keyframes ent-deslizar { from { opacity: 0; transform: translateX(-12%); } }
+@keyframes ent-desfoque { from { opacity: 0; filter: blur(28px); } }
+@keyframes ent-revelar { from { clip-path: inset(0 100% 0 0); } }
+/* Caixas de texto livres (graficos.json → "caixas"; também na thumb): posição/largura em % do quadro. */
+.caixa { position: absolute; }
+.caixa .d { color: var(--cd, var(--cor)); }
+.cx-contorno { -webkit-text-stroke: .07em #000; paint-order: stroke fill; }
+.cx-nenhum { text-shadow: 0 3px 18px rgba(0,0,0,.75); }
+.cx-solido, .cx-vidro, .cx-tarja { display: inline; padding: .12em .38em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.cx-vidro { background: rgba(8,12,24,.62) !important; border: 1px solid rgba(255,255,255,.14); border-radius: .25em; }
+.cx-tarja { border-left: .14em solid var(--cor); }
+@keyframes cx-subir { from { opacity: 0; transform: translateY(.6em); filter: blur(10px); } }
+@keyframes cx-fade { from { opacity: 0; } }
+@keyframes cx-zoom { from { opacity: 0; transform: scale(.8); } }
+@keyframes cx-esquerda { from { opacity: 0; transform: translateX(-1.2em); filter: blur(10px); } }
+@keyframes cx-revelar { from { clip-path: inset(0 100% 0 0); } }
+@keyframes entrar-baixo { from { opacity: 0; transform: translateY(40px); filter: blur(10px); } }
+@keyframes entrar-esq { from { opacity: 0; transform: translateX(-80px); filter: blur(12px); } }
+@keyframes aparecer { from { opacity: 0; } }
+@keyframes traco { from { transform: scaleX(0); } }
+.rotulo { font: 600 22px/1 Mono, monospace; letter-spacing: .22em; text-transform: uppercase; color: var(--cor); }
+{% block estilo %}{% endblock %}
+</style>
+</head>
+<body>
+<div class="palco">{% block corpo %}{% endblock %}
+{% for c in caixas %}<div class="caixa" data-k="{{ loop.index0 }}" style="left:{{ c.x }}%;top:{{ c.y }}%;width:{{ c.w }}%;
+font:{{ c.peso }} {{ c.tam }}px/1.12 {{ c.fonte }};color:{{ c.cor }};text-align:{{ c.alinhar }};{{ 'text-transform:uppercase;' if c.maiusculas }}{{ '--cd:%s;' % c.cor_d if c.cor_d }}
+{% if not estatico and c.entrada != 'nenhuma' %}animation:cx-{{ c.entrada }} {{ c.vel }}s var(--suave) {{ c.atraso }}s both;{% endif %}"><span class="cx-{{ c.fundo }}"{% if c.fundo in ('solido', 'tarja') %} style="background:{{ c.cor_fundo }}"{% endif %}>{{ c.html }}</span></div>{% endfor %}
+</div>
+<script>{% block script %}{% endblock %}</script>
+</body>
+</html>

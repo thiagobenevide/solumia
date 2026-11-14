@@ -1,0 +1,19 @@
+/* Fundo respira: só variáveis da pele do kit. Sem texto. */
+.p-fundo_respira { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.p-fundo_respira .fr-cena { position: absolute; inset: 0; }
+.p-fundo_respira .fr-l { position: absolute; inset: -8%; }
+.p-fundo_respira .fr-mancha { position: absolute; width: calc(95 * var(--U)); height: calc(95 * var(--U));
+  margin: calc(-47 * var(--U)) 0 0 calc(-47 * var(--U)); border-radius: 50%; filter: blur(calc(6 * var(--U))); }
+.p-fundo_respira .fr-mdestaque { background: radial-gradient(circle, color-mix(in srgb, var(--destaque) 26%, transparent), transparent 68%); }
+.p-fundo_respira .fr-mapoio { background: radial-gradient(circle, color-mix(in srgb, var(--apoio) 24%, transparent), transparent 68%); }
+.p-fundo_respira .fr-macento { background: radial-gradient(circle, color-mix(in srgb, var(--acento) 20%, transparent), transparent 68%); }
+.p-fundo_respira .fr-p { position: absolute; border-radius: 50%; opacity: 0; }
+.p-fundo_respira .fr-b { background: color-mix(in srgb, var(--texto) 70%, var(--destaque)); box-shadow: 0 0 calc(1.2 * var(--U)) color-mix(in srgb, var(--destaque) 50%, transparent); }
+.p-fundo_respira .fr-g { background: var(--texto); }
+.p-fundo_respira .fr-veu { position: absolute; inset: 0;
+  background: linear-gradient(to top, color-mix(in srgb, var(--fundo) 55%, transparent), transparent 45%),
+    radial-gradient(ellipse at center, transparent 40%, color-mix(in srgb, var(--fundo) 60%, transparent) 100%); }
+.p-fundo_respira .fr-halo { position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 40%, color-mix(in srgb, var(--fundo2) 45%, transparent), transparent 60%); }
+.vertical .p-fundo_respira .fr-mancha { width: calc(120 * var(--U)); height: calc(120 * var(--U));
+  margin: calc(-60 * var(--U)) 0 0 calc(-60 * var(--U)); }

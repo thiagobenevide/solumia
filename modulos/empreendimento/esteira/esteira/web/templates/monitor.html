@@ -1,0 +1,546 @@
+{% extends "base.html" %}
+{% from "_motor.html" import motor %}
+{% block titulo %}Monitor · Esteira dark{% endblock %}
+{% block corpo %}
+<div class="flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <p class="text-xs font-semibold tracking-[.2em] text-azul-400 uppercase">Tempo real · atualiza a cada 2 s</p>
+    <h1 class="mt-2 text-3xl sm:text-4xl font-semibold tracking-tight text-white">Monitor</h1>
+    <p class="mt-2 text-sm text-slate-400 max-w-2xl">O que a máquina está fazendo agora: GPU, CPU, energia, processos da esteira (com as últimas linhas
+      que cada um escreveu) e arquivos alterados. Só leitura: nada aqui interrompe um processo.</p>
+    <p class="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">Monitor: {{ motor([('py', 'Python (nvidia-smi, /proc, RAPL)')]) }} · sem tokens do Claude</p>
+  </div>
+  <div class="text-right">
+    <a href="/processos" class="inline-block text-sm px-3 py-2 rounded-md border border-azul-400/40 text-azul-300 hover:bg-azul-500/10">Processos (um por um, com histórico) →</a>
+    <p id="atualizado" class="mt-2 text-xs font-mono text-slate-500"></p>
+  </div>
+</div>
+
+
+<section class="mt-6">
+  <div class="cartao rounded-xl p-3">
+    <div class="flex flex-wrap items-center gap-3 px-1 text-[11px] text-slate-400">
+      <span class="font-semibold text-slate-200 text-xs">Grafo da operação</span>
+      <span>clique num nó para ver o que acontece por baixo</span>
+      <span class="ml-auto flex flex-wrap gap-2">
+        <span class="text-slate-300">■ Python</span><span class="text-teal-300">■ LLM local</span><span class="text-orange-300">■ GPU</span><span class="text-violet-300">■ Claude</span>
+        <span>· pulsando = agora · contorno = usado há &lt;15 min · passe o mouse para ver as ligações</span></span>
+    </div>
+    <div id="legado" class="hidden mx-1 mt-2 text-[11px] px-3 py-2 rounded-lg bg-amber-500/10 text-amber-200"></div>
+    <div class="relative mt-2 rounded-lg overflow-hidden" style="background: radial-gradient(ellipse at center, rgba(37,99,235,.07), transparent 70%)">
+      <svg id="grafo" class="block w-full h-[600px] touch-none select-none cursor-grab"></svg>
+      <div class="absolute bottom-2 left-3 text-[10px] text-slate-500">arraste os nós · arraste o fundo para mover · roda do mouse para zoom · duplo clique no fundo recentraliza</div>
+    </div>
+  </div>
+</section>
+<!-- Gaveta de detalhe do nó: abre ao clicar, sem tirar o grafo da tela -->
+<aside id="gaveta" class="fixed top-16 right-0 bottom-0 z-30 w-full sm:w-[540px] translate-x-full transition-transform duration-200
+  bg-tinta-950/95 backdrop-blur-md border-l border-azul-400/20 shadow-[-20px_0_40px_-20px_rgba(0,0,0,.8)]">
+  <button id="fechar" class="absolute top-3 right-3 w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/5">✕</button>
+  <div id="painel_no" class="h-full overflow-y-auto p-5 pr-12 text-sm"></div>
+</aside>
+
+<div class="mt-6 grid gap-3 grid-cols-2 lg:grid-cols-4" id="cartoes"></div>
+
+<div class="mt-4 grid gap-3 lg:grid-cols-2">
+  <div class="cartao rounded-xl p-4"><p class="text-xs text-slate-400">GPU · últimos 10 min</p><div id="g_gpu" class="mt-2"></div>
+    <p class="mt-1 text-[11px] text-slate-500"><span class="text-sky-300">— uso %</span> · <span class="text-orange-300">— potência (% do limite)</span> · <span class="text-rose-300">— temperatura °C</span></p></div>
+  <div class="cartao rounded-xl p-4"><p class="text-xs text-slate-400">CPU · últimos 10 min</p><div id="g_cpu" class="mt-2"></div>
+    <p class="mt-1 text-[11px] text-slate-500"><span class="text-sky-300">— uso %</span> · <span class="text-orange-300">— potência W</span> · <span class="text-rose-300">— temperatura °C</span></p></div>
+</div>
+
+<h2 class="mt-8 text-sm font-semibold text-slate-300">Processos da esteira agora</h2>
+<div id="esteira" class="mt-3 space-y-3"></div>
+
+<div class="mt-8 grid gap-6 lg:grid-cols-2">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-300">Programas auxiliares</h2>
+    <div id="grupos" class="mt-3 cartao rounded-xl divide-y divide-white/5 text-sm"></div>
+    <h2 class="mt-6 text-sm font-semibold text-slate-300">Fila do painel</h2>
+    <div id="fila" class="mt-3 cartao rounded-xl divide-y divide-white/5 text-sm"></div>
+  </div>
+  <div>
+    <h2 class="text-sm font-semibold text-slate-300">Arquivos alterados (15 min)</h2>
+    <div id="arquivos" class="mt-3 cartao rounded-xl p-3 font-mono text-[11.5px] leading-relaxed max-h-[420px] overflow-y-auto"></div>
+  </div>
+</div>
+
+<script>
+const MOTORES = {{ MOTORES|tojson }};
+const COR = {py: "bg-slate-500/10 text-slate-300 ring-slate-400/20", local: "bg-teal-500/10 text-teal-300 ring-teal-400/25",
+             gpu: "bg-orange-500/10 text-orange-300 ring-orange-400/25", claude: "bg-violet-500/10 text-violet-300 ring-violet-400/25"};
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const selo = (lista) => lista.map(([m, t]) => `<span class="inline-flex text-[10px] px-1.5 py-0.5 rounded-md ring-1 ${COR[m]}">${esc(t)}</span>`).join(" ");
+const dur = (s) => { s = Math.max(0, Math.round(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h}h${String(m).padStart(2, "0")}` : `${m}m${String(s % 60).padStart(2, "0")}s`; };
+const n = (v, casas = 0) => v == null ? "—" : (+v).toFixed(casas);
+function cor_temp(t) { return t == null ? "text-white" : t >= 83 ? "text-rose-400" : t >= 72 ? "text-amber-300" : "text-white"; }
+function cartao(rot, val, sub, cls = "text-white", barra = null) {
+  return `<div class="cartao rounded-xl px-4 py-3.5"><p class="text-[11px] uppercase tracking-wider text-slate-500">${rot}</p>
+    <p class="mt-1 text-2xl font-semibold tabular-nums ${cls}">${val}</p><p class="text-[11px] text-slate-500">${sub}</p>
+    ${barra != null ? `<div class="mt-2 h-1.5 rounded-full bg-white/5 overflow-hidden"><div class="h-full bg-azul-400" style="width:${Math.min(100, barra)}%"></div></div>` : ""}</div>`;
+}
+function grafico(series, max) {
+  const W = 600, H = 110;
+  const linhas = series.map(([vals, cor, teto]) => {
+    const pts = vals.map((v, i) => v == null ? null : `${(i / Math.max(1, vals.length - 1) * W).toFixed(1)},${(H - Math.min(1, v / teto) * H).toFixed(1)}`).filter(Boolean);
+    return `<polyline fill="none" stroke="${cor}" stroke-width="2" points="${pts.join(" ")}"/>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="w-full h-28"><line x1="0" x2="${W}" y1="${H / 2}" y2="${H / 2}" stroke="rgba(148,163,184,.12)"/>${linhas}</svg>`;
+}
+async function atualizar() {
+  let e;
+  try { e = await (await fetch("/api/monitor")).json(); } catch { document.getElementById("atualizado").textContent = "painel sem resposta"; return; }
+  const a = e.atual || {}, g = a.gpu, c = a.cpu || {}, r = a.ram || {}, en = e.energia;
+  document.getElementById("atualizado").textContent = a.t ? "atualizado " + new Date(a.t * 1000).toLocaleTimeString("pt-BR") : "coletando…";
+  const total_w = (g?.watts || 0) + (c.watts || 0);
+  const ollama = a.ollama == null ? "llama.cpp desligado" : a.ollama.length ? a.ollama.map(m => `${m.modelo} (${m.vram_gb} GB)`).join(", ") : "nenhum modelo carregado";
+  document.getElementById("cartoes").innerHTML = (g ? [
+    cartao("GPU · uso", n(g.uso) + "%", `${esc(g.nome)} · ${n(g.clock_mhz)} MHz`, "text-sky-300", g.uso),
+    cartao("GPU · potência", n(g.watts) + " W", `limite ${n(g.limite_w)} W · ventoinha ${n(g.ventoinha)}%`, "text-orange-300", g.watts / g.limite_w * 100),
+    cartao("GPU · temperatura", n(g.temp) + " °C", "≥ 83 °C fica vermelho", cor_temp(g.temp)),
+    cartao("GPU · VRAM", n(g.vram_mb / 1024, 1) + " GB", `de ${n(g.vram_total_mb / 1024, 1)} GB · ${esc(ollama)}`, "text-white", g.vram_mb / g.vram_total_mb * 100),
+  ] : [cartao("GPU", "—", "nvidia-smi indisponível")]).join("") + [
+    cartao("CPU · uso", n(c.uso) + "%", `${c.nucleos || "?"} núcleos`, "text-sky-300", c.uso),
+    cartao("CPU · potência / temp.", `${n(c.watts)} W · <span class="${cor_temp(c.temp)}">${n(c.temp)} °C</span>`, "potência do pacote (RAPL)"),
+    cartao("RAM", n(r.usada_gb, 1) + " GB", `de ${n(r.total_gb, 1)} GB`, "text-white", r.usada_gb / r.total_gb * 100),
+    cartao("Energia (GPU + CPU)", `${n(total_w)} W agora`, `${n(en.kwh, 3)} kWh em ${n(en.horas, 1)} h ≈ R$ ${n(en.reais, 2)} · ~R$ ${n(total_w / 1000 * en.tarifa, 2)}/h · tarifa R$ ${en.tarifa}/kWh`, "text-amarelo-300"),
+  ].join("");
+  const h = e.hist || [];
+  document.getElementById("g_gpu").innerHTML = grafico([[h.map(x => x.gpu_uso), "#7dd3fc", 100], [h.map(x => x.gpu_w), "#fdba74", g?.limite_w || 180], [h.map(x => x.gpu_temp), "#fda4af", 100]]);
+  document.getElementById("g_cpu").innerHTML = grafico([[h.map(x => x.cpu_uso), "#7dd3fc", 100], [h.map(x => x.cpu_w), "#fdba74", 200], [h.map(x => x.cpu_temp), "#fda4af", 100]]);
+  const agora = a.t || Date.now() / 1000;
+  document.getElementById("esteira").innerHTML = (a.esteira || []).map(p => {
+    const sub = (p.comando || "").split(/\s+/)[0];
+    const motores = p.motor == "claude" ? [["claude", "Claude"]] : MOTORES[sub] || [[p.motor, "Python"]];
+    return `<div class="cartao rounded-xl p-4">
+      <div class="flex flex-wrap items-center gap-2"><span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+        <span class="font-mono text-sm text-white">${esc(p.rotulo == "Esteira" ? "./dark " + p.comando : p.comando)}</span> ${selo(motores)}
+        <span class="ml-auto text-xs font-mono text-slate-500">pid ${p.pid} · há ${dur(agora - p.desde)} · CPU ${n(p.cpu)}% · RAM ${n(p.ram_mb)} MB${p.vram_mb ? ` · VRAM ${n(p.vram_mb)} MB` : ""}</span></div>
+      ${p.linhas?.length ? `<pre class="mt-3 p-3 rounded-lg bg-black/30 text-[11.5px] leading-relaxed text-slate-300 whitespace-pre-wrap">${esc(p.linhas.join("\n"))}</pre>
+        <p class="mt-1 text-[10px] font-mono text-slate-600 truncate">saída: ${esc(p.log)}</p>` : `<p class="mt-2 text-xs text-slate-500">${p.log ? "sem saída ainda" : "saída no terminal (não em arquivo)"}</p>`}
+    </div>`;
+  }).join("") || `<div class="cartao rounded-xl p-6 text-sm text-slate-400">Nenhum processo da esteira rodando.</div>`;
+  document.getElementById("grupos").innerHTML = (a.grupos || []).map(p => `<div class="flex items-center gap-3 px-4 py-2.5">
+      <span class="text-slate-200">${esc(p.rotulo)}</span> ${selo([[p.motor, {py: "Python", local: "LLM local", gpu: "GPU", claude: "Claude"}[p.motor]]])}
+      <span class="ml-auto text-xs font-mono text-slate-500">${p.n} proc. · CPU ${n(p.cpu)}% · RAM ${n(p.ram_mb)} MB${p.vram_mb ? ` · VRAM ${n(p.vram_mb / 1024, 1)} GB` : ""}</span></div>`).join("")
+    || `<p class="px-4 py-3 text-slate-500">Nenhum.</p>`;
+  document.getElementById("fila").innerHTML = (e.fila || []).map(t => `<div class="flex flex-wrap items-center gap-2 px-4 py-2.5">
+      <span class="text-xs font-mono ${t.estado == "rodando" ? "text-sky-300" : "text-slate-500"}">${esc(t.estado)}</span>
+      <a href="/ep/${esc(t.ep)}" class="text-white hover:text-azul-300">${esc(t.ep)}</a><span class="font-mono text-xs text-slate-500">${esc(t.comando)}</span> ${selo(MOTORES[t.comando] || [])}</div>`).join("")
+    || `<p class="px-4 py-3 text-slate-500">Fila vazia.</p>`;
+  document.getElementById("arquivos").innerHTML = (e.arquivos || []).map(f => `<div class="flex gap-3"><span class="w-14 shrink-0 text-right text-slate-500">${dur(f.seg)}</span><span class="text-slate-300 break-all">${esc(f.caminho)}</span></div>`).join("")
+    || `<p class="text-slate-500">Nenhum arquivo alterado nos últimos 15 min.</p>`;
+}
+atualizar(); setInterval(atualizar, 2000);
+</script>
+
+<style>
+@keyframes pulso { 0%,100% { stroke-opacity: 1; } 50% { stroke-opacity: .3; } }
+@keyframes fluxo { to { stroke-dashoffset: -24; } }
+#grafo g.no { cursor: pointer; transition: opacity .25s; }
+#grafo g.no rect.borda { transition: fill .4s, stroke .4s; }
+#grafo g.no-ativo rect.borda { animation: pulso 1.1s ease-in-out infinite; }
+#grafo g.no-ativo { filter: drop-shadow(0 0 10px var(--brilho)); }
+#grafo path.aresta { transition: stroke-opacity .25s, stroke .4s, opacity .25s; }
+#grafo path.aresta-viva { stroke-dasharray: 6 6; animation: fluxo .6s linear infinite; }
+#grafo.foco g.no:not(.viz) { opacity: .14; }
+#grafo.foco path.aresta:not(.viz) { opacity: .05; }
+#grafo.foco path.aresta.viz { stroke-opacity: .9 !important; }
+@keyframes indet { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+.barra-indet { width: 38%; animation: indet 1.3s ease-in-out infinite; }
+@keyframes indet-svg { 0% { transform: translateX(0); } 50% { transform: translateX(62px); } 100% { transform: translateX(0); } }
+#grafo rect.indet { animation: indet-svg 1.6s ease-in-out infinite; }
+.barra-viva { transition: width .5s linear; background-image: linear-gradient(90deg, rgba(255,255,255,.0), rgba(255,255,255,.25), rgba(255,255,255,0)); background-size: 200% 100%; animation: brilho 1.4s linear infinite; }
+@keyframes brilho { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+</style>
+<script>
+const CORM = {py: "#94a3b8", local: "#2dd4bf", gpu: "#fb923c", claude: "#a78bfa"};
+const NW = 112, NH = 46, NS = "http://www.w3.org/2000/svg";
+const FAIXA_Y = {roteiro: -190, episodio: 0, recurso: 190};
+let G = null, selecionado = null, nos = [], porId = {}, arestas = [], mundo = null;
+let alfa = 1, alvoAlfa = 0, cam = {x: 0, y: 0, k: 1}, arrastando = null, enquadrar = true;
+const svgG = document.getElementById("grafo");
+function tempo(s) { return s == null ? "" : s < 60 ? `${s}s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`; }
+function novo(tag, attrs = {}, pai) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); pai?.append(e); return e; }
+
+// ---------- construção (uma vez) ----------
+function construir() {
+  svgG.innerHTML = "";
+  const defs = novo("defs", {}, svgG);
+  novo("path", {d: "M0,0 L10,5 L0,10 z", fill: "#64748b"}, novo("marker", {id: "seta", viewBox: "0 0 10 10", refX: 10, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto"}, defs));
+  mundo = novo("g", {}, svgG);
+  const camArestas = novo("g", {}, mundo), camNos = novo("g", {}, mundo);
+  const contar = {};
+  G.def_nos.forEach(d => contar[d.faixa] = (contar[d.faixa] || 0) + 1);
+  const idx = {};
+  nos = G.def_nos.map(d => {
+    const k = idx[d.faixa] = (idx[d.faixa] ?? -1) + 1, n = contar[d.faixa];
+    const no = {...d, x: (k - (n - 1) / 2) * 130 + (Math.random() - .5) * 40, y: FAIXA_Y[d.faixa] + (Math.random() - .5) * 120, vx: 0, vy: 0};
+    no.g = novo("g", {class: "no", "data-id": d.id}, camNos);
+    no.g.style.setProperty("--brilho", CORM[d.motor] + "99");
+    no.borda = novo("rect", {class: "borda", width: NW, height: NH, rx: 10, fill: "#0e1730", stroke: "#334155"}, no.g);
+    no.faixa_cor = novo("rect", {width: 4, height: NH - 16, x: 7, y: 8, rx: 2, fill: CORM[d.motor]}, no.g);
+    no.titulo = novo("text", {x: 17, y: 20, "font-size": 12, "font-weight": 600, "font-family": "Inter", fill: "#94a3b8"}, no.g);
+    no.titulo.textContent = d.rotulo;
+    no.sub = novo("text", {x: 17, y: 36, "font-size": 10, "font-family": "Mono", fill: "#64748b"}, no.g);
+    no.trilho = novo("rect", {x: 10, y: NH - 6, width: NW - 20, height: 3, rx: 1.5, fill: "#ffffff", "fill-opacity": .08, opacity: 0}, no.g);
+    no.barra = novo("rect", {x: 10, y: NH - 6, width: 0, height: 3, rx: 1.5, fill: CORM[d.motor], opacity: 0}, no.g);
+    no.viz = new Set([d.id]);
+    porId[d.id] = no;
+    return no;
+  });
+  arestas = [...G.seq.map(([a, b]) => ({a, b, tipo: "seq"})), ...G.usa.map(([a, b]) => ({a, b, tipo: "usa"}))].map(l => {
+    l.el = novo("path", {class: "aresta", fill: "none", stroke: l.tipo == "seq" ? "#64748b" : "#475569", "stroke-width": l.tipo == "seq" ? 1.6 : 1.1,
+                         "stroke-opacity": l.tipo == "seq" ? .55 : .22, ...(l.tipo == "seq" ? {"marker-end": "url(#seta)"} : {})}, camArestas);
+    porId[l.a].viz.add(l.b); porId[l.b].viz.add(l.a);
+    return l;
+  });
+  nos.forEach(n => {
+    n.g.addEventListener("pointerenter", () => focar(n.id));
+    n.g.addEventListener("pointerleave", () => { if (!arrastando) focar(null); });
+    n.g.addEventListener("pointerdown", (e) => { e.stopPropagation(); arrastando = {no: n, x0: e.clientX, y0: e.clientY, moveu: false}; svgG.setPointerCapture(e.pointerId); });
+  });
+  centralizar();
+  requestAnimationFrame(quadro);
+}
+function focar(id) {
+  svgG.classList.toggle("foco", !!id);
+  const v = id ? porId[id].viz : new Set();
+  nos.forEach(n => n.g.classList.toggle("viz", v.has(n.id)));
+  arestas.forEach(l => l.el.classList.toggle("viz", !!id && (l.a == id || l.b == id)));
+}
+
+// ---------- física (repulsão, molas, gravidade fraca por faixa, colisão das caixas) ----------
+function fisica() {
+  const a = alfa;
+  for (let i = 0; i < nos.length; i++) for (let j = i + 1; j < nos.length; j++) {
+    const p = nos[i], q = nos[j];
+    let dx = q.x - p.x, dy = q.y - p.y, d2 = dx * dx + dy * dy;
+    if (d2 < 1) { dx = Math.random(); dy = Math.random(); d2 = 1; }
+    const f = 26000 * a / d2, d = Math.sqrt(d2);
+    p.vx -= dx / d * f; p.vy -= dy / d * f; q.vx += dx / d * f; q.vy += dy / d * f;
+    const sx = NW + 18 - Math.abs(dx), sy = NH + 16 - Math.abs(dy);   // caixas não se sobrepõem
+    if (sx > 0 && sy > 0) {
+      if (sx < sy) { const m = sx / 2 * Math.sign(dx || 1) * .5; p.vx -= m; q.vx += m; }
+      else { const m = sy / 2 * Math.sign(dy || 1) * .5; p.vy -= m; q.vy += m; }
+    }
+  }
+  for (const l of arestas) {
+    const p = porId[l.a], q = porId[l.b], L = l.tipo == "seq" ? 150 : 230, k = l.tipo == "seq" ? .05 : .018;
+    const dx = q.x - p.x, dy = q.y - p.y, d = Math.max(1, Math.hypot(dx, dy)), f = (d - L) / d * k * a;
+    p.vx += dx * f; p.vy += dy * f; q.vx -= dx * f; q.vy -= dy * f;
+  }
+  for (const n of nos) {
+    n.vx -= n.x * .004 * a; n.vy += (FAIXA_Y[n.faixa] - n.y) * .02 * a;
+    if (arrastando?.no == n) { n.vx = n.vy = 0; continue; }
+    n.vx *= .6; n.vy *= .6; n.x += n.vx; n.y += n.vy;
+  }
+}
+function desenharPosicoes() {
+  for (const n of nos) n.g.setAttribute("transform", `translate(${(n.x - NW / 2).toFixed(1)},${(n.y - NH / 2).toFixed(1)})`);
+  for (const l of arestas) {
+    const p = porId[l.a], q = porId[l.b];
+    let x1 = p.x, y1 = p.y, x2 = q.x, y2 = q.y;
+    const dx = x2 - x1, dy = y2 - y1;   // corta a linha na borda das caixas
+    const corte = (ddx, ddy) => Math.min(Math.abs((NW / 2 + 2) / (ddx || 1e-6)), Math.abs((NH / 2 + 2) / (ddy || 1e-6)));
+    const c1 = corte(dx, dy), c2 = corte(dx, dy);
+    x1 += dx * c1; y1 += dy * c1; x2 -= dx * c2; y2 -= dy * c2;
+    const mx = (x1 + x2) / 2 - dy * .08, my = (y1 + y2) / 2 + dx * .08;   // curva leve, como no Obsidian
+    l.el.setAttribute("d", `M${x1.toFixed(1)},${y1.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`);
+  }
+  mundo.setAttribute("transform", `translate(${cam.x},${cam.y}) scale(${cam.k})`);
+}
+function ajustar() {
+  // enquadra todos os nós (suave) até o usuário mexer na câmera
+  const r = svgG.getBoundingClientRect();
+  const xs = nos.map(n => n.x), ys = nos.map(n => n.y);
+  const x0 = Math.min(...xs) - NW, x1 = Math.max(...xs) + NW, y0 = Math.min(...ys) - NH * 1.5, y1 = Math.max(...ys) + NH * 1.5;
+  const k = Math.min(1.3, r.width / (x1 - x0), (r.height - 20) / (y1 - y0));
+  const alvo = {k, x: r.width / 2 - (x0 + x1) / 2 * k, y: (r.height - 20) / 2 - (y0 + y1) / 2 * k};
+  for (const c of ["k", "x", "y"]) cam[c] += (alvo[c] - cam[c]) * .08;
+}
+function quadro() {
+  alfa += (alvoAlfa - alfa) * .02;
+  if (alfa > .003) fisica();
+  if (enquadrar) ajustar();
+  desenharPosicoes();
+  requestAnimationFrame(quadro);
+}
+function centralizar() {
+  const r = svgG.getBoundingClientRect();
+  cam.k = Math.min(1, r.width / 1350); cam.x = r.width / 2; cam.y = r.height / 2;
+}
+
+// ---------- interação: arrastar nó, mover o fundo, zoom ----------
+const mundoXY = (e) => { const r = svgG.getBoundingClientRect(); return {x: (e.clientX - r.left - cam.x) / cam.k, y: (e.clientY - r.top - cam.y) / cam.k}; };
+svgG.addEventListener("pointerdown", (e) => { enquadrar = false; arrastando = {fundo: true, x0: e.clientX, y0: e.clientY, cx: cam.x, cy: cam.y}; svgG.setPointerCapture(e.pointerId); svgG.style.cursor = "grabbing"; });
+svgG.addEventListener("pointermove", (e) => {
+  if (!arrastando) return;
+  if (arrastando.no) {
+    const m = mundoXY(e);
+    arrastando.moveu ||= Math.hypot(e.clientX - arrastando.x0, e.clientY - arrastando.y0) > 4;
+    arrastando.no.x = m.x; arrastando.no.y = m.y; alvoAlfa = .35; alfa = Math.max(alfa, .3);
+  } else { cam.x = arrastando.cx + e.clientX - arrastando.x0; cam.y = arrastando.cy + e.clientY - arrastando.y0; }
+});
+svgG.addEventListener("pointerup", () => {
+  if (arrastando?.no && !arrastando.moveu) selecionar(arrastando.no.id);
+  if (arrastando?.no) focar(null);
+  arrastando = null; alvoAlfa = 0; svgG.style.cursor = "";
+});
+svgG.addEventListener("wheel", (e) => {
+  e.preventDefault(); enquadrar = false;
+  const r = svgG.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const k = Math.min(2.5, Math.max(.3, cam.k * Math.exp(-e.deltaY * .0015)));
+  cam.x = px - (px - cam.x) * k / cam.k; cam.y = py - (py - cam.y) * k / cam.k; cam.k = k;
+}, {passive: false});
+svgG.addEventListener("dblclick", (e) => { if (e.target == svgG) enquadrar = true; });
+function selecionar(id) {
+  selecionado = id; desenharGrafo(); detalheNo();
+  document.getElementById("gaveta").classList.remove("translate-x-full");
+}
+
+// ---------- estado vindo do servidor (sem recriar o DOM: a animação continua suave) ----------
+function fracao(a) {
+  if (!a) return null;
+  if (a.chamada?.max && a.chamada.tokens) return Math.min(1, a.chamada.tokens / a.chamada.max);
+  const t = (a.tarefas || []).find(t => t.total);
+  if (t) return Math.min(1, t.done / t.total);
+  if (a.progresso?.n) return Math.min(1, a.progresso.i / a.progresso.n);
+  return null;
+}
+const tamanho = (b) => b >= 2 ** 20 ? `${(b / 2 ** 20).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`;
+function barra({rotulo, feito, total, unidade, inicio, cor = "bg-sky-400", extra = "", eta = null, fixo = false}) {
+  const agora = Date.now() / 1000, dec = Math.max(.1, agora - (inicio || agora));
+  const fr = total ? Math.min(1, feito / total) : null;
+  const fmt = unidade == "B" ? tamanho : (x) => num(x);
+  const vel = feito && inicio ? feito / dec : null;
+  const resta = eta ?? (fr && vel ? (total - feito) / vel : null);
+  return `<div class="mt-2">
+    <div class="flex items-baseline justify-between gap-2 text-[11px]"><span class="text-slate-200 truncate">${esc(rotulo)}</span>
+      <span class="shrink-0 font-mono text-slate-400">${fr != null ? Math.round(fr * 100) + "%" : "…"}</span></div>
+    <div class="mt-1 h-2 rounded-full bg-white/[.06] overflow-hidden"><div class="h-full rounded-full ${cor} ${fr == null ? "barra-indet" : "barra-viva"}" style="${fr != null ? `width:${fr * 100}%` : ""}"></div></div>
+    <p class="mt-0.5 text-[10.5px] font-mono text-slate-500">${fixo ? extra.replace(/^ · /, "") + "</p></div>" : ""}${fixo ? "" : `${feito != null ? fmt(feito) : ""}${total ? " de " + fmt(total) : ""}${unidade && unidade != "B" ? " " + unidade : ""}
+      ${vel ? " · " + (unidade == "B" ? tamanho(vel) + "/s" : num(vel, 1) + " " + (unidade || "") + "/s") : ""} · ${tempo(Math.round(dec))}${resta ? " · faltam ~" + tempo(Math.round(resta)) : ""}${extra}</p></div>`}`;
+}
+function barrasVivo(v) {
+  let h = "";
+  if (v.progress?.n) h += barra({rotulo: `Etapa: ${v.progress.message || v.node}`, feito: v.progress.i, total: v.progress.n, unidade: "itens",
+                                  inicio: v.since, eta: v.progress.remaining, cor: "bg-azul-400"});
+  for (const t of Object.values(v.tasks || {})) h += barra({rotulo: t.label, feito: t.done, total: t.total, unidade: t.unit, inicio: t.start, cor: t.unit == "B" ? "bg-emerald-400" : "bg-orange-400"});
+  const c = v.call;
+  if (c) {
+    const seg = Date.now() / 1000 - c.start, max = c.params?.num_predict;
+    if (c.engine == "claude") h += barra({rotulo: "Claude: aguardando a resposta inteira (JSON)", feito: null, total: null, inicio: c.start, cor: "bg-violet-400"});
+    else if (!c.tokens) {
+      const estTok = Math.round(c.input.length / 3.5);
+      h += barra({rotulo: `LLM fase 1/2 · prefill: lendo ~${num(estTok)} tokens do prompt de uma vez`, feito: null, total: null, inicio: c.start, cor: "bg-teal-400",
+                  extra: " · se o modelo não estava na VRAM, inclui a carga"});
+    } else {
+      const ger = c.tokens / Math.max(seg, .1);
+      const ini = c.first || c.start;
+      h += barra({rotulo: "LLM fase 1/2 · prefill concluído", feito: 1, total: 1, inicio: c.start, cor: "bg-teal-700", fixo: true,
+                  extra: c.first ? ` · ${(c.first - c.start).toFixed(1)} s até o 1º token (fila + carga + leitura do prompt)` : ""});
+      h += barra({rotulo: `LLM fase 2/2 · gerando token a token (limite num_predict = ${max})`, feito: c.tokens, total: max, unidade: "tokens", inicio: ini, cor: "bg-teal-400",
+                  extra: " · o JSON costuma fechar antes do limite"});
+    }
+  }
+  return h || `<p class="mt-2 text-[11px] text-slate-500">Sem barra: este passo não informa progresso (é rápido ou é uma chamada única).</p>`;
+}
+function desenharGrafo() {
+  if (!G || !nos.length) return;
+  const st = G.nos, legadoRoteiro = G.legado.some(l => l.comando.startsWith("roteiro"));
+  for (const n of nos) {
+    const s = st[n.id], cor = CORM[n.motor], rec = s.recente != null && s.recente < 900, sel = selecionado == n.id;
+    const leg = legadoRoteiro && n.faixa == "roteiro" && !s.ativo;
+    n.g.classList.toggle("no-ativo", s.ativo);
+    n.borda.setAttribute("fill", s.ativo ? cor + "26" : "#0e1730");
+    n.borda.setAttribute("stroke", sel ? "#ffffff" : s.ativo || rec ? cor : leg ? "#fbbf24" : "#334155");
+    n.borda.setAttribute("stroke-width", sel ? 2.5 : s.ativo ? 2 : 1);
+    n.borda.setAttribute("stroke-dasharray", leg ? "4 3" : "");
+    n.faixa_cor.setAttribute("opacity", s.ativo || rec ? 1 : .4);
+    n.titulo.setAttribute("fill", s.ativo || rec ? "#f1f5f9" : "#94a3b8");
+    n.sub.setAttribute("fill", s.ativo ? cor : "#64748b");
+    const fr = fracao(s.agora);
+    n.trilho.setAttribute("opacity", s.ativo ? 1 : 0); n.barra.setAttribute("opacity", s.ativo ? 1 : 0);
+    n.barra.classList.toggle("indet", s.ativo && fr == null);
+    n.barra.setAttribute("width", s.ativo ? (fr == null ? (NW - 20) * .3 : Math.max(2, (NW - 20) * fr)) : 0);
+    n.sub.textContent = s.ativo && s.agora?.chamada ? `${s.agora.chamada.tokens} tok · ${s.agora.chamada.seg}s`
+      : s.ativo && s.agora?.progresso ? `${s.agora.progresso.i}/${s.agora.progresso.n}`
+      : s.ativo ? "agora" : s.chamadas ? `${s.chamadas} cham.${s.tok_s ? " · " + s.tok_s + " t/s" : ""}` : s.recente != null ? "há " + tempo(s.recente) : "";
+  }
+  for (const l of arestas) {
+    const viva = l.tipo == "usa" ? st[l.a].ativo && st[l.b].ativo : st[l.a].ativo || st[l.b].ativo;
+    l.el.classList.toggle("aresta-viva", viva && l.tipo == "usa");
+    l.el.setAttribute("stroke", viva ? (l.tipo == "usa" ? CORM[G.motor[l.b]] : "#60a5fa") : l.tipo == "seq" ? "#64748b" : "#475569");
+    l.el.setAttribute("stroke-opacity", viva ? .95 : l.tipo == "seq" ? .55 : .22);
+    l.el.setAttribute("stroke-width", viva ? 2.2 : l.tipo == "seq" ? 1.6 : 1.1);
+  }
+  const leg = document.getElementById("legado");
+  if (G.legado.length) { leg.classList.remove("hidden");
+    leg.textContent = "Rodando sem rastro detalhado (iniciado antes do rastreio; o próximo já aparece nó a nó): " + G.legado.map(l => "./dark " + l.comando).join(" · "); }
+  else leg.classList.add("hidden");
+}
+async function atualizarGrafo() {
+  try { G = await (await fetch("/api/grafo")).json(); } catch { return; }
+  G.motor = Object.fromEntries(G.def_nos.map(d => [d.id, d.motor]));
+  if (!nos.length) construir();
+  desenharGrafo();
+}
+function metricas(c) {
+  const m = [];
+  if (c.input_tokens != null) m.push(`entrada ${c.input_tokens} tok`);
+  if (c.output_tokens != null) m.push(`saída ${c.output_tokens} tok`);
+  if (c.load_s) m.push(`carga ${c.load_s}s`);
+  if (c.prefill_s != null && c.engine != "claude") m.push(`prefill ${c.prefill_s}s${c.prefill_tok_s ? " (" + c.prefill_tok_s + " t/s)" : ""}`);
+  if (c.generation_s != null && c.engine != "claude") m.push(`geração ${c.generation_s}s${c.tok_s ? " (" + c.tok_s + " t/s)" : ""}`);
+  if (c.cost_usd != null) m.push(`US$ ${(+c.cost_usd).toFixed(4)} (equiv. API)`);
+  if (c.cache_read) m.push(`cache Anthropic ${c.cache_read} tok`);
+  m.push(`total ${c.total_s ?? c.seconds}s`);
+  return m.join(" · ");
+}
+
+// ---------- seções extras da gaveta ----------
+const num = (v, c = 0) => v == null ? "—" : (+v).toLocaleString("pt-BR", {maximumFractionDigits: c, minimumFractionDigits: c});
+function kpis(lista) {
+  return `<div class="mt-3 grid grid-cols-3 gap-2">${lista.filter(Boolean).map(([r, v, sub]) => `<div class="rounded-lg bg-white/[.03] border border-white/5 px-2.5 py-2">
+    <p class="text-[10px] uppercase tracking-wider text-slate-500">${r}</p><p class="text-base font-semibold text-white tabular-nums">${v}</p>${sub ? `<p class="text-[10px] text-slate-500">${sub}</p>` : ""}</div>`).join("")}</div>`;
+}
+function secao(titulo, corpo, cor = "text-slate-300") { return `<h4 class="mt-5 text-xs font-semibold uppercase tracking-wider ${cor}">${titulo}</h4>${corpo}`; }
+function barras(itens, rot, val, fmt = (x) => x) {
+  const max = Math.max(...itens.map(val), 1);
+  return `<div class="mt-2 space-y-1.5">${itens.map(i => `<div class="text-[11px]"><div class="flex justify-between text-slate-300"><span class="font-mono truncate">${esc(rot(i))}</span><span class="text-slate-400 shrink-0 ml-2">${fmt(i)}</span></div>
+    <div class="mt-0.5 h-1.5 rounded-full bg-white/5"><div class="h-full rounded-full bg-azul-400/70" style="width:${100 * val(i) / max}%"></div></div></div>`).join("")}</div>`;
+}
+function serie(pts) {
+  const v = pts.map(p => p.tok_s || 0), max = Math.max(...v, 1), W = 480, H = 60, bw = W / Math.max(pts.length, 1);
+  return `<svg viewBox="0 0 ${W} ${H + 14}" class="mt-2 w-full">${pts.map((p, i) => `<rect x="${i * bw + 1}" y="${H - (p.tok_s || 0) / max * H}" width="${Math.max(bw - 2, 1)}" height="${(p.tok_s || 0) / max * H}" rx="1.5" fill="${p.ok ? "#2dd4bf" : "#f43f5e"}" opacity=".8"><title>${num(p.tok_s, 1)} t/s · ${num(p.seg, 1)} s · ${p.tokens ?? "?"} tokens</title></rect>`).join("")}
+    <text x="0" y="${H + 12}" fill="#64748b" font-size="10">velocidade de geração por chamada (t/s) · máx ${num(max, 1)}</text></svg>`;
+}
+function extrasHTML(d, aberto) {
+  const x = d.extras || {}, e = x.estat;
+  let h = "";
+  if (e) {
+    h += secao("Números das chamadas (rastro)", kpis([
+      ["chamadas", num(e.n), `${e.ok_pct}% válidas · ${e.tentativas_extra} refeitas`],
+      ["tokens entrada", num(e.tokens_entrada), `média ${num(e.media_entrada)} por chamada`],
+      ["tokens saída", num(e.tokens_saida), `média ${num(e.media_saida)} por chamada`],
+      d.motor != "claude" && d.id != "claude" ? ["geração", `${num(e.tok_s, 1)} t/s`, "mediana; 1 token por passo"] : ["custo equiv.", `US$ ${num(e.custo_usd, 4)}`, "assinatura, não cobrado"],
+      d.motor != "claude" && d.id != "claude" ? ["prefill", `${num(e.prefill_tok_s)} t/s`, "leitura do prompt, em paralelo"] : null,
+      ["latência", `${num(e.lat_p50, 1)} s`, `p95 ${num(e.lat_p95, 1)} s`],
+      e.wh ? ["energia GPU", `${num(e.wh, 2)} Wh`, `${num(e.wh_por_mil_tokens, 3)} Wh por 1.000 tokens`] : null,
+    ]), "text-sky-300");
+    if (e.serie.length > 1) h += serie(e.serie);
+    if (e.por_prompt.length) h += secao("Por modelo de prompt", barras(e.por_prompt, i => i.nome, i => i.n, i => `${i.n}× · ${num(i.seg, 1)} s · ${num(i.tokens)} tok`));
+  }
+  if (x.antigo) {
+    const a = x.antigo;
+    h += secao("Histórico dos episódios (antes do rastro)", kpis([
+      ["chamadas", num(a.n)], ["latência p50", `${num(a.lat_p50, 1)} s`, `p95 ${num(a.lat_p95, 1)} s`], ["tokens gerados", num(a.tokens_saida), `~${num(a.tok_s_aprox, 1)} t/s com prefill`]]))
+      + barras(a.por_etapa, i => i[0], i => i[1], i => `${i[1]} chamadas`);
+  }
+  if (x.cache) h += `<p class="mt-2 text-[11px] text-slate-400">Cache da esteira: <b class="text-slate-200">${num(x.cache.respostas)}</b> respostas guardadas (${x.cache.mb} MB). Pergunta repetida volta daqui sem usar a GPU.</p>`;
+  if (x.ficha) {
+    const f = x.ficha, dimCab = f.dim_embedding && f.cabecas_atencao ? f.dim_embedding / f.cabecas_atencao : null;
+    const kvTok = f.camadas && f.cabecas_kv && dimCab ? 2 * f.camadas * f.cabecas_kv * dimCab * 2 : null;   // K e V, fp16
+    h += secao("Ficha do modelo (llama.cpp)", kpis([
+      ["parâmetros", f.parametros || "—", f.parametros_exatos ? num(f.parametros_exatos) : ""],
+      ["quantização", f.quantizacao || "—", "pesos em ~4 bits: ~4× menos VRAM"],
+      ["contexto máx.", num(f.contexto_max), "a esteira usa 8.192"],
+      ["camadas", num(f.camadas), "blocos transformer"],
+      ["cabeças atenção", `${num(f.cabecas_atencao)} / ${num(f.cabecas_kv)} KV`, "GQA: menos cabeças K/V = cache menor"],
+      ["dim. embedding", num(f.dim_embedding), dimCab ? `${dimCab} por cabeça` : ""],
+    ])) + (kvTok ? `<p class="mt-2 text-[11px] leading-relaxed text-slate-400">KV cache: cada token guardado ocupa ~<b class="text-slate-200">${num(kvTok / 1024)} KB</b>
+      (2 × ${f.camadas} camadas × ${f.cabecas_kv} cabeças KV × ${dimCab} dims × 2 bytes). Com a janela de 8.192 tokens: ~<b class="text-slate-200">${num(kvTok * 8192 / 2 ** 30, 2)} GB</b> além dos pesos.
+      É por isso que contexto longo pesa na VRAM.</p>` : "");
+  }
+  if (x.claude) {
+    const c = x.claude;
+    h += secao("Claude (assinatura)", kpis([
+      ["hoje", `US$ ${num(c.hoje, 3)}`, `teto ${c.teto_dia} · ${c.chamadas_hoje} chamadas`], ["mês", `US$ ${num(c.mes, 3)}`, "equivalente de API"],
+      ["chamadas", num(c.chamadas), `${c.modelo} · ${c.ativo ? "ativo" : "desligado"}`]]), "text-violet-300")
+      + `<p class="mt-2 text-[11px] text-slate-400">Tetos: por chamada US$ ${c.teto_chamada} · por episódio US$ ${c.teto_episodio} · por dia US$ ${c.teto_dia}. Acima do teto a esteira fica com a decisão do LLM local.</p>`
+      + (c.por_motivo.length ? barras(c.por_motivo, i => i.motivo, i => i.custo, i => `${i.n}× · US$ ${num(i.custo, 4)}`) : "")
+      + (c.ultimas.length ? `<div class="mt-2 space-y-0.5">${c.ultimas.map(u => `<p class="text-[11px] text-slate-400"><span class="font-mono text-slate-500">${u.t.slice(5, 16).replace("T", " ")}</span> ${esc(u.ep || "")} · ${esc(u.motivo)} · US$ ${num(u.custo, 4)} ${u.ok ? "" : "✗"}</p>`).join("")}</div>` : "");
+  }
+  if (x.openalex) h += `<p class="mt-3 text-[11px] text-slate-400">Chave do OpenAlex no .env: <b class="${x.openalex.chave ? "text-emerald-300" : "text-rose-300"}">${x.openalex.chave ? "configurada" : "ausente (cota por IP)"}</b></p>`;
+  if (x.execucoes && x.execucoes.n) {
+    const r = x.execucoes;
+    h += secao("Execuções nos episódios", kpis([
+      ["execuções", num(r.n), `${r.ok} ok · ${r.erros} com erro`], ["duração média", r.dur_media ? tempo(r.dur_media) : "—"],
+      ["chamadas", `${num(r.chamadas_llm)} LLM`, `${r.chamadas_claude} ao Claude`]]))
+      + `<div class="mt-2 rounded-lg border border-white/5 divide-y divide-white/5">${r.execucoes.map(x => `<div class="px-2.5 py-1.5 text-[11px]">
+        <div class="flex gap-2"><a href="/ep/${esc(x.ep)}" class="text-azul-300 hover:underline">${esc(x.ep)}</a><span class="text-slate-500 font-mono">${x.inicio.slice(5, 16).replace("T", " ")}</span>
+        <span class="${x.status == "ok" ? "text-emerald-400" : x.status == "erro" ? "text-rose-400" : "text-sky-300"}">${x.status}</span>
+        <span class="ml-auto text-slate-500">${x.dur ? tempo(Math.round(x.dur)) : ""}${x.avisos ? ` · ${x.avisos} avisos` : ""}</span></div>
+        ${x.ultima ? `<p class="text-slate-500 truncate">${esc(x.ultima)}</p>` : ""}</div>`).join("")}</div>`;
+    if (r.mensagens.length) h += `<details data-k="msgs" ${aberto.has("msgs") ? "open" : ""} class="mt-2"><summary class="text-[11px] text-slate-400 cursor-pointer">últimas mensagens da etapa</summary>
+      <div class="mt-1 p-2 rounded bg-black/30 font-mono text-[10.5px] space-y-0.5 max-h-48 overflow-y-auto">${r.mensagens.map(m => `<p class="${m.tipo == "aviso" ? "text-amber-300" : m.tipo == "claude" ? "text-violet-300" : "text-slate-300"}"><span class="text-slate-600">${m.t.slice(11, 19)}</span> ${esc(m.msg)}</p>`).join("")}</div></details>`;
+  }
+  if (x.prompts?.length) h += secao("Modelos de prompt usados aqui", x.prompts.map((p, i) => `<details data-k="p${i}" ${aberto.has("p" + i) ? "open" : ""} class="mt-2">
+      <summary class="text-[11px] text-slate-300 cursor-pointer font-mono">esteira/ia/prompts/${esc(p.nome)}.md</summary>
+      <pre class="mt-1 p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-60 overflow-y-auto text-slate-300">${esc(p.texto)}</pre></details>`).join("")
+      + `<p class="mt-1 text-[10.5px] text-slate-500">Os {campos} entre chaves são preenchidos pelo Python antes de enviar.</p>`);
+  if (x.arquivos?.itens?.length) h += secao(esc(x.arquivos.titulo), `<div class="mt-2 space-y-1">${x.arquivos.itens.map(a => `<div class="text-[11px]"><span class="font-mono text-slate-500">${esc(a.quando)}</span> <span class="text-slate-200">${esc(a.nome)}</span>
+      <p class="text-slate-500">${esc(a.extra)}</p></div>`).join("")}</div>`);
+  return h;
+}
+
+async function detalheNo() {
+  if (!selecionado) return;
+  let d;
+  try { d = await (await fetch(`/api/grafo/no/${selecionado}`)).json(); } catch { return; }
+  const el = document.getElementById("painel_no");
+  const aberto = new Set([...el.querySelectorAll("details[open]")].map(x => x.dataset.k));
+  const rolagem = el.querySelector("pre.ao-vivo")?.scrollTop;
+  const nomeMotor = {py: "Python", local: "LLM local", gpu: "GPU", claude: "Claude"}[d.motor];
+  let h = `<div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full" style="background:${CORM[d.motor]}"></span>
+    <h3 class="text-base font-semibold text-white">${esc(d.rotulo)}</h3><span class="text-[11px] text-slate-500">${nomeMotor}</span></div>
+    <p class="mt-2 text-[12.5px] leading-relaxed text-slate-300">${esc(d.como)}</p>`;
+  if (d.usa.length) h += `<p class="mt-2 text-[11px] text-slate-500">usa: ${d.usa.join(", ")}</p>`;
+  if (d.usado_por.length) h += `<p class="mt-2 text-[11px] text-slate-500">usado por: ${d.usado_por.join(", ")}</p>`;
+  if (d.gpu) h += `<p class="mt-2 text-[11px] font-mono text-slate-400">GPU ${d.gpu.uso}% · ${d.gpu.watts} W · ${d.gpu.temp} °C · VRAM ${(d.gpu.vram_mb / 1024).toFixed(1)} GB${d.ollama?.length ? " · carregado: " + d.ollama.map(o => o.modelo).join(", ") : ""}</p>`;
+  h += `<h4 class="mt-4 text-xs font-semibold uppercase tracking-wider text-sky-300">Agora</h4>`;
+  if (!d.vivos.length) h += `<p class="mt-1 text-xs text-slate-500">Nada rodando neste nó.</p>`;
+  for (const v of d.vivos) {
+    const c = v.call, seg = c ? (Date.now() / 1000 - c.start) : 0;
+    h += `<div class="mt-2 rounded-lg border border-sky-400/20 p-3 space-y-2">
+      <p class="text-[11px] font-mono text-slate-400">pid ${v.pid} · ${esc(v.flow)} · nó ${esc(v.node)} há ${tempo(Math.round(Date.now() / 1000 - v.since))}</p>
+      ${v.detail ? `<p class="text-xs text-slate-200">${esc(v.detail)}</p>` : ""}
+      ${barrasVivo(v)}
+      ${c ? `<p class="text-[11px] text-slate-300"><b>${esc(c.engine == "claude" ? "Claude" : "LLM local")}</b> · modelo <span class="font-mono">${esc(c.model)}</span> · prompt <span class="font-mono">${esc(c.name)}</span></p>
+        <p class="text-[11px] font-mono text-slate-400">${Object.entries(c.params || {}).map(([k, x]) => `${k}=${x}`).join(" · ")}</p>
+        <details data-k="ent" ${aberto.has("ent") ? "open" : ""}><summary class="text-[11px] text-slate-400 cursor-pointer">prompt enviado (${c.input.length} caracteres ≈ ${Math.round(c.input.length / 3.5)} tokens)</summary>
+          <pre class="mt-1 p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-60 overflow-y-auto text-slate-300">${esc(c.input)}</pre></details>
+        <p class="text-[11px] text-slate-400">resposta sendo gerada (JSON restrito pelo esquema):</p>
+        <pre class="ao-vivo p-2 rounded bg-black/40 text-[11px] whitespace-pre-wrap max-h-56 overflow-y-auto text-teal-200">${esc(c.partial || "…lendo o prompt (prefill)")}</pre>` : ""}
+    </div>`;
+  }
+  h += extrasHTML(d, aberto);
+  h += `<h4 class="mt-4 text-xs font-semibold uppercase tracking-wider text-slate-300">Últimas chamadas <span class="text-slate-500 normal-case tracking-normal">(${d.n_chamadas} no histórico · ${d.n_cache} respondidas pelo cache, sem GPU)</span></h4>`;
+  if (!d.chamadas.length) h += `<p class="mt-1 text-xs text-slate-500">${d.faixa == "recurso" || ["local", "claude"].includes(d.motor) ? "Nenhuma chamada registrada ainda." : "Este passo é Python: não chama modelo."}</p>`;
+  d.chamadas.forEach((c, i) => {
+    h += `<details data-k="c${i}" ${aberto.has("c" + i) ? "open" : ""} class="mt-2 rounded-lg border border-white/10 p-2.5">
+      <summary class="cursor-pointer text-[11.5px] ${c.ok ? "text-slate-200" : "text-rose-300"}">${new Date(c.t * 1000).toLocaleTimeString("pt-BR")} · <span class="font-mono">${esc(c.name)}</span> · ${esc(c.model)}${c.ok ? "" : " · ✗ " + esc(c.error)}</summary>
+      <p class="mt-1.5 text-[11px] font-mono text-slate-400">${metricas(c)}</p>
+      <p class="mt-1 text-[11px] text-slate-500">${Object.entries(c.params || {}).map(([k, x]) => `${k}=${x}`).join(" · ")}</p>
+      ${c.schema ? `<details class="mt-2"><summary class="text-[11px] text-slate-400 cursor-pointer">esquema JSON que restringiu a resposta</summary><pre class="mt-1 p-2 rounded bg-black/30 text-[10px] whitespace-pre-wrap max-h-40 overflow-y-auto text-slate-400">${esc(c.schema)}</pre></details>` : ""}
+      <p class="mt-2 text-[11px] text-slate-400">prompt</p><pre class="p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-48 overflow-y-auto text-slate-300">${esc(c.input)}</pre>
+      ${c.pensamento ? `<p class="mt-2 text-[11px] text-slate-400">raciocínio (think)</p><pre class="p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-40 overflow-y-auto text-slate-400">${esc(c.pensamento)}</pre>` : ""}
+      <p class="mt-2 text-[11px] text-slate-400">resposta</p><pre class="p-2 rounded bg-black/30 text-[10.5px] whitespace-pre-wrap max-h-48 overflow-y-auto text-teal-200">${esc(c.output)}</pre></details>`;
+  });
+  if (d.passos.length) {
+    h += `<h4 class="mt-4 text-xs font-semibold uppercase tracking-wider text-slate-300">Passagens recentes</h4>`;
+    d.passos.forEach(p => h += `<p class="mt-1 text-[11px] text-slate-400"><span class="font-mono text-slate-500">${new Date(p.t * 1000).toLocaleTimeString("pt-BR")}</span> ${esc(p.fluxo || "")} · ${esc(p.detalhe || "")}</p>`);
+  }
+  el.innerHTML = h;
+  const pre = el.querySelector("pre.ao-vivo");
+  if (pre) pre.scrollTop = rolagem ?? pre.scrollHeight;
+  if (pre && (rolagem == null || rolagem + pre.clientHeight >= pre.scrollHeight - 40)) pre.scrollTop = pre.scrollHeight;
+}
+window.addEventListener("resize", () => enquadrar = true);
+document.getElementById("fechar").onclick = () => { selecionado = null; document.getElementById("gaveta").classList.add("translate-x-full"); desenharGrafo(); };
+document.addEventListener("keydown", (e) => { if (e.key == "Escape") document.getElementById("fechar").click(); });
+atualizarGrafo(); setInterval(atualizarGrafo, 1500);
+setInterval(detalheNo, 1000);
+</script>
+{% endblock %}

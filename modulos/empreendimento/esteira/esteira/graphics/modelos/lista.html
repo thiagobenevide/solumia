@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{# Cartões que entram em sequência: passos, placar de números, opções. Cada item: {titulo, valor?, detalhe?}. #}
+{% block estilo %}
+.veu { position: absolute; inset: 0; background: rgba(6,7,10,.8); animation: aparecer .45s ease-out both; }
+.topo { position: absolute; left: 0; right: 0; top: 150px; text-align: center; }
+.topo .rotulo { animation: entrar-baixo .6s .1s var(--suave) both; }
+.titulo { margin-top: 18px; font: 800 64px/1.1 Inter; letter-spacing: -.02em; animation: entrar-baixo .7s .2s var(--suave) both; }
+.itens { position: absolute; left: 120px; right: 120px; top: {{ 380 if titulo else 300 }}px; display: flex; gap: 36px; justify-content: center; }
+.item { flex: 1; max-width: 520px; padding: 40px 40px 44px; border-radius: 18px; background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12); box-shadow: 0 30px 70px rgba(0,0,0,.45);
+  animation: entrar-baixo .75s var(--suave) both; }
+.item .n { font: 700 22px Mono, monospace; color: var(--cor); letter-spacing: .15em; }
+.item .v { margin-top: 18px; font: 800 {{ 84 if itens|length <= 3 else 64 }}px/1 Inter; letter-spacing: -.03em; color: #fff; }
+.item .t { margin-top: 16px; font: 700 34px/1.2 Inter; }
+.item .d { margin-top: 12px; font: 500 26px/1.35 Inter; color: #b9b3a6; }
+.item.foco { border-color: var(--cor); background: rgba(255, 212, 0, .08); }
+{% if vertical %}
+.topo { top: 280px; padding: 0 80px; }
+.titulo { font-size: 58px; }
+.itens { left: 70px; right: 70px; top: {{ 560 if titulo else 440 }}px; flex-direction: column; gap: 24px; }
+.item { max-width: none; padding: 28px 36px 32px; }
+.item .v { font-size: 72px; }
+{% endif %}
+{% endblock %}
+{% block corpo %}
+<div class="veu"></div>
+<div class="topo">{% if rotulo %}<div class="rotulo">{{ rotulo }}</div>{% endif %}{% if titulo %}<div class="titulo">{{ titulo }}</div>{% endif %}</div>
+<div class="itens">
+  {% for it in itens %}
+  <div class="item{{ ' foco' if it.foco }}" style="animation-delay:{{ '%.2f' % tempos[loop.index0] }}s">
+    <div class="n">{{ '%02d' % loop.index }}</div>
+    {% if it.valor %}<div class="v">{{ it.valor }}</div>{% endif %}
+    <div class="t">{{ it.titulo }}</div>
+    {% if it.detalhe %}<div class="d">{{ it.detalhe }}</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

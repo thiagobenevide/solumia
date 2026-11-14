@@ -1,0 +1,59 @@
+{
+ "id": "lettering",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "frase curta de impacto em tipografia cinética, palavra a palavra, ocupando a tela",
+ "intencoes": [
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "O cartão não é dinheiro extra.",
+  "Pare de pagar juros agora.",
+  "Liberdade financeira começa hoje.",
+  "Você não está sozinho nessa.",
+  "Isso muda tudo."
+ ],
+ "exemplos_nao": [
+  "81% estão endividadas.",
+  "Passo 1: anote os gastos.",
+  "Em 1994 veio o Real."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica"
+ ],
+ "energia": "alta",
+ "peso": "texto",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 1.5,
+ "duracao_max": 6.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 48,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "O cartão *não é* dinheiro extra"
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

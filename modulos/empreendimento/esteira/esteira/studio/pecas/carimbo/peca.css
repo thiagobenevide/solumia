@@ -1,0 +1,7 @@
+/* Migrada do kit (cena carimbo). */
+.area.split .p-carimbo .carimbo { top: 30%; bottom: auto; }
+.p-carimbo .carimbo { position: absolute; left: 0; right: 0; bottom: calc(12 * var(--U)); display: grid; place-items: center; }
+.vertical .p-carimbo .carimbo { bottom: auto; top: 58%; }
+.p-carimbo .carimbo .cb { grid-area: 1 / 1; padding: calc(1.6 * var(--U)) calc(4 * var(--U)); border: calc(.6 * var(--U)) solid var(--destaque); border-radius: calc(1 * var(--U));
+  font: 900 calc(7 * var(--U) * var(--esc, 1))/1 var(--fD); text-transform: uppercase; letter-spacing: .04em; color: var(--destaque); opacity: 0; }
+.p-carimbo .carimbo .onda { grid-area: 1 / 1; width: calc(40 * var(--U)); height: calc(14 * var(--U)); border-radius: calc(2 * var(--U)); border: calc(.4 * var(--U)) solid var(--destaque); opacity: 0; }

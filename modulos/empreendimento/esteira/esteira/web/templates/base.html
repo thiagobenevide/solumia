@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR" class="h-full">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block titulo %}Esteira dark{% endblock %}</title>
+<script src="/static/tailwind.js"></script>
+<script src="/static/htmx.min.js"></script>
+<script>
+// Paleta: fundo azul-marinho (tinta), destaque azul (azul) e amarelo só para o marca-texto das citações,
+// que é a cor que elas têm no vídeo.
+tailwind.config = { theme: { extend: {
+  fontFamily: { sans: ["Inter", "system-ui", "sans-serif"], serif: ["Playfair", "Georgia", "serif"], mono: ["Mono", "ui-monospace", "monospace"] },
+  colors: { tinta: { 950: "#060a14", 900: "#0a1122", 850: "#0e1730", 800: "#132040", 700: "#1b2c55", 600: "#26396b" },
+            azul: { 100: "#dbeafe", 200: "#bfdbfe", 300: "#93c5fd", 400: "#60a5fa", 500: "#3b82f6", 600: "#2563eb", 700: "#1d4ed8" },
+            amarelo: { 100: "#fef9c3", 300: "#fde047", 400: "#facc15" } } } } };
+</script>
+<style>
+@font-face { font-family: Inter; src: url("/fontes/inter-latin-wght-normal.woff2"); font-weight: 100 900; }
+@font-face { font-family: Playfair; font-style: italic; src: url("/fontes/playfair-display-latin-wght-italic.woff2"); font-weight: 400 900; }
+@font-face { font-family: Mono; src: url("/fontes/jetbrains-mono-latin-wght-normal.woff2"); font-weight: 100 800; }
+body { background:
+  radial-gradient(900px 500px at 0% -10%, rgba(37,99,235,.20) 0%, transparent 60%),
+  radial-gradient(700px 400px at 100% 0%, rgba(14,165,233,.10) 0%, transparent 55%),
+  #060a14; background-attachment: fixed; }
+.cartao { background: linear-gradient(180deg, rgba(96,165,250,.06), rgba(96,165,250,.02));
+  border: 1px solid rgba(148,163,184,.12); box-shadow: 0 1px 0 rgba(255,255,255,.03) inset, 0 12px 30px -18px rgba(0,0,0,.6); }
+a.cartao, label.cartao { transition: border-color .15s, transform .15s, background .15s; }
+a.cartao:hover, label.cartao:hover { border-color: rgba(96,165,250,.45); transform: translateY(-1px); }
+.htmx-request .so-carregando { display: inline; } .so-carregando { display: none; }
+::-webkit-scrollbar { width: 10px; height: 10px } ::-webkit-scrollbar-thumb { background: #1b2c55; border-radius: 6px }
+::selection { background: rgba(59,130,246,.35); }
+</style>
+</head>
+<body class="h-full text-slate-200 font-sans antialiased">
+<header class="sticky top-0 z-20 backdrop-blur-md bg-tinta-950/75 border-b border-azul-400/10">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-8">
+    <a href="/" class="flex items-center gap-3">
+      <span class="grid place-items-center w-9 h-9 rounded-xl bg-gradient-to-br from-azul-400 to-azul-700 shadow-[0_6px_24px_-6px_#2563eb]">
+        <svg viewBox="0 0 24 24" class="w-5 h-5 text-white" fill="currentColor"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+      </span>
+      <span class="leading-tight">
+        <span class="block font-semibold text-white tracking-tight">Esteira dark</span>
+        <span class="block text-[11px] text-slate-400">roteiro → vídeo</span>
+      </span>
+    </a>
+    <nav class="flex gap-1 text-sm">
+      {% set atual = request.url.path %}
+      {% for href, nome in [("/", "Biblioteca"), ("/fila", "Produção"), ("/acervo", "Acervo"), ("/custos", "Consumo"), ("/monitor", "Monitor"), ("/opcoes", "Opções")] %}
+      {% set ativo = atual == href or (href != '/' and atual.startswith(href)) or (href == '/' and atual.startswith('/ep/')) %}
+      <a href="{{ href }}" class="px-3.5 py-2 rounded-lg transition {{ 'bg-azul-500/15 text-azul-200 ring-1 ring-azul-400/30' if ativo else 'text-slate-400 hover:text-white hover:bg-white/5' }}">{{ nome }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+</header>
+<main class="max-w-7xl mx-auto px-4 sm:px-6 py-8">{% block corpo %}{% endblock %}</main>
+</body>
+</html>

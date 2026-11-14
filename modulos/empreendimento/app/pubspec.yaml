@@ -1,0 +1,30 @@
+name: agent_empreendimento
+description: "Telas do módulo Empreendimento: produção dos canais do YouTube pela esteira."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  agent_core:
+    path: ../../../plataforma/app_core
+  url_launcher: ^6.3.3
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  file_picker: ^13.3.0
+  audioplayers: ^6.8.1
+  video_player: ^2.14.1
+  video_player_media_kit: ^2.0.0
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_linux: ^1.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

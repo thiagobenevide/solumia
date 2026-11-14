@@ -1,0 +1,66 @@
+/* Diagrama de convergência: tudo escala por --q (1% da largura do card). Só variáveis da pele do kit. */
+.p-diagrama_convergencia { --w: 64; --q: calc(var(--w) * var(--U) / 100);
+  display: flex; align-items: center; justify-content: flex-end; padding-right: calc(7 * var(--U)); }
+.p-diagrama_convergencia.dc-esq { justify-content: flex-start; padding-right: 0; padding-left: calc(7 * var(--U)); }
+.p-diagrama_convergencia .dc-cena { perspective: calc(150 * var(--U)); }
+.p-diagrama_convergencia .dc-card { position: relative; width: calc(100 * var(--q)); height: calc(130 * var(--q));
+  transform-style: preserve-3d; text-shadow: 0 calc(.3 * var(--U)) calc(1.2 * var(--U)) rgba(0,0,0,.5); }
+.p-diagrama_convergencia.dc-flut .dc-card { border-radius: var(--R, 12px);
+  background: color-mix(in srgb, var(--fundo) 58%, transparent);
+  border: calc(.25 * var(--U)) solid color-mix(in srgb, var(--texto) 24%, transparent);
+  backdrop-filter: blur(calc(1.4 * var(--U))); -webkit-backdrop-filter: blur(calc(1.4 * var(--U)));
+  box-shadow: 0 calc(2 * var(--U)) calc(6 * var(--U)) rgba(0,0,0,.5); }
+
+.p-diagrama_convergencia .dc-svgbox { position: absolute; inset: 0; pointer-events: none; }
+.p-diagrama_convergencia .dc-svg { width: 100%; height: 100%; overflow: visible; }
+.p-diagrama_convergencia .dc-fio { fill: none; stroke: color-mix(in srgb, var(--destaque) 75%, transparent);
+  stroke-width: .9; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.p-diagrama_convergencia .dc-luz { fill: none; stroke: var(--texto); stroke-width: 1.6; stroke-linecap: round;
+  stroke-dasharray: .08 1; stroke-dashoffset: .08; opacity: 0; }
+
+.p-diagrama_convergencia .dc-no { position: absolute; width: calc(20 * var(--q)); height: calc(20 * var(--q));
+  margin: calc(-10 * var(--q)) 0 0 calc(-10 * var(--q)); }
+.p-diagrama_convergencia .dc-halo { position: absolute; inset: calc(-4 * var(--q)); border-radius: 50%; opacity: .5;
+  background: radial-gradient(circle, color-mix(in srgb, var(--destaque) 45%, transparent) 40%, transparent 70%); }
+.p-diagrama_convergencia .dc-circ { position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--fundo) 88%, transparent); color: var(--destaque);
+  border: calc(.9 * var(--q)) solid var(--destaque);
+  box-shadow: 0 0 calc(4 * var(--q)) color-mix(in srgb, var(--destaque) 60%, transparent),
+    inset 0 0 calc(3 * var(--q)) color-mix(in srgb, var(--destaque) 28%, transparent); }
+.p-diagrama_convergencia .dc-ic { width: 56%; height: 56%; display: grid; place-items: center;
+  font-size: calc(9 * var(--q)); line-height: 1; color: var(--destaque); }
+.p-diagrama_convergencia .dc-ic svg { width: 100%; height: 100%; }
+.p-diagrama_convergencia .dc-rot { position: absolute; width: 28%; margin-left: -14%; text-align: center; white-space: nowrap;
+  font: 800 calc(5 * var(--q))/1.1 var(--fD); letter-spacing: .02em; text-transform: uppercase; color: var(--texto); }
+
+.p-diagrama_convergencia .dc-ponto { position: absolute; left: 50%; top: 50.77%; width: calc(5 * var(--q)); height: calc(5 * var(--q));
+  margin: calc(-2.5 * var(--q)) 0 0 calc(-2.5 * var(--q)); border-radius: 50%; background: var(--destaque);
+  box-shadow: 0 0 calc(3 * var(--q)) var(--destaque), 0 0 calc(7 * var(--q)) color-mix(in srgb, var(--destaque) 50%, transparent); }
+
+.p-diagrama_convergencia .dc-painel { position: absolute; left: 4%; width: 92%; top: 58.46%; height: 40%; box-sizing: border-box;
+  padding: calc(2.5 * var(--q)) calc(3 * var(--q)); display: flex; flex-direction: column; gap: calc(1.5 * var(--q));
+  border-radius: var(--R, 10px); background: color-mix(in srgb, var(--fundo) 80%, transparent);
+  border: calc(.3 * var(--U)) solid color-mix(in srgb, var(--destaque) 40%, transparent); }
+.p-diagrama_convergencia .dc-tit { font: 800 calc(6.5 * var(--q))/1.1 var(--fD); letter-spacing: .02em; text-transform: uppercase;
+  white-space: nowrap; color: var(--texto); padding-bottom: calc(1 * var(--q));
+  border-bottom: calc(.4 * var(--q)) solid color-mix(in srgb, var(--texto) 20%, transparent); }
+.p-diagrama_convergencia .dc-tit .d { color: var(--destaque); }
+.p-diagrama_convergencia .dc-linhas { position: relative; flex: 1; display: flex; flex-direction: column; gap: calc(.7 * var(--q)); }
+.p-diagrama_convergencia .dc-linha { display: flex; align-items: center; height: calc(6 * var(--q)); }
+.p-diagrama_convergencia .dc-trot { flex: 0 0 40%; box-sizing: border-box; padding-right: calc(2 * var(--q)); white-space: nowrap;
+  font: 700 calc(4.6 * var(--q))/1 var(--fT); letter-spacing: .02em; text-transform: uppercase; color: var(--texto); }
+.p-diagrama_convergencia .dc-trilho { position: relative; flex: 1; height: calc(3.4 * var(--q)); border-radius: 999px;
+  background: color-mix(in srgb, var(--texto) 18%, transparent); }
+.p-diagrama_convergencia .dc-seg { position: absolute; top: 0; bottom: 0; border-radius: 999px; background: var(--destaque);
+  transform-origin: left center; transform: scaleX(0); }
+.p-diagrama_convergencia .dc-linha:nth-child(even) .dc-seg { background: var(--apoio); }
+.p-diagrama_convergencia .dc-pista { position: absolute; left: 40%; right: 0; top: calc(-1 * var(--q)); bottom: calc(-1 * var(--q)); pointer-events: none; }
+.p-diagrama_convergencia .dc-cur { position: absolute; top: 0; bottom: 0; left: 0; width: 0; opacity: 0;
+  border-left: calc(.7 * var(--q)) solid var(--texto);
+  filter: drop-shadow(0 0 calc(1 * var(--q)) var(--destaque)); }
+.p-diagrama_convergencia .dc-cur::before { content: ""; position: absolute; top: calc(-1.2 * var(--q)); left: calc(-2.1 * var(--q));
+  width: calc(3.2 * var(--q)); height: calc(3.2 * var(--q)); border-radius: 50%; background: var(--destaque); }
+.p-diagrama_convergencia.dc-sem-cur .dc-cur { display: none; }
+
+.vertical .p-diagrama_convergencia { --w: 84; justify-content: center; padding: 0; }
+.vertical .p-diagrama_convergencia.dc-esq { padding: 0; }

@@ -1,0 +1,153 @@
+{
+ "fundo_tela_cheia": "tela",
+ "elementos": [
+  {
+   "tipo": "caixa",
+   "nome": "Centro",
+   "regiao": "centro",
+   "disposicao": "linha",
+   "pesos": [
+    0.36,
+    1
+   ],
+   "espaco": 0.05,
+   "alinhar": "inicio",
+   "vertical": {
+    "disposicao": "coluna",
+    "pesos": [
+     1,
+     1.6
+    ]
+   },
+   "filhos": [
+    {
+     "tipo": "caixa",
+     "nome": "BlocoNumero",
+     "disposicao": "camadas",
+     "alinhar": "centro",
+     "filhos": [
+      {
+       "tipo": "retangulo",
+       "nome": "FundoNumero",
+       "w": 0.39,
+       "h": 0.39,
+       "cor": "destaque",
+       "raio": 0.03,
+       "vertical": {
+        "w": 0.33,
+        "h": 0.33
+       }
+      },
+      {
+       "tipo": "texto",
+       "nome": "Numero",
+       "conteudo": "{{numero}}",
+       "nivel": "numero",
+       "fonte": "fD",
+       "peso": 800,
+       "cor": "fundo"
+      }
+     ]
+    },
+    {
+     "tipo": "caixa",
+     "nome": "ConteudoTexto",
+     "disposicao": "coluna",
+     "pesos": [
+      0.75,
+      2.6,
+      1.2,
+      0.2
+     ],
+     "espaco": 0.02,
+     "alinhar": "inicio",
+     "vertical": {
+      "alinhar": "centro"
+     },
+     "filhos": [
+      {
+       "tipo": "texto",
+       "nome": "Kicker",
+       "conteudo": "Capítulo",
+       "nivel": "corpo",
+       "cor": "destaque",
+       "peso": 700,
+       "caps": true,
+       "tracking": 120
+      },
+      {
+       "tipo": "texto",
+       "nome": "Titulo",
+       "conteudo": "{{titulo}}",
+       "nivel": "destaque",
+       "fonte": "fD",
+       "peso": 700
+      },
+      {
+       "tipo": "texto",
+       "nome": "Subtitulo",
+       "conteudo": "{{subtitulo}}",
+       "nivel": "corpo",
+       "cor": "apoio",
+       "se": {
+        "encaixe": "subtitulo"
+       }
+      },
+      {
+       "tipo": "retangulo",
+       "nome": "Traco",
+       "h": 0.006,
+       "cor": "destaque",
+       "vertical": {
+        "w": 0.3
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "animacoes": [
+  {
+   "anim": "entrar",
+   "alvo": "FundoNumero",
+   "de": "escala",
+   "t": 0,
+   "dur": "0.5v"
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Numero",
+   "de": "escala",
+   "t": 0.15,
+   "dur": "0.5v"
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Kicker",
+   "de": "aparecer",
+   "t": 0.3,
+   "dur": "0.4v"
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Titulo",
+   "de": "baixo",
+   "t": 0.4,
+   "dur": "0.6v"
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Subtitulo",
+   "de": "aparecer",
+   "t": 0.7,
+   "dur": "0.5v"
+  },
+  {
+   "anim": "tracar",
+   "alvo": "Traco",
+   "t": 0.8,
+   "dur": "0.6v"
+  }
+ ]
+}

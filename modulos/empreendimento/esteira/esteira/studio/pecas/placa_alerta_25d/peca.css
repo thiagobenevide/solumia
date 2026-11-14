@@ -1,0 +1,28 @@
+/* Placa de alerta 2,5D: só variáveis da pele do kit. */
+.p-placa_alerta_25d { --pa: var(--destaque); display: flex; align-items: center; justify-content: center; }
+.p-placa_alerta_25d.pa-perigo { --pa: var(--acento); }
+.p-placa_alerta_25d .pa-cena { position: absolute; inset: 0; perspective: calc(130 * var(--U)); display: flex; align-items: center; justify-content: center; }
+.p-placa_alerta_25d .pa-palco { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; display: flex; align-items: center; justify-content: center; }
+.p-placa_alerta_25d .pa-faixa { position: absolute; left: -20%; width: 140%; height: calc(9 * var(--U)); overflow: hidden; opacity: 0; }
+.p-placa_alerta_25d .pa-fx { position: absolute; top: 0; bottom: 0; left: -30%; right: -30%;
+  background: repeating-linear-gradient(-45deg, var(--pa) 0, var(--pa) calc(3 * var(--U)), var(--fundo) calc(3 * var(--U)), var(--fundo) calc(6 * var(--U))); }
+.p-placa_alerta_25d .pa-f1 { top: 16%; }
+.p-placa_alerta_25d .pa-f2 { bottom: 16%; }
+.p-placa_alerta_25d .pa-f3 { top: 9%; height: calc(5 * var(--U)); }
+.p-placa_alerta_25d .pa-f4 { bottom: 9%; height: calc(5 * var(--U)); }
+.p-placa_alerta_25d .pa-placa { position: relative; width: calc(120 * var(--U)); background: var(--fundo2); border: calc(.8 * var(--U)) solid var(--pa);
+  border-radius: var(--R, 0); overflow: hidden; box-shadow: 0 calc(3 * var(--U)) calc(6 * var(--U)) rgba(0,0,0,.5); opacity: 0; }
+.p-placa_alerta_25d .pa-topo { display: flex; align-items: center; gap: calc(3 * var(--U)); padding: calc(2.4 * var(--U)) calc(4 * var(--U)); background: var(--pa); color: var(--fundo); }
+.p-placa_alerta_25d .pa-ico { flex: none; width: calc(9 * var(--U)); height: calc(8 * var(--U)); background: var(--fundo); clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  display: flex; align-items: flex-end; justify-content: center; }
+.p-placa_alerta_25d .pa-ico span { font: 800 calc(5.4 * var(--U) * var(--esc, 1))/1 var(--fD); color: var(--pa); padding-bottom: calc(.6 * var(--U)); }
+.p-placa_alerta_25d .pa-titulo { font: 800 calc(6.6 * var(--U) * var(--esc, 1))/1.05 var(--fD); text-transform: uppercase; letter-spacing: .02em; text-wrap: balance; min-width: 0; }
+.p-placa_alerta_25d .pa-texto { padding: calc(4 * var(--U)) calc(5 * var(--U)); font: 600 calc(4.6 * var(--U) * var(--esc, 1))/1.25 var(--fT); color: var(--texto); text-wrap: balance; opacity: 0; }
+.p-placa_alerta_25d .pa-texto .d { color: var(--pa); }
+.vertical .p-placa_alerta_25d .pa-placa { width: calc(86 * var(--U)); }
+.vertical .p-placa_alerta_25d .pa-titulo { font-size: calc(5.6 * var(--U) * var(--esc, 1)); }
+.vertical .p-placa_alerta_25d .pa-texto { font-size: calc(5 * var(--U) * var(--esc, 1)); padding: calc(4 * var(--U)); }
+.vertical .p-placa_alerta_25d .pa-f1 { top: 22%; }
+.vertical .p-placa_alerta_25d .pa-f2 { bottom: 22%; }
+.vertical .p-placa_alerta_25d .pa-f3 { top: 14%; }
+.vertical .p-placa_alerta_25d .pa-f4 { bottom: 14%; }

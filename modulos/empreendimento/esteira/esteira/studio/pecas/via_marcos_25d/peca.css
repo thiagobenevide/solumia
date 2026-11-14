@@ -1,0 +1,33 @@
+/* Via de marcos 2,5D: só variáveis da pele (cores, fontes, --U). */
+.p-via_marcos_25d { overflow: hidden; }
+.p-via_marcos_25d .ve-via { position: absolute; left: 0; right: 0; bottom: 0; height: 40%;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--apoio) 8%, transparent), color-mix(in srgb, var(--apoio) 38%, transparent));
+  clip-path: polygon(47% 0, 53% 0, 100% 100%, 0 100%); }
+.p-via_marcos_25d .ve-eixo { position: absolute; left: 0; right: 0; bottom: 0; height: 40%;
+  background-image: repeating-linear-gradient(to bottom, var(--destaque) 0, var(--destaque) calc(4 * var(--U)), transparent calc(4 * var(--U)), transparent calc(9 * var(--U)));
+  clip-path: polygon(49.6% 0, 50.4% 0, 51.6% 100%, 48.4% 100%); }
+.p-via_marcos_25d .ve-horizonte { position: absolute; left: 0; right: 0; bottom: 40%; height: calc(.3 * var(--U));
+  background: color-mix(in srgb, var(--texto) 30%, transparent); }
+.p-via_marcos_25d .ve-cena { position: absolute; inset: 0; perspective: calc(130 * var(--U)); perspective-origin: 50% 42%; }
+.p-via_marcos_25d .ve-palco { position: absolute; inset: 0; transform-style: preserve-3d; }
+.p-via_marcos_25d .ve-card { position: absolute; left: 50%; top: 42%; width: calc(66 * var(--U)); box-sizing: border-box;
+  padding: calc(3 * var(--U)) calc(3.5 * var(--U)); text-align: center; border-radius: var(--R, calc(2 * var(--U)));
+  background: color-mix(in srgb, var(--fundo2) 94%, transparent); border: calc(.5 * var(--U)) solid color-mix(in srgb, var(--apoio) 70%, transparent);
+  box-shadow: 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5); opacity: 0; }
+.p-via_marcos_25d .ve-card.ve-d { width: calc(74 * var(--U)); border-color: var(--destaque); }
+.p-via_marcos_25d .ve-ano { font: 800 calc(11 * var(--U) * min(var(--esc, 1), 1))/1.05 var(--fD); color: var(--destaque);
+  letter-spacing: -.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.p-via_marcos_25d .ve-d .ve-ano { font-size: calc(13 * var(--U) * min(var(--esc, 1), 1)); }
+.p-via_marcos_25d .ve-rot { margin-top: calc(1.6 * var(--U)); font: 600 calc(4.6 * var(--U))/1.2 var(--fT); color: var(--texto); overflow-wrap: anywhere; }
+.p-via_marcos_25d .ve-foto { width: 100%; height: calc(24 * var(--U)); margin-bottom: calc(2.4 * var(--U)); overflow: hidden;
+  border-radius: calc(1 * var(--U)); background: var(--fundo); }
+.p-via_marcos_25d .ve-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.p-via_marcos_25d .ve-prog { position: absolute; left: 0; right: 0; bottom: calc(5 * var(--U)); display: flex; justify-content: center; gap: calc(2 * var(--U)); }
+.p-via_marcos_25d .ve-ponto { width: calc(2 * var(--U)); height: calc(2 * var(--U)); border-radius: 50%; background: var(--destaque); opacity: .3; }
+.vertical .p-via_marcos_25d .ve-card { width: calc(64 * var(--U)); top: 40%; padding: calc(3 * var(--U)) calc(2.5 * var(--U)); }
+.vertical .p-via_marcos_25d .ve-card.ve-d { width: calc(70 * var(--U)); }
+.vertical .p-via_marcos_25d .ve-ano { font-size: calc(8.5 * var(--U) * min(var(--esc, 1), 1)); }
+.vertical .p-via_marcos_25d .ve-d .ve-ano { font-size: calc(9.5 * var(--U) * min(var(--esc, 1), 1)); }
+.vertical .p-via_marcos_25d .ve-rot { font-size: calc(4.8 * var(--U)); }
+.vertical .p-via_marcos_25d .ve-foto { height: calc(30 * var(--U)); }
+.vertical .p-via_marcos_25d .ve-cena { perspective-origin: 50% 40%; }

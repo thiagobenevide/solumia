@@ -1,0 +1,394 @@
+{
+ "versao": 1,
+ "fundo": "veu",
+ "fundo_tela_cheia": "tela",
+ "opacidade_veu": 0.88,
+ "botao_velocidade": "velocidade",
+ "elementos": [
+  {
+   "tipo": "retangulo",
+   "nome": "Barra do título",
+   "se": {
+    "encaixe": "titulo"
+   },
+   "x": 0.08,
+   "y": 0.075,
+   "w": 0.1,
+   "h": 0.008,
+   "cor": "destaque",
+   "ancora_esq": true,
+   "vertical": {
+    "y": 0.055
+   }
+  },
+  {
+   "tipo": "texto",
+   "nome": "Título",
+   "conteudo": "{{titulo}}",
+   "se": {
+    "encaixe": "titulo"
+   },
+   "x": 0.08,
+   "y": 0.1,
+   "largura": 0.84,
+   "fonte": "fD",
+   "peso": 800,
+   "tam": 0.056,
+   "cor": "texto",
+   "alinhar": "esquerda",
+   "tracking": -20,
+   "entrelinha": 1.1,
+   "vertical": {
+    "x": 0.08,
+    "y": 0.07,
+    "largura": 0.84,
+    "tam": 0.07
+   }
+  },
+  {
+   "tipo": "repetir",
+   "nome": "Cartões em leque",
+   "se": {
+    "botao": "arranjo",
+    "igual": "leque"
+   },
+   "encaixe": "itens",
+   "maximo": 4,
+   "passo": [
+    0.2,
+    0.1
+   ],
+   "intervalo": 0.35,
+   "vertical": {
+    "passo": [
+     0.04,
+     0.13
+    ]
+   },
+   "elementos": [
+    {
+     "tipo": "retangulo",
+     "nome": "Cartão",
+     "x": 0.08,
+     "y": 0.3,
+     "w": 0.4,
+     "h": 0.17,
+     "cor": "fundo2",
+     "opacidade": 94,
+     "raio": 0.018,
+     "ancora_esq": true,
+     "vertical": {
+      "x": 0.08,
+      "y": 0.26,
+      "w": 0.8,
+      "h": 0.2
+     }
+    },
+    {
+     "tipo": "retangulo",
+     "nome": "Filete do cartão",
+     "x": 0.08,
+     "y": 0.3,
+     "w": 0.008,
+     "h": 0.17,
+     "cor": "destaque",
+     "ancora_esq": true,
+     "vertical": {
+      "x": 0.08,
+      "y": 0.26,
+      "w": 0.012,
+      "h": 0.2
+     }
+    },
+    {
+     "tipo": "texto",
+     "nome": "Texto do cartão",
+     "conteudo": "{{item}}",
+     "x": 0.1,
+     "y": 0.33,
+     "largura": 0.19,
+     "fonte": "fT",
+     "peso": 700,
+     "tam": 0.036,
+     "cor": "texto",
+     "alinhar": "esquerda",
+     "entrelinha": 1.2,
+     "vertical": {
+      "x": 0.13,
+      "y": 0.2825,
+      "largura": 0.7,
+      "tam": 0.048
+     }
+    }
+   ],
+   "animacoes": [
+    {
+     "anim": "entrar",
+     "alvo": "Cartão",
+     "de": "baixo",
+     "t": "T0+0.3",
+     "dur": "0.8v"
+    },
+    {
+     "anim": "entrar",
+     "alvo": "Filete do cartão",
+     "de": "baixo",
+     "t": "T0+0.3",
+     "dur": "0.8v"
+    },
+    {
+     "anim": "entrar",
+     "alvo": "Texto do cartão",
+     "de": "baixo",
+     "t": "T0+0.4",
+     "dur": "0.8v"
+    },
+    {
+     "anim": "chaves",
+     "alvo": "Cartão",
+     "prop": "opacidade",
+     "pares": [
+      [
+       "T0+0.3",
+       0
+      ],
+      [
+       "T0+0.3+0.6v",
+       100
+      ]
+     ]
+    },
+    {
+     "anim": "chaves",
+     "alvo": "Texto do cartão",
+     "prop": "opacidade",
+     "pares": [
+      [
+       "T0+0.4",
+       0
+      ],
+      [
+       "T0+0.4+0.6v",
+       100
+      ]
+     ]
+    },
+    {
+     "anim": "desfocar",
+     "alvo": "Cartão",
+     "pares": [
+      [
+       "T0+0.3",
+       8
+      ],
+      [
+       "T0+0.3+0.8v",
+       0
+      ]
+     ]
+    },
+    {
+     "anim": "desfocar",
+     "alvo": "Texto do cartão",
+     "pares": [
+      [
+       "T0+0.4",
+       8
+      ],
+      [
+       "T0+0.4+0.8v",
+       0
+      ]
+     ]
+    },
+    {
+     "anim": "tracar",
+     "alvo": "Filete do cartão",
+     "t": "T0+0.6v",
+     "dur": "0.6v",
+     "vertical": true
+    }
+   ]
+  },
+  {
+   "tipo": "repetir",
+   "nome": "Cartões em fila",
+   "se": {
+    "botao": "arranjo",
+    "igual": "fila"
+   },
+   "encaixe": "itens",
+   "maximo": 4,
+   "passo": [
+    0.02,
+    0.14
+   ],
+   "intervalo": 0.35,
+   "vertical": {
+    "passo": [
+     0.01,
+     0.115
+    ]
+   },
+   "elementos": [
+    {
+     "tipo": "retangulo",
+     "nome": "Cartão",
+     "x": 0.34,
+     "y": 0.28,
+     "w": 0.5,
+     "h": 0.2,
+     "cor": "fundo2",
+     "opacidade": 96,
+     "raio": 0.018,
+     "ancora_esq": true,
+     "vertical": {
+      "x": 0.1,
+      "y": 0.26,
+      "w": 0.8,
+      "h": 0.25
+     }
+    },
+    {
+     "tipo": "retangulo",
+     "nome": "Filete do cartão",
+     "x": 0.34,
+     "y": 0.28,
+     "w": 0.008,
+     "h": 0.2,
+     "cor": "destaque",
+     "ancora_esq": true,
+     "vertical": {
+      "x": 0.1,
+      "y": 0.26,
+      "w": 0.012,
+      "h": 0.25
+     }
+    },
+    {
+     "tipo": "texto",
+     "nome": "Texto do cartão",
+     "conteudo": "{{item}}",
+     "x": 0.36,
+     "y": 0.31,
+     "largura": 0.24,
+     "fonte": "fT",
+     "peso": 700,
+     "tam": 0.038,
+     "cor": "texto",
+     "alinhar": "esquerda",
+     "entrelinha": 1.2,
+     "vertical": {
+      "x": 0.15,
+      "y": 0.2825,
+      "largura": 0.7,
+      "tam": 0.048
+     }
+    }
+   ],
+   "animacoes": [
+    {
+     "anim": "entrar",
+     "alvo": "Cartão",
+     "de": "baixo",
+     "t": "T0+0.3",
+     "dur": "0.8v"
+    },
+    {
+     "anim": "entrar",
+     "alvo": "Filete do cartão",
+     "de": "baixo",
+     "t": "T0+0.3",
+     "dur": "0.8v"
+    },
+    {
+     "anim": "entrar",
+     "alvo": "Texto do cartão",
+     "de": "baixo",
+     "t": "T0+0.4",
+     "dur": "0.8v"
+    },
+    {
+     "anim": "chaves",
+     "alvo": "Cartão",
+     "prop": "opacidade",
+     "pares": [
+      [
+       "T0+0.3",
+       0
+      ],
+      [
+       "T0+0.3+0.6v",
+       100
+      ]
+     ]
+    },
+    {
+     "anim": "chaves",
+     "alvo": "Texto do cartão",
+     "prop": "opacidade",
+     "pares": [
+      [
+       "T0+0.4",
+       0
+      ],
+      [
+       "T0+0.4+0.6v",
+       100
+      ]
+     ]
+    },
+    {
+     "anim": "desfocar",
+     "alvo": "Cartão",
+     "pares": [
+      [
+       "T0+0.3",
+       8
+      ],
+      [
+       "T0+0.3+0.8v",
+       0
+      ]
+     ]
+    },
+    {
+     "anim": "desfocar",
+     "alvo": "Texto do cartão",
+     "pares": [
+      [
+       "T0+0.4",
+       8
+      ],
+      [
+       "T0+0.4+0.8v",
+       0
+      ]
+     ]
+    },
+    {
+     "anim": "tracar",
+     "alvo": "Filete do cartão",
+     "t": "T0+0.6v",
+     "dur": "0.6v",
+     "vertical": true
+    }
+   ]
+  }
+ ],
+ "animacoes": [
+  {
+   "anim": "tracar",
+   "alvo": "Barra do título",
+   "t": "T0",
+   "dur": "0.6v"
+  },
+  {
+   "anim": "entrar",
+   "alvo": "Título",
+   "de": "baixo",
+   "t": "T0+0.1",
+   "dur": 0.6
+  }
+ ]
+}

@@ -1,0 +1,97 @@
+{
+ "id": "barras_3d",
+ "versao": 1,
+ "origem": "etapa9",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "dois a cinco valores comparados em barras 3D que crescem com a câmera girando",
+ "intencoes": [
+  "comparacao",
+  "numero"
+ ],
+ "exemplos_sim": [
+  "O rotativo cobra 430% ao ano, o cheque especial 130% e o consignado 24%.",
+  "Em 2010 eram 18 milhões, em 2020 já eram 40 milhões de endividados.",
+  "A poupança rendeu 6%, o CDB 11% e o Tesouro 12%.",
+  "São Paulo tem 9 mil casos, o Rio 5 mil e Minas 3 mil.",
+  "Quem ganha até dois salários gasta 40% com dívidas; acima de dez, só 12%."
+ ],
+ "exemplos_nao": [
+  "Por que a gente gasta mais do que ganha?",
+  "Passo 1: anote todos os gastos.",
+  "Comenta aqui sua maior dívida."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica",
+  "dramatica"
+ ],
+ "energia": "alta",
+ "peso": "3d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 3.0,
+ "duracao_max": 9.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "o que as barras comparam",
+   "obrigatorio": false,
+   "max_car": 40,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Juros ao ano por *tipo de crédito*"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "um par por barra (rótulo curto e valor dito); o último fica em destaque",
+   "obrigatorio": true,
+   "max_car": 14,
+   "max_valor": 8,
+   "min_itens": 2,
+   "max_itens": 5,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Consignado",
+     "valor": "24%"
+    },
+    {
+     "rotulo": "Cheque esp.",
+     "valor": "130%"
+    },
+    {
+     "rotulo": "Rotativo",
+     "valor": "430%"
+    }
+   ]
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "orbita",
+   "valores": [
+    "leve",
+    "ampla"
+   ],
+   "padrao": "leve",
+   "descricao": "quanto a câmera gira em volta"
+  }
+ ],
+ "batidas": [],
+ "sfx": {
+  "entrada": "swoosh"
+ },
+ "notas": "Peça 3D de referência (etapa 9): Three.js via k.cena3d (desenho pela timeline, cores da pele por k.cor3d); sem 2 números cai em barras_comparacao."
+}

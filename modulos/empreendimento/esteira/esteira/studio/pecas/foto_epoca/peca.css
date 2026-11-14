@@ -1,0 +1,50 @@
+/* Foto de época: só variáveis da pele do kit. */
+.p-foto_epoca { display: flex; align-items: center; justify-content: center; }
+.p-foto_epoca .fe-corpo { display: flex; align-items: center; justify-content: center; gap: calc(6 * var(--U)); max-width: calc(150 * var(--U)); }
+.p-foto_epoca .fe-cena { position: relative; flex: none; width: calc(54 * var(--U)); height: calc(42 * var(--U)); perspective: calc(130 * var(--U)); }
+.p-foto_epoca .fe-palco { position: absolute; inset: 0; transform-style: preserve-3d; }
+.p-foto_epoca .fe-quadro { position: absolute; inset: 0; box-shadow: 0 calc(1.5 * var(--U)) calc(4 * var(--U)) rgba(0,0,0,.5); }
+.p-foto_epoca .fe-janela { position: relative; width: 100%; height: 100%; overflow: hidden;
+  background: color-mix(in srgb, var(--destaque) 25%, var(--fundo2)); }
+.p-foto_epoca .fe-img { width: 100%; height: 100%; object-fit: cover; display: block; filter: sepia(.85) brightness(.95) contrast(1.05); }
+.p-foto_epoca .fe-vazio { position: absolute; inset: 0; filter: sepia(.6);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--destaque) 40%, var(--fundo2)), var(--fundo2) 75%); }
+.p-foto_epoca .fe-grao { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay; opacity: .4;
+  background-size: calc(30 * var(--U));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.p-foto_epoca.fe-grao-forte .fe-grao { opacity: .8; }
+.p-foto_epoca .fe-vinheta { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%); }
+
+/* porta-retrato */
+.p-foto_epoca.fe-retrato .fe-quadro { padding: calc(2.2 * var(--U)); background: var(--texto); border-radius: calc(.4 * var(--U)); }
+.p-foto_epoca.fe-retrato .fe-quadro::after { content: ""; position: absolute; inset: calc(1 * var(--U)); pointer-events: none;
+  border: calc(.25 * var(--U)) solid color-mix(in srgb, var(--fundo) 45%, transparent); }
+.p-foto_epoca.fe-retrato .fe-atras { filter: brightness(.8); }
+
+/* recorte de jornal */
+.p-foto_epoca.fe-jornal .fe-quadro { padding: calc(1.6 * var(--U)) calc(1.6 * var(--U)) calc(5.4 * var(--U));
+  background: color-mix(in srgb, var(--texto) 88%, var(--destaque)); }
+.p-foto_epoca.fe-jornal .fe-quadro::after { content: ""; position: absolute; left: calc(1.6 * var(--U)); right: calc(1.6 * var(--U)); bottom: calc(1.1 * var(--U)); height: calc(3 * var(--U));
+  background: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--fundo) 55%, transparent) 0 calc(.35 * var(--U)), transparent calc(.35 * var(--U)) calc(.9 * var(--U))); }
+.p-foto_epoca.fe-jornal .fe-img { filter: sepia(.9) brightness(.95) contrast(1.2); }
+.p-foto_epoca.fe-jornal .fe-atras { filter: brightness(.82); }
+
+/* texto */
+.p-foto_epoca .fe-texto { display: flex; flex-direction: column; align-items: flex-start; width: calc(48 * var(--U)); }
+.p-foto_epoca .fe-carimbo { display: inline-block; white-space: nowrap; text-transform: uppercase; opacity: 0;
+  font: 700 calc(4 * var(--U) * var(--esc, 1))/1 var(--fM); letter-spacing: .12em; color: var(--destaque);
+  border: calc(.5 * var(--U)) solid var(--destaque); padding: calc(.9 * var(--U)) calc(1.8 * var(--U));
+  margin-bottom: calc(3 * var(--U)); border-radius: calc(.6 * var(--U)); }
+.p-foto_epoca .fe-leg { font: 400 calc(3.6 * var(--U))/1.4 var(--fM); color: var(--texto); overflow-wrap: anywhere; }
+.p-foto_epoca .fe-pal { display: inline-block; white-space: nowrap; }
+.p-foto_epoca .fe-ch { opacity: 0; }
+.p-foto_epoca .fe-ch.d { color: var(--destaque); font-weight: 700; }
+.p-foto_epoca .fe-cursor { display: inline-block; width: .5em; margin-left: .1em; opacity: 0; background: var(--destaque); }
+
+/* vertical */
+.vertical .p-foto_epoca .fe-corpo { flex-direction: column; gap: calc(7 * var(--U)); max-width: calc(94 * var(--U)); }
+.vertical .p-foto_epoca .fe-cena { width: calc(80 * var(--U)); height: calc(62 * var(--U)); }
+.vertical .p-foto_epoca .fe-texto { width: calc(84 * var(--U)); align-items: center; text-align: center; }
+.vertical .p-foto_epoca .fe-carimbo { font-size: calc(5 * var(--U) * var(--esc, 1)); }
+.vertical .p-foto_epoca .fe-leg { font-size: calc(4.6 * var(--U)); }

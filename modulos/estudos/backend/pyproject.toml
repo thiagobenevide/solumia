@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-estudos"
+version = "0.1.0"
+description = "Backend do módulo Estudos: leituras e trilhas de idiomas A1–C2 com cronograma."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "pydantic>=2.9,<3.0",
+    "openpyxl>=3.1",
+    "python-multipart>=0.0.12",
+    "agent-shared",
+]
+
+[tool.uv.sources]
+agent-shared = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/estudos"]

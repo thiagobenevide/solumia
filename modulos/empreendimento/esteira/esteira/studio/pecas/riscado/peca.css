@@ -1,0 +1,7 @@
+/* Migrada do kit (cena riscado). */
+.area.split .p-riscado .riscado { top: 30%; bottom: auto; }
+.p-riscado .riscado { position: absolute; left: 0; right: 0; bottom: calc(12 * var(--U)); display: flex; flex-wrap: wrap; justify-content: center; gap: calc(2 * var(--U)); }
+.vertical .p-riscado .riscado { bottom: auto; top: 58%; flex-direction: column; align-items: center; }
+.p-riscado .rs { position: relative; padding: calc(1.8 * var(--U)) calc(4 * var(--U)); border-radius: 99px; opacity: 0; font: 800 calc(4.6 * var(--U) * var(--esc, 1))/1 var(--fD);
+  text-transform: uppercase; background: color-mix(in srgb, var(--fundo) 80%, transparent); border: 1px solid color-mix(in srgb, var(--texto) 18%, transparent); }
+.p-riscado .rs i { position: absolute; left: 6%; right: 6%; top: 50%; height: calc(.5 * var(--U)); background: var(--acento); transform-origin: 0 50%; }

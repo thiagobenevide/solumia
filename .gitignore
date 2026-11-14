@@ -1,0 +1,46 @@
+# --- Segredos: nunca versionar ---
+.env
+.env.*
+!.env.example
+*.bak
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+key.properties
+local.properties
+id_rsa*
+id_ed25519*
+google/*.json
+**/client_secret*.json
+**/service-account*.json
+# Cofre e estado do configurador (gerados em tempo de execução)
+*.vault
+*.cofre
+solumia-vault*
+.solumia/
+
+# --- Ambientes e caches ---
+.venv*/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+unsloth_compiled_cache/
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+node_modules/
+
+# --- IDE ---
+.idea/
+.vscode/
+
+# --- Dados pessoais / de terceiros (ver docs/CONFIGURATOR.md §18) ---
+docs/wireframes-nd/
+docs/Mapeamento de Conteúdo.xlsx
+*.drawio (*)

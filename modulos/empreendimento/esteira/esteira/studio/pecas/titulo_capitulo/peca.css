@@ -1,0 +1,10 @@
+/* Migrada do kit (cena titulo_capitulo). */
+#root .p-titulo_capitulo .area.split .ctit { max-width: 100%; }
+.p-titulo_capitulo .capitulo { align-items: flex-start; text-align: left; padding: 0 calc(15 * var(--U)); }
+.vertical .p-titulo_capitulo .capitulo { padding: 0 calc(7.4 * var(--U)); }
+.p-titulo_capitulo .capitulo .kicker { font-size: calc(3.1 * var(--U)); }
+.p-titulo_capitulo .ctit { margin-top: calc(2.6 * var(--U)); max-width: calc(135 * var(--U)); font: italic 700 calc(10.4 * var(--U))/1.05 var(--fE); letter-spacing: -.01em; }
+.p-titulo_capitulo .ctit.longo { font-size: calc(8.2 * var(--U)); }
+.vertical .p-titulo_capitulo .ctit { font-size: calc(9.6 * var(--U)); }
+.p-titulo_capitulo .ctit .pl { display: inline-block; white-space: nowrap; }
+.p-titulo_capitulo .ctit .l { display: inline-block; white-space: pre; opacity: 0; }

@@ -1,0 +1,20 @@
+name: agent_rotinas
+description: "Telas do módulo Rotinas: Kanban de tarefas, temporizador por tarefa e assistente por LLM."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  agent_core:
+    path: ../../../plataforma/app_core
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

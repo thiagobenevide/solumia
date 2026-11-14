@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{# Texto cinético: palavras entram uma a uma; as marcadas com *asterisco* ganham a cor de destaque. #}
+{% block estilo %}
+.veu { position: absolute; left: 0; right: 0; bottom: 0; height: 62%;
+  background: linear-gradient(0deg, rgba(8,9,12,.85) 0%, rgba(8,9,12,.55) 55%, transparent 100%);
+  animation: aparecer .4s ease-out both; }
+.frase { position: absolute; left: 140px; right: 140px; bottom: {{ 150 if posicao == 'baixo' else 400 }}px;
+  text-align: {{ 'left' if alinhar == 'esquerda' else 'center' }};
+  font: 800 {{ tamanho }}px/1.08 Inter; letter-spacing: -.02em; text-transform: uppercase; }
+.p { display: inline-block; margin-right: .26em; animation: entrar-palavra .55s var(--suave) both; }
+.p.d { color: var(--cor); }
+@keyframes entrar-palavra { from { opacity: 0; transform: translateY(.45em) scale(.96); filter: blur(12px); } }
+.barra { display: block; width: 120px; height: 6px; margin: 0 {{ '0' if alinhar == 'esquerda' else 'auto' }} 34px;
+  background: var(--cor); transform-origin: 0 50%; animation: traco .6s var(--suave) both; }
+{% if vertical %}
+.veu { height: 70%; }
+.frase { left: 70px; right: 150px; bottom: {{ 520 if posicao == 'baixo' else 820 }}px;
+  font-size: {{ (tamanho * 0.85) | int }}px; }
+{% endif %}
+{% endblock %}
+{% block corpo %}
+<div class="veu"></div>
+<div class="frase"><span class="barra"></span>{% for p in palavras %}<span class="p{{ ' d' if p.d }}" style="animation-delay:{{ '%.2f' % (0.15 + loop.index0 * passo) }}s">{{ p.t }}</span>{% endfor %}</div>
+{% endblock %}

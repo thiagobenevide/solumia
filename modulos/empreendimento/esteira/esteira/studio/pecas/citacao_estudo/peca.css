@@ -1,0 +1,9 @@
+/* Migrada do kit (cena citacao_estudo). */
+.p-citacao_estudo .citacao .ct { margin-top: calc(1.2 * var(--U)); font: italic 700 calc(5 * var(--U))/1.15 var(--fE); }
+.vertical .p-citacao_estudo .citacao .ct { font-size: calc(6 * var(--U)); }
+.p-citacao_estudo .citacao .cv { margin-top: calc(1 * var(--U)); font: 500 calc(2.4 * var(--U))/1.35 var(--fM); color: var(--acento); }
+.vertical .p-citacao_estudo .citacao .cv { font-size: calc(2.6 * var(--U)); }
+.p-citacao_estudo .selo { display: inline-block; margin-top: calc(1.6 * var(--U)); padding: calc(.8 * var(--U)) calc(1.4 * var(--U)); border-radius: calc(.6 * var(--U));
+  background: var(--destaque); color: var(--fundo); font: 700 calc(1.9 * var(--U)) var(--fM); letter-spacing: .12em; text-transform: uppercase; }
+.vertical .p-citacao_estudo .selo { font-size: calc(2.2 * var(--U)); }
+.p-citacao_estudo .citacao .cselo { margin-top: calc(1 * var(--U)); font: 600 calc(1.9 * var(--U))/1 var(--fM); letter-spacing: .08em; text-transform: uppercase; color: var(--destaque); }

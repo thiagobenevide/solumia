@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Studio engine (modulos/empreendimento/capture): venv over the system Python, so PyGObject and
+# GStreamer come from apt, plus OpenCV 4 for face tracking (5 dropped the Haar cascades). The app uses .venv/bin/python when present.
+set -euo pipefail
+cd "$(dirname "$0")/../../modulos/empreendimento/capture"
+uv venv --quiet --allow-existing --system-site-packages --python /usr/bin/python3 .venv
+uv pip install --quiet --python .venv/bin/python "opencv-python-headless<5" numpy
+.venv/bin/python -c "import gi, cv2; print('capture venv ready, OpenCV', cv2.__version__)"

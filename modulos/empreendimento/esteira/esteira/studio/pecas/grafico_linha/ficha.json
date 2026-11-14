@@ -1,0 +1,90 @@
+{
+ "id": "grafico_linha",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "evolução de um valor no tempo, linha que se desenha até o último ponto",
+ "intencoes": [
+  "dado_temporal",
+  "numero"
+ ],
+ "exemplos_sim": [
+  "A inadimplência foi de 40% em 2019 para 61% em 2024.",
+  "O dólar saiu de 3 reais para 5 em cinco anos.",
+  "Os juros subiram mês a mês: 2%, 4%, 7% e 13%.",
+  "O preço do arroz dobrou desde 2020.",
+  "As vendas cresceram trimestre após trimestre."
+ ],
+ "exemplos_nao": [
+  "Poupança ou Tesouro?",
+  "Passo 1: anote os gastos.",
+  "Vamos entender por que isso acontece."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 9.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 36,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Inadimplência no Brasil"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "um par por ponto: período (rótulo curto) e valor",
+   "obrigatorio": true,
+   "max_car": 6,
+   "max_valor": 8,
+   "min_itens": 2,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "2019",
+     "valor": "40%"
+    },
+    {
+     "rotulo": "2021",
+     "valor": "48%"
+    },
+    {
+     "rotulo": "2023",
+     "valor": "56%"
+    },
+    {
+     "rotulo": "2024",
+     "valor": "61%"
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "swoosh"
+ },
+ "notas": "Migrada do kit na etapa 3. Sem o dado necessário, cai em linha_do_tempo."
+}

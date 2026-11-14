@@ -1,0 +1,87 @@
+{
+ "id": "riscado",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "o que deixar de fazer ou de pagar, riscado na tela",
+ "intencoes": [
+  "lista",
+  "alerta"
+ ],
+ "exemplos_sim": [
+  "Corte as assinaturas paradas, o delivery diário e a tarifa do banco.",
+  "Esqueça o cheque especial.",
+  "Pare de pagar só o mínimo da fatura.",
+  "Nada de empréstimo para pagar empréstimo.",
+  "Chega de comprar parcelado sem planejar."
+ ],
+ "exemplos_nao": [
+  "81% estão endividadas.",
+  "Poupança ou Tesouro?",
+  "Em 1994 veio o Real."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "media",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.0,
+ "duracao_max": 7.0,
+ "tela_cheia": false,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 30,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Pagar só o mínimo"
+  },
+  {
+   "nome": "valores",
+   "tipo": "pares",
+   "descricao": "o que deixar de fazer/pagar (um par por item); sem pares, risca o título",
+   "obrigatorio": false,
+   "max_car": 22,
+   "max_valor": 8,
+   "min_itens": 0,
+   "max_itens": 4,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": [
+    {
+     "rotulo": "Assinaturas paradas",
+     "valor": ""
+    },
+    {
+     "rotulo": "Delivery diário",
+     "valor": ""
+    },
+    {
+     "rotulo": "Tarifa do banco",
+     "valor": ""
+    }
+   ]
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "swoosh"
+ },
+ "notas": "Migrada do kit na etapa 3."
+}

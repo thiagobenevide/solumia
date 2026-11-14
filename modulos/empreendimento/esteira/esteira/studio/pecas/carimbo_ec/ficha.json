@@ -1,0 +1,60 @@
+{
+ "id": "carimbo_ec",
+ "versao": 1,
+ "origem": "kit",
+ "motor": "effectcraft",
+ "estado": "rascunho",
+ "comunica": "conclusão curta e firme (pronto, aprovado, proibido) carimbada numa placa que bate na tela com desfoque, onda de impacto e um traço que sublinha",
+ "intencoes": [
+  "destaque"
+ ],
+ "exemplos_sim": [
+  "Pronto: dívida quitada.",
+  "E isso é proibido por lei.",
+  "Resultado: aprovado.",
+  "Golpe confirmado.",
+  "Missão cumprida."
+ ],
+ "exemplos_nao": [
+  "81% estão endividadas.",
+  "Passo 1: anote os gastos.",
+  "Os juros mais caros são estes."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "leve"
+ ],
+ "energia": "alta",
+ "peso": "2d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 1.0,
+ "duracao_max": 4.0,
+ "tela_cheia": false,
+ "rosto": "precisa_area_livre",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "texto da peça; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": true,
+   "max_car": 16,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Aprovado"
+  }
+ ],
+ "botoes": [],
+ "batidas": [],
+ "sfx": {
+  "entrada": "stamp"
+ },
+ "notas": "auditoria (Claude): 16:9 (claro e escuro): a placa APROVADO fica pequena, ocupa cerca de 37% da largura e fica na metade de baixo. A metade de cima da tela está vazia e a mensagem não domina o quadro.; 9:16 (claro e escuro): a placa é minúscula, com cerca de 20% da largura do quadro, e flutua no meio. O texto APROVADO "
+}

@@ -1,0 +1,52 @@
+/* Foto de época: só variáveis da pele (cores, fontes, --U). */
+.p-foto_passado_camadas { display: flex; align-items: center; justify-content: center; }
+.p-foto_passado_camadas .fe-corpo { display: flex; flex-direction: column; align-items: center; gap: calc(4 * var(--U)); max-width: calc(90 * var(--U)); }
+.p-foto_passado_camadas .fe-cena { perspective: calc(130 * var(--U)); }
+.p-foto_passado_camadas .fe-palco { display: grid; place-items: center; transform-style: preserve-3d; }
+.p-foto_passado_camadas .fe-cartao { grid-area: 1 / 1; position: relative; transform-style: preserve-3d; }
+.p-foto_passado_camadas .fe-foto { position: relative; overflow: hidden; width: calc(58 * var(--U)); height: calc(40 * var(--U));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--fundo2) 70%, var(--destaque)), var(--fundo2)); }
+.p-foto_passado_camadas .fe-img { position: relative; width: 100%; height: 100%; object-fit: cover; display: block;
+  filter: sepia(.85) contrast(1.08) brightness(.95) saturate(.9); }
+.p-foto_passado_camadas .fe-fundo-n .fe-img { filter: sepia(.9) contrast(1.05) brightness(.7) saturate(.8); }
+.p-foto_passado_camadas .fe-vazio { position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--destaque) 35%, transparent), transparent 60%); }
+.p-foto_passado_camadas .fe-grao { position: absolute; inset: 0; opacity: .32; mix-blend-mode: overlay; background-size: calc(30 * var(--U));
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='.9 0 0 0 0 .9 0 0 0 0 .9 0 0 0 0 0 0 0 0 1'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+.p-foto_passado_camadas .fe-vinheta { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%),
+    linear-gradient(color-mix(in srgb, var(--apoio) 14%, transparent), color-mix(in srgb, var(--apoio) 14%, transparent)); }
+
+/* Porta-retrato */
+.p-foto_passado_camadas .fe-retrato { padding: calc(2 * var(--U)); background: color-mix(in srgb, var(--texto) 88%, var(--destaque));
+  border: calc(2.6 * var(--U)) solid color-mix(in srgb, var(--apoio) 60%, var(--fundo));
+  box-shadow: 0 calc(2 * var(--U)) calc(5 * var(--U)) rgba(0,0,0,.5), inset 0 0 calc(1.2 * var(--U)) rgba(0,0,0,.5); }
+.p-foto_passado_camadas .fe-retrato .fe-foto { box-shadow: 0 0 0 calc(.3 * var(--U)) rgba(0,0,0,.5); }
+
+/* Recorte de jornal */
+.p-foto_passado_camadas .fe-jornal { padding: calc(2.2 * var(--U)) calc(2.4 * var(--U)) calc(2 * var(--U));
+  background: color-mix(in srgb, var(--texto) 82%, var(--destaque)); border-radius: calc(.3 * var(--U));
+  box-shadow: 0 calc(1.6 * var(--U)) calc(4 * var(--U)) rgba(0,0,0,.5); }
+.p-foto_passado_camadas .fe-jornal .fe-foto { border: calc(.3 * var(--U)) solid color-mix(in srgb, var(--fundo) 70%, transparent); box-sizing: content-box; }
+.p-foto_passado_camadas .fe-linhas { display: grid; gap: calc(.9 * var(--U)); margin-top: calc(1.6 * var(--U)); }
+.p-foto_passado_camadas .fe-linhas i { display: block; height: calc(.7 * var(--U)); background: color-mix(in srgb, var(--fundo) 55%, transparent); }
+.p-foto_passado_camadas .fe-linhas i:nth-child(2) { width: 86%; }
+.p-foto_passado_camadas .fe-linhas i:nth-child(3) { width: 58%; }
+
+/* Carimbo de data (filho do cartão, não é cortado pela foto) */
+.p-foto_passado_camadas .fe-selo { position: absolute; right: calc(5 * var(--U)); bottom: calc(5 * var(--U)); opacity: 0;
+  font: 700 calc(3 * var(--U))/1.15 var(--fM); letter-spacing: .04em; text-transform: uppercase;
+  max-width: calc(40 * var(--U)); text-align: center; overflow-wrap: anywhere;
+  color: var(--destaque); padding: calc(.9 * var(--U)) calc(1.4 * var(--U));
+  border: calc(.5 * var(--U)) solid var(--destaque); border-radius: calc(.6 * var(--U));
+  background: color-mix(in srgb, var(--fundo) 70%, transparent); }
+
+/* Legenda datilografada */
+.p-foto_passado_camadas .fe-leg { font: 500 calc(3.4 * var(--U))/1.4 var(--fM); color: var(--texto); text-align: center; max-width: calc(84 * var(--U)); overflow-wrap: anywhere; }
+.p-foto_passado_camadas .fe-pal { display: inline-block; white-space: nowrap; }
+.p-foto_passado_camadas .fe-c { opacity: 0; }
+
+.vertical .p-foto_passado_camadas .fe-corpo { gap: calc(6 * var(--U)); max-width: calc(88 * var(--U)); }
+.vertical .p-foto_passado_camadas .fe-foto { width: calc(58 * var(--U)); height: calc(46 * var(--U)); }
+.vertical .p-foto_passado_camadas .fe-selo { font-size: calc(2.8 * var(--U)); max-width: calc(42 * var(--U)); }
+.vertical .p-foto_passado_camadas .fe-leg { font-size: calc(4 * var(--U)); max-width: calc(80 * var(--U)); }

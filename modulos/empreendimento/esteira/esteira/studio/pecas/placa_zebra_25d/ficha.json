@@ -1,0 +1,89 @@
+{
+ "id": "placa_zebra_25d",
+ "versao": 1,
+ "origem": "finlumia",
+ "motor": "html",
+ "estado": "aprovada",
+ "comunica": "um aviso ou dado perigoso numa placa que cai em perspectiva e quica, com faixas zebradas deslizando em camadas atrás e o título que treme uma vez no impacto",
+ "intencoes": [
+  "alerta"
+ ],
+ "exemplos_sim": [
+  "Cuidado: nunca passe o número do cartão por mensagem.",
+  "Atenção! Esse tipo de golpe cresceu 300% em um ano.",
+  "Perigo: juros do cheque especial passam de 8% ao mês.",
+  "Não faça isso: investir dinheiro que você vai precisar no mês que vem.",
+  "Fique de olho, esse contrato tem multa de 20% para cancelar.",
+  "Alerta vermelho: sua reserva de emergência não pode ficar na ação.",
+  "Cuidado com links de promoção que chegam por WhatsApp.",
+  "Isso é perigoso: misturar as contas pessoais com as da empresa."
+ ],
+ "exemplos_nao": [
+  "Vamos ver como o juro composto funciona.",
+  "81% das famílias estão endividadas.",
+  "Se inscreva no canal para ver o próximo vídeo.",
+  "Compare o CDB com a poupança."
+ ],
+ "temas": [],
+ "neutra": true,
+ "tom": [
+  "dramatica",
+  "didatica"
+ ],
+ "energia": "alta",
+ "peso": "2_5d",
+ "formatos": [
+  "16:9",
+  "9:16"
+ ],
+ "duracao_min": 2.5,
+ "duracao_max": 7.0,
+ "tela_cheia": true,
+ "rosto": "nao_usa",
+ "encaixes": [
+  {
+   "nome": "titulo",
+   "tipo": "texto",
+   "descricao": "o aviso em poucas palavras, que treme no impacto",
+   "obrigatorio": true,
+   "max_car": 24,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Golpe do falso boleto"
+  },
+  {
+   "nome": "texto",
+   "tipo": "texto",
+   "descricao": "uma linha que explica o risco; *palavra* entre asteriscos vai em destaque",
+   "obrigatorio": false,
+   "max_car": 70,
+   "max_valor": 16,
+   "min_itens": 1,
+   "max_itens": 6,
+   "unidade": false,
+   "opcoes": [],
+   "exemplo": "Sempre confira o *beneficiário* antes de pagar"
+  }
+ ],
+ "botoes": [
+  {
+   "nome": "nivel",
+   "valores": [
+    "atencao",
+    "perigo"
+   ],
+   "padrao": "perigo",
+   "descricao": "atencao: cor de apoio e rótulo ATENÇÃO; perigo: cor de destaque e rótulo PERIGO"
+  }
+ ],
+ "batidas": [
+  "titulo"
+ ],
+ "sfx": {
+  "entrada": "whoosh"
+ },
+ "notas": "Complementa placa_alerta_25d: faixas zebradas em três camadas deslizando em sentidos opostos e câmera que respira."
+}

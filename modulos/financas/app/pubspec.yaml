@@ -1,0 +1,27 @@
+name: agent_financas
+description: "Telas do módulo Finanças: painel, extrato, orçamento, metas, contas, empresas e carteira."
+version: 0.1.0
+publish_to: none
+resolution: workspace
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.38.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  agent_core:
+    path: ../../../plataforma/app_core
+  agent_arquivos:
+    path: ../../arquivos/app
+  archive: ^4.0.0
+  audioplayers: ^6.8.1
+  file_picker: ^13.3.0
+  http: ^1.2.0
+  url_launcher: ^6.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
