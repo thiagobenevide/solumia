@@ -5,11 +5,11 @@ CENA = {"busca_en": "credit card bills", "chave_en": "credit card"}
 
 
 def test_passaro_nao_e_cartao():
-    chave = M.key_of_scene(CENA)
+    key = M.key_of_scene(CENA)
     passaro = {"id": "a", "tags": "bird, flamingo, beak, bill, feathers"}
     cartao = {"id": "b", "tags": "wallet, credit card, cash, money"}
     aniversario = {"id": "c", "tags": "birthday party, birthday card, congratulation"}
-    assert [c["id"] for c in M.sort([passaro, aniversario, cartao], chave)] == ["b"]
+    assert [c["id"] for c in M.sort([passaro, aniversario, cartao], key)] == ["b"]
 
 
 def test_video_sem_nada_relevante_passa_para_foto():

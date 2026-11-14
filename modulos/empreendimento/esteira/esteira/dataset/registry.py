@@ -47,42 +47,42 @@ def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
-def _attach(arq: Path, dado: dict) -> None:
+def _attach(file: Path, given: dict) -> None:
     """Uma linha inteira por escrita, com trava e fsync: falha no meio corrompe no máximo a última linha."""
-    arq.parent.mkdir(parents=True, exist_ok=True)
-    linha = json.dumps(dado, ensure_ascii=False, separators=(",", ":")) + "\n"
-    with open(arq, "a", encoding="utf-8") as f:
+    file.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(given, ensure_ascii=False, separators=(",", ":")) + "\n"
+    with open(file, "a", encoding="utf-8") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
-        f.write(linha)
+        f.write(line)
         f.flush()
         os.fsync(f.fileno())
         fcntl.flock(f, fcntl.LOCK_UN)
 
 
-def artifact(dado: Any) -> str:
+def artifact(given: Any) -> str:
     """Guarda um artefato (bytes, str ou JSON) por conteúdo → "sha:<hex>". Repetido não se regrava."""
-    if isinstance(dado, bytes):
-        bruto, ext = dado, ".bin"
-    elif isinstance(dado, str):
-        bruto, ext = dado.encode(), ".txt"
+    if isinstance(given, bytes):
+        raw, ext = given, ".bin"
+    elif isinstance(given, str):
+        raw, ext = given.encode(), ".txt"
     else:
-        bruto, ext = json.dumps(dado, ensure_ascii=False, sort_keys=True).encode(), ".json"
-    sha = hashlib.sha256(bruto).hexdigest()
-    arq = ARTIFACTS / sha[:2] / f"{sha}{ext}"
-    if not arq.exists():
-        arq.parent.mkdir(parents=True, exist_ok=True)
-        tmp = arq.with_suffix(arq.suffix + ".parcial")
-        tmp.write_bytes(bruto)
-        tmp.replace(arq)
+        raw, ext = json.dumps(given, ensure_ascii=False, sort_keys=True).encode(), ".json"
+    sha = hashlib.sha256(raw).hexdigest()
+    file = ARTIFACTS / sha[:2] / f"{sha}{ext}"
+    if not file.exists():
+        file.parent.mkdir(parents=True, exist_ok=True)
+        tmp = file.with_suffix(file.suffix + ".parcial")
+        tmp.write_bytes(raw)
+        tmp.replace(file)
     return f"sha:{sha}"
 
 
 def read_artifact(ref: str) -> Any:
     sha = ref.removeprefix("sha:")
-    for arq in (ARTIFACTS / sha[:2]).glob(f"{sha}.*"):
-        if arq.suffix == ".json":
-            return json.loads(arq.read_text())
-        return arq.read_text() if arq.suffix == ".txt" else arq.read_bytes()
+    for file in (ARTIFACTS / sha[:2]).glob(f"{sha}.*"):
+        if file.suffix == ".json":
+            return json.loads(file.read_text())
+        return file.read_text() if file.suffix == ".txt" else file.read_bytes()
     raise KeyError(ref)
 
 
@@ -115,14 +115,14 @@ def write(tarefa: str, *, grupo: str, contexto: dict, saida: Any, origem: str, p
     return id_
 
 
-def evaluate(id_: str, veredito: str, *, nota: int | None = None, motivo: str | None = None,
+def evaluate(id_: str, verdict: str, *, nota: int | None = None, motivo: str | None = None,
             comentario: str | None = None) -> None:
     """Veredito humano que chega depois: evento à parte (o registro original não muda)."""
-    if veredito not in VERDICTS:
-        raise ValueError(f"veredito inválido: {veredito}")
+    if verdict not in VERDICTS:
+        raise ValueError(f"veredito inválido: {verdict}")
     _attach(EVENTS / f"{time.strftime('%Y-%m')}.jsonl", {
         "t": _now(), "ref": id_, "tipo": "humano",
-        "dado": {"veredito": veredito, "nota": nota, "motivo": motivo, "comentario": comentario, "em": _now()}})
+        "dado": {"veredito": verdict, "nota": nota, "motivo": motivo, "comentario": comentario, "em": _now()}})
 
 
 def measure(id_: str, **metricas) -> None:
@@ -131,19 +131,19 @@ def measure(id_: str, **metricas) -> None:
                                                           "dado": metricas})
 
 
-def _lines(arq: Path) -> Iterator[dict]:
-    with open(arq, encoding="utf-8") as f:
-        for linha in f:
+def _lines(file: Path) -> Iterator[dict]:
+    with open(file, encoding="utf-8") as f:
+        for line in f:
             try:
-                yield json.loads(linha)
+                yield json.loads(line)
             except ValueError:  # última linha de uma escrita interrompida
                 continue
 
 
 def _events() -> dict[str, list[dict]]:
     ev: dict[str, list[dict]] = {}
-    for arq in sorted(EVENTS.glob("*.jsonl")):
-        for e in _lines(arq):
+    for file in sorted(EVENTS.glob("*.jsonl")):
+        for e in _lines(file):
             ev.setdefault(e["ref"], []).append(e)
     return ev
 
@@ -167,11 +167,11 @@ def records(tarefa: str | None = None, app: str | None = None) -> Iterator[dict]
     """Registros com os eventos posteriores aplicados (o último veredito vale) e o campo `uso` calculado."""
     ev = _events()
     base = RECORD / app if app else RECORD
-    padrao = f"**/{tarefa}/*.jsonl" if tarefa else "**/*.jsonl"
-    for arq in sorted(base.glob(padrao)):
-        if arq.parent.name == "_eventos":
+    default = f"**/{tarefa}/*.jsonl" if tarefa else "**/*.jsonl"
+    for file in sorted(base.glob(default)):
+        if file.parent.name == "_eventos":
             continue
-        for r in _lines(arq):
+        for r in _lines(file):
             for e in ev.get(r["id"], ()):
                 if e["tipo"] == "humano":
                     r["humano"] = e["dado"]
@@ -183,12 +183,12 @@ def records(tarefa: str | None = None, app: str | None = None) -> Iterator[dict]
 
 def last(grupo: str | None = None, tarefa: str | None = None, **extra) -> dict | None:
     """Registro mais recente de um grupo e/ou com esses campos em `extra` (ex.: `peca=<id>`)."""
-    achado = None
+    found = None
     for r in records(tarefa):
         if grupo and r["grupo"] != grupo:
             continue
         if any((r.get("extra") or {}).get(k) != v for k, v in extra.items()):
             continue
-        if achado is None or r["id"] > achado["id"]:
-            achado = r
-    return achado
+        if found is None or r["id"] > found["id"]:
+            found = r
+    return found

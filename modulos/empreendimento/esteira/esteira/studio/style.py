@@ -123,8 +123,8 @@ class Rules(BaseModel):
         """Estilo salvo com `cenas` (cardápio permitido) vira `filtro` (o que fica de fora)."""
         if isinstance(d, dict) and "cenas" in d:
             d = dict(d)
-            cenas = d.pop("cenas") or []
-            d.setdefault("filtro", [c for c in SCENES if c not in cenas])
+            scenes = d.pop("cenas") or []
+            d.setdefault("filtro", [c for c in SCENES if c not in scenes])
         return d
 
     def cardapio(self):
@@ -227,13 +227,13 @@ class Style(BaseModel):
 def aplicar_levels(regras: Rules, niveis=None):
     """Regras com os números dos níveis (os do estilo, ou `niveis` por cima para uma produção só)."""
     nv = {**regras.niveis, **(niveis or {})}
-    dados = regras.model_dump()
-    for eixo, nivel in nv.items():
-        dados.update(LEVELS.get(eixo, {}).get(nivel, {}))
+    data = regras.model_dump()
+    for eixo, level in nv.items():
+        data.update(LEVELS.get(eixo, {}).get(level, {}))
     if nv.get("motion") in BROLL:
-        dados["apresentador"] = {**dados["apresentador"], "broll": BROLL[nv["motion"]]}
-    dados["niveis"] = nv
-    return Rules.model_validate(dados)
+        data["apresentador"] = {**data["apresentador"], "broll": BROLL[nv["motion"]]}
+    data["niveis"] = nv
+    return Rules.model_validate(data)
 
 
 def with_mode(estilo: "Style", modo):
@@ -259,8 +259,8 @@ def _seed():
 
 def list_all(canal=None):
     _seed()
-    estilos = [Style.model_validate_json(a.read_text()) for a in sorted(FOLDER.glob("*.json"))]
-    return [e for e in estilos if canal is None or e.canal == canal]
+    styles = [Style.model_validate_json(a.read_text()) for a in sorted(FOLDER.glob("*.json"))]
+    return [e for e in styles if canal is None or e.canal == canal]
 
 
 def load(id_):
@@ -269,13 +269,13 @@ def load(id_):
     id_, _, v = id_.partition("@")
     if not _file(id_).exists():
         raise KeyError(f"estilo inexistente: {id_}")
-    atual = Style.model_validate_json(_file(id_).read_text())
-    if not v or int(v) == atual.versao:
-        return atual
-    arq = _versions(id_) / f"v{int(v)}.json"
-    if not arq.exists():
+    current = Style.model_validate_json(_file(id_).read_text())
+    if not v or int(v) == current.versao:
+        return current
+    file = _versions(id_) / f"v{int(v)}.json"
+    if not file.exists():
         raise KeyError(f"versão inexistente: {id_}@{v}")
-    return Style.model_validate_json(arq.read_text())
+    return Style.model_validate_json(file.read_text())
 
 
 def _versions(id_):
@@ -294,26 +294,26 @@ def label(estilo: Style):
 
 def versions(id_):
     """Todas as versões guardadas do estilo, da mais nova para a mais antiga."""
-    atual = load(id_)
-    pasta = _versions(id_)
-    todas = {atual.versao: atual}
-    if pasta.is_dir():
-        for a in pasta.glob("v*.json"):
+    current = load(id_)
+    folder = _versions(id_)
+    everything = {current.versao: current}
+    if folder.is_dir():
+        for a in folder.glob("v*.json"):
             e = Style.model_validate_json(a.read_text())
-            todas.setdefault(e.versao, e)
-    return [todas[v] for v in sorted(todas, reverse=True)]
+            everything.setdefault(e.versao, e)
+    return [everything[v] for v in sorted(everything, reverse=True)]
 
 
 def save(estilo: Style, forcar=False, nova_versao=True):
     """Grava como versão nova (a anterior fica guardada). Estilo travado só muda com `forcar` (destravar é explícito)."""
     _seed()
     if _file(estilo.id).exists():
-        atual = load(estilo.id)
-        if atual.travado and not forcar:
+        current = load(estilo.id)
+        if current.travado and not forcar:
             raise PermissionError(f"estilo {estilo.id} travado: destrave antes de mudar")
-        if not (_versions(atual.id) / f"v{atual.versao}.json").exists():
-            _store(atual)
-        estilo.versao = atual.versao + 1 if nova_versao else atual.versao
+        if not (_versions(current.id) / f"v{current.versao}.json").exists():
+            _store(current)
+        estilo.versao = current.versao + 1 if nova_versao else current.versao
     if nova_versao or not estilo.salvo_em:
         estilo.salvo_em = datetime.now().isoformat(timespec="seconds")
     estilo.regras = aplicar_levels(estilo.regras)
@@ -326,12 +326,12 @@ def new(canal, modo, formatos, nome=""):
     """Template novo do canal pelo tipo (modo + formatos), a partir do estilo do canal mais parecido."""
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,30}", canal):
         raise ValueError("canal: letras minúsculas, números e hífen")
-    do_canal = list_all(canal)
-    base = next((e for e in do_canal if e.modo == modo), None) or (do_canal[0] if do_canal else load("finlumia-dark"))
-    raiz = f"{canal}-{modo}"
-    id_, n = raiz, 2
+    of_channel = list_all(canal)
+    base = next((e for e in of_channel if e.modo == modo), None) or (of_channel[0] if of_channel else load("finlumia-dark"))
+    root = f"{canal}-{modo}"
+    id_, n = root, 2
     while _file(id_).exists():
-        id_, n = f"{raiz}-{n}", n + 1
+        id_, n = f"{root}-{n}", n + 1
     e = base.model_copy(update={"id": id_, "canal": canal, "modo": modo, "formatos": formatos, "versao": 1,
                                 "travado": False, "rotulo": "", "exemplos": list(base.exemplos),
                                 "nome": nome.strip() or f"{canal.capitalize()} · {modo}" + (f" {n - 1}" if n > 2 else "")})
@@ -339,7 +339,7 @@ def new(canal, modo, formatos, nome=""):
     return save(e)
 
 
-def new_channel(slug, nome, nicho="", cor="#f5c518", modo="dark"):
+def new_channel(slug, nome, niche="", cor="#f5c518", modo="dark"):
     """Cria o estilo inicial de um canal novo (rede aberta); a identidade fina vem do Fluxo A."""
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,30}", slug):
         raise ValueError("slug: letras minúsculas, números e hífen")
@@ -348,26 +348,26 @@ def new_channel(slug, nome, nicho="", cor="#f5c518", modo="dark"):
         raise FileExistsError(f"já existe o estilo {id_}")
     base = load("finlumia-dark")
     e = Style(id=id_, nome=f"{nome} · {modo}", canal=slug, modo=modo, pele=base.pele.model_copy(update={"destaque": cor}),
-               regras=base.regras, guia=f"Canal {nome}. Nicho: {nicho}." if nicho else f"Canal {nome}.")
+               regras=base.regras, guia=f"Canal {nome}. Nicho: {niche}." if niche else f"Canal {nome}.")
     return save(e)
 
 
-def duplicate(origem_id, novo_id, nome):
+def duplicate(origin_id, new_id, nome):
     """Template novo a partir de um estilo: tudo igual, destravado, versão 1 (o canal pode ser trocado depois)."""
-    if _file(novo_id).exists():
-        raise FileExistsError(f"já existe o estilo {novo_id}")
-    base = load(origem_id)
-    novo = base.model_copy(update={"id": novo_id, "nome": nome, "versao": 1, "travado": False, "rotulo": ""})
-    Style.model_validate(novo.model_dump())  # valida o id
-    return save(novo)
+    if _file(new_id).exists():
+        raise FileExistsError(f"já existe o estilo {new_id}")
+    base = load(origin_id)
+    new = base.model_copy(update={"id": new_id, "nome": nome, "versao": 1, "travado": False, "rotulo": ""})
+    Style.model_validate(new.model_dump())  # valida o id
+    return save(new)
 
 
 def channels():
     """Canais da rede: os perfis da esteira + os que só existem como estilo."""
     from esteira.project import ROOT
-    nomes = {p.stem for p in (ROOT / "perfis").glob("*.toml")}
-    nomes |= {e.canal for e in list_all()}
-    return sorted(nomes)
+    names = {p.stem for p in (ROOT / "perfis").glob("*.toml")}
+    names |= {e.canal for e in list_all()}
+    return sorted(names)
 
 
 def json_skin(estilo: Style):

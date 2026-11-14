@@ -13,11 +13,11 @@ def _p(texto, t0=0.0, passo=0.4):
 
 def test_numero_partido_pelo_whisper_casa_com_o_roteiro():
     # roteiro "12,5%" × Whisper "12" ",5" "%": antes a tomada começava em "das" e o número era cortado
-    frases = C.sentences_of_script("Hoje 12,5% das famílias dizem que não vão pagar.")
+    sentences = C.sentences_of_script("Hoje 12,5% das famílias dizem que não vão pagar.")
     pal = _p("Hoje 12 ,5 % das famílias dizem que não vão pagar.")
-    escolhas, _, _ = C.choose(frases, pal)
-    i, j, nota, _ = escolhas[0]
-    assert i == 0 and nota > 0.9
+    choices, _, _ = C.choose(sentences, pal)
+    i, j, note, _ = choices[0]
+    assert i == 0 and note > 0.9
 
 
 def _env(pedacos, total=4.0):
@@ -31,8 +31,8 @@ def _env(pedacos, total=4.0):
 def test_borda_do_fim_vai_ate_o_silencio_real():
     # o Whisper diz que a palavra acaba em 1.0, mas a voz vai até 1.25 ("porcen|to"): o corte não pode ser em 1.0
     env = _env([(0.2, 1.25)])
-    fim = C._edge_end(env, 1.0, 3.0, 0.2)
-    assert 1.25 <= fim <= 1.5
+    end = C._edge_end(env, 1.0, 3.0, 0.2)
+    assert 1.25 <= end <= 1.5
 
 
 def test_fecho_de_consoante_nao_e_pausa():
@@ -43,31 +43,31 @@ def test_fecho_de_consoante_nao_e_pausa():
 
 def test_borda_do_inicio_recua_ate_o_silencio():
     env = _env([(1.0, 2.0)])
-    ini = C._edge_start(env, 1.15, 0.0, 0.15)  # Whisper atrasou o começo da palavra
-    assert 0.8 <= ini <= 1.0
+    start = C._edge_start(env, 1.15, 0.0, 0.15)  # Whisper atrasou o começo da palavra
+    assert 0.8 <= start <= 1.0
 
 
 def test_comeco_abandonado_sai_sem_llm():
-    trechos = [{"ini": 0, "fim": 1, "i": 0, "j": 4, "manter": True, "tipo": "improviso", "confianca": 0.5,
+    spans = [{"ini": 0, "fim": 1, "i": 0, "j": 4, "manter": True, "tipo": "improviso", "confianca": 0.5,
                 "texto": "Resumindo, 81...", "motivo": ""},
                {"ini": 1.5, "fim": 4, "i": 4, "j": 12, "manter": True, "tipo": "tomada", "confianca": 1.0,
                 "texto": "Resumindo. 81% de pessoas endividadas realmente assusta.", "motivo": ""}]
-    C._starts_abandoned(trechos)
-    assert not trechos[0]["manter"] and trechos[0]["tipo"] == "retake"
+    C._starts_abandoned(spans)
+    assert not spans[0]["manter"] and spans[0]["tipo"] == "retake"
 
 
 def test_retake_que_sobrou_na_narracao_editada():
-    frases = C.sentences_of_script("Segundo motivo, entender o crédito é difícil e a pesquisa também mede isso.")
+    sentences = C.sentences_of_script("Segundo motivo, entender o crédito é difícil e a pesquisa também mede isso.")
     pal = _p("Segundo motivo, entender o crédito é difícil. Segundo motivo, entender o crédito é difícil e a "
              "pesquisa também mede isso.")
-    r = C.repetitions(pal, frases)
+    r = C.repetitions(pal, sentences)
     assert len(r) == 1 and r[0]["i"] == 0 and r[0]["j"] == 7
 
 
 def test_repeticao_natural_da_frase_nao_e_retake():
-    frases = C.sentences_of_script("Quem respondeu antes, com o dinheiro mais curto, ficou impaciente com o dinheiro.")
+    sentences = C.sentences_of_script("Quem respondeu antes, com o dinheiro mais curto, ficou impaciente com o dinheiro.")
     pal = _p("Quem respondeu antes, com o dinheiro mais curto, ficou impaciente com o dinheiro.")
-    assert C.repetitions(pal, frases) == []
+    assert C.repetitions(pal, sentences) == []
 
 
 def test_numero_ancorado_na_fala():
@@ -86,26 +86,26 @@ def test_numeros_em_fila_nao_empurram_o_seguinte():
 
 
 def test_pedaco_do_numero_fica_na_tomada():
-    frases = C.sentences_of_script("Em setembro eram 81,7%. E o cartão é a dívida mais comum.")
+    sentences = C.sentences_of_script("Em setembro eram 81,7%. E o cartão é a dívida mais comum.")
     pal = _p("Em setembro eram 81 ,7%. E o cartão é a dívida mais comum.")
-    trechos, _ = C.decide(frases, pal)
-    assert all(t["manter"] for t in trechos if ",7%" in t["texto"])
+    spans, _ = C.decide(sentences, pal)
+    assert all(t["manter"] for t in spans if ",7%" in t["texto"])
 
 
 def test_gaguejo_sai():
-    frases = C.sentences_of_script("O cartão é de longe a dívida mais comum.")
+    sentences = C.sentences_of_script("O cartão é de longe a dívida mais comum.")
     pal = _p("O cartão é é de longe a dívida mais comum.")
-    trechos, _ = C.decide(frases, pal)
-    fora = [t for t in trechos if not t["manter"]]
-    assert len(fora) == 1 and fora[0]["i"] == 2
+    spans, _ = C.decide(sentences, pal)
+    outside = [t for t in spans if not t["manter"]]
+    assert len(outside) == 1 and outside[0]["i"] == 2
 
 
 def test_gaguejo_de_duas_palavras_sai():
-    frases = C.sentences_of_script("Não vão ter condições de pagar o que está atrasado.")
+    sentences = C.sentences_of_script("Não vão ter condições de pagar o que está atrasado.")
     pal = _p("Não vão ter condições de pagar o que está que está atrasado.")
-    trechos, _ = C.decide(frases, pal)
-    fora = [t for t in trechos if not t["manter"]]
-    assert len(fora) == 1 and (fora[0]["i"], fora[0]["j"]) == (7, 9)
+    spans, _ = C.decide(sentences, pal)
+    outside = [t for t in spans if not t["manter"]]
+    assert len(outside) == 1 and (outside[0]["i"], outside[0]["j"]) == (7, 9)
 
 
 def test_todo_numero_com_unidade_vira_grafico():

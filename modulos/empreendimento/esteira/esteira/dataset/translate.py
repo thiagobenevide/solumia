@@ -12,50 +12,50 @@ def _tem(grupo, tarefa, **extra):
     return R.last(grupo, tarefa, **extra) is not None
 
 
-def assembly(projeto: Project) -> str | None:
+def assembly(project: Project) -> str | None:
     """N1 da montagem do episódio pelo plano atual (`origem: traducao`). → id do registro."""
     from esteira import assemble, production
-    if not projeto.caminho("plano.json").exists():
+    if not project.caminho("plano.json").exists():
         return None
-    plano = projeto.carregar_json("plano.json")
-    cam = production.camera(projeto) if production.mode(projeto) == "apresentador" else None
-    cenas = ([c for c in plano["cenas"] if c.get("midia") and not c.get("camera")] if cam
-             else assemble._scenes_with_media(plano))
-    if not cenas:
+    plan = project.carregar_json("plano.json")
+    cam = production.camera(project) if production.mode(project) == "apresentador" else None
+    scenes = ([c for c in plan["cenas"] if c.get("midia") and not c.get("camera")] if cam
+             else assemble._scenes_with_media(plan))
+    if not scenes:
         return None
-    doc, midias = assemble.assembly(projeto, plano, cenas, cam)
-    assemble._dataset(projeto, plano, doc, None, cam, midias)
-    r = R.last(f"ep:{projeto.ep}", "montar")
+    doc, medias = assemble.assembly(project, plan, scenes, cam)
+    assemble._dataset(project, plan, doc, None, cam, medias)
+    r = R.last(f"ep:{project.ep}", "montar")
     return r and r["id"]
 
 
-def thumbs(projeto: Project) -> int:
+def thumbs(project: Project) -> int:
     """Candidatas de `thumbs/ranking.json` → `thumb_compor` em N1; as que estão nas vagas A/B ficam `escolhida`."""
     from esteira import thumbs as T
     from esteira.n1 import photocraft as N1
-    rk = projeto.caminho("thumbs/ranking.json")
+    rk = project.caminho("thumbs/ranking.json")
     if not rk.exists():
         return 0
-    cfg = projeto.cfg.get("thumb", {})
+    cfg = project.cfg.get("thumb", {})
     w, h = cfg.get("largura", 1280), cfg.get("altura", 720)
-    vagas = {projeto.caminho(f"thumb_{k}.png").read_bytes() for k in (1, 2, 3) if projeto.caminho(f"thumb_{k}.png").exists()}
-    ctx = T._context(projeto)
+    slots = {project.caminho(f"thumb_{k}.png").read_bytes() for k in (1, 2, 3) if project.caminho(f"thumb_{k}.png").exists()}
+    ctx = T._context(project)
     n = 0
     for x in json.loads(rk.read_text()):
-        if _tem(f"thumb:{projeto.ep}", "thumb_compor", arquivo=x["arquivo"]):
+        if _tem(f"thumb:{project.ep}", "thumb_compor", arquivo=x["arquivo"]):
             continue
-        dados = T.data_thumb(x["conceito"], projeto.caminho(f"thumbs/{x['fundo']}").as_uri(), projeto.cfg)
-        doc = N1.of_data_thumb(dados, w, h)
-        png = projeto.caminho(f"thumbs/{x['arquivo']}")
-        escolhida = png.exists() and png.read_bytes() in vagas
-        R.write("thumb_compor", grupo=f"thumb:{projeto.ep}", origem="traducao",
-                 contexto={**ctx, "canal": getattr(projeto, "canal", "") or "", "fundo": x["fundo"],
+        data = T.data_thumb(x["conceito"], project.caminho(f"thumbs/{x['fundo']}").as_uri(), project.cfg)
+        doc = N1.of_data_thumb(data, w, h)
+        png = project.caminho(f"thumbs/{x['arquivo']}")
+        chosen = png.exists() and png.read_bytes() in slots
+        R.write("thumb_compor", grupo=f"thumb:{project.ep}", origem="traducao",
+                 contexto={**ctx, "canal": getattr(project, "canal", "") or "", "fundo": x["fundo"],
                            "cena_en": x["conceito"].get("cena_en")},
                  saida=doc.model_dump(mode="json"), versoes={"n1": N1.VERSION, "app": "photocraft"},
                  humano={"veredito": "escolhida", "nota": None, "motivo": None, "comentario": "vaga A/B",
-                         "em": R._now()} if escolhida else None,
+                         "em": R._now()} if chosen else None,
                  metricas={"nota_visao": x.get("nota"), "problema": x.get("problema")},
-                 extra={"episodio": projeto.ep, "arquivo": x["arquivo"]})
+                 extra={"episodio": project.ep, "arquivo": x["arquivo"]})
         n += 1
     return n
 
@@ -68,50 +68,50 @@ def pieces() -> int:
     for d in sorted(P.FOLDER.iterdir()):
         if not (d / "ficha.json").exists():
             continue
-        ficha = json.loads((d / "ficha.json").read_text())
+        card = json.loads((d / "ficha.json").read_text())
         if (d / "peca.n1.json").exists():
-            tarefa, saida = "peca_animar", {"peca_n1": json.loads((d / "peca.n1.json").read_text()), "ficha": ficha}
+            task, output = "peca_animar", {"peca_n1": json.loads((d / "peca.n1.json").read_text()), "ficha": card}
         elif (d / "peca.js").exists():
-            tarefa = "peca_html"
-            saida = {"peca_js": (d / "peca.js").read_text(),
-                     "peca_css": (d / "peca.css").read_text() if (d / "peca.css").exists() else "", "ficha": ficha}
+            task = "peca_html"
+            output = {"peca_js": (d / "peca.js").read_text(),
+                     "peca_css": (d / "peca.css").read_text() if (d / "peca.css").exists() else "", "ficha": card}
         else:
             continue
-        if _tem(f"peca:{d.name}", tarefa, peca=d.name, versao=ficha.get("versao")):
+        if _tem(f"peca:{d.name}", task, peca=d.name, versao=card.get("versao")):
             continue
-        v = vered.get(ficha.get("estado"))
-        R.write(tarefa, grupo=f"peca:{d.name}", origem="traducao",
-                 contexto={"pedido": {"tipo": "acervo", "texto": ficha.get("comunica", "")}, "modo": "nova",
-                           "motor": ficha.get("motor"), "intencoes": ficha.get("intencoes")},
-                 saida=saida, portao={"ok": True, "erros": [], "render_s": None},
+        v = vered.get(card.get("estado"))
+        R.write(task, grupo=f"peca:{d.name}", origem="traducao",
+                 contexto={"pedido": {"tipo": "acervo", "texto": card.get("comunica", "")}, "modo": "nova",
+                           "motor": card.get("motor"), "intencoes": card.get("intencoes")},
+                 saida=output, portao={"ok": True, "erros": [], "render_s": None},
                  humano={"veredito": v, "nota": None, "motivo": None, "comentario": None, "em": R._now()} if v else None,
-                 extra={"peca": d.name, "versao": ficha.get("versao"), "origem_peca": ficha.get("origem")})
+                 extra={"peca": d.name, "versao": card.get("versao"), "origem_peca": card.get("origem")})
         n += 1
     return n
 
 
 def translate_all() -> list[str]:
-    linhas = []
-    for pasta in episodes():
+    lines = []
+    for folder in episodes():
         try:
-            p = Project(pasta)
+            p = Project(folder)
         except SystemExit:
             continue
-        partes = []
+        parts = []
         if not _tem(f"ep:{p.ep}", "montar"):
             try:
                 if assembly(p):
-                    partes.append("montagem")
+                    parts.append("montagem")
             except (KeyError, ValueError, FileNotFoundError) as e:
-                partes.append(f"montagem falhou ({e})")
+                parts.append(f"montagem falhou ({e})")
         try:
             if k := thumbs(p):
-                partes.append(f"{k} thumbs")
+                parts.append(f"{k} thumbs")
         except (KeyError, ValueError, FileNotFoundError) as e:
-            partes.append(f"thumbs falharam ({e})")
-        if partes:
-            linhas.append(f"{p.ep}: " + ", ".join(partes))
-    linhas.append(f"peças do acervo: {pieces()} novas")
+            parts.append(f"thumbs falharam ({e})")
+        if parts:
+            lines.append(f"{p.ep}: " + ", ".join(parts))
+    lines.append(f"peças do acervo: {pieces()} novas")
     from esteira.dataset import index
     index.reindex()
-    return linhas
+    return lines

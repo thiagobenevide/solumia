@@ -37,15 +37,15 @@ def open_graphic(ep: str, i: int, t: float = 0.0):
 @router.get("/thumb")
 def open_thumb(ep: str, arquivo: str = "", fundo: str = ""):
     p = api._project(ep)
-    fundos = editor.backgrounds(p)
-    if not fundos:
+    backgrounds = editor.backgrounds(p)
+    if not backgrounds:
         raise HTTPException(404, "sem fundos: rode a etapa thumb ou envie uma imagem em Thumbs")
-    estado = next((t["estado"] for t in editor.thumbs(p) if t["arquivo"] == arquivo), None) or {
+    state = next((t["estado"] for t in editor.thumbs(p) if t["arquivo"] == arquivo), None) or {
         "texto": "TEXTO DA THUMB", "destaque": "", "layout": "rosto_direita", "seta": False,
-        "fundo": fundo if fundo in fundos else fundos[0]}
+        "fundo": fundo if fundo in backgrounds else backgrounds[0]}
     w, h = editor._dim_thumb(p)
-    return _context(p, "thumb") | {"estado": estado, "w": w, "h": h, "fundos": fundos,
-                                    "fundos_url": {f: f"/arq/{ep}/thumbs/{f}" for f in fundos}}
+    return _context(p, "thumb") | {"estado": state, "w": w, "h": h, "fundos": backgrounds,
+                                    "fundos_url": {f: f"/arq/{ep}/thumbs/{f}" for f in backgrounds}}
 
 
 class Frame(BaseModel):
@@ -74,11 +74,11 @@ def save_graphic(ep: str, i: int, estado: dict):
     """Grava a peça (vira `manual`) e põe só a renderização das peças mudadas na fila."""
     p = api._project(ep)
     try:
-        novo = editor.save_graphic(p, i, estado)
+        new = editor.save_graphic(p, i, estado)
     except (ValueError, KeyError, TypeError, IndexError) as e:
         raise HTTPException(400, str(e))
     queue.add(ep, "graphics", ["--render-only"])
-    return {"i": novo}
+    return {"i": new}
 
 
 @router.post("/grafico/{i}/excluir")
@@ -117,9 +117,9 @@ async def suggest(ep: str, corpo: Request):
                                  "Use o motor Claude ou espere terminar.")
     p = api._project(ep)
     try:
-        novo, explicacao, avisos = await asyncio.to_thread(
+        new, explanation, warnings = await asyncio.to_thread(
             editor.suggest, p, ep, corpo.estado, corpo.pedido.strip(), corpo.motor, corpo.tipo)
     except (ValueError, KeyError, TypeError) as e:
         raise HTTPException(400, str(e))
-    return {"estado": json.loads(json.dumps(novo, default=str)), "explicacao": explicacao, "avisos": avisos}
+    return {"estado": json.loads(json.dumps(new, default=str)), "explicacao": explanation, "avisos": warnings}
 

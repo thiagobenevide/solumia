@@ -23,47 +23,47 @@ def _cases(tarefa):
     return bench.cases(tarefa)
 
 
-def _prompt_bench(tarefa, caso):
+def _prompt_bench(tarefa, instance):
     from esteira import bench
-    texto, _, _ = bench.TASKS[tarefa][0](caso)
-    return str(texto)
+    text, _, _ = bench.TASKS[tarefa][0](instance)
+    return str(text)
 
 
-def _fill(caso):
+def _fill(instance):
     """Prompt de preenchimento reconstruído com a ficha atual da peça (a peça pode ter saído do acervo: pula)."""
     from esteira.studio import direction as D
     from esteira.studio import piece as P
     try:
-        f = P.load(caso["peca"])
+        f = P.load(instance["peca"])
     except (KeyError, ValueError):
         return None
-    ditos = sorted(D.spoken(caso["texto"]))
-    texto = D.local.prompt(
-        "direcao_preencher", peca=f.id, comunica=f.comunica, texto=caso["texto"], numeros=", ".join(ditos) or "nenhum",
+    spoken = sorted(D.spoken(instance["texto"]))
+    text = D.local.prompt(
+        "direcao_preencher", peca=f.id, comunica=f.comunica, texto=instance["texto"], numeros=", ".join(spoken) or "nenhum",
         datas="nenhuma", nomes="nenhum", encaixes=D._describe_fits(f),
         botoes="\n".join(f"- {b.nome}: {b.valores} (padrão {b.padrao})" for b in f.botoes) or "(nenhum)", erros="")
-    if P.validate_data(f, caso["encaixes"], caso.get("botoes") or {}):
+    if P.validate_data(f, instance["encaixes"], instance.get("botoes") or {}):
         return None  # o que ficou não passa mais na ficha atual: não ensina
-    return str(texto), {"encaixes": caso["encaixes"], "botoes": caso.get("botoes") or {}}
+    return str(text), {"encaixes": instance["encaixes"], "botoes": instance.get("botoes") or {}}
 
 
 def examples(tarefa):
     """[(id, prompt, resposta JSON)] de uma tarefa (casos repetidos: vale o último)."""
-    saida = {}
+    output = {}
     for c in _cases(tarefa):
         if tarefa == "bloco_peca":
-            par = (_prompt_bench(tarefa, c), {"escolha": c["aceitas"][0], "motivo": "a que a pessoa aprovou"})
+            pair = (_prompt_bench(tarefa, c), {"escolha": c["aceitas"][0], "motivo": "a que a pessoa aprovou"})
         elif tarefa == "preencher":
-            par = _fill(c)
+            pair = _fill(c)
         elif tarefa == "corte":
-            par = (_prompt_bench(tarefa, c), {"manter": c["manter"], "motivo": "decisão revisada", "confianca": 1.0})
+            pair = (_prompt_bench(tarefa, c), {"manter": c["manter"], "motivo": "decisão revisada", "confianca": 1.0})
         elif tarefa == "legenda":
-            par = (_prompt_bench(tarefa, c), {"texto": c["certo"]})
+            pair = (_prompt_bench(tarefa, c), {"texto": c["certo"]})
         else:
-            par = None
-        if par:
-            saida[c.get("id") or hashlib.sha1(par[0].encode()).hexdigest()[:12]] = par
-    return [(k, p, r) for k, (p, r) in saida.items()]
+            pair = None
+        if pair:
+            output[c.get("id") or hashlib.sha1(pair[0].encode()).hexdigest()[:12]] = pair
+    return [(k, p, r) for k, (p, r) in output.items()]
 
 
 def _validation(id_):
@@ -72,31 +72,31 @@ def _validation(id_):
 
 def export(tarefas=tuple(MINIMUM)):
     """Escreve `<tarefa>.train.jsonl` / `.val.jsonl` (mensagens de chat) e `resumo.json`. → o resumo."""
-    destino = FOLDER / datetime.now().strftime("%Y%m%d-%H%M")
-    destino.mkdir(parents=True, exist_ok=True)
-    resumo = {"em": datetime.now().isoformat(timespec="seconds"), "pasta": str(destino), "tarefas": {}}
+    destination = FOLDER / datetime.now().strftime("%Y%m%d-%H%M")
+    destination.mkdir(parents=True, exist_ok=True)
+    summary = {"em": datetime.now().isoformat(timespec="seconds"), "pasta": str(destination), "tarefas": {}}
     for t in tarefas:
         ex = examples(t)
-        partes = {"train": [], "val": []}
-        for id_, prompt, resposta in ex:
-            linha = {"id": id_, "tarefa": t, "messages": [
+        parts = {"train": [], "val": []}
+        for id_, prompt, answer in ex:
+            line = {"id": id_, "tarefa": t, "messages": [
                 {"role": "user", "content": prompt},
-                {"role": "assistant", "content": json.dumps(resposta, ensure_ascii=False)}]}
-            partes["val" if _validation(id_) else "train"].append(linha)
-        for nome, linhas in partes.items():
-            (destino / f"{t}.{nome}.jsonl").write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in linhas))
-        resumo["tarefas"][t] = {"treino": len(partes["train"]), "validacao": len(partes["val"]), "minimo": MINIMUM.get(t, 0),
+                {"role": "assistant", "content": json.dumps(answer, ensure_ascii=False)}]}
+            parts["val" if _validation(id_) else "train"].append(line)
+        for name, lines in parts.items():
+            (destination / f"{t}.{name}.jsonl").write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in lines))
+        summary["tarefas"][t] = {"treino": len(parts["train"]), "validacao": len(parts["val"]), "minimo": MINIMUM.get(t, 0),
                                 "pronta": len(ex) >= MINIMUM.get(t, 0)}
-    resumo["pronta"] = any(x["pronta"] for x in resumo["tarefas"].values())
-    (destino / "resumo.json").write_text(json.dumps(resumo, ensure_ascii=False, indent=1))
-    return resumo
+    summary["pronta"] = any(x["pronta"] for x in summary["tarefas"].values())
+    (destination / "resumo.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1))
+    return summary
 
 
 def status():
     """Quantos casos há por tarefa (sem exportar) e a última exportação."""
-    ultima = sorted(FOLDER.glob("*/resumo.json"))[-1:] if FOLDER.exists() else []
+    last = sorted(FOLDER.glob("*/resumo.json"))[-1:] if FOLDER.exists() else []
     return {"casos": {t: len(_cases(t)) for t in MINIMUM}, "minimo": MINIMUM,
-            "ultima": json.loads(ultima[0].read_text()) if ultima else None}
+            "ultima": json.loads(last[0].read_text()) if last else None}
 
 
 # ---------------------------------------------------------------- treino LoRA (GPU)
@@ -106,7 +106,7 @@ def environment():
     return ROOT / ".venv-treino" / "bin" / "python"
 
 
-def train(base="unsloth/gemma-4-12b-it", epocas=2.0, quant="q4_k_m"):
+def train(base="unsloth/gemma-4-12b-it", epochs=2.0, quant="q4_k_m"):
     """Treina o LoRA com a última exportação (`ai/train_lora.py` no `.venv-treino`) e põe o GGUF na pasta de modelos
     do roteador como `agente-<data>.gguf` (escolha-o em Opções → modelo por operação). → nome do modelo."""
     import shutil
@@ -121,16 +121,16 @@ def train(base="unsloth/gemma-4-12b-it", epocas=2.0, quant="q4_k_m"):
     s = status()
     if not s["ultima"]:
         raise SystemExit("exporte a base antes (aba Estúdio → Dependências → Base de treino)")
-    dados = s["ultima"]["pasta"]
-    nome = f"agente-{datetime.now():%Y%m%d-%H%M}"
-    saida = FOLDER / "modelos" / nome
-    saida.mkdir(parents=True, exist_ok=True)
+    data = s["ultima"]["pasta"]
+    name = f"agente-{datetime.now():%Y%m%d-%H%M}"
+    output = FOLDER / "modelos" / name
+    output.mkdir(parents=True, exist_ok=True)
     local.free_gpu()
-    subprocess.run([str(py), str(ROOT / "esteira/ai/train_lora.py"), dados, str(saida), "--base", base,
-                    "--epochs", str(epocas), "--quant", quant], check=True)
-    gguf = next(iter(sorted((saida / "gguf").glob("*.gguf"))), None)
+    subprocess.run([str(py), str(ROOT / "esteira/ai/train_lora.py"), data, str(output), "--base", base,
+                    "--epochs", str(epochs), "--quant", quant], check=True)
+    gguf = next(iter(sorted((output / "gguf").glob("*.gguf"))), None)
     if not gguf:
         raise SystemExit("o treino não gerou GGUF")
-    shutil.copy(gguf, llama.MODELS_DIR / f"{nome}.gguf")
+    shutil.copy(gguf, llama.MODELS_DIR / f"{name}.gguf")
     llama.server()
-    return nome
+    return name

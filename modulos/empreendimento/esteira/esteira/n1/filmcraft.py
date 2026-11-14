@@ -206,8 +206,8 @@ class Executor:
     """Aplica uma `Montagem` numa sessão do FilmCraft. `midias`: ref → {"caminho", "dur"?}. `estilo`: fonte,
     fonte_estilo e cores por papel. `rastro` guarda os comandos N0 enviados (o dataset grava)."""
 
-    def __init__(self, fc, midias: dict, estilo: dict):
-        self.fc, self.midias, self.estilo = fc, midias, estilo
+    def __init__(self, fc, medias: dict, estilo: dict):
+        self.fc, self.midias, self.estilo = fc, medias, estilo
         self.itens: dict[str, str] = {}   # ref → item importado
         self.clipes: dict[str, list] = {}  # nome → ids de clipe
         self.inicio: dict[str, tuple[float, float]] = {}  # nome → (em, dur), para animações relativas
@@ -229,9 +229,9 @@ class Executor:
             ref = getattr(o, "midia", None)
             if ref and ref not in refs and ref not in self.itens:
                 refs.append(ref)
-        faltam = [r for r in refs if r not in self.midias]
-        if faltam:
-            raise ErrorN1(f"mídia sem caminho: {faltam}")
+        missing = [r for r in refs if r not in self.midias]
+        if missing:
+            raise ErrorN1(f"mídia sem caminho: {missing}")
         if refs:
             imp = self.run("file.import", paths=[str(self.midias[r]["caminho"]) for r in refs])
             if imp.get("errors"):
@@ -256,15 +256,15 @@ class Executor:
     _usa_sfx = False
 
     def _colocar(self, o: Place):
-        trilha = TRACKS[o.trilha]
-        p = {"item": self.itens[o.midia], "track": trilha, "seconds": o.em, "insert": False}
+        track = TRACKS[o.trilha]
+        p = {"item": self.itens[o.midia], "track": track, "seconds": o.em, "insert": False}
         if o.origem is not None:
             p["sourceIn"] = ticks(o.origem)
         if o.dur is not None:
             p["duration"] = ticks(o.dur)
-        if trilha.startswith("V") and not o.com_audio:
+        if track.startswith("V") and not o.com_audio:
             p["audio"] = False
-        if trilha.startswith("A") and o.trilha != "narracao":
+        if track.startswith("A") and o.trilha != "narracao":
             p["video"] = False
         self.clipes[o.id] = self.run("timeline.place", **p)["clips"]
         self.inicio[o.id] = (o.em, o.dur or float(self.midias[o.midia].get("dur") or 0))
@@ -275,32 +275,32 @@ class Executor:
 
     def _ken_burns(self, o: KenBurns):
         clip = self._clipes(o.alvo)[0]
-        ini, dur = self.inicio[o.alvo]
-        fim = ini + dur
+        start, duration = self.inicio[o.alvo]
+        end = start + duration
         z = o.zoom
         cx, cy = self.w / 2, self.h / 2
         dx = self.w * z / 200 * 0.9  # deslocamento que o zoom extra permite sem mostrar borda
         a, b = {"zoom_in": (100, 100 + z), "zoom_out": (100 + z, 100)}.get(o.movimento, (100 + z, 100 + z))
 
         def base(t):
-            return a + (b - a) * (t - ini) / max(fim - ini, 0.01)
-        chaves, extra = [(ini, a)], 0
-        for tp in sorted(t for t in o.socos if ini + 0.3 < t < fim - 0.6)[:PUNCHES_MAX]:
-            if tp - chaves[-1][0] < 0.5:
+            return a + (b - a) * (t - start) / max(end - start, 0.01)
+        keys, extra = [(start, a)], 0
+        for tp in sorted(t for t in o.socos if start + 0.3 < t < end - 0.6)[:PUNCHES_MAX]:
+            if tp - keys[-1][0] < 0.5:
                 continue
-            chaves.append((tp, base(tp) + extra))
+            keys.append((tp, base(tp) + extra))
             extra += PUNCH
-            chaves.append((tp + PUNCH_DURATION, base(tp + PUNCH_DURATION) + extra))
-        chaves.append((fim, b + extra))
-        for t, v in chaves:
+            keys.append((tp + PUNCH_DURATION, base(tp + PUNCH_DURATION) + extra))
+        keys.append((end, b + extra))
+        for t, v in keys:
             self.run("effects.setParam", clip=clip, effect="motion", param="scale", value=round(v, 2), time=ticks(t),
                      keyframe=True)
         if o.movimento in ("pan_dir", "pan_esq"):
-            sinal = 1 if o.movimento == "pan_dir" else -1
-            self.run("effects.setParam", clip=clip, effect="motion", param="position", value=[cx + sinal * dx, cy],
-                     time=ticks(ini), keyframe=True)
-            self.run("effects.setParam", clip=clip, effect="motion", param="position", value=[cx - sinal * dx, cy],
-                     time=ticks(fim), keyframe=True)
+            signal = 1 if o.movimento == "pan_dir" else -1
+            self.run("effects.setParam", clip=clip, effect="motion", param="position", value=[cx + signal * dx, cy],
+                     time=ticks(start), keyframe=True)
+            self.run("effects.setParam", clip=clip, effect="motion", param="position", value=[cx - signal * dx, cy],
+                     time=ticks(end), keyframe=True)
 
     def _transicao(self, o: TransitionOp):
         self.run("sequence.applyVideoTransition", clip=self._clipes(o.alvo)[0], effect=o.tipo,
@@ -309,61 +309,61 @@ class Executor:
     def _cor(self, o: Color):
         item = self.run("file.newAdjustmentLayer", seconds=o.dur)
         item = item["item"] if isinstance(item, dict) else item
-        trilha = "V2" if o.acima_de == "base" else "V3"
-        aj = self.run("timeline.place", item=item, track=trilha, seconds=o.em, duration=ticks(o.dur),
+        track = "V2" if o.acima_de == "base" else "V3"
+        aj = self.run("timeline.place", item=item, track=track, seconds=o.em, duration=ticks(o.dur),
                       insert=False)["clips"][0]
         self.run("effects.apply", clips=[aj], effect="lumetri")
-        for campo, param in _LUMETRI.items():
-            self.run("effects.setParam", clip=aj, effect="lumetri", param=param, value=getattr(o.ajustes, campo))
+        for field, param in _LUMETRI.items():
+            self.run("effects.setParam", clip=aj, effect="lumetri", param=param, value=getattr(o.ajustes, field))
 
     def _texto(self, o: Text):
         e = self.estilo
-        tam = round(o.tamanho * self.h, 1)
-        tam = int(tam) if tam == int(tam) else tam
+        size = round(o.tamanho * self.h, 1)
+        size = int(size) if size == int(size) else size
         x, y = o.pos[0] * self.w, o.pos[1] * self.h
-        cor = e["cores"][o.cor]
-        clip = self.run("graphics.newText", text=o.conteudo, size=tam, seconds=o.dur, time=ticks(o.em),
+        color = e["cores"][o.cor]
+        clip = self.run("graphics.newText", text=o.conteudo, size=size, seconds=o.dur, time=ticks(o.em),
                         track=3)["clip"]
         self.clipes[o.id] = [clip]
         self.inicio[o.id] = (o.em, o.dur)
         pop = o.estilo == "pop"
         self.run("graphics.set", clip=clip, layer=0, props={
-            "font": e["fonte"], "font_style": e["fonte_estilo"], "size": tam, "align": "center", "fill_color": cor,
+            "font": e["fonte"], "font_style": e["fonte_estilo"], "size": size, "align": "center", "fill_color": color,
             "stroke": True, "stroke_width": 6 if pop else 4, "shadow": True, "position": [x, y]})
-        ini, dur = o.em, o.dur
+        start, duration = o.em, o.dur
         if pop:  # nasce pequena, passa de 100% e assenta; sobe 30 px ao entrar; some encolhendo
-            for t, v in ((0, 40), (0.12, 112), (0.22, 100), (dur - 0.15, 100), (dur, 85)):
-                self.run("effects.setParam", clip=clip, effect="motion", param="scale", value=v, time=ticks(ini + t),
+            for t, v in ((0, 40), (0.12, 112), (0.22, 100), (duration - 0.15, 100), (duration, 85)):
+                self.run("effects.setParam", clip=clip, effect="motion", param="scale", value=v, time=ticks(start + t),
                          keyframe=True)
             for t, v in ((0, [x, y + 30]), (0.2, [x, y])):
                 self.run("effects.setParam", clip=clip, effect="motion", param="position", value=v,
-                         time=ticks(ini + t), keyframe=True)
-            for t, v in ((0, 0), (0.08, 100), (dur - 0.15, 100), (dur, 0)):
+                         time=ticks(start + t), keyframe=True)
+            for t, v in ((0, 0), (0.08, 100), (duration - 0.15, 100), (duration, 0)):
                 self.run("effects.setParam", clip=clip, effect="opacity", param="opacity", value=v,
-                         time=ticks(ini + t), keyframe=True)
+                         time=ticks(start + t), keyframe=True)
             return
         # surgir: cresce de 85% e aparece em 0,3 s; some nos últimos 0,3 s
-        t0, t1, tin, tout = ticks(ini), ticks(ini + dur), ticks(ini + 0.3), ticks(ini + dur - 0.3)
+        t0, t1, tin, tout = ticks(start), ticks(start + duration), ticks(start + 0.3), ticks(start + duration - 0.3)
         for t, v in ((t0, 85), (tin, 100)):
             self.run("effects.setParam", clip=clip, effect="motion", param="scale", value=v, time=t, keyframe=True)
         for t, v in ((t0, 0), (tin, 100), (tout, 100), (t1, 0)):
             self.run("effects.setParam", clip=clip, effect="opacity", param="opacity", value=v, time=t, keyframe=True)
 
     def _musica(self, o: Music):
-        dur_m = float(self.midias[o.midia].get("dur") or 0)
-        if dur_m <= 0:
+        duration_m = float(self.midias[o.midia].get("dur") or 0)
+        if duration_m <= 0:
             raise ErrorN1("música sem duração conhecida")
-        t, trilha = o.de, []
+        t, track = o.de, []
         while t < o.ate:
-            d = min(dur_m, o.ate - t)
-            trilha += self.run("timeline.place", item=self.itens[o.midia], track="A2", seconds=t, duration=ticks(d),
+            d = min(duration_m, o.ate - t)
+            track += self.run("timeline.place", item=self.itens[o.midia], track="A2", seconds=t, duration=ticks(d),
                                insert=False, video=False)["clips"]
             t += d
-        self.clipes[o.midia] = trilha
-        self.run("clip.audioGain", clips=trilha, mode="set", db=o.ganho_db)
-        self.run("essentialSound.setType", clips=trilha, type="music")
+        self.clipes[o.midia] = track
+        self.run("clip.audioGain", clips=track, mode="set", db=o.ganho_db)
+        self.run("essentialSound.setType", clips=track, type="music")
         if o.ducking:
-            self.run("essentialSound.generateDucking", clips=trilha)
+            self.run("essentialSound.generateDucking", clips=track)
 
     def _tipo_audio(self, o: KindAudio):
         self.run("essentialSound.setType", clips=self._clipes(o.alvo), type=_KIND_AUDIO[o.tipo])
@@ -371,8 +371,8 @@ class Executor:
     def _legendas(self, o: Captions):
         e = self.estilo
         self.run("captions.import", path=str(self.midias[o.arquivo]["caminho"]))
-        tam = round(o.tamanho * self.h)
-        self.run("captions.setStyle", track="C1", font=e["fonte"], size=tam, color=e["cores"]["texto"],
+        size = round(o.tamanho * self.h)
+        self.run("captions.setStyle", track="C1", font=e["fonte"], size=size, color=e["cores"]["texto"],
                  background=o.fundo, backgroundColor="#000000aa", anchor="bottom", margin=o.margem)
 
     def _cortar(self, o: Cut):
@@ -403,10 +403,10 @@ class Executor:
 
     def _fade(self, o: Fade):
         fps = 30
-        for borda, s in (("in", o.entrada), ("out", o.saida)):
+        for edge, s in (("in", o.entrada), ("out", o.saida)):
             if s > 0:
                 for c in self._clipes(o.alvo):
-                    self.run("sequence.applyAudioTransition", clip=c, effect="constant_power", edge=borda,
+                    self.run("sequence.applyAudioTransition", clip=c, effect="constant_power", edge=edge,
                              frames=max(1, round(s * fps)))
 
     def _marcar(self, o: Mark):

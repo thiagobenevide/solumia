@@ -40,16 +40,16 @@ def test_aplicar_perfil_no_estilo_sem_mudar_o_salvo():
 
 
 def test_gancho_so_no_curto_e_so_sem_peca_no_comeco():
-    frases = [{"texto": "Oito em cada dez famílias brasileiras estão endividadas.", "ini": 0.2, "fim": 3.0}]
-    cenas = rhythm.hook([_c(5.0, "contador")], CURTO, frases)
-    assert cenas[0]["por"] == "ritmo" and cenas[0]["t"] == 0.0 and cenas[0]["titulo"].endswith("*brasileiras*")
-    assert len(rhythm.hook([_c(1.0, "contador")], CURTO, frases)) == 1
-    assert len(rhythm.hook([_c(5.0, "contador")], LONGO, frases)) == 1
+    sentences = [{"texto": "Oito em cada dez famílias brasileiras estão endividadas.", "ini": 0.2, "fim": 3.0}]
+    scenes = rhythm.hook([_c(5.0, "contador")], CURTO, sentences)
+    assert scenes[0]["por"] == "ritmo" and scenes[0]["t"] == 0.0 and scenes[0]["titulo"].endswith("*brasileiras*")
+    assert len(rhythm.hook([_c(1.0, "contador")], CURTO, sentences)) == 1
+    assert len(rhythm.hook([_c(5.0, "contador")], LONGO, sentences)) == 1
 
 
 def test_anti_repeticao_troca_ou_tira_so_quando_colada():
-    trocas = {"frase_destaque": "lettering"}
-    cs = rhythm.anti_repetition([_c(1, "frase_destaque"), _c(10, "frase_destaque")], LONGO, trocas)
+    swaps = {"frase_destaque": "lettering"}
+    cs = rhythm.anti_repetition([_c(1, "frase_destaque"), _c(10, "frase_destaque")], LONGO, swaps)
     assert cs[1]["cena"] == "lettering" and cs[1]["repeticao"] == "trocada"
     cs = rhythm.anti_repetition([_c(1, "frase_destaque"), _c(10, "frase_destaque")], LONGO)
     assert cs[1]["cena"] == "midia"                                      # colada e sem alternativa
@@ -69,18 +69,18 @@ def test_curto_sem_capitulos():
 
 
 def test_conferencia_de_ritmo():
-    cenas = [_c(6.0, "frase_destaque", 12.0), _c(13.0, "cta"), _c(16, "cta"), _c(19, "cta")]
-    avisos = rhythm.cross_check(cenas, [{"ini": 0.0}, {"ini": 25.0}], 40.0, CURTO)
-    tipos = {a["tipo"] for a in avisos}
-    assert {"sem_virada", "gancho", "peca_longa", "repeticao"} <= tipos and "duracao" not in tipos
+    scenes = [_c(6.0, "frase_destaque", 12.0), _c(13.0, "cta"), _c(16, "cta"), _c(19, "cta")]
+    warnings = rhythm.cross_check(scenes, [{"ini": 0.0}, {"ini": 25.0}], 40.0, CURTO)
+    kinds = {a["tipo"] for a in warnings}
+    assert {"sem_virada", "gancho", "peca_longa", "repeticao"} <= kinds and "duracao" not in kinds
     assert any(a["tipo"] == "duracao" for a in rhythm.cross_check([], [], 40.0, LONGO))
 
 
 def test_ritmar_no_diretor_recontagem_e_takeover():
     est = E.Style(id="t-dark", nome="T", canal="t")
-    frases = [{"texto": "Você sabia disso?", "ini": 0.1, "fim": 1.5}]
-    cenas, avisos = director.pace([_c(4.0, "titulo_capitulo"), _c(8.0, "contador", valores=[1])], frases, est, CURTO,
+    sentences = [{"texto": "Você sabia disso?", "ini": 0.1, "fim": 1.5}]
+    scenes, warnings = director.pace([_c(4.0, "titulo_capitulo"), _c(8.0, "contador", valores=[1])], sentences, est, CURTO,
                                    [], 30.0)
-    assert [c["cena"] for c in cenas] == ["frase_destaque", "frase_destaque", "contador"]
-    assert [c["id"] for c in cenas] == [0, 1, 2] and cenas[2]["takeover"] and not cenas[0]["takeover"]
-    assert isinstance(avisos, list)
+    assert [c["cena"] for c in scenes] == ["frase_destaque", "frase_destaque", "contador"]
+    assert [c["id"] for c in scenes] == [0, 1, 2] and scenes[2]["takeover"] and not scenes[0]["takeover"]
+    assert isinstance(warnings, list)

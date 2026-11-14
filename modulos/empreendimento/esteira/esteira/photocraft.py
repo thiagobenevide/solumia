@@ -21,10 +21,10 @@ def available():
     return shutil.which(CLI) is not None
 
 
-def _run(origem, passos, destino):
+def _run(origem, steps, destino):
     """passos: [(comando, params)]. Devolve os resultados (um dict por comando)."""
     cmd = [CLI, "run", *(["--new", json.dumps(origem)] if isinstance(origem, dict) else [str(origem)])]
-    for c, p in passos:
+    for c, p in steps:
         cmd += ["--cmd", c, "--params", json.dumps(p, ensure_ascii=False)]
     cmd += ["--out", str(destino)]
     if str(origem) == str(destino):  # 2ª passagem reescreve o .pcraft: o CLI exige pedir
@@ -35,8 +35,8 @@ def _run(origem, passos, destino):
     return [json.loads(l)["result"] for l in r.stdout.splitlines() if l.startswith("{")]
 
 
-def _size_image(arq):
-    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", str(arq)],
+def _size_image(file):
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", str(file)],
                        capture_output=True, text=True, check=True)
     w, h = r.stdout.strip().split(",")[:2]
     return int(w), int(h)
@@ -49,8 +49,8 @@ def compose(d, destino, w=1280, h=720):
     """`d`: dados de `thumbs.data_thumb` (com `fundo` como caminho ou file://) → N1 → `destino` (.pcraft) + PNG."""
     from esteira.n1 import photocraft as N1
     doc = N1.of_data_thumb(d, w, h)
-    cores = {"texto": "#ffffff", "destaque": d["cor_d"], "alerta": d["alerta"], "preto": "#000000"}
-    N1.Executor(_run, {"fundo": d["fundo"]}, cores, _size_image).executar(doc, Path(destino))
+    colors = {"texto": "#ffffff", "destaque": d["cor_d"], "alerta": d["alerta"], "preto": "#000000"}
+    N1.Executor(_run, {"fundo": d["fundo"]}, colors, _size_image).executar(doc, Path(destino))
     LAST[str(Path(destino).with_suffix(".png"))] = doc
     return export(destino)
 

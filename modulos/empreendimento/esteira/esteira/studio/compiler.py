@@ -18,8 +18,8 @@ KIT = Path(__file__).parent / "kit"
 DIM = {"16:9": (1920, 1080), "9:16": (1080, 1920)}
 
 
-def folder(projeto, formato):
-    return projeto.pasta / "estudio" / formato.replace(":", "x")
+def folder(project, fmt):
+    return project.pasta / "estudio" / fmt.replace(":", "x")
 
 
 def _link(origem, destino):
@@ -29,11 +29,11 @@ def _link(origem, destino):
     destino.symlink_to(Path(origem).resolve())
 
 
-def _words(projeto):
+def _words(project):
     """Palavras da narração editada; números partidos pelo Whisper ("81" ",7%") voltam a ser um só."""
     from esteira.studio import cut
     ws = []
-    for p in cut.words(projeto):
+    for p in cut.words(project):
         txt = p["p"].strip()
         if ws and re.fullmatch(r"[,.]?\d*%?|%", txt) and txt and re.search(r"\d$", ws[-1]["text"]):
             ws[-1]["text"] += txt
@@ -43,53 +43,53 @@ def _words(projeto):
     return ws
 
 
-def _media(projeto, destino):
+def _media(project, destino):
     """Mídia curada do plano (imagem/vídeo por trecho), sem buracos entre um trecho e o seguinte."""
     from esteira.studio import cut
-    plano = json.loads((projeto.pasta / "plano.json").read_text())
-    novo = cut.new(projeto)
-    itens = []
-    for c in plano["cenas"]:
-        arq = projeto.pasta / (c.get("midia") or "")
-        if not c.get("midia") or not arq.is_file():
+    plan = json.loads((project.pasta / "plano.json").read_text())
+    new = cut.new(project)
+    items = []
+    for c in plan["cenas"]:
+        file = project.pasta / (c.get("midia") or "")
+        if not c.get("midia") or not file.is_file():
             continue
-        _link(arq, destino / "midia" / arq.name)
-        itens.append({"ini": novo(c["inicio"]), "fim": novo(c["fim"]), "src": f"assets/midia/{arq.name}",
-                      "tipo": "video" if c.get("midia_tipo") == "video" or arq.suffix == ".mp4" else "imagem",
+        _link(file, destino / "midia" / file.name)
+        items.append({"ini": new(c["inicio"]), "fim": new(c["fim"]), "src": f"assets/midia/{file.name}",
+                      "tipo": "video" if c.get("midia_tipo") == "video" or file.suffix == ".mp4" else "imagem",
                       "mov": c.get("movimento") or "zoom_in"})
-    itens.sort(key=lambda m: m["ini"])
-    for a, b in zip(itens, itens[1:], strict=False):
+    items.sort(key=lambda m: m["ini"])
+    for a, b in zip(items, items[1:], strict=False):
         a["fim"] = b["ini"]
-    if itens:
-        itens[0]["ini"] = 0.0
-        itens[-1]["fim"] = plano.get("duracao") or itens[-1]["fim"]
-    return itens
+    if items:
+        items[0]["ini"] = 0.0
+        items[-1]["fim"] = plan.get("duracao") or items[-1]["fim"]
+    return items
 
 
 def _sfx(cenas, estilo):
     """Um som por entrada de cena, respeitando o teto por segundo (intervalo mínimo entre efeitos)."""
     rg = estilo.regras
-    gap, ultimo, sons = 1.0 / max(rg.sfx_por_s, 0.05), -99.0, []
+    gap, last, sounds = 1.0 / max(rg.sfx_por_s, 0.05), -99.0, []
     from esteira.studio.style import SFX_KEY, SFX_DEFAULT
-    nivel = rg.niveis.get("sfx", "media")
+    level = rg.niveis.get("sfx", "media")
     for c in sorted(cenas, key=lambda c: c["t"]):
         # baixa: só as entradas principais; alta: toda cena ganha som (o padrão onde o estilo não escolheu)
         # a peça do acervo traz o som da entrada na ficha (`sfx.entrada`); o estilo pode trocar por cena
-        nome = rg.sfx.get(c["cena"]) or (SFX_DEFAULT.get(c["cena"]) or c.get("sfx") if nivel == "alta" else None)
-        if nivel == "baixa" and c["cena"] not in SFX_KEY:
+        name = rg.sfx.get(c["cena"]) or (SFX_DEFAULT.get(c["cena"]) or c.get("sfx") if level == "alta" else None)
+        if level == "baixa" and c["cena"] not in SFX_KEY:
             continue
-        if not nome or c["t"] - ultimo < gap:
+        if not name or c["t"] - last < gap:
             continue
-        with wave.open(str(KIT / "sfx" / f"{nome}.wav")) as w:
-            dur = w.getnframes() / w.getframerate()
-        sons.append({"t": max(0.0, c["t"] - 0.05), "dur": round(dur, 3), "src": f"assets/sfx/{nome}.wav", "vol": rg.sfx_volume})
-        ultimo = c["t"]
-    return sons
+        with wave.open(str(KIT / "sfx" / f"{name}.wav")) as w:
+            duration = w.getnframes() / w.getframerate()
+        sounds.append({"t": max(0.0, c["t"] - 0.05), "dur": round(duration, 3), "src": f"assets/sfx/{name}.wav", "vol": rg.sfx_volume})
+        last = c["t"]
+    return sounds
 
 
 def _window(itens, de, ate, ini="t", fim="ate"):
     """Itens que tocam [de, ate], com os tempos deslocados para começar em 0 (trecho de um bloco)."""
-    saida = []
+    output = []
     for x in itens:
         if x[fim] <= de or x[ini] >= ate:
             continue
@@ -98,71 +98,71 @@ def _window(itens, de, ate, ini="t", fim="ate"):
             y["corte"] = round(de - x[ini] + x.get("corte", 0.0), 3)  # a mídia que já tinha começado entra no meio
         if "batidas" in x:
             y["batidas"] = {k: round(v - de, 3) for k, v in (x.get("batidas") or {}).items() if de <= v < ate}
-        saida.append(y)
-    return saida
+        output.append(y)
+    return output
 
 
-def build(projeto, estilo, formato, destino=None, ate=None, de=None):
+def build(project, estilo, fmt, destino=None, ate=None, de=None):
     """Monta a pasta da produção e o index.html; devolve a pasta. `destino`/`ate`: amostra do estilo (outra pasta,
     só os primeiros `ate` segundos do mapa). `de` + `ate`: trecho [de, ate] (render de um bloco, para emendar)."""
-    mapa = json.loads((projeto.pasta / "estudio" / "mapa.json").read_text())
-    duracao_total = mapa["duracao"]
+    mapping = json.loads((project.pasta / "estudio" / "mapa.json").read_text())
+    duration_total = mapping["duracao"]
     if de is not None:
-        ate = ate if ate is not None else mapa["duracao"]
-        mapa["cenas"] = _window(mapa["cenas"], de, ate)
-        mapa["duracao"] = round(ate - de, 3)
+        ate = ate if ate is not None else mapping["duracao"]
+        mapping["cenas"] = _window(mapping["cenas"], de, ate)
+        mapping["duracao"] = round(ate - de, 3)
     elif ate:
-        mapa["duracao"] = min(mapa["duracao"], ate)
-        mapa["cenas"] = [{**c, "ate": min(c["ate"], ate)} for c in mapa["cenas"] if c["t"] < ate - 1]
-    p = destino or folder(projeto, formato)
+        mapping["duracao"] = min(mapping["duracao"], ate)
+        mapping["cenas"] = [{**c, "ate": min(c["ate"], ate)} for c in mapping["cenas"] if c["t"] < ate - 1]
+    p = destino or folder(project, fmt)
     a = p / "assets"
     a.mkdir(parents=True, exist_ok=True)
-    for nome in ("estudio.js", "estudio.css", "gsap.min.js"):
-        shutil.copy(KIT / nome, a / nome)
+    for name in ("estudio.js", "estudio.css", "gsap.min.js"):
+        shutil.copy(KIT / name, a / name)
     from esteira.studio import piece
-    fichas = {f.id: f for f in piece.list_all()}
-    tres = piece.join(a, sorted(fichas))  # todas: uma peça pode cair em outra (anel sem porcentagem → contador)
+    cards = {f.id: f for f in piece.list_all()}
+    three = piece.join(a, sorted(cards))  # todas: uma peça pode cair em outra (anel sem porcentagem → contador)
     # mapa do diretor atual (titulo/valores no topo) → encaixes das peças migradas do kit
-    mapa["cenas"] = [{**c, "encaixes": piece.legacy(c, fichas[c["cena"]])} if c["cena"] in fichas else c
-                     for c in mapa["cenas"]]
+    mapping["cenas"] = [{**c, "encaixes": piece.legacy(c, cards[c["cena"]])} if c["cena"] in cards else c
+                     for c in mapping["cenas"]]
     # peças do motor EffectCraft: renderizadas aqui (WebM com alfa por cena, `.ecproj` ao lado para editar à mão)
     from esteira.studio import ec
-    for n, c in enumerate(mapa["cenas"]):
-        f = fichas.get(c["cena"])
+    for n, c in enumerate(mapping["cenas"]):
+        f = cards.get(c["cena"])
         if f and f.motor == "effectcraft":
-            ec.to_production(f.id, c, estilo, formato, a / f"ec_{n:03d}.webm")
+            ec.to_production(f.id, c, estilo, fmt, a / f"ec_{n:03d}.webm")
             c["ec_src"] = f"assets/ec_{n:03d}.webm"
     from esteira.studio import fonts
-    pele = estilo.pele
-    papeis = ("fonte_destaque", "fonte_texto", "fonte_tecnica", "fonte_legenda", "fonte_editorial")
-    (a / "fontes.css").write_text(fonts.css([getattr(pele, k) for k in papeis], a))
-    pele = pele.model_copy(update={k: fonts.resolve(getattr(pele, k)) for k in papeis})
+    skin = estilo.pele
+    roles = ("fonte_destaque", "fonte_texto", "fonte_tecnica", "fonte_legenda", "fonte_editorial")
+    (a / "fontes.css").write_text(fonts.css([getattr(skin, k) for k in roles], a))
+    skin = skin.model_copy(update={k: fonts.resolve(getattr(skin, k)) for k in roles})
     shutil.copytree(KIT / "sfx", a / "sfx", dirs_exist_ok=True)
     from esteira.studio import cut
-    _link(cut.audio(projeto), a / "narracao.wav")
-    W, H = DIM[formato]
+    _link(cut.audio(project), a / "narracao.wav")
+    W, H = DIM[fmt]
     rg = estilo.regras
-    chaves = sorted({w for c in mapa["cenas"] for w in re.findall(r"\w{4,}", (c.get("ancora") or "").lower())})
-    cfg = {"W": W, "H": H, "pele": pele.model_dump(), "efeitos": rg.efeitos, "visual": rg.visual.model_dump(),
-           "legenda": {"ativa": rg.legenda.get(formato, False), **rg.legenda_visual.model_dump(), "chaves": chaves},
+    keys = sorted({w for c in mapping["cenas"] for w in re.findall(r"\w{4,}", (c.get("ancora") or "").lower())})
+    cfg = {"W": W, "H": H, "pele": skin.model_dump(), "efeitos": rg.efeitos, "visual": rg.visual.model_dump(),
+           "legenda": {"ativa": rg.legenda.get(fmt, False), **rg.legenda_visual.model_dump(), "chaves": keys},
            # linguagem de movimento, layouts, regras de cor e ajuste de cada peça (abas do estilo no app)
            "movimento": estilo.movimento.model_dump(), "layouts": estilo.layouts.model_dump(),
            "regras_cor": estilo.regras_cor.model_dump(), "pecas": {k: v.model_dump() for k, v in estilo.pecas.items()}}
-    sons = _sfx(mapa["cenas"], estilo)
-    dur = round(mapa["duracao"], 3)
-    midia = _media(projeto, a)
+    sounds = _sfx(mapping["cenas"], estilo)
+    duration = round(mapping["duracao"], 3)
+    media = _media(project, a)
     if de is not None:
-        midia = _window(midia, de, ate, "ini", "fim")
+        media = _window(media, de, ate, "ini", "fim")
     lay = None
     if estilo.modo != "apresentador":
-        _layouts_dark(mapa["cenas"], estilo.layouts.variacoes_dark)
+        _layouts_dark(mapping["cenas"], estilo.layouts.variacoes_dark)
     if estilo.modo == "apresentador":
         from esteira.studio import camera
-        if not camera.exists(projeto):
+        if not camera.exists(project):
             raise SystemExit("estilo de apresentador sem câmera: envie o vídeo da câmera do episódio (camera.mp4)")
-        v = camera.cut_camera(projeto, duracao_total if de is not None else dur)
+        v = camera.cut_camera(project, duration_total if de is not None else duration)
         _link(v, a / "camera.mp4")
-        segs = camera.layouts(mapa["cenas"], midia, estilo.regras, dur, estilo.layouts.variacoes)
+        segs = camera.layouts(mapping["cenas"], media, estilo.regras, duration, estilo.layouts.variacoes)
         ap = estilo.regras.apresentador
         from esteira.library import _probe
         cw, ch, _ = _probe(v)
@@ -170,42 +170,42 @@ def build(projeto, estilo, formato, destino=None, ate=None, de=None):
                          "inicio": de or 0.0,
                          "punch_impacto": round(1 + (ap["punch_impacto"] - 1) * rg.efeitos.get("zoom", 1.0), 3),
                          "segs": segs}
-        lay = camera.summary(segs, dur)
+        lay = camera.summary(segs, duration)
     html = (KIT / "index.template.html").read_text()
-    for k, v in {"__W__": W, "__H__": H, "__DUR__": dur, "__CFG__": json.dumps(cfg, ensure_ascii=False),
-                 "__MIDIA__": json.dumps(midia, ensure_ascii=False),
-                 "__CENAS__": json.dumps(mapa["cenas"], ensure_ascii=False),
-                 "__WORDS__": json.dumps(_words(projeto) if de is None else
-                                         _window(_words(projeto), de, ate, "start", "end"), ensure_ascii=False),
+    for k, v in {"__W__": W, "__H__": H, "__DUR__": duration, "__CFG__": json.dumps(cfg, ensure_ascii=False),
+                 "__MIDIA__": json.dumps(media, ensure_ascii=False),
+                 "__CENAS__": json.dumps(mapping["cenas"], ensure_ascii=False),
+                 "__WORDS__": json.dumps(_words(project) if de is None else
+                                         _window(_words(project), de, ate, "start", "end"), ensure_ascii=False),
                  "__DE__": de or 0,
-                 "__SFX__": json.dumps(sons), "__EC__": piece.videos_ec(mapa["cenas"]),
-                 "__THREE__": piece.TAG_THREE if tres else ""}.items():
+                 "__SFX__": json.dumps(sounds), "__EC__": piece.videos_ec(mapping["cenas"]),
+                 "__THREE__": piece.TAG_THREE if three else ""}.items():
         html = html.replace(k, str(v))
     (p / "index.html").write_text(html)
-    (p / "producao.json").write_text(json.dumps({"estilo": estilo.id, "versao": estilo.versao, "formato": formato,
-                                                 "cenas": len(mapa["cenas"]), "sfx": len(sons), "duracao": dur,
+    (p / "producao.json").write_text(json.dumps({"estilo": estilo.id, "versao": estilo.versao, "formato": fmt,
+                                                 "cenas": len(mapping["cenas"]), "sfx": len(sounds), "duracao": duration,
                                                  "layouts": lay}, indent=1))
-    print(f"  {formato}: {len(mapa['cenas'])} cenas · {len(sons)} efeitos · {dur:.0f} s" + (f" · layouts {lay}" if lay else ""))
+    print(f"  {fmt}: {len(mapping['cenas'])} cenas · {len(sounds)} efeitos · {duration:.0f} s" + (f" · layouts {lay}" if lay else ""))
     return p
 
 
-def _layouts_dark(cenas, variacoes):
+def _layouts_dark(cenas, variations):
     """Dark: peças cheias em rodízio (tela = motion sobre a mídia desfocada; lateral/flutuante = dados sobre a mídia;
     sólido = card sobre fundo na cor do estilo). O layout pedido pelo gatilho vence; capítulo fica na tela."""
-    giro = 0
+    spin = 0
     for c in cenas:
-        pedido = c.get("layout_pedido")
-        if pedido in ("lateral", "flutuante", "solido", "galeria"):
-            c["layout"] = pedido
-        elif c.get("takeover") and not pedido and c["cena"] != "titulo_capitulo" and variacoes:
-            lay = variacoes[giro % len(variacoes)]
-            giro += 1
+        request = c.get("layout_pedido")
+        if request in ("lateral", "flutuante", "solido", "galeria"):
+            c["layout"] = request
+        elif c.get("takeover") and not request and c["cena"] != "titulo_capitulo" and variations:
+            lay = variations[spin % len(variations)]
+            spin += 1
             if lay != "tela":
                 c["layout"] = lay
 
 
-def render(projeto, formato, qualidade="high", p=None):
-    p = p or folder(projeto, formato)
+def render(project, fmt, qualidade="high", p=None):
+    p = p or folder(project, fmt)
     (p / "render").mkdir(exist_ok=True)
     with open(p / "render.log", "w") as log:
         engine.npx(["hyperframes", "lint"], p, log)
@@ -213,60 +213,60 @@ def render(projeto, formato, qualidade="high", p=None):
     return p / "render" / "bruto.mp4"
 
 
-def _has_audio(arq):
+def _has_audio(file):
     r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0",
-                        str(arq)], capture_output=True, text=True)
+                        str(file)], capture_output=True, text=True)
     return bool(r.stdout.strip())
 
 
-def render_span(projeto, estilo, formato, de, ate, nome):
+def render_span(project, estilo, fmt, de, ate, nome):
     """Compila e renderiza só [de, ate] (o bloco alterado) em `<formato>/trechos/<nome>/render/bruto.mp4`."""
-    destino = folder(projeto, formato) / "trechos" / nome
-    shutil.rmtree(destino, ignore_errors=True)
-    build(projeto, estilo, formato, destino=destino, ate=ate, de=de)
-    return render(projeto, formato, p=destino)
+    destination = folder(project, fmt) / "trechos" / nome
+    shutil.rmtree(destination, ignore_errors=True)
+    build(project, estilo, fmt, destino=destination, ate=ate, de=de)
+    return render(project, fmt, p=destination)
 
 
-def splice(projeto, formato, de, ate, trecho):
+def splice(project, fmt, de, ate, trecho):
     """Troca [de, ate] do `render/bruto.mp4` pelo trecho renderizado (vídeo e som da composição); o resto do vídeo
     não é renderizado de novo, só reencodado na emenda. Guarda o bruto anterior como `bruto.anterior.mp4`."""
-    p = folder(projeto, formato)
-    bruto = p / "render" / "bruto.mp4"
-    if not bruto.exists():
+    p = folder(project, fmt)
+    raw = p / "render" / "bruto.mp4"
+    if not raw.exists():
         raise SystemExit("sem render completo para emendar: renderize o vídeo inteiro antes")
-    som = _has_audio(bruto) and _has_audio(trecho)
+    sound = _has_audio(raw) and _has_audio(trecho)
     v = (f"[0:v]trim=0:{de:.3f},setpts=PTS-STARTPTS[v0];[1:v]setpts=PTS-STARTPTS[v1];"
          f"[0:v]trim=start={ate:.3f},setpts=PTS-STARTPTS[v2];")
     a = (f"[0:a]atrim=0:{de:.3f},asetpts=PTS-STARTPTS[a0];[1:a]asetpts=PTS-STARTPTS[a1];"
-         f"[0:a]atrim=start={ate:.3f},asetpts=PTS-STARTPTS[a2];") if som else ""
-    junta = "[v0][a0][v1][a1][v2][a2]concat=n=3:v=1:a=1[v][a]" if som else "[v0][v1][v2]concat=n=3:v=1:a=0[v]"
-    novo = p / "render" / "bruto.novo.mp4"
-    cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(bruto), "-i", str(trecho), "-filter_complex", v + a + junta,
+         f"[0:a]atrim=start={ate:.3f},asetpts=PTS-STARTPTS[a2];") if sound else ""
+    junta = "[v0][a0][v1][a1][v2][a2]concat=n=3:v=1:a=1[v][a]" if sound else "[v0][v1][v2]concat=n=3:v=1:a=0[v]"
+    new = p / "render" / "bruto.novo.mp4"
+    cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(raw), "-i", str(trecho), "-filter_complex", v + a + junta,
            "-map", "[v]", "-c:v", "libx264", "-preset", "fast", "-crf", "16", "-pix_fmt", "yuv420p"]
-    cmd += ["-map", "[a]", "-c:a", "aac", "-b:a", "256k"] if som else []
-    subprocess.run(cmd + [str(novo)], check=True)
-    bruto.replace(p / "render" / "bruto.anterior.mp4")
-    novo.replace(bruto)
-    return bruto
+    cmd += ["-map", "[a]", "-c:a", "aac", "-b:a", "256k"] if sound else []
+    subprocess.run(cmd + [str(new)], check=True)
+    raw.replace(p / "render" / "bruto.anterior.mp4")
+    new.replace(raw)
+    return raw
 
 
-def _measure(arq, lufs, pico, extra=""):
-    filtro = f"{extra}loudnorm=I={lufs}:TP={pico}:LRA=11:print_format=json"
-    out = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(arq), "-af", filtro, "-f", "null", "-"],
+def _measure(file, lufs, peak, extra=""):
+    criteria = f"{extra}loudnorm=I={lufs}:TP={peak}:LRA=11:print_format=json"
+    out = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(file), "-af", criteria, "-f", "null", "-"],
                          capture_output=True, text=True).stderr
     return json.loads(out[out.rindex("{"):out.rindex("}") + 1])
 
 
-def audio(projeto, estilo, formato, p=None):
+def audio(project, estilo, fmt, p=None):
     """Loudnorm em duas passadas (medição + correção linear); vídeo copiado sem reencodar. Gera também a prévia leve."""
-    p = p or folder(projeto, formato)
+    p = p or folder(project, fmt)
     rg = estilo.regras
-    bruto, final = p / "render" / "bruto.mp4", p / "final.mp4"
-    teto = rg.pico - 0.8  # o AAC estoura o pico depois do loudnorm: a margem mantém o final dentro do limite
-    m = _measure(bruto, rg.lufs, teto)
-    filtro = (f"loudnorm=I={rg.lufs}:TP={teto}:LRA=11:measured_I={m['input_i']}:measured_TP={m['input_tp']}:"
+    raw, final = p / "render" / "bruto.mp4", p / "final.mp4"
+    cap = rg.pico - 0.8  # o AAC estoura o pico depois do loudnorm: a margem mantém o final dentro do limite
+    m = _measure(raw, rg.lufs, cap)
+    criteria = (f"loudnorm=I={rg.lufs}:TP={cap}:LRA=11:measured_I={m['input_i']}:measured_TP={m['input_tp']}:"
               f"measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(bruto), "-c:v", "copy", "-af", filtro, "-ar", "48000",
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(raw), "-c:v", "copy", "-af", criteria, "-ar", "48000",
                     "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(final)], check=True)
     preview(final)
     return final
@@ -275,13 +275,13 @@ def audio(projeto, estilo, formato, p=None):
 def preview(final):
     """`previa.mp4` ao lado do final: lado menor 540 px, H.264 leve e faststart, para assistir de fora da rede do PC
     sem baixar o arquivo cheio. Sai primeiro num temporário: o app só vê a prévia quando ela está inteira."""
-    destino, tmp = final.with_name("previa.mp4"), final.with_name("previa.tmp.mp4")
+    destination, tmp = final.with_name("previa.mp4"), final.with_name("previa.tmp.mp4")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(final),
                     "-vf", "scale='if(gt(iw,ih),-2,540)':'if(gt(iw,ih),540,-2)',fps=30", "-c:v", "libx264",
                     "-preset", "veryfast", "-crf", "30", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k",
                     "-movflags", "+faststart", str(tmp)], check=True)
-    tmp.replace(destino)
-    return destino
+    tmp.replace(destination)
+    return destination
 
 
 def _frame(video, t, destino):
@@ -289,47 +289,47 @@ def _frame(video, t, destino):
                     str(destino)], check=True)
 
 
-def verify(projeto, estilo, formato, n_visao=8):
+def verify(project, estilo, fmt, n_vision=8):
     """Portão final: loudness, folha de quadros e conferência visual (IA local) nos quadros das cenas."""
     from esteira.bench import Vision
     from esteira.ai import local
-    p = folder(projeto, formato)
+    p = folder(project, fmt)
     final = p / "final.mp4"
-    mapa = json.loads((projeto.pasta / "estudio" / "mapa.json").read_text())
+    mapping = json.loads((project.pasta / "estudio" / "mapa.json").read_text())
     medido = _measure(final, estilo.regras.lufs, estilo.regras.pico)
-    lufs, pico = float(medido["input_i"]), float(medido["input_tp"])
+    lufs, peak = float(medido["input_i"]), float(medido["input_tp"])
     q = p / "quadros"
     shutil.rmtree(q, ignore_errors=True)
     q.mkdir()
-    cenas = mapa["cenas"]
-    alvo = cenas[:: max(1, len(cenas) // 12)][:12]
-    quadros = []
-    for c in alvo:
-        arq = q / f"c{c['id']:03d}.jpg"
-        _frame(final, (c["t"] + c["ate"]) / 2, arq)
-        quadros.append((c, arq))
-    W, H = DIM[formato]
-    escala = "scale=480:-2" if W > H else "scale=270:-2"
+    scenes = mapping["cenas"]
+    target = scenes[:: max(1, len(scenes) // 12)][:12]
+    frames = []
+    for c in target:
+        file = q / f"c{c['id']:03d}.jpg"
+        _frame(final, (c["t"] + c["ate"]) / 2, file)
+        frames.append((c, file))
+    W, H = DIM[fmt]
+    scale = "scale=480:-2" if W > H else "scale=270:-2"
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-pattern_type", "glob", "-i", str(q / "c*.jpg"), "-vf",
-                    f"{escala},tile={4 if W > H else 6}x{3 if W > H else 2}", "-frames:v", "1", str(p / "folha.jpg")])
-    problemas = []
-    for n, (c, arq) in enumerate(quadros[:n_visao], 1):
-        events.progress(n, min(n_visao, len(quadros)), f"conferindo {c['cena']}")
-        r = local.ask(local.prompt("estudio_visao"), Vision, model=local.VISION, images=[str(arq)], max_tokens=200,
+                    f"{scale},tile={4 if W > H else 6}x{3 if W > H else 2}", "-frames:v", "1", str(p / "folha.jpg")])
+    problems = []
+    for n, (c, file) in enumerate(frames[:n_vision], 1):
+        events.progress(n, min(n_vision, len(frames)), f"conferindo {c['cena']}")
+        r = local.ask(local.prompt("estudio_visao"), Vision, model=local.VISION, images=[str(file)], max_tokens=200,
                             operation="studio_vision")
         if r:
-            ruins = [k for k, v in r.model_dump().items() if v]
-            if ruins:
-                problemas.append({"cena": c["id"], "tipo": c["cena"], "t": c["t"], "defeitos": ruins, "quadro": arq.name})
+            bad = [k for k, v in r.model_dump().items() if v]
+            if bad:
+                problems.append({"cena": c["id"], "tipo": c["cena"], "t": c["t"], "defeitos": bad, "quadro": file.name})
     prod = json.loads((p / "producao.json").read_text())
-    rel = {"formato": formato, "estilo": estilo.id, "versao": estilo.versao, "duracao": prod["duracao"],
+    rel = {"formato": fmt, "estilo": estilo.id, "versao": estilo.versao, "duracao": prod["duracao"],
            "cenas": prod["cenas"], "sfx": prod["sfx"], "sfx_por_s": round(prod["sfx"] / max(prod["duracao"], 1), 2),
-           "takeover": round(sum(c["ate"] - c["t"] for c in cenas if c["takeover"]) / max(prod["duracao"], 1), 2),
-           "lufs": lufs, "pico": pico, "visao": problemas, "decisoes": mapa.get("decisoes", {}),
-           "ritmo": mapa.get("ritmo"),
-           "audio_ok": abs(lufs - estilo.regras.lufs) <= 0.5 and pico <= estilo.regras.pico + 0.3}
-    rel["aprovado_auto"] = rel["audio_ok"] and not problemas
+           "takeover": round(sum(c["ate"] - c["t"] for c in scenes if c["takeover"]) / max(prod["duracao"], 1), 2),
+           "lufs": lufs, "pico": peak, "visao": problems, "decisoes": mapping.get("decisoes", {}),
+           "ritmo": mapping.get("ritmo"),
+           "audio_ok": abs(lufs - estilo.regras.lufs) <= 0.5 and peak <= estilo.regras.pico + 0.3}
+    rel["aprovado_auto"] = rel["audio_ok"] and not problems
     (p / "relatorio.json").write_text(json.dumps(rel, ensure_ascii=False, indent=1))
-    print(f"  {formato}: {lufs} LUFS · pico {pico} dBTP · {len(problemas)} quadro(s) com defeito · "
+    print(f"  {fmt}: {lufs} LUFS · pico {peak} dBTP · {len(problems)} quadro(s) com defeito · "
           f"{'aprovado' if rel['aprovado_auto'] else 'precisa revisão'}")
     return rel

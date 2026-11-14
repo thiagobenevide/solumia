@@ -30,18 +30,18 @@ def test_modo_vem_do_video_e_nao_muda_o_estilo():
 def test_ficha_de_referencia_valida_e_coerencia():
     f = P.Card.model_validate(_ficha())
     assert f.id == "numero_impacto" and f.batidas == ["numero"]
-    for ruim in ({"batidas": ["inexistente"]}, {"duracao_min": 9.0}, {"neutra": False}, {"exemplos_sim": ["a"]},
+    for bad in ({"batidas": ["inexistente"]}, {"duracao_min": 9.0}, {"neutra": False}, {"exemplos_sim": ["a"]},
                  {"botoes": [{"nome": "x", "valores": ["a", "b"], "padrao": "c"}]}):
         with pytest.raises(ValueError):
-            P.Card.model_validate(_ficha(**ruim))
+            P.Card.model_validate(_ficha(**bad))
 
 
 def test_validar_dados_confere_limites_e_volta_erro_claro():
     f = P.load("numero_impacto")
     assert P.validate_data(f, {"numero": "81%", "rotulo": "endividadas"}, {"enfase": "anel"}) == []
-    erros = P.validate_data(f, {"numero": "oitenta", "rotulo": "x" * 40, "extra": "?"}, {"enfase": "brilho"})
-    assert any("número" in e for e in erros) and any("rotulo" in e for e in erros)
-    assert any("extra" in e for e in erros) and any("enfase" in e for e in erros)
+    errors = P.validate_data(f, {"numero": "oitenta", "rotulo": "x" * 40, "extra": "?"}, {"enfase": "brilho"})
+    assert any("número" in e for e in errors) and any("rotulo" in e for e in errors)
+    assert any("extra" in e for e in errors) and any("enfase" in e for e in errors)
     assert P.validate_data(f, {"numero": "81"}) == ["numero: número com unidade (%, R$, anos…)"]
 
 
@@ -59,14 +59,14 @@ def test_maximos_itens_objeto():  # porte de linha do tempo: itens {ano, texto} 
 
 
 def _peca(tmp_path, monkeypatch, js, css="", **ficha):
-    dados = _ficha(id="teste_peca", **ficha)
+    data = _ficha(id="teste_peca", **ficha)
     monkeypatch.setattr(P, "FOLDER", tmp_path)
     d = tmp_path / "teste_peca"
     d.mkdir()
     (d / "peca.js").write_text(js)
     if css:
         (d / "peca.css").write_text(css)
-    (d / "ficha.json").write_text(json.dumps(dados, ensure_ascii=False))
+    (d / "ficha.json").write_text(json.dumps(data, ensure_ascii=False))
     return P.check_code("teste_peca", P.load("teste_peca"))
 
 
@@ -75,9 +75,9 @@ BOM = 'ESTUDIO.peca("teste_peca", (k, c, box) => { const { numero, rotulo, conte
 
 
 def test_codigo_bom_passa(tmp_path, monkeypatch):
-    erros, avisos = _peca(tmp_path, monkeypatch, BOM, ".p-teste_peca .tp-n { color: var(--destaque); font-family: var(--fD); }"
+    errors, warnings = _peca(tmp_path, monkeypatch, BOM, ".p-teste_peca .tp-n { color: var(--destaque); font-family: var(--fD); }"
                           "\n@keyframes tp { from { opacity: 0 } to { opacity: 1 } }")
-    assert erros == [] and avisos == []
+    assert errors == [] and warnings == []
 
 
 @pytest.mark.parametrize("js,css,trecho", [
@@ -91,22 +91,22 @@ def test_codigo_bom_passa(tmp_path, monkeypatch):
     (BOM + " box.style.background = 'rgb(10, 20, 30)';", "", "cor fixa"),
 ])
 def test_portao_estatico_reprova(tmp_path, monkeypatch, js, css, trecho):
-    erros, _ = _peca(tmp_path, monkeypatch, js, css)
-    assert any(trecho in e for e in erros), erros
+    errors, _ = _peca(tmp_path, monkeypatch, js, css)
+    assert any(trecho in e for e in errors), errors
 
 
 def test_sombra_preta_e_comentario_nao_reprovam(tmp_path, monkeypatch):
-    erros, _ = _peca(tmp_path, monkeypatch, BOM + "\n// cor antiga era #123456",
+    errors, _ = _peca(tmp_path, monkeypatch, BOM + "\n// cor antiga era #123456",
                      ".p-teste_peca .tp-n { box-shadow: 0 0 4px rgba(0,0,0,.5); } /* white */")
-    assert erros == []
+    assert errors == []
 
 
 def test_filtro_do_canal_tira_peca_por_id_intencao_ou_tema():
     f = P.Card.model_validate(_ficha(estado="aprovada"))
     est = E.Style(id="teste-dark", nome="Teste", canal="teste")
     assert P.in_channel([f], est) == [f]
-    for filtro in (["numero_impacto"], ["alerta"]):
-        est.regras.filtro = filtro
+    for criteria in (["numero_impacto"], ["alerta"]):
+        est.regras.filtro = criteria
         assert P.in_channel([f], est) == []
     assert P.in_channel([f.model_copy(update={"estado": "revisao"})], E.Style(id="t-d", nome="T", canal="t")) == []
 
@@ -118,12 +118,12 @@ def test_portao_completo_na_peca_de_referencia(tmp_path, monkeypatch):
     shutil.copytree(P.folder("numero_impacto"), tmp_path / "numero_impacto",
                     ignore=shutil.ignore_patterns("prova"))
     monkeypatch.setattr(P, "FOLDER", tmp_path)
-    antes = P.load("numero_impacto").estado
+    before = P.load("numero_impacto").estado
     r = P.gate("numero_impacto")
     assert r["ok"], r["erros"]
     assert sorted(r["quadros"]) == ["clara_16x9.jpg", "clara_9x16.jpg",
                                     "escura_16x9.jpg", "escura_9x16.jpg"]
-    assert P.load("numero_impacto").estado == antes  # o portão não muda o estado
+    assert P.load("numero_impacto").estado == before  # o portão não muda o estado
     # texto que não cabe reprova: rótulo enorme
     d = json.loads((tmp_path / "numero_impacto" / "ficha.json").read_text())
     next(e for e in d["encaixes"] if e["nome"] == "rotulo")["max_car"] = 120

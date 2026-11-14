@@ -24,22 +24,22 @@ def _serve():
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
         nav = pw.chromium.launch()
-        paginas = {}  # (w, h) → [página, hash do HTML aberto]
+        pages = {}  # (w, h) → [página, hash do HTML aberto]
         while True:
             html, w, h, t, transparente, fut = _requests.get()
             try:
-                if (w, h) not in paginas:
+                if (w, h) not in pages:
                     pg = nav.new_page(viewport={"width": w, "height": h}, device_scale_factor=0.5)
                     pg.add_init_script(render._SEEK)
-                    paginas[w, h] = [pg, None]
-                pg, aberto = paginas[w, h]
-                chave = hashlib.sha1(html.encode()).hexdigest()
-                if chave != aberto:
-                    arq = _TMP / f"{chave}.html"
-                    arq.write_text(html)
-                    pg.goto(arq.as_uri())
+                    pages[w, h] = [pg, None]
+                pg, opened = pages[w, h]
+                key = hashlib.sha1(html.encode()).hexdigest()
+                if key != opened:
+                    file = _TMP / f"{key}.html"
+                    file.write_text(html)
+                    pg.goto(file.as_uri())
                     pg.evaluate("document.fonts.ready")
-                    paginas[w, h][1] = chave
+                    pages[w, h][1] = key
                 pg.evaluate(f"window.seek && seek({float(t)})")
                 fut.set_result(pg.screenshot(omit_background=transparente, type="png"))
             except Exception as e:  # o pedido falha; o navegador continua servindo os próximos

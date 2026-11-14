@@ -14,34 +14,34 @@ def _link(f):
 
 
 def _line(f):
-    autor, ano = f.get("autores", "").strip(), f.get("ano", "")[:4]
-    detalhes = f.get("detalhes", "").split(" · ")[0].strip()  # depois do "·" vêm anotações do vault
-    partes = [f"{autor} ({ano})" if ano else autor, f.get("titulo", "").strip(),
-              " ".join(x for x in (f.get("revista", "").strip(), detalhes) if x)]
-    texto = ". ".join(p for p in partes if p)
-    return f"• {texto}" + (f"\n  {_link(f)}" if _link(f) else "")
+    author, year = f.get("autores", "").strip(), f.get("ano", "")[:4]
+    details = f.get("detalhes", "").split(" · ")[0].strip()  # depois do "·" vêm anotações do vault
+    parts = [f"{author} ({year})" if year else author, f.get("titulo", "").strip(),
+              " ".join(x for x in (f.get("revista", "").strip(), details) if x)]
+    text = ". ".join(p for p in parts if p)
+    return f"• {text}" + (f"\n  {_link(f)}" if _link(f) else "")
 
 
-def generate(projeto):
-    rot = json.loads(projeto.caminho("roteiro.json").read_text()) if projeto.caminho("roteiro.json").exists() else {}
-    fontes = rot.get("fontes", [])
-    graficos = projeto.carregar_json("graficos.json") if projeto.caminho("graficos.json").exists() else []
-    sobrenome = lambda f: re.split(r"[ ,]", f.get("autores", "") or "?")[0].lower()
-    na_tela = []
-    for g in graficos:
+def generate(project):
+    rot = json.loads(project.caminho("roteiro.json").read_text()) if project.caminho("roteiro.json").exists() else {}
+    sources = rot.get("fontes", [])
+    graphics = project.carregar_json("graficos.json") if project.caminho("graficos.json").exists() else []
+    surname = lambda f: re.split(r"[ ,]", f.get("autores", "") or "?")[0].lower()
+    in_screen = []
+    for g in graphics:
         if g["modelo"] not in ("citacao", "fonte"):
             continue
-        texto = json.dumps(g["dados"], ensure_ascii=False).lower()
-        for k, f in enumerate(fontes):
-            if k not in na_tela and len(sobrenome(f)) > 2 and sobrenome(f) in texto:
-                na_tela.append(k)
-    ordem = na_tela + [k for k in range(len(fontes)) if k not in na_tela]
-    blocos = []
-    if fontes:
-        blocos.append("📚 Estudos e fontes citados no vídeo\n" + "\n".join(_line(fontes[k]) for k in ordem))
-    creditos = projeto.caminho("creditos.txt")
-    if creditos.exists() and creditos.read_text().strip():
-        blocos.append("📷 Créditos das imagens\n" + creditos.read_text().strip())
-    destino = projeto.caminho("descricao.txt")
-    destino.write_text("\n\n".join(blocos) + "\n")
-    return destino
+        text = json.dumps(g["dados"], ensure_ascii=False).lower()
+        for k, f in enumerate(sources):
+            if k not in in_screen and len(surname(f)) > 2 and surname(f) in text:
+                in_screen.append(k)
+    order = in_screen + [k for k in range(len(sources)) if k not in in_screen]
+    blocks = []
+    if sources:
+        blocks.append("📚 Estudos e fontes citados no vídeo\n" + "\n".join(_line(sources[k]) for k in order))
+    credit = project.caminho("creditos.txt")
+    if credit.exists() and credit.read_text().strip():
+        blocks.append("📷 Créditos das imagens\n" + credit.read_text().strip())
+    destination = project.caminho("descricao.txt")
+    destination.write_text("\n\n".join(blocks) + "\n")
+    return destination

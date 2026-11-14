@@ -36,10 +36,10 @@ class FilmCraft:
         self._id += 1
         self._send({"jsonrpc": "2.0", "id": self._id, "method": method, "params": params})
         while True:
-            linha = self.proc.stdout.readline()
-            if not linha:
+            line = self.proc.stdout.readline()
+            if not line:
                 raise ErrorFilmCraft("o processo filmcraft-cli mcp terminou")
-            msg = json.loads(linha)
+            msg = json.loads(line)
             if msg.get("id") == self._id:
                 if "error" in msg:
                     raise ErrorFilmCraft(msg["error"])
@@ -47,13 +47,13 @@ class FilmCraft:
 
     def tool(self, nome, **args):
         res = self._rpc("tools/call", {"name": nome, "arguments": args})
-        texto = "".join(c.get("text", "") for c in res.get("content", []))
+        text = "".join(c.get("text", "") for c in res.get("content", []))
         if res.get("isError"):
-            raise ErrorFilmCraft(f"{nome} {args.get('id', '')}: {texto}")
+            raise ErrorFilmCraft(f"{nome} {args.get('id', '')}: {text}")
         try:
-            return json.loads(texto)
+            return json.loads(text)
         except ValueError:
-            return texto
+            return text
 
     def run(self, cmd_id, **params):
         t = time.monotonic()

@@ -38,11 +38,11 @@ def _cfg():
     return tomllib.loads((ROOT / "config.toml").read_text())
 
 
-def _tail(arq, n_bytes=400_000):
-    with open(arq, "rb") as f:
-        f.seek(max(0, arq.stat().st_size - n_bytes))
-        linhas = f.read().decode("utf-8", "replace").splitlines()[1:]
-    for l in linhas:
+def _tail(file, n_bytes=400_000):
+    with open(file, "rb") as f:
+        f.seek(max(0, file.stat().st_size - n_bytes))
+        lines = f.read().decode("utf-8", "replace").splitlines()[1:]
+    for l in lines:
         try:
             yield json.loads(l)
         except ValueError:
@@ -66,28 +66,28 @@ def call_statistics(chamadas, hist_monitor=()):
     tok_s = [c["tok_s"] for c in ok if c.get("tok_s")]
     pre = [c["prefill_tok_s"] for c in ok if c.get("prefill_tok_s")]
     lat = [c.get("total_s") or c.get("seconds") for c in ok if c.get("total_s") or c.get("seconds")]
-    por_prompt = {}
+    by_prompt = {}
     for c in chamadas:
-        d = por_prompt.setdefault(c.get("name") or "?", {"n": 0, "seg": 0.0, "tokens": 0})
+        d = by_prompt.setdefault(c.get("name") or "?", {"n": 0, "seg": 0.0, "tokens": 0})
         d["n"] += 1
         d["seg"] += c.get("total_s") or c.get("seconds") or 0
         d["tokens"] += c.get("output_tokens") or 0
     # energia: integra a potência da GPU (amostras de 2 s do monitor) dentro da janela de cada chamada
-    wh, tok_e = 0.0, 0
+    wh, tok_and = 0.0, 0
     for c in ok:
-        ini, fim = c["t"] - (c.get("total_s") or c.get("seconds") or 0), c["t"]
-        amostras = [h["gpu_w"] for h in hist_monitor if h.get("gpu_w") and ini - 1 <= h["t"] <= fim + 1]
-        if amostras:
-            wh += statistics.mean(amostras) * (fim - ini) / 3600
-            tok_e += (c.get("input_tokens") or 0) + (c.get("output_tokens") or 0)
+        start, end = c["t"] - (c.get("total_s") or c.get("seconds") or 0), c["t"]
+        samples = [h["gpu_w"] for h in hist_monitor if h.get("gpu_w") and start - 1 <= h["t"] <= end + 1]
+        if samples:
+            wh += statistics.mean(samples) * (end - start) / 3600
+            tok_and += (c.get("input_tokens") or 0) + (c.get("output_tokens") or 0)
     return {
         "n": len(chamadas), "ok_pct": round(100 * len(ok) / len(chamadas)), "tentativas_extra": sum(1 for c in chamadas if (c.get("params") or {}).get("attempt", 1) > 1),
         "tokens_entrada": sum(tin), "tokens_saida": sum(tout),
         "media_entrada": round(statistics.mean(tin)) if tin else None, "media_saida": round(statistics.mean(tout)) if tout else None,
         "tok_s": round(statistics.median(tok_s), 1) if tok_s else None, "prefill_tok_s": round(statistics.median(pre)) if pre else None,
         "lat_p50": _pct(lat, .5), "lat_p95": _pct(lat, .95), "custo_usd": round(sum(c.get("cost_usd") or 0 for c in chamadas), 4),
-        "wh": round(wh, 3) if wh else None, "wh_por_mil_tokens": round(wh / tok_e * 1000, 4) if tok_e else None,
-        "por_prompt": sorted(({"nome": k, **v, "seg": round(v["seg"], 1)} for k, v in por_prompt.items()), key=lambda x: -x["n"])[:8],
+        "wh": round(wh, 3) if wh else None, "wh_por_mil_tokens": round(wh / tok_and * 1000, 4) if tok_and else None,
+        "por_prompt": sorted(({"nome": k, **v, "seg": round(v["seg"], 1)} for k, v in by_prompt.items()), key=lambda x: -x["n"])[:8],
         "serie": [{"t": c["t"], "tok_s": c.get("tok_s"), "seg": c.get("total_s") or c.get("seconds"),
                    "tokens": c.get("output_tokens"), "ok": c.get("ok")} for c in chamadas[-40:]],
     }
@@ -100,28 +100,28 @@ def card_model(nome):
         m = next((m for m in llama.models() or [] if m["id"] == nome), None)
         if m is None:
             return None
-        ficha = {"formato": "gguf", "gb": llama.gb(nome), "visao": llama.vision(m), "estado": m["status"]["value"]}
-        if ficha["estado"] == "loaded":
+        card = {"formato": "gguf", "gb": llama.gb(nome), "visao": llama.vision(m), "estado": m["status"]["value"]}
+        if card["estado"] == "loaded":
             try:
                 req = urllib.request.Request(f"{llama.HOST}/props?model={urllib.parse.quote(nome)}")
                 with urllib.request.urlopen(req, timeout=3) as r:
                     p = json.load(r)
                 ger = p.get("default_generation_settings") or {}
-                ficha |= {"contexto_max": ger.get("n_ctx"), "familia": (p.get("model_alias") or nome),
+                card |= {"contexto_max": ger.get("n_ctx"), "familia": (p.get("model_alias") or nome),
                           "arquivo": Path(p.get("model_path") or "").name or None}
             except (OSError, ValueError):
                 pass
-        return ficha
+        return card
     return _stored(f"ficha:{nome}", 600, ler)
 
 
-def history_events_llm(modelo):
+def history_events_llm(model):
     """Chamadas antigas (antes do rastro) gravadas como eventos `llm` nos episódios: ms e tokens gerados."""
     def ler():
         regs = []
-        for arq in PROJECTS.glob("*/*/log/events.jsonl"):
-            for e in _tail(arq, 800_000):
-                if e.get("message") == "llm" and e.get("modelo") in (modelo, OLD.get(modelo)):
+        for file in PROJECTS.glob("*/*/log/events.jsonl"):
+            for e in _tail(file, 800_000):
+                if e.get("message") == "llm" and e.get("modelo") in (model, OLD.get(model)):
                     regs.append({"ms": e.get("ms"), "tokens": e.get("tokens"), "etapa": e.get("stage"), "ep": e.get("ep")})
         if not regs:
             return None
@@ -133,36 +133,36 @@ def history_events_llm(modelo):
         return {"n": len(regs), "lat_p50": _pct([m / 1000 for m in ms], .5), "lat_p95": _pct([m / 1000 for m in ms], .95),
                 "tokens_saida": sum(tk), "tok_s_aprox": round(sum(tk) / (sum(ms) / 1000), 1) if ms and tk else None,
                 "por_etapa": sorted(por.items(), key=lambda x: -x[1])}
-    return _stored(f"evllm:{modelo}", 15, ler)
+    return _stored(f"evllm:{model}", 15, ler)
 
 
 def cache_llm():
     def ler():
-        arq = CACHE / "llm.jsonl"
-        if not arq.exists():
+        file = CACHE / "llm.jsonl"
+        if not file.exists():
             return None
-        with open(arq, "rb") as f:
+        with open(file, "rb") as f:
             n = sum(1 for _ in f)
-        return {"respostas": n, "mb": round(arq.stat().st_size / 2**20, 1)}
+        return {"respostas": n, "mb": round(file.stat().st_size / 2**20, 1)}
     return _stored("cache_llm", 30, ler)
 
 
-def prompts(id_no):
-    saida = []
-    for nome in PROMPTS_DO_NODE.get(id_no, []):
-        p = PROMPTS / f"{nome}.md"
+def prompts(id_node):
+    output = []
+    for name in PROMPTS_DO_NODE.get(id_node, []):
+        p = PROMPTS / f"{name}.md"
         if p.exists():
-            saida.append({"nome": nome, "texto": p.read_text()[:6000]})
-    return saida
+            output.append({"nome": name, "texto": p.read_text()[:6000]})
+    return output
 
 
 # ---------- Claude ----------
 
 def claude():
     def ler():
-        arq = CACHE / "claude.jsonl"
-        regs = list(_tail(arq, 2_000_000)) if arq.exists() else []
-        hoje, mes = date.today().isoformat(), date.today().isoformat()[:7]
+        file = CACHE / "claude.jsonl"
+        regs = list(_tail(file, 2_000_000)) if file.exists() else []
+        today, mes = date.today().isoformat(), date.today().isoformat()[:7]
         c = _cfg().get("claude", {})
         por = {}
         for r in regs:
@@ -170,9 +170,9 @@ def claude():
             d = por.setdefault(m, {"n": 0, "custo": 0.0})
             d["n"] += 1
             d["custo"] += r.get("custo") or 0
-        return {"hoje": round(sum(r["custo"] for r in regs if r["t"].startswith(hoje)), 4),
+        return {"hoje": round(sum(r["custo"] for r in regs if r["t"].startswith(today)), 4),
                 "mes": round(sum(r["custo"] for r in regs if r["t"].startswith(mes)), 4),
-                "chamadas": len(regs), "chamadas_hoje": sum(1 for r in regs if r["t"].startswith(hoje)),
+                "chamadas": len(regs), "chamadas_hoje": sum(1 for r in regs if r["t"].startswith(today)),
                 "teto_dia": c.get("teto_dia_usd"), "teto_episodio": c.get("teto_episodio_usd"), "teto_chamada": c.get("teto_chamada_usd"),
                 "modelo": c.get("modelo"), "ativo": c.get("ativo", True),
                 "por_motivo": sorted(({"motivo": k, "n": v["n"], "custo": round(v["custo"], 4)} for k, v in por.items()), key=lambda x: -x["custo"])[:8],
@@ -186,29 +186,29 @@ def executions(etapa):
     """Últimas execuções da etapa em todos os episódios + mensagens, avisos e chamadas registradas nelas."""
     def ler():
         runs, msgs, n_llm, n_claude = [], [], 0, 0
-        for arq in PROJECTS.glob("*/*/log/events.jsonl"):
-            atual = None
-            for e in _tail(arq, 800_000):
+        for file in PROJECTS.glob("*/*/log/events.jsonl"):
+            current = None
+            for e in _tail(file, 800_000):
                 if e.get("stage") != etapa:
                     continue
-                tipo = e.get("kind")
-                if tipo == "start":
-                    atual = {"ep": e["ep"], "inicio": e["t"], "status": "rodando", "avisos": 0, "dur": None, "ultima": ""}
-                    runs.append(atual)
-                elif atual is None:
+                kind = e.get("kind")
+                if kind == "start":
+                    current = {"ep": e["ep"], "inicio": e["t"], "status": "rodando", "avisos": 0, "dur": None, "ultima": ""}
+                    runs.append(current)
+                elif current is None:
                     continue
-                elif tipo in ("end", "error"):
-                    atual.update(status="ok" if tipo == "end" else "erro", dur=e.get("duration"), ultima=e.get("message") or atual["ultima"])
-                elif tipo == "warning":
-                    atual["avisos"] += 1
+                elif kind in ("end", "error"):
+                    current.update(status="ok" if kind == "end" else "erro", dur=e.get("duration"), ultima=e.get("message") or current["ultima"])
+                elif kind == "warning":
+                    current["avisos"] += 1
                     msgs.append({"t": e["t"], "ep": e["ep"], "tipo": "aviso", "msg": e.get("message")})
-                elif tipo == "output":
-                    atual["ultima"] = e.get("message")
+                elif kind == "output":
+                    current["ultima"] = e.get("message")
                     msgs.append({"t": e["t"], "ep": e["ep"], "tipo": "saida", "msg": e.get("message")})
-                elif tipo == "claude":
+                elif kind == "claude":
                     n_claude += 1
                     msgs.append({"t": e["t"], "ep": e["ep"], "tipo": "claude", "msg": f"{e.get('message')} · US$ {e.get('cost', 0):.4f}"})
-                elif tipo == "debug" and e.get("message") == "llm":
+                elif kind == "debug" and e.get("message") == "llm":
                     n_llm += 1
         runs.sort(key=lambda r: r["inicio"])
         durs = [r["dur"] for r in runs if r["status"] == "ok" and r["dur"]]
@@ -229,42 +229,42 @@ def _when(ts):
     return datetime.fromtimestamp(ts).strftime("%d/%m %H:%M")
 
 
-def files(id_no):
+def files(id_node):
     v = _vault()
-    if id_no in ("r_pdf", "openalex", "r_trechos", "r_citar"):
+    if id_node in ("r_pdf", "openalex", "r_trechos", "r_citar"):
         def pdfs():
             ind = v / "Referências/Artigos/indice.json"
             d = json.loads(ind.read_text()) if ind.exists() else {}
-            itens = []
+            items = []
             for r in d.values():
                 p = v / r.get("arquivo", "")
                 if p.exists():
-                    itens.append((p.stat().st_mtime, r))
-            itens.sort(key=lambda x: -x[0])
+                    items.append((p.stat().st_mtime, r))
+            items.sort(key=lambda x: -x[0])
             return {"titulo": f"PDFs no índice ({len(d)} no total)", "itens": [
                 {"quando": _when(m), "nome": f"{r.get('autores', '?').split(',')[0]} ({r.get('ano', '?')}) · {r.get('titulo', '')[:90]}",
-                 "extra": f"{r.get('paginas', '?')} p. · {r.get('revista', '')[:40]}"} for m, r in itens[:10]]}
+                 "extra": f"{r.get('paginas', '?')} p. · {r.get('revista', '')[:40]}"} for m, r in items[:10]]}
         return _stored("arq:pdfs", 15, pdfs)
-    if id_no in ("r_montar", "r_checar", "r_partes", "r_validar", "r_plano"):
+    if id_node in ("r_montar", "r_checar", "r_partes", "r_validar", "r_plano"):
         def roteiros():
             fs = sorted(v.glob("Notas/Empreendimento/YouTube/*/Roteiros/Roteiro — *.md"), key=lambda p: -p.stat().st_mtime)[:10]
-            itens = []
+            items = []
             for f in fs:
                 txt = f.read_text()
                 status = next((l.split(":", 1)[1].strip() for l in txt.splitlines()[:20] if l.startswith("status:")), "?")
-                itens.append({"quando": _when(f.stat().st_mtime), "nome": f.stem.replace("Roteiro — ", ""),
+                items.append({"quando": _when(f.stat().st_mtime), "nome": f.stem.replace("Roteiro — ", ""),
                               "extra": f"{status} · {txt.count('[!cite]')} citações · {len(txt.split())} palavras · {f.parent.parent.name}"})
-            return {"titulo": "Roteiros mais recentes no vault", "itens": itens}
+            return {"titulo": "Roteiros mais recentes no vault", "itens": items}
         return _stored("arq:roteiros", 15, roteiros)
-    if id_no in ("graficos", "chromium"):
+    if id_node in ("graficos", "chromium"):
         fs = sorted(PROJECTS.glob("*/*/graficos/*.mov"), key=lambda p: -p.stat().st_mtime)[:10]
         return {"titulo": "Gráficos renderizados", "itens": [{"quando": _when(f.stat().st_mtime), "nome": f.name,
                 "extra": f"{f.parent.parent.parent.name}-{f.parent.parent.name} · {f.stat().st_size / 2**20:.0f} MB"} for f in fs]}
-    if id_no in ("thumb", "sdxl"):
+    if id_node in ("thumb", "sdxl"):
         fs = sorted(PROJECTS.glob("*/*/thumbs/*.png"), key=lambda p: -p.stat().st_mtime)[:10]
         return {"titulo": "Thumbs e fundos gerados", "itens": [{"quando": _when(f.stat().st_mtime), "nome": f.name,
                 "extra": f"{f.parent.parent.parent.name}-{f.parent.parent.name}"} for f in fs]}
-    if id_no in ("buscar", "bancos", "avaliar", "qwen_vl"):
+    if id_node in ("buscar", "bancos", "avaliar", "qwen_vl"):
         try:
             from esteira import library
             e = library.call_statistics()
@@ -272,11 +272,11 @@ def files(id_no):
                     "extra": f"{e['descritos']} descritos pelo modelo de visão · {e['usos']} usos · {e['gb']:.2f} GB"}]}
         except Exception:
             return None
-    if id_no in ("montar", "filmcraft"):
+    if id_node in ("montar", "filmcraft"):
         fs = sorted(PROJECTS.glob("*/*/final.mp4"), key=lambda p: -p.stat().st_mtime)[:10]
         return {"titulo": "Vídeos exportados", "itens": [{"quando": _when(f.stat().st_mtime), "nome": f"{f.parent.parent.name}-{f.parent.name}",
                 "extra": f"{f.stat().st_size / 2**20:.0f} MB"} for f in fs]}
-    if id_no in ("transcrever", "whisper"):
+    if id_node in ("transcrever", "whisper"):
         fs = sorted(PROJECTS.glob("*/*/transcricao.json"), key=lambda p: -p.stat().st_mtime)[:10]
         return {"titulo": "Transcrições", "itens": [{"quando": _when(f.stat().st_mtime), "nome": f"{f.parent.parent.name}-{f.parent.name}",
                 "extra": f"{f.stat().st_size / 1024:.0f} KB"} for f in fs]}
@@ -289,17 +289,17 @@ def openalex():
     return {"chave": tem}
 
 
-def extras(id_no, chamadas, hist_monitor):
+def extras(id_node, chamadas, hist_monitor):
     """Tudo o que a gaveta mostra além do básico, conforme o tipo do nó."""
-    e = {"estat": call_statistics(chamadas, hist_monitor), "prompts": prompts(id_no), "arquivos": files(id_no)}
-    if id_no in MODELS:
-        e["ficha"] = card_model(MODELS[id_no])
-        e["antigo"] = history_events_llm(MODELS[id_no])
+    e = {"estat": call_statistics(chamadas, hist_monitor), "prompts": prompts(id_node), "arquivos": files(id_node)}
+    if id_node in MODELS:
+        e["ficha"] = card_model(MODELS[id_node])
+        e["antigo"] = history_events_llm(MODELS[id_node])
         e["cache"] = cache_llm()
-    if id_no == "claude" or id_no == "editor":
+    if id_node == "claude" or id_node == "editor":
         e["claude"] = claude()
-    if id_no in STAGES:
-        e["execucoes"] = executions(id_no)
-    if id_no in ("openalex", "r_openalex"):
+    if id_node in STAGES:
+        e["execucoes"] = executions(id_node)
+    if id_node in ("openalex", "r_openalex"):
         e["openalex"] = openalex()
     return e

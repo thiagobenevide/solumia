@@ -49,8 +49,8 @@ class Trigger(BaseModel):
     cor_regras: list[ColorRule] = Field(default_factory=list)
 
 
-def _g(id_, nome, grupo, prio, padroes, exemplos, layout, peca, nao=(), cor_regras=()):
-    return {"id": id_, "nome": nome, "grupo": grupo, "prioridade": prio, "padroes": list(padroes),
+def _g(id_, nome, grupo, prio, defaults, exemplos, layout, peca, nao=(), cor_regras=()):
+    return {"id": id_, "nome": nome, "grupo": grupo, "prioridade": prio, "padroes": list(defaults),
             "exemplos": list(exemplos), "layout": layout, "peca": peca, "nao_disparar": list(nao),
             "cor_regras": list(cor_regras)}
 
@@ -127,9 +127,9 @@ def build(p):
     if p.startswith("re:"):
         return re.compile(_without_accent(p[3:]))
     p = _without_accent(p.strip())
-    partes = re.split(r"(\{[a-z]+\}|…|\.\.\.|\*)", p)
+    parts = re.split(r"(\{[a-z]+\}|…|\.\.\.|\*)", p)
     rx = []
-    for x in partes:
+    for x in parts:
         if x in MARKS:
             rx.append(MARKS[x])
         elif x in ("…", "..."):
@@ -138,13 +138,13 @@ def build(p):
             rx.append(r"\w*")
         elif x:
             rx.append(re.escape(x))
-    corpo = "".join(rx)
+    body = "".join(rx)
     # palavra inteira nas pontas literais (evita "dica" dentro de "indica")
     if p[:1].isalpha():
-        corpo = r"\b" + corpo
+        body = r"\b" + body
     if p[-1:].isalpha():
-        corpo += r"\b"
-    return re.compile(corpo)
+        body += r"\b"
+    return re.compile(body)
 
 
 def _numbers(s):
@@ -153,10 +153,10 @@ def _numbers(s):
 
 def matches(g: Trigger, frase):
     """Primeiro trecho da frase que casa com algum padrão do gatilho (ou None)."""
-    alvo = _without_accent(frase)
+    target = _without_accent(frase)
     for p in g.padroes:
         try:
-            m = build(p).search(alvo)
+            m = build(p).search(target)
         except re.error:
             continue
         if m:
@@ -174,18 +174,18 @@ def blocked(g: Trigger, frase, ctx):
 
 
 def color(g: Trigger, frase):
-    alvo = _without_accent(frase)
+    target = _without_accent(frase)
     for r in g.cor_regras:
-        if any(build(t).search(alvo) for t in r.termos if t.strip()):
+        if any(build(t).search(target) for t in r.termos if t.strip()):
             return r.cor
     return g.cor
 
 
-def detect(frase, gatilhos, ctx=None):
+def detect(frase, triggers, ctx=None):
     """{gatilho, trecho, cor, perdeu:[ids]} do gatilho vencedor (menor prioridade; 0 vence todos) ou None."""
     ctx = ctx or {}
     hits = []
-    for g in gatilhos:
+    for g in triggers:
         if not g.ativo or blocked(g, frase, ctx):
             continue
         t = matches(g, frase)
@@ -198,83 +198,83 @@ def detect(frase, gatilhos, ctx=None):
     return {"gatilho": g, "trecho": t, "cor": color(g, frase), "perdeu": [h.id for h, _ in hits[1:]]}
 
 
-def aplicar(frases, gatilhos):
+def aplicar(frases, triggers):
     """{i: detecção} para as frases com tempo (`ini`/`fim`); o contexto marca número dito há menos de 2 s."""
-    saida, ultimo_num = {}, -99.0
+    output, last_num = {}, -99.0
     for i, f in enumerate(frases):
-        d = detect(f["texto"], gatilhos, {"numero_recente": f["ini"] - ultimo_num < 2.0})
+        d = detect(f["texto"], triggers, {"numero_recente": f["ini"] - last_num < 2.0})
         if _numbers(f["texto"]):
-            ultimo_num = f["fim"]
+            last_num = f["fim"]
         if d:
-            saida[i] = d
-    return saida
+            output[i] = d
+    return output
 
 
-def sentences_of_text(texto, palavras_s=2.6):
+def sentences_of_text(texto, words_s=2.6):
     """Roteiro colado → frases com tempo estimado (2,6 palavras/s) para o teste sem gravação. Frontmatter, títulos,
     citações (`>`) e marcações do Obsidian saem."""
     texto = re.sub(r"\A---\n.*?\n---\n", "", texto, flags=re.S)
     texto = "\n".join(x for x in texto.splitlines() if not x.lstrip().startswith(("#", ">", "![[", "%%")))
     texto = re.sub(r"[*_`]|\[\[|\]\]", "", texto)
-    partes =[x.strip() for x in re.split(r"(?<=[.!?])\s+|\n+", texto) if x.strip()]
-    t, saida = 0.0, []
-    for x in partes:
-        d = max(0.8, len(x.split()) / palavras_s)
-        saida.append({"texto": x, "ini": round(t, 2), "fim": round(t + d, 2)})
+    parts =[x.strip() for x in re.split(r"(?<=[.!?])\s+|\n+", texto) if x.strip()]
+    t, output = 0.0, []
+    for x in parts:
+        d = max(0.8, len(x.split()) / words_s)
+        output.append({"texto": x, "ini": round(t, 2), "fim": round(t + d, 2)})
         t += d + 0.15
-    return saida
+    return output
 
 
 def test(frases, estilo):
     """Decupagem do roteiro pelo estilo, sem IA: cena por frase, ritmo e avisos (o "Testar com roteiro")."""
     det = aplicar(frases, estilo.gatilhos)
-    cenas = []
+    scenes = []
     for i, f in enumerate(frases):
         d = det.get(i)
         g = d["gatilho"] if d else None
         layout = g.layout if g else "camera"
         if estilo.modo != "apresentador" and layout == "camera":
             layout = "peca" if g and g.peca else "broll"
-        cenas.append({"i": i, "t": f["ini"], "ate": f["fim"], "frase": f["texto"], "gatilho": g.id if g else "",
+        scenes.append({"i": i, "t": f["ini"], "ate": f["fim"], "frase": f["texto"], "gatilho": g.id if g else "",
                       "gatilho_nome": g.nome if g else "", "trecho": d["trecho"] if d else "",
                       "perdeu": d["perdeu"] if d else [], "layout": layout, "peca": g.peca if g else "",
                       "cor": d["cor"] if d else ""})
-    dur = (frases[-1]["fim"] if frases else 0) or 1
+    duration = (frases[-1]["fim"] if frases else 0) or 1
     pres = estilo.presenca
-    avisos = []
+    warnings = []
     # peça parada: a mesma peça em frases seguidas passa do limite
     k = 0
-    while k < len(cenas):
+    while k < len(scenes):
         j = k
-        while j + 1 < len(cenas) and cenas[j + 1]["peca"] and cenas[j + 1]["peca"] == cenas[k]["peca"]:
+        while j + 1 < len(scenes) and scenes[j + 1]["peca"] and scenes[j + 1]["peca"] == scenes[k]["peca"]:
             j += 1
-        tempo = cenas[j]["ate"] - cenas[k]["t"]
-        if cenas[k]["peca"] and tempo > pres.peca_parada_s:
-            avisos.append({"tipo": "peca_parada", "i": k, "t": cenas[k]["t"],
-                           "titulo": f"Peça parada por {tempo:.0f} s em {_mmss(cenas[k]['t'])}",
+        time = scenes[j]["ate"] - scenes[k]["t"]
+        if scenes[k]["peca"] and time > pres.peca_parada_s:
+            warnings.append({"tipo": "peca_parada", "i": k, "t": scenes[k]["t"],
+                           "titulo": f"Peça parada por {time:.0f} s em {_mmss(scenes[k]['t'])}",
                            "texto": f"Limite do estilo é {pres.peca_parada_s:.0f} s. A fala continua no mesmo processo.",
                            "acoes": ["Avançar etapa por palavra", "Ajustar regra"]})
         k = j + 1
-    fora = 0.0
-    for c in cenas:
-        fora = fora + (c["ate"] - c["t"]) if c["layout"] in ("peca", "capitulo", "tipografia", "broll") else 0.0
-        if estilo.modo == "apresentador" and fora > pres.fora_max_s:
-            avisos.append({"tipo": "fora", "i": c["i"], "t": c["t"],
-                           "titulo": f"Apresentador fora da tela por {fora:.0f} s em {_mmss(c['t'])}",
+    outside = 0.0
+    for c in scenes:
+        outside = outside + (c["ate"] - c["t"]) if c["layout"] in ("peca", "capitulo", "tipografia", "broll") else 0.0
+        if estilo.modo == "apresentador" and outside > pres.fora_max_s:
+            warnings.append({"tipo": "fora", "i": c["i"], "t": c["t"],
+                           "titulo": f"Apresentador fora da tela por {outside:.0f} s em {_mmss(c['t'])}",
                            "texto": f"Máximo do estilo: {pres.fora_max_s:.0f} s.", "acoes": ["Ajustar regra"]})
-            fora = 0.0
-    for c in cenas:
+            outside = 0.0
+    for c in scenes:
         if not c["gatilho"]:
-            avisos.append({"tipo": "sem_gatilho", "i": c["i"], "t": c["t"], "titulo": f'"{c["frase"][:40]}" sem gatilho',
+            warnings.append({"tipo": "sem_gatilho", "i": c["i"], "t": c["t"], "titulo": f'"{c["frase"][:40]}" sem gatilho',
                            "texto": "Ficou em câmera cheia. Quer tratar como frase de impacto (punch-in)?",
                            "acoes": ["Sim, neste estilo", "Ignorar"]})
-    ritmo = {}
-    for c in cenas:
-        ritmo[c["layout"]] = ritmo.get(c["layout"], 0) + (c["ate"] - c["t"])
-    trocas = sum(1 for a, b in zip(cenas, cenas[1:], strict=False) if (a["layout"], a["peca"]) != (b["layout"], b["peca"]))
-    return {"cenas": cenas, "duracao": round(dur, 1), "avisos": avisos,
-            "ritmo": {k: round(v / dur, 2) for k, v in ritmo.items()},
-            "troca_media_s": round(dur / max(trocas + 1, 1), 1)}
+    rhythm = {}
+    for c in scenes:
+        rhythm[c["layout"]] = rhythm.get(c["layout"], 0) + (c["ate"] - c["t"])
+    swaps = sum(1 for a, b in zip(scenes, scenes[1:], strict=False) if (a["layout"], a["peca"]) != (b["layout"], b["peca"]))
+    return {"cenas": scenes, "duracao": round(duration, 1), "avisos": warnings,
+            "ritmo": {k: round(v / duration, 2) for k, v in rhythm.items()},
+            "troca_media_s": round(duration / max(swaps + 1, 1), 1)}
 
 
 def _mmss(t):

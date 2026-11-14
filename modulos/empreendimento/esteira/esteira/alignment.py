@@ -33,34 +33,34 @@ def refine(audio, palavras, cache=None, cfg=None):
     """palavras [[ini, fim, texto]] → mesma lista com ini/fim do alinhamento forçado onde ele deu certo."""
     if not palavras or (cfg is not None and not enabled(cfg)) or not PY_IMG.exists():
         return palavras
-    chave = _signature(audio, palavras)
+    key = _signature(audio, palavras)
     if cache and Path(cache).exists():
         d = json.loads(Path(cache).read_text())
-        if d.get("chave") == chave:
+        if d.get("chave") == key:
             return d["palavras"]
     try:
-        tempos = _run(audio, palavras)
+        times = _run(audio, palavras)
     except (subprocess.CalledProcessError, OSError, ValueError) as e:
-        erro = (getattr(e, "stderr", None) or str(e)).strip()[-200:]
-        events.warning(f"alinhamento forçado falhou ({erro}); bordas pelo tempo do Whisper")
+        error = (getattr(e, "stderr", None) or str(e)).strip()[-200:]
+        events.warning(f"alinhamento forçado falhou ({error}); bordas pelo tempo do Whisper")
         return palavras
-    saida = combine(palavras, tempos)
+    output = combine(palavras, times)
     if cache:
-        Path(cache).write_text(json.dumps({"chave": chave, "palavras": saida}, ensure_ascii=False))
-    return saida
+        Path(cache).write_text(json.dumps({"chave": key, "palavras": output}, ensure_ascii=False))
+    return output
 
 
 def combine(palavras, tempos):
     """Aplica os tempos alinhados (None = não alinhou) sem deixar uma palavra passar por cima da vizinha."""
-    saida = []
-    for (ini, fim, t), al in zip(palavras, tempos, strict=True):
-        if al and abs(al[0] - ini) <= DEVIATION_MAX and abs(al[1] - fim) <= DEVIATION_MAX and al[1] > al[0]:
-            ini, fim = al
-        saida.append([ini, fim, t])
-    for a, b in zip(saida, saida[1:]):
+    output = []
+    for (start, end, t), al in zip(palavras, tempos, strict=True):
+        if al and abs(al[0] - start) <= DEVIATION_MAX and abs(al[1] - end) <= DEVIATION_MAX and al[1] > al[0]:
+            start, end = al
+        output.append([start, end, t])
+    for a, b in zip(output, output[1:]):
         if a[1] > b[0]:
             a[1] = max(a[0] + 0.01, b[0])
-    return saida
+    return output
 
 
 def _run(audio, palavras):
@@ -68,13 +68,13 @@ def _run(audio, palavras):
     from esteira.transcribe import _decode
     free_gpu()
     with tempfile.TemporaryDirectory() as tmp:
-        cru = Path(tmp) / "audio.f32"
-        _decode(audio).tofile(cru)
-        pedido = Path(tmp) / "pedido.json"
-        pedido.write_text(json.dumps({"audio": str(cru), "words": palavras, "model": MODEL}))
-        r = subprocess.run([str(PY_IMG), "-I", str(ROOT / "esteira/ai/ctc_align.py"), str(pedido)],
+        raw = Path(tmp) / "audio.f32"
+        _decode(audio).tofile(raw)
+        request = Path(tmp) / "pedido.json"
+        request.write_text(json.dumps({"audio": str(raw), "words": palavras, "model": MODEL}))
+        r = subprocess.run([str(PY_IMG), "-I", str(ROOT / "esteira/ai/ctc_align.py"), str(request)],
                            capture_output=True, text=True, check=True)
-    tempos = json.loads(r.stdout.strip().splitlines()[-1])
-    if len(tempos) != len(palavras):
+    times = json.loads(r.stdout.strip().splitlines()[-1])
+    if len(times) != len(palavras):
         raise ValueError("alinhamento devolveu outro número de palavras")
-    return tempos
+    return times

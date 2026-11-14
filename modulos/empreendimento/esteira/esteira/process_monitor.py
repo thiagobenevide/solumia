@@ -28,22 +28,22 @@ def _history(r):
     h = _read.setdefault(r["id"], {"pos": 0, "nos": [], "chamadas": [], "caches": 0})
     if not trace.LOG.exists():
         return h
-    tam = trace.LOG.stat().st_size
-    if tam < h["pos"]:  # o rastro foi rotacionado: relê
+    size = trace.LOG.stat().st_size
+    if size < h["pos"]:  # o rastro foi rotacionado: relê
         h.update(pos=0, nos=[], chamadas=[], caches=0)
     if h["pos"] == 0:  # começa perto do início do processo (o rastro é cronológico)
-        h["pos"] = _position_of(r["start"] - 2, tam)
+        h["pos"] = _position_of(r["start"] - 2, size)
     with open(trace.LOG, "rb") as f:
         f.seek(h["pos"])
-        bloco = f.read()
-    corte = bloco.rfind(b"\n") + 1
-    h["pos"] += corte
-    chave, pid = r["id"].encode(), f'"pid": {r["pid"]},'.encode()
-    for linha in bloco[:corte].splitlines():
-        if chave not in linha and pid not in linha:
+        block = f.read()
+    cut = block.rfind(b"\n") + 1
+    h["pos"] += cut
+    key, pid = r["id"].encode(), f'"pid": {r["pid"]},'.encode()
+    for line in block[:cut].splitlines():
+        if key not in line and pid not in line:
             continue
         try:
-            reg = json.loads(linha)
+            reg = json.loads(line)
         except ValueError:
             continue
         if not _my(reg, r):
@@ -67,9 +67,9 @@ def _position_of(t, tam):
             meio = (lo + hi) // 2
             f.seek(meio)
             f.readline()
-            linha = f.readline()
+            line = f.readline()
             try:
-                tm = json.loads(linha).get("t", 0)
+                tm = json.loads(line).get("t", 0)
             except ValueError:
                 tm = 0
             lo, hi = (meio, hi) if tm < t else (lo, meio)
@@ -78,23 +78,23 @@ def _position_of(t, tam):
 
 def _path(nos, fim):
     """Nós visitados em ordem, com a duração de cada um (o último dura até agora ou até o fim)."""
-    saida = []
+    output = []
     for i, n in enumerate(nos):
         if not n["no"]:
             continue
-        ate = nos[i + 1]["t"] if i + 1 < len(nos) else fim
-        saida.append(dict(n, nome=NAMES.get(n["id_no"], n["no"]), seg=round(ate - n["t"], 1)))
-    return saida
+        until = nos[i + 1]["t"] if i + 1 < len(nos) else fim
+        output.append(dict(n, nome=NAMES.get(n["id_no"], n["no"]), seg=round(until - n["t"], 1)))
+    return output
 
 
-def _tail(arq, n=40):
-    if not arq or not Path(arq).is_file():
+def _tail(file, n=40):
+    if not file or not Path(file).is_file():
         return []
-    p = Path(arq)
+    p = Path(file)
     with open(p, "rb") as f:
         f.seek(max(0, p.stat().st_size - 12000))
-        linhas = f.read().decode("utf-8", "replace").replace("\r", "\n").splitlines()
-    return [l for l in linhas if l.strip()][-n:]
+        lines = f.read().decode("utf-8", "replace").replace("\r", "\n").splitlines()
+    return [l for l in lines if l.strip()][-n:]
 
 
 def _log_of_queue(r):
@@ -106,16 +106,16 @@ def _log_of_queue(r):
 
 
 def _events(r):
-    alvo = r.get("target") or ""
-    if not alvo or ":" in alvo or not folder_ep(alvo).is_dir():
+    target = r.get("target") or ""
+    if not target or ":" in target or not folder_ep(target).is_dir():
         return []
-    ini = datetime.fromtimestamp(r["start"] - 1).isoformat()
-    fim = datetime.fromtimestamp((r.get("end") or time.time()) + 1).isoformat()
-    return [e for e in status.events(folder_ep(alvo))
-            if e.get("pid") == r["pid"] and ini <= e["t"] <= fim and e["kind"] != "debug"][-60:]
+    start = datetime.fromtimestamp(r["start"] - 1).isoformat()
+    end = datetime.fromtimestamp((r.get("end") or time.time()) + 1).isoformat()
+    return [e for e in status.events(folder_ep(target))
+            if e.get("pid") == r["pid"] and start <= e["t"] <= end and e["kind"] != "debug"][-60:]
 
 
-def detail(pid_id, monitor_atual):
+def detail(pid_id, monitor_current):
     r = processes.get(pid_id)
     if not r:
         return None
@@ -125,13 +125,13 @@ def detail(pid_id, monitor_atual):
         if vivo:
             vivo["nome"] = NAMES.get(vivo.get("id_no"), vivo.get("node"))
     h = _history(r)
-    fim = r.get("end") or time.time()
-    recursos = next((p for p in (monitor_atual or {}).get("esteira", []) if p["pid"] == r["pid"]), None)
-    chamadas = h["chamadas"]
-    tok = sum(c.get("output_tokens") or 0 for c in chamadas)
-    resumo = {"chamadas": len(chamadas), "falhas": sum(not c.get("ok") for c in chamadas), "cache": h["caches"],
-              "tokens_saida": tok, "custo_usd": round(sum(c.get("cost_usd") or 0 for c in chamadas), 4),
-              "seg_llm": round(sum(c.get("seconds") or 0 for c in chamadas), 1)}
-    return {"processo": r, "vivo": vivo, "recursos": recursos, "caminho": _path(h["nos"], fim),
-            "chamadas": chamadas[-30:][::-1], "resumo": resumo, "eventos": _events(r)[::-1],
+    end = r.get("end") or time.time()
+    recursos = next((p for p in (monitor_current or {}).get("esteira", []) if p["pid"] == r["pid"]), None)
+    calls = h["chamadas"]
+    tok = sum(c.get("output_tokens") or 0 for c in calls)
+    summary = {"chamadas": len(calls), "falhas": sum(not c.get("ok") for c in calls), "cache": h["caches"],
+              "tokens_saida": tok, "custo_usd": round(sum(c.get("cost_usd") or 0 for c in calls), 4),
+              "seg_llm": round(sum(c.get("seconds") or 0 for c in calls), 1)}
+    return {"processo": r, "vivo": vivo, "recursos": recursos, "caminho": _path(h["nos"], end),
+            "chamadas": calls[-30:][::-1], "resumo": summary, "eventos": _events(r)[::-1],
             "log": _tail(r.get("output") or _log_of_queue(r))}

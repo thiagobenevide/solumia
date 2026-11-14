@@ -17,96 +17,96 @@ def _ids(texto):
     return {int(x) for x in texto.split(",")} if texto else None
 
 
-def summary(projeto, cenas=None, sem_texto=False):
-    plano = projeto.carregar_json("plano.json")
+def summary(project, cenas=None, without_text=False):
+    plan = project.carregar_json("plano.json")
     so = _ids(cenas)
-    sem_midia = [c["id"] for c in plano["cenas"] if not c.get("midia")]
-    print(f"{plano.get('titulo') or '(sem título)'} · {plano['duracao']:.0f}s · {len(plano['cenas'])} cenas"
-          + (f" · sem mídia: {','.join(map(str, sem_midia))}" if sem_midia else ""))
+    without_media = [c["id"] for c in plan["cenas"] if not c.get("midia")]
+    print(f"{plan.get('titulo') or '(sem título)'} · {plan['duracao']:.0f}s · {len(plan['cenas'])} cenas"
+          + (f" · sem mídia: {','.join(map(str, without_media))}" if without_media else ""))
     print("id ini tipo>obtido | busca_en | busca | destaques | texto   (* = busca_definida)")
-    for c in plano["cenas"]:
+    for c in plan["cenas"]:
         if so and c["id"] not in so:
             continue
         obtido = {"video": "v", "imagem": "i"}.get(c.get("midia_tipo"), "-") if c.get("midia") else "-"
         dest = ";".join(f"{d['texto']}@{d['inicio']:.1f}" for d in c.get("destaques", []))
-        campos = [f"{c['id']}{'*' if c.get('busca_definida') else ''} {c['inicio']:.1f} {c['tipo'][0]}>{obtido}",
+        fields = [f"{c['id']}{'*' if c.get('busca_definida') else ''} {c['inicio']:.1f} {c['tipo'][0]}>{obtido}",
                   c.get("busca_en") or "", c.get("busca") or "", dest]
-        if not sem_texto:
-            campos.append(c["texto"])
-        print(" | ".join(campos))
+        if not without_text:
+            fields.append(c["texto"])
+        print(" | ".join(fields))
 
 
-def _words(projeto):
+def _words(project):
     # alinhamento.json tem o texto do roteiro (grafia certa); a transcrição é o fallback.
-    if projeto.caminho("alinhamento.json").exists():
-        return projeto.carregar_json("alinhamento.json")
-    return projeto.carregar_json("transcricao.json")["palavras"]
+    if project.caminho("alinhamento.json").exists():
+        return project.carregar_json("alinhamento.json")
+    return project.carregar_json("transcricao.json")["palavras"]
 
 
-def words(projeto, de=0.0, ate=None):
-    linha = []
-    for p in _words(projeto):
+def words(project, de=0.0, ate=None):
+    line = []
+    for p in _words(project):
         if p["ini"] >= de and (ate is None or p["ini"] <= ate):
-            linha.append(f"{p['ini']:.1f} {p['p']}")
-    print(" · ".join(linha))
+            line.append(f"{p['ini']:.1f} {p['p']}")
+    print(" · ".join(line))
 
 
 def _start(palavras, texto, ini, fim):
-    alvo = [normalize(w) for w in texto.split()]
-    dentro = [p for p in palavras if ini - 0.5 <= p["ini"] <= fim + 0.5]
-    for i, p in enumerate(dentro):
-        if [normalize(q["p"]) for q in dentro[i:i + len(alvo)]] == alvo:
+    target = [normalize(w) for w in texto.split()]
+    inside = [p for p in palavras if ini - 0.5 <= p["ini"] <= fim + 0.5]
+    for i, p in enumerate(inside):
+        if [normalize(q["p"]) for q in inside[i:i + len(target)]] == target:
             return round(p["ini"], 3)
-    return next((round(p["ini"], 3) for p in dentro if normalize(p["p"]) == alvo[0]), None)
+    return next((round(p["ini"], 3) for p in inside if normalize(p["p"]) == target[0]), None)
 
 
-def adjust(projeto, arquivo=None):
+def adjust(project, arquivo=None):
     """Uma linha JSON por cena: {"id": 3, "busca_en": "...", "tipo": "imagem", "destaques": ["piratas"]}.
 
     Só os campos informados mudam. Destaque pode ser texto puro: o início é achado nas palavras da cena.
     """
-    entrada = open(arquivo, encoding="utf-8").read() if arquivo else sys.stdin.read()
-    plano = projeto.carregar_json("plano.json")
-    por_id = {c["id"]: c for c in plano["cenas"]}
-    palavras_ = _words(projeto)
-    erros, mudou = [], []
-    for n, linha in enumerate(entrada.splitlines(), 1):
-        linha = linha.strip()
-        if not linha or linha.startswith("#"):
+    entry = open(arquivo, encoding="utf-8").read() if arquivo else sys.stdin.read()
+    plan = project.carregar_json("plano.json")
+    by_id = {c["id"]: c for c in plan["cenas"]}
+    words_ = _words(project)
+    errors, mudou = [], []
+    for n, line in enumerate(entry.splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
             continue
         try:
-            ed = json.loads(linha)
+            ed = json.loads(line)
         except json.JSONDecodeError as e:
-            erros.append(f"linha {n}: JSON inválido ({e.msg})")
+            errors.append(f"linha {n}: JSON inválido ({e.msg})")
             continue
-        c = por_id.get(ed.pop("id", None))
+        c = by_id.get(ed.pop("id", None))
         if not c:
-            erros.append(f"linha {n}: cena inexistente")
+            errors.append(f"linha {n}: cena inexistente")
             continue
         proibidos = set(ed) - EDITABLE
         if proibidos:
-            erros.append(f"cena {c['id']}: campos não editáveis {sorted(proibidos)}")
+            errors.append(f"cena {c['id']}: campos não editáveis {sorted(proibidos)}")
             continue
         if "tipo" in ed and ed["tipo"] not in ("video", "imagem"):
-            erros.append(f"cena {c['id']}: tipo deve ser video|imagem")
+            errors.append(f"cena {c['id']}: tipo deve ser video|imagem")
             continue
         if c.get("busca_definida") and ({"busca_en", "busca"} & set(ed)):
-            erros.append(f"cena {c['id']}: busca veio de [busca: ...] no roteiro; ignorada")
+            errors.append(f"cena {c['id']}: busca veio de [busca: ...] no roteiro; ignorada")
             ed.pop("busca_en", None), ed.pop("busca", None)
         if "destaques" in ed:
-            lista = []
+            items = []
             for d in ed["destaques"]:
                 d = {"texto": d} if isinstance(d, str) else d
                 if d.get("inicio") is None:
-                    d["inicio"] = _start(palavras_, d["texto"], c["inicio"], c["fim"])
+                    d["inicio"] = _start(words_, d["texto"], c["inicio"], c["fim"])
                     if d["inicio"] is None:
-                        erros.append(f"cena {c['id']}: '{d['texto']}' não é falado nesta cena; ignorado")
+                        errors.append(f"cena {c['id']}: '{d['texto']}' não é falado nesta cena; ignorado")
                         continue
-                lista.append({"texto": d["texto"], "inicio": d["inicio"]})
-            ed["destaques"] = lista
+                items.append({"texto": d["texto"], "inicio": d["inicio"]})
+            ed["destaques"] = items
         c.update(ed)
         mudou.append(str(c["id"]))
-    projeto.salvar_json("plano.json", plano)
+    project.salvar_json("plano.json", plan)
     print(f"  {len(mudou)} cenas ajustadas" + (f": {','.join(mudou)}" if mudou else ""))
-    for e in erros:
+    for e in errors:
         print(f"  ! {e}")

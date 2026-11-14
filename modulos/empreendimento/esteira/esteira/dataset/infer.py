@@ -15,35 +15,35 @@ def _summary(cx: dict) -> str:
 
 
 def examples(tarefa: str, contexto: dict, k: int = 3, fora: set[str] = frozenset()) -> list[tuple[dict, object]]:
-    pares = [(r, cx, resp) for r, cx, resp in X._pairs(tarefa) if r["id"] not in fora]
-    if not pares:
+    pairs = [(r, cx, resp) for r, cx, resp in X._pairs(tarefa) if r["id"] not in fora]
+    if not pairs:
         return []
     try:
         from esteira.ai import embeddings
         if not embeddings.available():
             raise RuntimeError
-        alvo, *vs = embeddings.vectors([_summary(contexto)] + [_summary(cx) for _, cx, _ in pares])
-        ordem = sorted(range(len(pares)), key=lambda i: -embeddings.cosine(alvo, vs[i]))
+        target, *vs = embeddings.vectors([_summary(contexto)] + [_summary(cx) for _, cx, _ in pairs])
+        order = sorted(range(len(pairs)), key=lambda i: -embeddings.cosine(target, vs[i]))
     except Exception:  # noqa: BLE001 — sem embeddings: os mais recentes
-        ordem = list(range(len(pares)))[::-1]
-    escolhidos = []
-    for i in ordem[:k]:
-        _, cx, resp = pares[i]
-        escolhidos.append((cx, resp))
-    return escolhidos
+        order = list(range(len(pairs)))[::-1]
+    chosen = []
+    for i in order[:k]:
+        _, cx, resp = pairs[i]
+        chosen.append((cx, resp))
+    return chosen
 
 
 def prompt(tarefa: str, contexto: dict, k: int = 3, fora: set[str] = frozenset()) -> str:
     return X.prompt(tarefa, contexto, examples(tarefa, contexto, k, fora))
 
 
-def generate(tarefa: str, contexto: dict, modelo: str | None = None, k: int = 3):
+def generate(tarefa: str, contexto: dict, model: str | None = None, k: int = 3):
     """Uma resposta do modelo local, validada pelo esquema N1 da tarefa (ou None)."""
     from esteira.dataset import app_training
     from esteira.ai import local
     esq = X.schema(tarefa)
     app = R.TASKS[tarefa]
-    modelo = modelo or app_training.promoted(app)  # o adaptador promovido da app, se houver
-    kw = {"modelo": modelo} if modelo else {}
+    model = model or app_training.promoted(app)  # o adaptador promovido da app, se houver
+    kw = {"modelo": model} if model else {}
     return local.ask(prompt(tarefa, contexto, k, fora=X.gold(tarefa)), esq, temperature=0.2, max_tokens=6000,
                            operation=f"n1_{tarefa}", **kw)

@@ -14,9 +14,9 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/api/v1", tags=["sistema"])
 
 
-def _body(resposta):
+def _body(answer):
     """Dados de uma rota JSON do painel (`/api/grafo`, `/api/processos/…`), sem repetir a lógica dela."""
-    return json.loads(resposta.body)
+    return json.loads(answer.body)
 
 
 # ---------- Monitor e grafo da operação ----------
@@ -25,9 +25,9 @@ def _body(resposta):
 def monitor():
     from esteira import monitor as m
     e = m.state(painel._cfg().get("monitor", {}).get("tarifa_kwh", 0.85))
-    atual = e.get("atual") or {}
-    return {"gpu": atual.get("gpu"), "cpu": atual.get("cpu"), "ram": atual.get("ram"), "ollama": atual.get("ollama"),
-            "esteira": atual.get("esteira") or [], "grupos": atual.get("grupos") or [],
+    current = e.get("atual") or {}
+    return {"gpu": current.get("gpu"), "cpu": current.get("cpu"), "ram": current.get("ram"), "ollama": current.get("ollama"),
+            "esteira": current.get("esteira") or [], "grupos": current.get("grupos") or [],
             "arquivos": e.get("arquivos") or [], "energia": e.get("energia"), "hist": e.get("hist") or [],
             "erro": e.get("erro"), "fila": [t for t in queue.list_all() if t["estado"] in ("rodando", "na fila")]}
 
@@ -72,8 +72,8 @@ def read_options():
     from esteira.core import options
     from esteira.ai import local
     return {"opcoes": options.read(), "claude": options.claude(painel._cfg().get("claude", {})),
-            "operacoes": [{"id": k, "nome": nome, "descricao": desc, "tipos": tipos, "atual": options.operation(k)}
-                          for k, (nome, desc, tipos) in options.OPERATIONS.items()],
+            "operacoes": [{"id": k, "nome": name, "descricao": desc, "tipos": kinds, "atual": options.operation(k)}
+                          for k, (name, desc, kinds) in options.OPERATIONS.items()],
             "modelos_claude": [{"id": i, "nome": n, "descricao": d} for i, n, d in options.MODELS],
             "sugestoes": [{"nome": n, "tipo": t, "descricao": d} for n, t, d in options.SUGGESTIONS],
             "locais": painel._local_models(), "padrao": {"text": local.TEXT, "vision": local.VISION}}
@@ -121,13 +121,13 @@ class Download(BaseModel):
 def download(corpo: Download):
     """Baixa um modelo (`usuario/repo:QUANT` do Hugging Face) para o llama.cpp em segundo plano; o andamento
     sai em `/opcoes/baixando`."""
-    nome = corpo.nome.strip()
-    if not re.fullmatch(r"[\w.\-/]+(:[\w.\-]+)?", nome):
+    name = corpo.nome.strip()
+    if not re.fullmatch(r"[\w.\-/]+(:[\w.\-]+)?", name):
         raise HTTPException(400, "nome de modelo inválido (ex.: unsloth/Qwen3-8B-GGUF:Q4_K_M)")
-    if painel._downloading.get(nome, {}).get("estado") != "baixando":
-        painel._downloading[nome] = {"estado": "baixando", "feito": 0, "total": 0, "msg": "começando"}
-        threading.Thread(target=painel._download, args=(nome,), daemon=True).start()
-    return painel._downloading[nome]
+    if painel._downloading.get(name, {}).get("estado") != "baixando":
+        painel._downloading[name] = {"estado": "baixando", "feito": 0, "total": 0, "msg": "começando"}
+        threading.Thread(target=painel._download, args=(name,), daemon=True).start()
+    return painel._downloading[name]
 
 
 @router.get("/opcoes/baixando")
@@ -141,14 +141,14 @@ def downloading():
 def costs():
     from esteira.ai import claude
     regs = list(reversed(claude._records()))
-    por_ep = {}
+    by_ep = {}
     for r in regs:
-        por_ep[r["ep"]] = por_ep.get(r["ep"], 0) + (r.get("cost") or 0)
-    hoje = datetime.now().date().isoformat()
+        by_ep[r["ep"]] = by_ep.get(r["ep"], 0) + (r.get("cost") or 0)
+    today = datetime.now().date().isoformat()
     cfg = painel._cfg().get("claude", {})
-    return {"registros": regs[:200], "n_registros": len(regs), "total": sum(por_ep.values()),
-            "hoje": sum((r.get("cost") or 0) for r in regs if r["t"].startswith(hoje)),
-            "por_episodio": [{"ep": ep, "custo": v} for ep, v in sorted(por_ep.items(), key=lambda x: -x[1])],
+    return {"registros": regs[:200], "n_registros": len(regs), "total": sum(by_ep.values()),
+            "hoje": sum((r.get("cost") or 0) for r in regs if r["t"].startswith(today)),
+            "por_episodio": [{"ep": ep, "custo": v} for ep, v in sorted(by_ep.items(), key=lambda x: -x[1])],
             "teto_dia_usd": cfg.get("teto_dia_usd", 3), "teto_episodio_usd": cfg.get("teto_episodio_usd", 1),
             "modelo": cfg.get("modelo", "")}
 
@@ -158,8 +158,8 @@ def costs():
 @router.get("/acervo")
 def library(q: str = "", tipo: str = "", limite: int = 180):
     from esteira import library as A
-    itens = [dict(it, mini=f"/acervo/mini/{it['id']}") for it in A.list_all(q, tipo, limite=min(limite, 500))]
-    return {"itens": itens, "estatisticas": A.call_statistics()}
+    items = [dict(it, mini=f"/acervo/mini/{it['id']}") for it in A.list_all(q, tipo, limite=min(limite, 500))]
+    return {"itens": items, "estatisticas": A.call_statistics()}
 
 
 # ---------- Backup e dataset das Craft Apps (docs/PLANO-DATASET.md) ----------
@@ -168,21 +168,21 @@ def library(q: str = "", tipo: str = "", limite: int = 180):
 def backup():
     """Estado do backup no Google Drive (`infra/scripts/backup` grava `plataforma/backup.json`)."""
     from esteira.project import DATA
-    arq = DATA.parent / "plataforma" / "backup.json"
-    if not arq.exists():
+    file = DATA.parent / "plataforma" / "backup.json"
+    if not file.exists():
         return {"configurado": False, "modulos": [], "ultimo": None, "teste": None}
-    d = json.loads(arq.read_text())
+    d = json.loads(file.read_text())
     mods = d.get("modulos") or {}
-    agora = datetime.now()
+    now = datetime.now()
 
     def horas(t):
-        return round((agora - datetime.fromisoformat(t)).total_seconds() / 3600, 1) if t else None
-    linhas = [{"modulo": m, "estado": r.get("estado"), "erro": r.get("erro"), "ultimo_ok": r.get("ultimo_ok"),
+        return round((now - datetime.fromisoformat(t)).total_seconds() / 3600, 1) if t else None
+    lines = [{"modulo": m, "estado": r.get("estado"), "erro": r.get("erro"), "ultimo_ok": r.get("ultimo_ok"),
                "horas": horas(r.get("ultimo_ok"))} for m, r in sorted(mods.items()) if not m.startswith("teste:")]
     teste = next(({"modulo": m[6:], **r} for m, r in sorted(mods.items(), key=lambda x: x[1].get("fim") or "",
                                                            reverse=True) if m.startswith("teste:")), None)
-    return {"configurado": True, "ultimo": d.get("ultimo"), "modulos": linhas, "teste": teste,
-            "atrasado": any((x["horas"] or 999) > 36 for x in linhas), "erros": sum(x["estado"] == "erro" for x in linhas)}
+    return {"configurado": True, "ultimo": d.get("ultimo"), "modulos": lines, "teste": teste,
+            "atrasado": any((x["horas"] or 999) > 36 for x in lines), "erros": sum(x["estado"] == "erro" for x in lines)}
 
 
 @router.get("/dataset")
@@ -191,20 +191,20 @@ def dataset():
     from esteira import bench
     from esteira.dataset import index, app_training
     situ = index.status()
-    tarefas = [{"tarefa": t, "app": app_training.R.TAREFAS[t], **x} for t, x in situ.items() if t != "peca_html"]
+    tasks = [{"tarefa": t, "app": app_training.R.TAREFAS[t], **x} for t, x in situ.items() if t != "peca_html"]
     adaptadores = []
-    pasta = app_training._folder()
-    for m in sorted(pasta.glob("*.json")) if pasta.exists() else []:
+    folder = app_training._folder()
+    for m in sorted(folder.glob("*.json")) if folder.exists() else []:
         try:
             adaptadores.append(json.loads(m.read_text()))
         except ValueError:
             continue
-    notas = {}
-    for modelo, info in ((bench.last() or {}).get("modelos") or {}).items():
+    notes = {}
+    for model, info in ((bench.last() or {}).get("modelos") or {}).items():
         for t, x in (info.get("tarefas") or {}).items():
             if t.startswith("n1_"):
-                notas.setdefault(t[3:], {})[modelo] = {"nota": x.get("nota"), "json_ok": x.get("json_ok")}
-    return {"tarefas": tarefas, "adaptadores": adaptadores, "bancada": notas,
+                notes.setdefault(t[3:], {})[model] = {"nota": x.get("nota"), "json_ok": x.get("json_ok")}
+    return {"tarefas": tasks, "adaptadores": adaptadores, "bancada": notes,
             "promovidos": {app: app_training.promoted(app) for app in app_training.TASKS_APP}}
 
 

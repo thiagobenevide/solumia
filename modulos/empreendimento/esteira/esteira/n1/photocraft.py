@@ -152,14 +152,14 @@ class ErrorN1(ValueError):
 
 def _highlights(s, cor):
     """*destaque* → (texto sem marcas, runs com a cor)."""
-    out, runs, ini = "", [], None
+    out, runs, start = "", [], None
     for ch in s:
         if ch == "*":
-            if ini is None:
-                ini = len(out)
+            if start is None:
+                start = len(out)
             else:
-                runs.append({"start": ini, "end": len(out), "color": cor})
-                ini = None
+                runs.append({"start": start, "end": len(out), "color": cor})
+                start = None
             continue
         out += ch
     return out, runs
@@ -175,8 +175,8 @@ class Executor:
     """Aplica uma `Composicao` com `rodar(origem, passos, destino)` (o `photocraft._run`). `midias`: ref → caminho;
     `cores`: papel → hex; `tamanho_imagem(caminho)` → (w, h). `rastro` guarda as duas passagens."""
 
-    def __init__(self, rodar, midias: dict, cores: dict, tamanho_imagem):
-        self.rodar, self.midias, self.cores, self.tamanho_imagem = rodar, midias, cores, tamanho_imagem
+    def __init__(self, run, medias: dict, colors: dict, size_image):
+        self.rodar, self.midias, self.cores, self.tamanho_imagem = run, medias, colors, size_image
         self.rastro: list[list] = []
 
     def cor(self, c):
@@ -187,35 +187,35 @@ class Executor:
         w, h = doc.documento.largura, doc.documento.altura
         els = doc.elementos
         tit = next((e for e in els if isinstance(e, Title)), None)
-        selo = next((e for e in els if isinstance(e, Badge)), None)
-        passos, camadas, x_tit = [], {}, 56
+        badge = next((e for e in els if isinstance(e, Badge)), None)
+        steps, layers, x_tit = [], {}, 56
         for e in els:
             if isinstance(e, Image):
-                caminho = str(self.midias[e.midia]).replace("file://", "")
-                iw, ih = self.tamanho_imagem(caminho)
+                path = str(self.midias[e.midia]).replace("file://", "")
+                iw, ih = self.tamanho_imagem(path)
                 f = max(w / iw, h / ih) if e.ajuste == "cobrir" else min(w / iw, h / ih)
-                passos += [("file.placeEmbedded", {"path": caminho, "fit": False, "scale": round(f * 100, 3),
+                steps += [("file.placeEmbedded", {"path": path, "fit": False, "scale": round(f * 100, 3),
                                                    "center": [w / 2, h / 2]}),
                            ("layer.renameLayer", {"name": e.nome})]
             elif isinstance(e, Adjustment):
                 if e.ajuste == "brilho_contraste":
-                    passos += [("layer.newAdjustmentLayer.brightnessContrast",
+                    steps += [("layer.newAdjustmentLayer.brightnessContrast",
                                 {"brightness": e.brilho, "contrast": e.contraste}),
                                ("layer.renameLayer", {"name": "Ajuste: contraste"})]
                 elif e.ajuste == "saturacao":
-                    passos += [("layer.newAdjustmentLayer.hueSaturation", {"saturation": e.saturacao}),
+                    steps += [("layer.newAdjustmentLayer.hueSaturation", {"saturation": e.saturacao}),
                                ("layer.renameLayer", {"name": "Ajuste: saturação"})]
                 else:
-                    passos += [("layer.newAdjustmentLayer.colorLookup", {"lut": e.lut or "none"}),
+                    steps += [("layer.newAdjustmentLayer.colorLookup", {"lut": e.lut or "none"}),
                                ("layer.renameLayer", {"name": "Ajuste: look"})]
             elif isinstance(e, Vinheta):
                 if e.lado:  # escurece o lado do texto (degradê linear)
-                    passos += [("shape.create", {"kind": "rect", "rect": [0, 0, w, h], "name": "Vinheta lateral",
+                    steps += [("shape.create", {"kind": "rect", "rect": [0, 0, w, h], "name": "Vinheta lateral",
                                                  "stroke": None, "fill": {"gradient": {
                                                      "stops": [[0, "#000000e0"], [0.38, "#0000008c"], [0.62, "#00000000"]],
                                                      "angle": 180 if e.lado == "direita" else 0, "style": "linear"}}})]
                 if e.bordas:
-                    passos += [("shape.create", {"kind": "rect", "rect": [0, 0, w, h], "name": "Vinheta das bordas",
+                    steps += [("shape.create", {"kind": "rect", "rect": [0, 0, w, h], "name": "Vinheta das bordas",
                                                  "stroke": None, "fill": {"gradient": {
                                                      "stops": [[0.3, "#00000000"], [1, "#000000c7"]], "scale": 150,
                                                      "style": "radial"}}})]
@@ -226,7 +226,7 @@ class Executor:
 
                 def pt(x, y, x0=x0, sx=sx, esq=esq):
                     return [round(x0 + (220 if esq else 0) + x * sx, 1), round(150 + y * 1.1, 1)]
-                passos += [("shape.create", {"kind": "path", "name": "Seta", "fill": None,
+                steps += [("shape.create", {"kind": "path", "name": "Seta", "fill": None,
                                              "stroke": {"width": 16, "color": self.cor(e.cor), "cap": "round",
                                                         "join": "round"},
                                              "path": {"subpaths": [
@@ -235,114 +235,114 @@ class Executor:
                                                      {"anchor": pt(150, 150), "in": pt(130, 80), "out": pt(150, 150)}]},
                                                  {"closed": False, "knots": [pt(118, 140), pt(152, 160), pt(166, 118)]}]}})]
             elif isinstance(e, Title):
-                tam = round(e.tamanho * h)
-                larg = round(e.largura * w)
-                x_tit = w - 56 - larg if e.lado == "direita" else 56
-                texto, runs = _highlights(e.conteudo, self.cor(e.destaque))
-                if not texto:
+                size = round(e.tamanho * h)
+                width = round(e.largura * w)
+                x_tit = w - 56 - width if e.lado == "direita" else 56
+                text, runs = _highlights(e.conteudo, self.cor(e.destaque))
+                if not text:
                     continue
-                passos += [("type.create", {"box": [x_tit, 0, larg, h], "text": texto, "name": "Título",
-                                            "font": "InterVar", "fontStyle": "Black", "size": tam,
-                                            "color": self.cor(e.cor), "leading": round(tam * 0.92), "tracking": -35,
+                steps += [("type.create", {"box": [x_tit, 0, width, h], "text": text, "name": "Título",
+                                            "font": "InterVar", "fontStyle": "Black", "size": size,
+                                            "color": self.cor(e.cor), "leading": round(size * 0.92), "tracking": -35,
                                             "align": "right" if e.lado == "direita" else "left"})]
                 if runs:
-                    passos += [("type.edit", {"runs": runs})]
-                passos += [("layer.layerStyle.stroke", {"size": max(2, round(tam * 0.06)), "position": "outside",
+                    steps += [("type.edit", {"runs": runs})]
+                steps += [("layer.layerStyle.stroke", {"size": max(2, round(size * 0.06)), "position": "outside",
                                                         "color": "#000000"}),
                            ("layer.layerStyle.dropShadow", {"color": "#000000", "opacity": 55, "distance": 10, "size": 0,
                                                             "angle": 90, "useGlobalLight": False, "add": True}),
                            ("layer.layerStyle.outerGlow", {"color": "#000000", "opacity": 80, "blend": "multiply",
                                                            "size": 60, "add": True}),
                            ("type.info", {})]
-                camadas["titulo"] = len(passos) - 1
+                layers["titulo"] = len(steps) - 1
             elif isinstance(e, Badge):
-                x_selo = (w - 56 - round(tit.largura * w) if tit.lado == "direita" else 56) if tit else 56
-                passos += [("type.create", {"x": x_selo + 18, "y": 100, "text": e.conteudo, "name": "Selo (texto)",
+                x_badge = (w - 56 - round(tit.largura * w) if tit.lado == "direita" else 56) if tit else 56
+                steps += [("type.create", {"x": x_badge + 18, "y": 100, "text": e.conteudo, "name": "Selo (texto)",
                                             "font": "InterVar", "fontStyle": "Black", "size": 44, "color": "#000000",
                                             "tracking": -20}),
                            ("type.info", {})]
-                camadas["selo"] = len(passos) - 1
+                layers["selo"] = len(steps) - 1
             elif isinstance(e, Box):
-                k = sum(1 for c in camadas if c.startswith("caixa"))
+                k = sum(1 for c in layers if c.startswith("caixa"))
                 t, rs = _highlights(e.conteudo, self.cor(e.destaque or "destaque"))
                 if e.maiusculas:
                     t = t.upper()
-                tam = round(e.tamanho * h)
+                size = round(e.tamanho * h)
                 cx, cy, cw = w * e.pos[0], h * e.pos[1], w * e.largura
-                passos += [("type.create", {"box": [round(cx), round(cy), round(cw), h], "text": t or " ",
+                steps += [("type.create", {"box": [round(cx), round(cy), round(cw), h], "text": t or " ",
                                             "name": f"Caixa {k + 1}", "font": SOURCES[e.fonte],
-                                            "fontStyle": WEIGHTS.get(e.peso, "ExtraBold"), "size": tam,
-                                            "color": self.cor(e.cor), "leading": round(tam * 1.12),
+                                            "fontStyle": WEIGHTS.get(e.peso, "ExtraBold"), "size": size,
+                                            "color": self.cor(e.cor), "leading": round(size * 1.12),
                                             "align": {"centro": "center", "direita": "right"}.get(e.alinhar, "left")})]
                 if rs:
-                    passos += [("type.edit", {"runs": rs})]
+                    steps += [("type.edit", {"runs": rs})]
                 if e.fundo == "contorno":
-                    passos += [("layer.layerStyle.stroke", {"size": max(2, round(tam * 0.07)), "position": "outside",
+                    steps += [("layer.layerStyle.stroke", {"size": max(2, round(size * 0.07)), "position": "outside",
                                                             "color": "#000000"})]
                 elif e.fundo == "nenhum":
-                    passos += [("layer.layerStyle.dropShadow", {"color": "#000000", "opacity": 75, "distance": 3,
+                    steps += [("layer.layerStyle.dropShadow", {"color": "#000000", "opacity": 75, "distance": 3,
                                                                 "size": 18})]
-                passos += [("type.info", {})]
-                camadas[f"caixa{k}"] = (len(passos) - 1, e)
+                steps += [("type.info", {})]
+                layers[f"caixa{k}"] = (len(steps) - 1, e)
             else:
-                passos += self._tratamento(e, w, h)
+                steps += self._tratamento(e, w, h)
         if doc.variantes:
-            passos += [("layerComp.new", {"name": "A"})]
-        self.rastro.append(passos)
-        res = self.rodar({"width": w, "height": h, "name": Path(destino).stem}, passos, destino)
+            steps += [("layerComp.new", {"name": "A"})]
+        self.rastro.append(steps)
+        res = self.rodar({"width": w, "height": h, "name": Path(destino).stem}, steps, destino)
 
         # segunda passagem: centraliza o título, põe o selo acima dele e os fundos atrás das caixas
-        ajuste = []
-        if "titulo" in camadas:
-            info = res[camadas["titulo"]]
+        adjustment = []
+        if "titulo" in layers:
+            info = res[layers["titulo"]]
             bx, by, bw, bh = _bounds(info)
-            alto_selo = 80 if selo else 0
-            dy = round(h / 2 - (by + bh / 2) - h * 0.02 + alto_selo / 2)
-            ajuste += [("type.edit", {"layer": info["layer"], "move": [0, dy]})]
-            if "selo" in camadas:
-                si = res[camadas["selo"]]
+            alto_badge = 80 if badge else 0
+            dy = round(h / 2 - (by + bh / 2) - h * 0.02 + alto_badge / 2)
+            adjustment += [("type.edit", {"layer": info["layer"], "move": [0, dy]})]
+            if "selo" in layers:
+                si = res[layers["selo"]]
                 sx, sy, sw, sh = _bounds(si)
-                topo = by + dy - 18 - (sh + 22)
-                ajuste += [("type.edit", {"layer": si["layer"], "move": [0, round(topo + 10 - sy)]}),
-                           ("shape.create", {"kind": "rect", "rect": [x_tit, round(topo), round(sw + 36), round(sh + 22)],
-                                             "fill": self.cor(selo.fundo), "stroke": None, "name": "Selo (fundo)"}),
+                top = by + dy - 18 - (sh + 22)
+                adjustment += [("type.edit", {"layer": si["layer"], "move": [0, round(top + 10 - sy)]}),
+                           ("shape.create", {"kind": "rect", "rect": [x_tit, round(top), round(sw + 36), round(sh + 22)],
+                                             "fill": self.cor(badge.fundo), "stroke": None, "name": "Selo (fundo)"}),
                            ("layer.moveTo", {"target": si["layer"], "position": "below"}),
                            ("layer.select", {"layer": si["layer"], "mode": "add"}),
                            ("edit.transform", {"rotate": -3})]
-        for chave, v in camadas.items():
-            if not chave.startswith("caixa") or v[1].fundo not in ("solido", "vidro", "tarja"):
+        for key, v in layers.items():
+            if not key.startswith("caixa") or v[1].fundo not in ("solido", "vidro", "tarja"):
                 continue
             info, c = res[v[0]], v[1]
             bx, by, bw, bh = _bounds(info)
-            tam = round(c.tamanho * h)
-            m = round(tam * 0.3)
-            cor = "#080c189e" if c.fundo == "vidro" else self.cor(c.cor_fundo)  # vidro: 62% de opacidade
-            ajuste += [("shape.create", {"kind": "roundedRect" if c.fundo == "vidro" else "rect", "radii": 8,
-                                         "rect": [bx - m, by - m // 2, bw + 2 * m, bh + m], "fill": cor, "stroke": None,
+            size = round(c.tamanho * h)
+            m = round(size * 0.3)
+            color = "#080c189e" if c.fundo == "vidro" else self.cor(c.cor_fundo)  # vidro: 62% de opacidade
+            adjustment += [("shape.create", {"kind": "roundedRect" if c.fundo == "vidro" else "rect", "radii": 8,
+                                         "rect": [bx - m, by - m // 2, bw + 2 * m, bh + m], "fill": color, "stroke": None,
                                          "name": f"Fundo da {info.get('name', 'caixa')}"}),
                        ("layer.moveTo", {"target": info["layer"], "position": "below"})]
             if c.fundo == "tarja":
-                ajuste += [("shape.create", {"kind": "rect", "rect": [bx - m, by - m // 2, round(tam * 0.14), bh + m],
+                adjustment += [("shape.create", {"kind": "rect", "rect": [bx - m, by - m // 2, round(size * 0.14), bh + m],
                                              "fill": self.cor("destaque"), "stroke": None, "name": "Tarja"})]
-        ajuste += self._variantes(doc, res, camadas)
-        if ajuste:
-            self.rastro.append(ajuste)
-            self.rodar(destino, ajuste, destino)
+        adjustment += self._variantes(doc, res, layers)
+        if adjustment:
+            self.rastro.append(adjustment)
+            self.rodar(destino, adjustment, destino)
         return Path(destino)
 
-    def _variantes(self, doc, res, camadas):
+    def _variantes(self, doc, res, layers):
         """Cada variante troca textos e vira um layer comp (o A/B fica no mesmo `.pcraft`); volta ao A no fim."""
         if not doc.variantes:
             return []
-        passos = []
+        steps = []
         for v in doc.variantes:
-            if v.titulo is not None and "titulo" in camadas:
+            if v.titulo is not None and "titulo" in layers:
                 t, runs = _highlights(v.titulo, self.cor("destaque"))
-                passos += [("type.edit", {"layer": res[camadas["titulo"]]["layer"], "text": t, "runs": runs})]
-            if v.selo is not None and "selo" in camadas:
-                passos += [("type.edit", {"layer": res[camadas["selo"]]["layer"], "text": v.selo})]
-            passos += [("layerComp.new", {"name": v.nome})]
-        return passos + [("layerComp.apply", {"comp": "A"})]
+                steps += [("type.edit", {"layer": res[layers["titulo"]]["layer"], "text": t, "runs": runs})]
+            if v.selo is not None and "selo" in layers:
+                steps += [("type.edit", {"layer": res[layers["selo"]]["layer"], "text": v.selo})]
+            steps += [("layerComp.new", {"name": v.nome})]
+        return steps + [("layerComp.apply", {"comp": "A"})]
 
     def _tratamento(self, e, w, h):
         if isinstance(e, CropSubject):
@@ -369,25 +369,25 @@ class Executor:
 def of_data_thumb(d: dict, w: int, h: int) -> Composition:
     """Dados do modelo `thumb` (`thumbs.data_thumb`) → N1. Ponte do formato antigo do editor/etapa."""
     esq = d["layout"] == "rosto_esquerda"
-    lado = "direita" if esq else "esquerda"
+    side = "direita" if esq else "esquerda"
     els: list[dict] = [
         {"tipo": "imagem", "midia": "fundo"},
         {"tipo": "ajuste", "ajuste": "brilho_contraste", "brilho": -8, "contraste": 18},
         {"tipo": "ajuste", "ajuste": "saturacao", "saturacao": 15},
-        {"tipo": "vinheta", "lado": lado, "bordas": True},
+        {"tipo": "vinheta", "lado": side, "bordas": True},
     ]
     if d.get("seta"):
-        els.append({"tipo": "seta", "lado": lado})
-    titulo = " ".join(f"*{p['t']}*" if p["d"] else p["t"] for p in d.get("palavras") or [])
-    if titulo:
-        els.append({"tipo": "titulo", "conteudo": titulo, "tamanho": d["tamanho"] / h,
-                    "largura": (1160 if d["layout"] == "numero" else 640) / w, "lado": lado})
+        els.append({"tipo": "seta", "lado": side})
+    title = " ".join(f"*{p['t']}*" if p["d"] else p["t"] for p in d.get("palavras") or [])
+    if title:
+        els.append({"tipo": "titulo", "conteudo": title, "tamanho": d["tamanho"] / h,
+                    "largura": (1160 if d["layout"] == "numero" else 640) / w, "lado": side})
     if d.get("selo"):
         els.append({"tipo": "selo", "conteudo": d["selo"]})
     for c in d.get("caixas") or []:
-        fonte = {"Inter": "corpo", "Playfair": "serifa", "Mono": "mono"}.get(c.get("fonte", "Inter"), "corpo")
+        source = {"Inter": "corpo", "Playfair": "serifa", "Mono": "mono"}.get(c.get("fonte", "Inter"), "corpo")
         els.append({"tipo": "caixa", "conteudo": c.get("texto", ""), "pos": (c["x"] / 100, c["y"] / 100),
-                    "largura": c["w"] / 100, "tamanho": c.get("tam", 64) / h, "fonte": fonte,
+                    "largura": c["w"] / 100, "tamanho": c.get("tam", 64) / h, "fonte": source,
                     "peso": c.get("peso", 800), "cor": c.get("cor", "#f4f1ea"), "destaque": c.get("cor_d"),
                     "maiusculas": bool(c.get("maiusculas")),
                     "alinhar": {"center": "centro", "right": "direita"}.get(c.get("alinhar"), "esquerda"),
@@ -395,24 +395,24 @@ def of_data_thumb(d: dict, w: int, h: int) -> Composition:
     return Composition.model_validate({"documento": {"uso": "thumb", "largura": w, "altura": h}, "elementos": els})
 
 
-def treatment(receita: dict, decisao: PhotoDecision, formato: str, w: int, h: int) -> Composition:
+def treatment(recipe: dict, decision: PhotoDecision, fmt: str, w: int, h: int) -> Composition:
     """Receita fixa do canal (`[foto]` do perfil) + decisão N2 → composição de tratamento da foto."""
     els: list[dict] = [{"tipo": "imagem", "nome": "Foto", "midia": "foto", "ajuste": "conter"}]
-    if receita.get("reenquadrar", True):
-        els.append({"tipo": "reenquadrar", "formato": formato, "foco": decisao.foco})
-    if receita.get("lut"):
-        els.append({"tipo": "ajuste", "ajuste": "lut", "lut": receita["lut"]})
-    if receita.get("contraste") or receita.get("brilho"):
-        els.append({"tipo": "ajuste", "ajuste": "brilho_contraste", "brilho": receita.get("brilho", 0),
-                    "contraste": receita.get("contraste", 0)})
-    if receita.get("saturacao"):
-        els.append({"tipo": "ajuste", "ajuste": "saturacao", "saturacao": receita["saturacao"]})
-    if receita.get("nitidez"):
-        els.append({"tipo": "nitidez", "intensidade": receita["nitidez"]})
-    if receita.get("grao"):
-        els.append({"tipo": "grao", "intensidade": receita["grao"]})
-    if decisao.separar_planos and receita.get("desfoque_fundo"):
-        els.append({"tipo": "desfocar_fundo", "intensidade": receita["desfoque_fundo"]})
-    if decisao.recortar:
+    if recipe.get("reenquadrar", True):
+        els.append({"tipo": "reenquadrar", "formato": fmt, "foco": decision.foco})
+    if recipe.get("lut"):
+        els.append({"tipo": "ajuste", "ajuste": "lut", "lut": recipe["lut"]})
+    if recipe.get("contraste") or recipe.get("brilho"):
+        els.append({"tipo": "ajuste", "ajuste": "brilho_contraste", "brilho": recipe.get("brilho", 0),
+                    "contraste": recipe.get("contraste", 0)})
+    if recipe.get("saturacao"):
+        els.append({"tipo": "ajuste", "ajuste": "saturacao", "saturacao": recipe["saturacao"]})
+    if recipe.get("nitidez"):
+        els.append({"tipo": "nitidez", "intensidade": recipe["nitidez"]})
+    if recipe.get("grao"):
+        els.append({"tipo": "grao", "intensidade": recipe["grao"]})
+    if decision.separar_planos and recipe.get("desfoque_fundo"):
+        els.append({"tipo": "desfocar_fundo", "intensidade": recipe["desfoque_fundo"]})
+    if decision.recortar:
         els.append({"tipo": "recortar_sujeito"})
     return Composition.model_validate({"documento": {"uso": "foto", "largura": w, "altura": h}, "elementos": els})

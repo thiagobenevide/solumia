@@ -25,21 +25,21 @@ def test_kit_ficou_so_com_o_nucleo():
     assert re.search(r"const CENA = \{\s*midia\(\) \{\},\s*\};", js)
     for classe in (".linhab", ".anelp", ".grade10", ".eqt", ".rk ", ".letreiro", ".carimbo"):
         assert classe not in css, classe
-    for nucleo in (".tkfundo", ".kicker", ".centro", ".tag", "#cap .pal", ".peca"):
-        assert nucleo in css, nucleo
+    for core in (".tkfundo", ".kicker", ".centro", ".tag", "#cap .pal", ".peca"):
+        assert core in css, core
 
 
 @pytest.mark.parametrize("id_", [f.id for f in P.list_all()])
 def test_portao_estatico_de_todas_as_pecas(id_):
     from esteira.studio import ec
     f = P.load(id_)
-    erros, avisos = (ec.check_code if f.motor == "effectcraft" else P.check_code)(id_, f)
-    assert erros == [] and avisos == [], (erros, avisos)
+    errors, warnings = (ec.check_code if f.motor == "effectcraft" else P.check_code)(id_, f)
+    assert errors == [] and warnings == [], (errors, warnings)
 
 
 def test_mapa_antigo_vira_encaixes_da_peca():
-    cena = {"cena": "barras_comparacao", "titulo": "Juros", "valores": [{"rotulo": "A", "valor": "1%"}], "frase": "x"}
-    assert P.legacy(cena, P.load("barras_comparacao")) == {"titulo": "Juros", "valores": cena["valores"]}
+    scene = {"cena": "barras_comparacao", "titulo": "Juros", "valores": [{"rotulo": "A", "valor": "1%"}], "frase": "x"}
+    assert P.legacy(scene, P.load("barras_comparacao")) == {"titulo": "Juros", "valores": scene["valores"]}
     assert P.legacy({"cena": "cta", "titulo": "Comenta", "valores": []}, P.load("cta")) == {"titulo": "Comenta"}
     assert P.legacy({"encaixes": {"x": 1}}, P.load("cta")) == {"x": 1}
 
@@ -47,8 +47,8 @@ def test_mapa_antigo_vira_encaixes_da_peca():
 def test_pares_conferem_limites():
     f = P.load("barras_comparacao")
     assert P.validate_data(f, {"titulo": "Juros", "valores": [{"rotulo": "A", "valor": "1%"}, {"rotulo": "B", "valor": "2%"}]}) == []
-    erros = P.validate_data(f, {"titulo": "Juros", "valores": [{"rotulo": "A" * 60, "valor": "1%"}]})
-    assert any("pares" in e for e in erros) and any("rotulo" in e for e in erros)
+    errors = P.validate_data(f, {"titulo": "Juros", "valores": [{"rotulo": "A" * 60, "valor": "1%"}]})
+    assert any("pares" in e for e in errors) and any("rotulo" in e for e in errors)
 
 
 def test_peca_que_cai_em_outra_leva_a_outra_junto():

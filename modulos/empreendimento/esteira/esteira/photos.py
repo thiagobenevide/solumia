@@ -14,9 +14,9 @@ def recipe(cfg):
     return cfg.get("foto", {})
 
 
-def treat(projeto, cenas):
+def treat(project, cenas):
     """Trata as fotos de `cenas` (as de vídeo ficam como estão). → cenas com `midia` apontando para a tratada."""
-    r = recipe(projeto.cfg)
+    r = recipe(project.cfg)
     if not r.get("ativo"):
         return cenas
     from esteira import photocraft
@@ -24,42 +24,42 @@ def treat(projeto, cenas):
     if not photocraft.available():
         events.warning("fotos: PhotoCraft ausente; seguindo com as originais")
         return cenas
-    pasta = projeto.caminho("midia/tratadas")
-    pasta.mkdir(parents=True, exist_ok=True)
-    formato = projeto.cfg["video"].get("formato", "16:9")
-    saida = []
+    folder = project.caminho("midia/tratadas")
+    folder.mkdir(parents=True, exist_ok=True)
+    fmt = project.cfg["video"].get("formato", "16:9")
+    output = []
     for c in cenas:
         if c.get("midia_tipo") == "video" or not c.get("midia"):
-            saida.append(c)
+            output.append(c)
             continue
-        origem = projeto.pasta / c["midia"]
-        destino = pasta / f"{Path(c['midia']).stem}.pcraft"
-        png = destino.with_suffix(".png")
-        if not png.exists() or png.stat().st_mtime < origem.stat().st_mtime:
-            w, h = photocraft._size_image(origem)
-            decisao = N1.PhotoDecision()
-            doc = N1.treatment(r, decisao, formato, w, h)
-            ex = N1.Executor(photocraft._run, {"foto": origem}, {}, photocraft._size_image)
+        origin = project.pasta / c["midia"]
+        destination = folder / f"{Path(c['midia']).stem}.pcraft"
+        png = destination.with_suffix(".png")
+        if not png.exists() or png.stat().st_mtime < origin.stat().st_mtime:
+            w, h = photocraft._size_image(origin)
+            decision = N1.PhotoDecision()
+            doc = N1.treatment(r, decision, fmt, w, h)
+            ex = N1.Executor(photocraft._run, {"foto": origin}, {}, photocraft._size_image)
             try:
-                ex.executar(doc, destino)
-                photocraft.export(destino, png)
+                ex.executar(doc, destination)
+                photocraft.export(destination, png)
             except RuntimeError as e:
                 events.warning(f"fotos: cena {c['id']} sem tratamento ({e})")
-                saida.append(c)
+                output.append(c)
                 continue
-            _dataset(projeto, c, r, decisao, formato, ex.rastro)
-        saida.append({**c, "midia": str(png.relative_to(projeto.pasta))})
-    return saida
+            _dataset(project, c, r, decision, fmt, ex.rastro)
+        output.append({**c, "midia": str(png.relative_to(project.pasta))})
+    return output
 
 
-def _dataset(projeto, cena, r, decisao, formato, rastro):
+def _dataset(project, cena, r, decision, fmt, trace):
     try:
         from esteira.dataset import registry as R
         R.write("foto_tratar", grupo=f"foto:{cena.get('midia_id') or cena['midia']}", origem="receita",
-                 contexto={"canal": getattr(projeto, "canal", "") or "", "formato": formato,
+                 contexto={"canal": getattr(project, "canal", "") or "", "formato": fmt,
                            "descricao": cena.get("descricao") or cena.get("busca_en") or cena.get("busca"),
                            "uso": "camera" if cena.get("camera") else "broll", "receita": r},
-                 saida=decisao.model_dump(mode="json"), n0=[p for passada in rastro for p in passada],
-                 versoes={"n1": 1, "app": "photocraft"}, extra={"episodio": projeto.ep, "cena": cena["id"]})
+                 saida=decision.model_dump(mode="json"), n0=[p for skip in trace for p in skip],
+                 versoes={"n1": 1, "app": "photocraft"}, extra={"episodio": project.ep, "cena": cena["id"]})
     except Exception as e:  # noqa: BLE001
         events.warning(f"dataset: foto da cena {cena.get('id')} não gravada ({e})")

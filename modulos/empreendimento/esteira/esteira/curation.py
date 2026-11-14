@@ -29,61 +29,61 @@ class Curation(BaseModel):
     clima: str = Field(pattern="^(tensao|revelacao|dado|respiro|neutro)$")
 
 
-def _notes_by_time(projeto):
+def _notes_by_time(project):
     """[(instante, nota)] das notas de cena do roteiro, pelo tempo da fala que vem depois delas."""
-    arq = projeto.caminho("roteiro.json")
-    if not arq.exists() or not projeto.caminho("frases.json").exists():
+    file = project.caminho("roteiro.json")
+    if not file.exists() or not project.caminho("frases.json").exists():
         return []
     from esteira.graphics.plan import _speech_to_sentence
-    rot, frases = json.loads(arq.read_text()), projeto.carregar_json("frases.json")
-    mapa = _speech_to_sentence(projeto.roteiro().read_text())
-    saida = []
+    rot, sentences = json.loads(file.read_text()), project.carregar_json("frases.json")
+    mapping = _speech_to_sentence(project.roteiro().read_text())
+    output = []
     for n in rot.get("notas", []):
-        k = mapa[min(n["antes_da_fala"], len(mapa) - 1)] if mapa else 0
-        t = next((frases[i]["ini"] for i in range(k, len(frases)) if frases[i]["ini"] is not None), None)
+        k = mapping[min(n["antes_da_fala"], len(mapping) - 1)] if mapping else 0
+        t = next((sentences[i]["ini"] for i in range(k, len(sentences)) if sentences[i]["ini"] is not None), None)
         if t is not None:
-            saida.append((t, n["texto"]))
-    return saida
+            output.append((t, n["texto"]))
+    return output
 
 
-def _repeated(termo, anteriores):
+def _repeated(term, previous):
     """Mesmo termo, ou 3+ palavras em comum com um termo recente."""
-    p = set(termo.lower().split())
-    return any(termo.lower() == a.lower() or len(p & set(a.lower().split())) >= 3 for a in anteriores)
+    p = set(term.lower().split())
+    return any(term.lower() == a.lower() or len(p & set(a.lower().split())) >= 3 for a in previous)
 
 
-def curate(projeto, refazer=False):
-    plano = projeto.carregar_json("plano.json")
-    cenas = plano["cenas"]
-    canal = getattr(projeto, "canal", None) or ""
-    notas = _notes_by_time(projeto)
-    usados, feitas, falhas = [], 0, 0
-    for k, c in enumerate(cenas):
-        events.progress(k + 1, len(cenas), f"cena {c['id']}")
+def curate(project, refazer=False):
+    plan = project.carregar_json("plano.json")
+    scenes = plan["cenas"]
+    channel = getattr(project, "canal", None) or ""
+    notes = _notes_by_time(project)
+    used, done, failures = [], 0, 0
+    for k, c in enumerate(scenes):
+        events.progress(k + 1, len(scenes), f"cena {c['id']}")
         if c.get("busca_definida") or (c.get("curada") and not refazer):
-            usados.append(c.get("busca_en") or c["busca"])
+            used.append(c.get("busca_en") or c["busca"])
             continue
         # a direção de cena vale só para a cena em que ela começa (senão vira o mesmo fundo por 20 s)
-        nota = next((n for t, n in notas if c["inicio"] - 0.5 <= t < c["fim"]), "")
-        campos = dict(canal=canal or "documentário", estilo=STYLES.get(canal, "documentário dark"),
-                      dur=c["fim"] - c["inicio"], texto=c["texto"], antes=cenas[k - 1]["texto"][-160:] if k else "",
-                      depois=cenas[k + 1]["texto"][:160] if k + 1 < len(cenas) else "",
-                      nota=f'Direção de cena do roteiro: "{nota}"' if nota else "",
-                      usados=", ".join(usados[-6:]) or "nenhum")
-        r = local.ask(local.prompt("curadoria", **campos), Curation)
-        if r and _repeated(r.busca_en, usados[-6:]):
-            campos["usados"] += f'. PROIBIDO repetir "{r.busca_en}": escolha outro assunto visual da fala'
-            r = local.ask(local.prompt("curadoria", **campos), Curation, temperature=0.7) or r
+        note = next((n for t, n in notes if c["inicio"] - 0.5 <= t < c["fim"]), "")
+        fields = dict(canal=channel or "documentário", estilo=STYLES.get(channel, "documentário dark"),
+                      dur=c["fim"] - c["inicio"], texto=c["texto"], antes=scenes[k - 1]["texto"][-160:] if k else "",
+                      depois=scenes[k + 1]["texto"][:160] if k + 1 < len(scenes) else "",
+                      nota=f'Direção de cena do roteiro: "{note}"' if note else "",
+                      usados=", ".join(used[-6:]) or "nenhum")
+        r = local.ask(local.prompt("curadoria", **fields), Curation)
+        if r and _repeated(r.busca_en, used[-6:]):
+            fields["usados"] += f'. PROIBIDO repetir "{r.busca_en}": escolha outro assunto visual da fala'
+            r = local.ask(local.prompt("curadoria", **fields), Curation, temperature=0.7) or r
         if not r:
-            falhas += 1
+            failures += 1
             continue
         if (c.get("busca_en"), c.get("tipo")) != (r.busca_en, r.tipo):
             c.pop("rejeitados", None)  # termo novo: mídias rejeitadas antes podem servir
         c.update(busca_en=r.busca_en, busca=r.busca, tipo=r.tipo, clima=r.clima, curada=True, chave_en=r.chave_en,
                  alternativas=[a for a in r.alternativas if a and a.lower() != r.busca_en.lower()][:2])
-        usados.append(r.busca_en)
-        feitas += 1
-    projeto.salvar_json("plano.json", plano)
-    climas = {x: sum(c.get("clima") == x for c in cenas) for x in MOODS}
-    print(f"  {feitas} cenas curadas pelo LLM local" + (f"; {falhas} sem resposta (ficam com o termo automático)"
-                                                       if falhas else "") + f"; climas {climas}")
+        used.append(r.busca_en)
+        done += 1
+    project.salvar_json("plano.json", plan)
+    moods = {x: sum(c.get("clima") == x for c in scenes) for x in MOODS}
+    print(f"  {done} cenas curadas pelo LLM local" + (f"; {failures} sem resposta (ficam com o termo automático)"
+                                                       if failures else "") + f"; climas {moods}")

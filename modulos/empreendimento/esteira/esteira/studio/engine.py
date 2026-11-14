@@ -22,8 +22,8 @@ PACKAGES = {"hyperframes": "0.7.109", "playwright": "1.59.1"}
 
 
 def _chromium():
-    achados = sorted(Path("~/.cache/ms-playwright").expanduser().glob("chromium-*/chrome-linux*/chrome"))
-    return str(achados[-1]) if achados else None
+    found = sorted(Path("~/.cache/ms-playwright").expanduser().glob("chromium-*/chrome-linux*/chrome"))
+    return str(found[-1]) if found else None
 
 
 def environment():
@@ -68,27 +68,27 @@ def ready():
 
 
 def _install_node(progresso):
-    versoes = requests.get("https://nodejs.org/dist/index.json", timeout=30).json()
-    v = next(x["version"] for x in versoes if x["version"].startswith("v22.") and x.get("lts"))
-    nome = f"node-{v}-linux-x64.tar.xz"
+    versions = requests.get("https://nodejs.org/dist/index.json", timeout=30).json()
+    v = next(x["version"] for x in versions if x["version"].startswith("v22.") and x.get("lts"))
+    name = f"node-{v}-linux-x64.tar.xz"
     somas = requests.get(f"https://nodejs.org/dist/{v}/SHASUMS256.txt", timeout=30).text
-    esperado = next(linha.split()[0] for linha in somas.splitlines() if linha.endswith(nome))
+    expected = next(line.split()[0] for line in somas.splitlines() if line.endswith(name))
     progresso(f"baixando Node {v}")
-    tmp = NODE.parent / nome
+    tmp = NODE.parent / name
     NODE.parent.mkdir(parents=True, exist_ok=True)
     h = hashlib.sha256()
-    with requests.get(f"https://nodejs.org/dist/{v}/{nome}", stream=True, timeout=60) as r, open(tmp, "wb") as f:
+    with requests.get(f"https://nodejs.org/dist/{v}/{name}", stream=True, timeout=60) as r, open(tmp, "wb") as f:
         r.raise_for_status()
-        for bloco in r.iter_content(1 << 20):
-            f.write(bloco)
-            h.update(bloco)
-    if h.hexdigest() != esperado:
+        for block in r.iter_content(1 << 20):
+            f.write(block)
+            h.update(block)
+    if h.hexdigest() != expected:
         tmp.unlink()
         raise RuntimeError("Node baixado com checksum errado")
     with tarfile.open(tmp) as t:
         t.extractall(NODE.parent, filter="data")
     tmp.unlink()
-    (NODE.parent / nome.removesuffix(".tar.xz")).rename(NODE)
+    (NODE.parent / name.removesuffix(".tar.xz")).rename(NODE)
 
 
 def install(progresso=print):
@@ -115,8 +115,8 @@ def install(progresso=print):
 
 def npx(args, cwd, log=None):
     """Roda `npx <args>` na pasta da produção (que tem node_modules → MOTOR/node_modules)."""
-    alvo = Path(cwd) / "node_modules"
-    if not alvo.exists():
-        alvo.symlink_to(ENGINE / "node_modules")
+    target = Path(cwd) / "node_modules"
+    if not target.exists():
+        target.symlink_to(ENGINE / "node_modules")
     return subprocess.run(["npx", *args], cwd=cwd, env=environment(), stdout=log, stderr=subprocess.STDOUT if log else None,
                           text=True, check=True)

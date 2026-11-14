@@ -37,11 +37,11 @@ def _ep(ep):
 @router.get("/canais")
 def channels():
     from esteira.studio import style
-    todos = style.list_all()
+    everything = style.list_all()
     return [{"canal": c, "episodios": len([p for p in (PROJECTS / c).glob("*") if p.is_dir()]) if (PROJECTS / c).is_dir() else 0,
              "estilos": [{"id": e.id, "nome": e.nome, "modo": e.modo, "formatos": e.formatos, "versao": e.versao,
                           "travado": e.travado, "destaque": e.pele.destaque, "fundo": e.pele.fundo}
-                         for e in todos if e.canal == c]}
+                         for e in everything if e.canal == c]}
             for c in style.channels()]
 
 
@@ -93,10 +93,10 @@ def generate_sample(ref: str):
 @router.get("/amostras/{nome}/{formato}.mp4")
 def file_sample(nome: str, formato: str):
     from esteira.studio import sample
-    arq = sample.FOLDER / Path(nome).name / Path(formato).name / "previa.mp4"
-    if formato not in ("16x9", "9x16") or not arq.is_file():
+    file = sample.FOLDER / Path(nome).name / Path(formato).name / "previa.mp4"
+    if formato not in ("16x9", "9x16") or not file.is_file():
         raise HTTPException(404, "exemplo ainda não gerado")
-    return FileResponse(arq, media_type="video/mp4")
+    return FileResponse(file, media_type="video/mp4")
 
 
 class Template(BaseModel):
@@ -195,20 +195,20 @@ def test_style(id_: str, corpo: Test):
             e = style.Style.model_validate({**corpo.estilo, "id": e.id})
         except ValueError as x:
             raise HTTPException(400, str(x)[:300]) from None
-    frases = None
+    sentences = None
     if corpo.ep:
         from esteira.project import Project
         pr = Project(_ep(corpo.ep))
         if (pr.pasta / "frases.json").is_file():
             from esteira.studio import cut
-            frases = cut.sentences(pr)
+            sentences = cut.sentences(pr)
         elif pr.roteiro():
-            frases = triggers.sentences_of_text(pr.roteiro().read_text())
+            sentences = triggers.sentences_of_text(pr.roteiro().read_text())
     elif corpo.texto.strip():
-        frases = triggers.sentences_of_text(corpo.texto)
-    if not frases:
+        sentences = triggers.sentences_of_text(corpo.texto)
+    if not sentences:
         raise HTTPException(400, "cole um trecho ou escolha um episódio com roteiro")
-    return triggers.test(frases[:200], e)
+    return triggers.test(sentences[:200], e)
 
 
 @router.get("/fontes")
@@ -253,19 +253,19 @@ def lock_style(id_: str, corpo: Lock):
 async def send_reference(id_: str, arquivo: UploadFile = File(...)):
     from esteira.studio import identity
     _style(id_)
-    nome = re.sub(r"[^\w.\-]+", "_", Path(arquivo.filename or "ref.jpg").name)
-    if Path(nome).suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
+    name = re.sub(r"[^\w.\-]+", "_", Path(arquivo.filename or "ref.jpg").name)
+    if Path(name).suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp"):
         raise HTTPException(400, "envie imagens (jpg, png ou webp)")
-    (identity.folder_refs(id_) / nome).write_bytes(await arquivo.read())
-    return {"ok": True, "nome": nome}
+    (identity.folder_refs(id_) / name).write_bytes(await arquivo.read())
+    return {"ok": True, "nome": name}
 
 
 @router.delete("/estilos/{id_}/referencias/{nome}")
 def erase_reference(id_: str, nome: str):
     from esteira.studio import identity
-    alvo = identity.folder_refs(id_) / Path(nome).name
-    if alvo.is_file():
-        alvo.unlink()
+    target = identity.folder_refs(id_) / Path(nome).name
+    if target.is_file():
+        target.unlink()
     return {"ok": True}
 
 
@@ -305,17 +305,17 @@ def _preview_to_background(final):
 @router.get("/producoes")
 def productions(canal: str):
     from esteira import studio
-    pasta = PROJECTS / canal
-    if not pasta.is_dir():
+    folder = PROJECTS / canal
+    if not folder.is_dir():
         return []
-    saida = []
-    for p in sorted((x for x in pasta.iterdir() if x.is_dir() and (x / "frases.json").exists()), reverse=True):
+    output = []
+    for p in sorted((x for x in folder.iterdir() if x.is_dir() and (x / "frases.json").exists()), reverse=True):
         ep = ep_id(p)
-        titulo = ""
+        title = ""
         if (p / "roteiro.json").exists():
-            titulo = json.loads((p / "roteiro.json").read_text()).get("titulo", "")
-        saida.append({"ep": ep, "titulo": titulo, **studio.status(ep)})
-    return saida
+            title = json.loads((p / "roteiro.json").read_text()).get("titulo", "")
+        output.append({"ep": ep, "titulo": title, **studio.status(ep)})
+    return output
 
 
 @router.get("/producoes/{ep}")
@@ -326,8 +326,8 @@ def production(ep: str):
     for fmt, d in r["formatos"].items():
         if d["final"] and not d["previa"]:
             _preview_to_background(p / "estudio" / fmt / "final.mp4")
-    mapa = p / "estudio" / "mapa.json"
-    m = json.loads(mapa.read_text()) if mapa.exists() else {}
+    mapping = p / "estudio" / "mapa.json"
+    m = json.loads(mapping.read_text()) if mapping.exists() else {}
     r["cenas"], r["blocos"], r["direcao"] = m.get("cenas", []), m.get("blocos", []), m.get("direcao", "frases")
     return r
 
@@ -377,14 +377,14 @@ def show_cut(ep: str):
     """Corte pelo som: estado, emendas (com o texto em volta) e a conferência."""
     from esteira.studio import cut
     from esteira.project import Project
-    projeto = Project(_ep(ep))
-    c = cut.load(projeto) or {}
+    project = Project(_ep(ep))
+    c = cut.load(project) or {}
 
-    def url(arq):
-        return f"/arq/{ep}/{arq.relative_to(projeto.pasta)}?v={arq.stat().st_mtime_ns}" if arq.exists() else None
-    return {"estado": cut.state(projeto), "emendas": c.get("emendas", []), "revertidas": c.get("revertidas", []),
-            "conferencia": c.get("conferencia"), "editada": url(projeto.pasta / "narracao.wav"),
-            "cortada": url(cut.folder(projeto) / "narracao.wav")}
+    def url(file):
+        return f"/arq/{ep}/{file.relative_to(project.pasta)}?v={file.stat().st_mtime_ns}" if file.exists() else None
+    return {"estado": cut.state(project), "emendas": c.get("emendas", []), "revertidas": c.get("revertidas", []),
+            "conferencia": c.get("conferencia"), "editada": url(project.pasta / "narracao.wav"),
+            "cortada": url(cut.folder(project) / "narracao.wav")}
 
 
 @router.post("/producoes/{ep}/corte")
@@ -405,12 +405,12 @@ def revert_splice(ep: str, corpo: Reversal):
     from esteira import studio
     from esteira.studio import cut
     from esteira.project import Project
-    projeto = Project(_ep(ep))
+    project = Project(_ep(ep))
     try:
-        cut.revert(projeto, corpo.de, corpo.ate, corpo.reverter)
+        cut.revert(project, corpo.de, corpo.ate, corpo.reverter)
     except ValueError as e:
         raise HTTPException(409, str(e)) from None
-    if studio.approvals(projeto).get("corte", {}).get("aprovado"):
+    if studio.approvals(project).get("corte", {}).get("aprovado"):
         studio.approve(ep, "corte", False, "emenda revertida")
     return queue.add(ep, "studio-cut") or {"ok": True, "ja_na_fila": True}
 
@@ -422,13 +422,13 @@ def show_marking(ep: str, estilo: str = ""):
     from esteira.studio import marking, cut
     from esteira.studio import style as E
     from esteira.project import Project
-    projeto = Project(_ep(ep))
-    if not cut.state(projeto)["feito"]:
+    project = Project(_ep(ep))
+    if not cut.state(project)["feito"]:
         raise HTTPException(409, "faça o corte pelo som antes do apontamento")
-    est = E.load(estilo) if estilo else studio.style_default(projeto)
+    est = E.load(estilo) if estilo else studio.style_default(project)
     if not est:
         raise HTTPException(404, "nenhum estilo para o canal")
-    return {"estilo": est.id, **marking.script(projeto, est)}
+    return {"estilo": est.id, **marking.script(project, est)}
 
 
 class Mark(BaseModel):
@@ -447,9 +447,9 @@ def save_marking(ep: str, corpo: Marking):
     """Grava as marcas; com `confirmar` libera o diretor e, com `produzir`, já põe a produção na fila."""
     from esteira.studio import marking
     from esteira.project import Project
-    projeto = Project(_ep(ep))
+    project = Project(_ep(ep))
     try:
-        d = marking.save(projeto, [m.model_dump() for m in corpo.marcas], corpo.confirmar)
+        d = marking.save(project, [m.model_dump() for m in corpo.marcas], corpo.confirmar)
     except ValueError as e:
         raise HTTPException(400, str(e)) from None
     if corpo.confirmar and corpo.produzir:
@@ -469,28 +469,28 @@ def edit_scene(ep: str, cid: int, corpo: EditScene):
     from esteira.bench import SCENES, ANSWER_KEY
     from esteira.studio import piece
     from esteira.studio.director import TAKEOVER
-    ficha = piece.load(corpo.cena) if re.fullmatch(piece.ID, corpo.cena) and (piece.folder(corpo.cena) / "ficha.json").exists() else None
-    if corpo.cena not in SCENES and not ficha:
+    card = piece.load(corpo.cena) if re.fullmatch(piece.ID, corpo.cena) and (piece.folder(corpo.cena) / "ficha.json").exists() else None
+    if corpo.cena not in SCENES and not card:
         raise HTTPException(400, f"cena inválida: {corpo.cena}")
-    arq = _ep(ep) / "estudio" / "mapa.json"
-    if not arq.exists():
+    file = _ep(ep) / "estudio" / "mapa.json"
+    if not file.exists():
         raise HTTPException(404, "sem mapa: rode a etapa dirigir")
-    mapa = json.loads(arq.read_text())
-    c = next((c for c in mapa["cenas"] if c["id"] == cid), None)
+    mapping = json.loads(file.read_text())
+    c = next((c for c in mapping["cenas"] if c["id"] == cid), None)
     if not c:
         raise HTTPException(404, "cena inexistente")
-    if mapa.get("direcao") == "blocos" and c.get("candidatas") and corpo.cena != c["cena"]:
+    if mapping.get("direcao") == "blocos" and c.get("candidatas") and corpo.cena != c["cena"]:
         from esteira.studio import direction
         direction.answer_key(ep, c, corpo.cena, "troca")  # a troca da pessoa é a resposta certa da tarefa bloco_peca
     c.update(cena=corpo.cena, titulo=corpo.titulo, valores=corpo.valores, manual=True,
-             takeover=ficha.tela_cheia if ficha else corpo.cena in TAKEOVER)
-    if ficha:  # peça do acervo: título/valores viram os encaixes que ela tem; botões no padrão
-        c["encaixes"] = piece.legacy({"titulo": corpo.titulo, "valores": corpo.valores}, ficha)
-        c["botoes"] = piece.defaults(ficha)
-        if mapa.get("direcao") == "blocos":  # a correção da pessoa é a resposta certa do preenchimento
+             takeover=card.tela_cheia if card else corpo.cena in TAKEOVER)
+    if card:  # peça do acervo: título/valores viram os encaixes que ela tem; botões no padrão
+        c["encaixes"] = piece.legacy({"titulo": corpo.titulo, "valores": corpo.valores}, card)
+        c["botoes"] = piece.defaults(card)
+        if mapping.get("direcao") == "blocos":  # a correção da pessoa é a resposta certa do preenchimento
             from esteira.studio import direction
             direction.answer_key_fill(ep, c, "corrigido")
-    arq.write_text(json.dumps(mapa, ensure_ascii=False, indent=1))
+    file.write_text(json.dumps(mapping, ensure_ascii=False, indent=1))
     ANSWER_KEY.mkdir(parents=True, exist_ok=True)
     with open(ANSWER_KEY / "cena.jsonl", "a") as f:  # a escolha humana ensina a bancada (e o fine-tune depois)
         f.write(json.dumps({"id": f"aprov:{ep}:{c['frase_i']}", "frase": c["frase"], "antes": "", "aceitas": [corpo.cena]},
@@ -522,16 +522,16 @@ def _piece(id_):
 
 def _summary_piece(p):
     from esteira.studio import piece
-    arq = p / "prova" / "portao.json"
-    portao = json.loads(arq.read_text()) if arq.exists() else None
+    file = p / "prova" / "portao.json"
+    gate = json.loads(file.read_text()) if file.exists() else None
     try:
-        ficha = piece.Card.model_validate_json((p / "ficha.json").read_text()).model_dump()
+        card = piece.Card.model_validate_json((p / "ficha.json").read_text()).model_dump()
     except ValueError:
-        ficha = {"id": p.name, "estado": "rascunho", "invalida": True}
+        card = {"id": p.name, "estado": "rascunho", "invalida": True}
     # ?v= com a data do arquivo: peça refeita com o mesmo id não mostra o quadro antigo do cache do app
-    quadros = [f"/api/v1/estudio/pecas/{p.name}/prova/{q}?v={int(a.stat().st_mtime) if (a := p / 'prova' / q).exists() else 0}"
-               for q in (portao or {}).get("quadros", [])]
-    return {"id": p.name, "ficha": ficha, "portao": portao, "quadros": quadros}
+    frames = [f"/api/v1/estudio/pecas/{p.name}/prova/{q}?v={int(a.stat().st_mtime) if (a := p / 'prova' / q).exists() else 0}"
+               for q in (gate or {}).get("quadros", [])]
+    return {"id": p.name, "ficha": card, "portao": gate, "quadros": frames}
 
 
 @router.get("/pecas")
@@ -557,10 +557,10 @@ def gate_piece(id_: str):
 def proof_piece(id_: str, nome: str):
     if not re.fullmatch(r"[a-z]+_\d+x\d+\.jpg", nome):
         raise HTTPException(404, "quadro inexistente")
-    arq = _piece(id_) / "prova" / nome
-    if not arq.exists():
+    file = _piece(id_) / "prova" / nome
+    if not file.exists():
         raise HTTPException(404, "quadro inexistente")
-    return FileResponse(arq, media_type="image/jpeg")
+    return FileResponse(file, media_type="image/jpeg")
 
 
 # ── fábrica de peças (studio/factory.py): pedidos, revisão, lacunas ──
@@ -617,8 +617,8 @@ def factory_ideas(corpo: RequestIdeas):
 def factory_size():
     """Porte das peças HTML para EffectCraft pela LLM local: retoma o pedido de porte aberto ou cria um."""
     from esteira.studio import factory
-    aberto = next((p for p in factory.requests() if p.tipo == "porte" and p.estado != "concluido"), None)
-    p = factory.pause(aberto.id, False) if aberto else factory.request_hybrid("porte")
+    opened = next((p for p in factory.requests() if p.tipo == "porte" and p.estado != "concluido"), None)
+    p = factory.pause(opened.id, False) if opened else factory.request_hybrid("porte")
     factory.enqueue(p.id)
     return p.model_dump()
 
@@ -736,10 +736,10 @@ def proof_channels(corpo: ProofChannels):
 @router.get("/pecas/prova-canais")
 def proof_channels_result():
     from esteira.studio import piece
-    arq = piece.previews_dir("_canais").parent / "_prova_canais" / "resultado.json"
-    if not arq.exists():
+    file = piece.previews_dir("_canais").parent / "_prova_canais" / "resultado.json"
+    if not file.exists():
         return {"folhas": [], "problemas": [], "estilos": []}
-    r = json.loads(arq.read_text())
+    r = json.loads(file.read_text())
     r["folhas"] = [f"/api/v1/estudio/pecas/prova-canais/{n}" for n in r["folhas"]]
     return r
 
@@ -747,10 +747,10 @@ def proof_channels_result():
 @router.get("/pecas/prova-canais/{nome}")
 def proof_channels_sheet(nome: str):
     from esteira.studio import piece
-    arq = piece.previews_dir("_canais").parent / "_prova_canais" / nome
-    if not re.fullmatch(r"[a-z0-9-]+_\d+x\d+\.jpg", nome) or not arq.exists():
+    file = piece.previews_dir("_canais").parent / "_prova_canais" / nome
+    if not re.fullmatch(r"[a-z0-9-]+_\d+x\d+\.jpg", nome) or not file.exists():
         raise HTTPException(404, "folha inexistente")
-    return FileResponse(arq, media_type="image/jpeg")
+    return FileResponse(file, media_type="image/jpeg")
 
 
 @router.get("/fabrica/comparacao")
@@ -800,8 +800,8 @@ def save_factory_expansion(corpo: dict):
         a = factory.save_expansion(**corpo)
     except ValidationError as e:
         raise HTTPException(400, str(e)[:300]) from None
-    p, motivo = factory.expand()
-    return {**a.model_dump(), "agora": motivo, "pedido": p.id if p else None}
+    p, reason = factory.expand()
+    return {**a.model_dump(), "agora": reason, "pedido": p.id if p else None}
 
 
 # ── linha do tempo por bloco (direção nova): trocar peça e render só do bloco ──
@@ -816,24 +816,24 @@ def swap_piece(ep: str, cid: int, corpo: Swap):
     do gabarito (`bloco_peca`) e a cena fica `manual` (o replanejamento mantém)."""
     from esteira.studio import direction, piece
     _piece(corpo.peca)
-    arq = _ep(ep) / "estudio" / "mapa.json"
-    if not arq.exists():
+    file = _ep(ep) / "estudio" / "mapa.json"
+    if not file.exists():
         raise HTTPException(404, "sem mapa: rode a etapa dirigir")
-    mapa = json.loads(arq.read_text())
-    c = next((c for c in mapa["cenas"] if c["id"] == cid), None)
+    mapping = json.loads(file.read_text())
+    c = next((c for c in mapping["cenas"] if c["id"] == cid), None)
     if not c:
         raise HTTPException(404, "cena inexistente")
-    antes = dict(c)
+    before = dict(c)
     try:
         direction.redo_scene(c, piece.load(corpo.peca))
     except ValueError as e:
         raise HTTPException(409, str(e)) from None
-    if antes.get("candidatas") and antes["cena"] != corpo.peca:
-        direction.answer_key(ep, antes, corpo.peca, "troca")
-    proxima = next((x for x in mapa["cenas"] if x["t"] > c["t"]), None)
-    if proxima:
-        c["ate"] = round(min(c["ate"], proxima["t"] - 0.05), 3)
-    arq.write_text(json.dumps(mapa, ensure_ascii=False, indent=1))
+    if before.get("candidatas") and before["cena"] != corpo.peca:
+        direction.answer_key(ep, before, corpo.peca, "troca")
+    following = next((x for x in mapping["cenas"] if x["t"] > c["t"]), None)
+    if following:
+        c["ate"] = round(min(c["ate"], following["t"] - 0.05), 3)
+    file.write_text(json.dumps(mapping, ensure_ascii=False, indent=1))
     return c
 
 

@@ -121,43 +121,43 @@ def wer(a, b):
     return d[len(b)] / max(len(b), 1)
 
 
-def only_swaps(dito, certo):
+def only_swaps(spoken, right):
     """Erro de reconhecimento, não fala diferente do roteiro: só trocas de som parecido (ou número partido),
     sem palavra acrescentada nem omitida pelo narrador."""
-    a, b = normalize(dito).split(), normalize(certo).split()
+    a, b = normalize(spoken).split(), normalize(right).split()
     ops = [o for o in SequenceMatcher(None, a, b, autojunk=False).get_opcodes() if o[0] != "equal"]
     if not ops:
         return False
     for op, i1, i2, j1, j2 in ops:
         x, y = " ".join(a[i1:i2]), " ".join(b[j1:j2])
-        partido = x.replace(" ", "") == y.replace(" ", "")
-        if not partido and (op != "replace" or SequenceMatcher(None, x, y).ratio() < 0.6):
+        split = x.replace(" ", "") == y.replace(" ", "")
+        if not split and (op != "replace" or SequenceMatcher(None, x, y).ratio() < 0.6):
             return False
     return True
 
 
-def score_scene(caso, r):
-    frase = caso["frase"]
-    n = 0.5 * (r.cena in caso["aceitas"])
-    n += 0.25 * bool(r.ancora.strip() and normalize(r.ancora) in normalize(frase))
-    ditos = numbers(frase)
-    usados = set().union(*[numbers(v.valor) for v in r.valores], numbers(r.titulo))
-    inventados = usados - ditos
-    if r.cena in NUMERIC and ditos:
-        n += 0.25 * bool(usados & ditos and not inventados)
+def score_scene(instance, r):
+    sentence = instance["frase"]
+    n = 0.5 * (r.cena in instance["aceitas"])
+    n += 0.25 * bool(r.ancora.strip() and normalize(r.ancora) in normalize(sentence))
+    spoken = numbers(sentence)
+    used = set().union(*[numbers(v.valor) for v in r.valores], numbers(r.titulo))
+    invented = used - spoken
+    if r.cena in NUMERIC and spoken:
+        n += 0.25 * bool(used & spoken and not invented)
     else:
-        n += 0.25 * (not inventados)
+        n += 0.25 * (not invented)
     return n
 
 
-def score_caption(caso, r):
-    antes, depois = wer(caso["whisper"], caso["certo"]), wer(r.texto, caso["certo"])
-    return 1.0 if depois < antes else 0.5 if depois == antes else 0.0
+def score_caption(instance, r):
+    before, after = wer(instance["whisper"], instance["certo"]), wer(r.texto, instance["certo"])
+    return 1.0 if after < before else 0.5 if after == before else 0.0
 
 
-def score_vision(caso, r):
-    certo = caso["certo"]
-    return sum(getattr(r, k) == v for k, v in certo.items()) / len(certo)
+def score_vision(instance, r):
+    right = instance["certo"]
+    return sum(getattr(r, k) == v for k, v in right.items()) / len(right)
 
 
 # ── tarefas: caso → (prompt, esquema, imagens) e nota ──
@@ -166,9 +166,9 @@ def _catalog():
     return "\n".join(f"- {k}: {v}" for k, v in SCENES.items())
 
 
-def _prompt_n1(tarefa, caso):
+def _prompt_n1(tarefa, instance):
     from esteira.dataset import export, infer
-    return infer.prompt(tarefa, caso["contexto"], fora=export.gold(tarefa))
+    return infer.prompt(tarefa, instance["contexto"], fora=export.gold(tarefa))
 
 
 def _schema_n1(tarefa):
@@ -179,36 +179,36 @@ def _schema_n1(tarefa):
 def _f1(a, b):
     from collections import Counter
     ca, cb = Counter(a), Counter(b)
-    comum = sum((ca & cb).values())
-    return 0.0 if not comum else 2 * comum / (sum(ca.values()) + sum(cb.values()))
+    common = sum((ca & cb).values())
+    return 0.0 if not common else 2 * common / (sum(ca.values()) + sum(cb.values()))
 
 
-def score_n1(tarefa, caso, r):
+def score_n1(tarefa, instance, r):
     """Nota estrutural 0–1: metade "roda" (executor/compilador aceita), metade semelhança com a referência."""
-    ref, d = caso["referencia"], r.model_dump(mode="json")
+    ref, d = instance["referencia"], r.model_dump(mode="json")
     if tarefa == "foto_tratar":
-        perto = abs(d["foco"][0] - ref["foco"][0]) + abs(d["foco"][1] - ref["foco"][1]) < 0.3
-        return (perto + (d["recortar"] == ref["recortar"]) + (d["separar_planos"] == ref["separar_planos"])) / 3
+        near = abs(d["foco"][0] - ref["foco"][0]) + abs(d["foco"][1] - ref["foco"][1]) < 0.3
+        return (near + (d["recortar"] == ref["recortar"]) + (d["separar_planos"] == ref["separar_planos"])) / 3
     if tarefa in ("montar", "corrigir_montagem"):
         from esteira.n1 import filmcraft as FC
-        chave = lambda o: (o["op"], o.get("trilha") or o.get("tipo") or o.get("movimento"))  # noqa: E731
+        key = lambda o: (o["op"], o.get("trilha") or o.get("tipo") or o.get("movimento"))  # noqa: E731
         try:
             class _Falso:
                 def run(self, cmd, **p):
                     return {"items": [f"i{k}" for k in range(len(p.get("paths", [])))], "errors": [],
                             "clips": ["c"], "clip": "c", "item": "i"}
-            midias = {o["midia"]: {"caminho": "/x", "dur": 60} for o in d["ops"] if o.get("midia")}
-            midias.setdefault("legendas", {"caminho": "/x"})
-            FC.Executor(_Falso(), midias, {"fonte": "x", "fonte_estilo": "x",
+            medias = {o["midia"]: {"caminho": "/x", "dur": 60} for o in d["ops"] if o.get("midia")}
+            medias.setdefault("legendas", {"caminho": "/x"})
+            FC.Executor(_Falso(), medias, {"fonte": "x", "fonte_estilo": "x",
                                           "cores": {"texto": "#fff", "destaque": "#fff", "acento": "#fff"}}).executar(d)
             roda = 1.0
         except (FC.ErrorN1, KeyError, ValueError):
             roda = 0.0
-        return 0.5 * roda + 0.5 * _f1([chave(o) for o in d["ops"]], [chave(o) for o in ref["ops"]])
+        return 0.5 * roda + 0.5 * _f1([key(o) for o in d["ops"]], [key(o) for o in ref["ops"]])
     if tarefa == "thumb_compor":
-        tipos = lambda x: [e["tipo"] for e in x["elementos"]]  # noqa: E731
+        kinds = lambda x: [e["tipo"] for e in x["elementos"]]  # noqa: E731
         tit = lambda x: next((e["conteudo"] for e in x["elementos"] if e["tipo"] == "titulo"), "")  # noqa: E731
-        return 0.5 * _f1(tipos(d), tipos(ref)) + 0.5 * (len(tit(d).split()) <= 4 and bool(tit(d)))
+        return 0.5 * _f1(kinds(d), kinds(ref)) + 0.5 * (len(tit(d).split()) <= 4 and bool(tit(d)))
     if tarefa == "peca_animar":
         from esteira.n1 import effectcraft as EC
         try:
@@ -216,8 +216,8 @@ def score_n1(tarefa, caso, r):
             roda = 1.0
         except (EC.ErrorN1, KeyError, ValueError):
             roda = 0.0
-        tipos = lambda x: [e["tipo"] for e in x["elementos"]] + [a["anim"] for a in x.get("animacoes", [])]  # noqa: E731
-        return 0.5 * roda + 0.5 * _f1(tipos(d), tipos(ref))
+        kinds = lambda x: [e["tipo"] for e in x["elementos"]] + [a["anim"] for a in x.get("animacoes", [])]  # noqa: E731
+        return 0.5 * roda + 0.5 * _f1(kinds(d), kinds(ref))
     return 0.0
 
 
@@ -247,8 +247,8 @@ def cases(tarefa):
     if tarefa.startswith("n1_"):  # tarefas das Craft Apps: o ouro do dataset (docs/PLANO-DATASET.md)
         from esteira.dataset import export
         return export.cases_eval(tarefa[3:])
-    arq = ANSWER_KEY / f"{tarefa}.jsonl"
-    return [json.loads(linha) for linha in arq.read_text().splitlines() if linha.strip()] if arq.exists() else []
+    file = ANSWER_KEY / f"{tarefa}.jsonl"
+    return [json.loads(line) for line in file.read_text().splitlines() if line.strip()] if file.exists() else []
 
 
 # ── gerar corte e legenda a partir dos episódios ──
@@ -256,34 +256,34 @@ def cases(tarefa):
 def generate(canal="finlumia"):
     """Reescreve corte.jsonl e legenda.jsonl do canal; devolve {tarefa: n}."""
     rev = json.loads((ANSWER_KEY / "revisao.json").read_text()) if (ANSWER_KEY / "revisao.json").exists() else {}
-    fora, corrigidos = set(rev.get("excluir", [])), rev.get("manter", {})
-    fora_legenda = set(rev.get("excluir_legenda", []))
-    corte, legenda = [], []
+    outside, fixed = set(rev.get("excluir", [])), rev.get("manter", {})
+    outside_caption = set(rev.get("excluir_legenda", []))
+    cut, caption = [], []
     for ep in sorted(p for p in (PROJECTS / canal).iterdir() if (p / "cortes.json").exists()):
-        frases = json.loads((ep / "frases.json").read_text())
-        trechos = json.loads((ep / "cortes.json").read_text())["trechos"]
-        for k, t in enumerate(trechos):
+        sentences = json.loads((ep / "frases.json").read_text())
+        spans = json.loads((ep / "cortes.json").read_text())["trechos"]
+        for k, t in enumerate(spans):
             id_ = f"{ep.name}:{k}"
             # só o que o LLM decidiu (o resto é regra); o par A/B tem outra tarefa
-            if "→" not in t["motivo"] or "(par)" in t["motivo"] or id_ in fora:
+            if "→" not in t["motivo"] or "(par)" in t["motivo"] or id_ in outside:
                 continue
-            antes = next((x["texto"] for x in reversed(trechos[:k]) if x["manter"]), "")
-            depois = next((x["texto"] for x in trechos[k + 1:] if x["manter"]), "")
+            before = next((x["texto"] for x in reversed(spans[:k]) if x["manter"]), "")
+            after = next((x["texto"] for x in spans[k + 1:] if x["manter"]), "")
             ka, kb = t.get("entre", [0, 0])
-            regiao = [frases[i]["texto"] for i in range(max(ka, 0), min(kb + 1, len(frases)))][:4]
-            corte.append({"id": id_, "manter": corrigidos.get(id_, t["manter"]), "campos": {
-                "antes": " ".join(antes.split()[-25:]), "depois": " ".join(depois.split()[:25]),
-                "roteiro": json.dumps(regiao, ensure_ascii=False), "trecho": t["texto"], "tipo": t["tipo"],
+            region = [sentences[i]["texto"] for i in range(max(ka, 0), min(kb + 1, len(sentences)))][:4]
+            cut.append({"id": id_, "manter": fixed.get(id_, t["manter"]), "campos": {
+                "antes": " ".join(before.split()[-25:]), "depois": " ".join(after.split()[:25]),
+                "roteiro": json.dumps(region, ensure_ascii=False), "trecho": t["texto"], "tipo": t["tipo"],
                 "motivo": t["motivo"].split(" → ")[0]}})
-        palavras = json.loads((ep / "transcricao.json").read_text())["palavras"]
-        for i, f in enumerate(frases):
-            dito = " ".join(p["p"] for p in palavras if f["ini"] - 0.05 <= p["ini"] < f["fim"])
-            if dito and only_swaps(dito, f["texto"]) and f"{ep.name}:{i}" not in fora_legenda:
-                legenda.append({"id": f"{ep.name}:{i}", "whisper": dito, "certo": f["texto"], "canal": canal})
+        words = json.loads((ep / "transcricao.json").read_text())["palavras"]
+        for i, f in enumerate(sentences):
+            spoken = " ".join(p["p"] for p in words if f["ini"] - 0.05 <= p["ini"] < f["fim"])
+            if spoken and only_swaps(spoken, f["texto"]) and f"{ep.name}:{i}" not in outside_caption:
+                caption.append({"id": f"{ep.name}:{i}", "whisper": spoken, "certo": f["texto"], "canal": canal})
     ANSWER_KEY.mkdir(parents=True, exist_ok=True)
-    for nome, itens in (("corte", corte), ("legenda", legenda)):
-        (ANSWER_KEY / f"{nome}.jsonl").write_text("".join(json.dumps(c, ensure_ascii=False) + "\n" for c in itens))
-    return {"corte": len(corte), "legenda": len(legenda)}
+    for name, items in (("corte", cut), ("legenda", caption)):
+        (ANSWER_KEY / f"{name}.jsonl").write_text("".join(json.dumps(c, ensure_ascii=False) + "\n" for c in items))
+    return {"corte": len(cut), "legenda": len(caption)}
 
 
 # ── rodar ──
@@ -297,78 +297,78 @@ def _vram_gb():
         return None
 
 
-def _call(modelo, texto, esquema, imagens=None, max_tokens=1200):
+def _call(model, texto, schema, images=None, max_tokens=1200):
     msg = {"role": "user", "content": str(texto)}
-    if imagens:
+    if images:
         msg["content"] = [{"type": "text", "text": str(texto)}] + [
-            {"type": "image_url", "image_url": {"url": _data_url(i)}} for i in imagens]
-    corpo = {"model": modelo, "messages": [msg], "temperature": 0.1, "max_tokens": max_tokens,
-             "response_format": {"type": "json_object", "schema": esquema.model_json_schema()},
+            {"type": "image_url", "image_url": {"url": _data_url(i)}} for i in images]
+    body = {"model": model, "messages": [msg], "temperature": 0.1, "max_tokens": max_tokens,
+             "response_format": {"type": "json_object", "schema": schema.model_json_schema()},
              "chat_template_kwargs": {"enable_thinking": False, "reasoning_effort": "low"}}
     t = time.monotonic()
-    r = requests.post(f"{llama.HOST}/v1/chat/completions", json=corpo, timeout=(10, 600))
+    r = requests.post(f"{llama.HOST}/v1/chat/completions", json=body, timeout=(10, 600))
     r.raise_for_status()
     d = r.json()
     tim = d.get("timings") or {}
     return d["choices"][0]["message"].get("content") or "", time.monotonic() - t, tim.get("predicted_per_second")
 
 
-def run(modelos, tarefas=None, n=None, progresso=print):
+def run(models, tarefas=None, n=None, progresso=print):
     """Roda cada modelo em cada tarefa; devolve e grava o resultado."""
     if not llama.server():
         raise RuntimeError("llama-server fora do ar")
-    disponiveis = {m["id"]: m for m in llama.models() or []}
+    available = {m["id"]: m for m in llama.models() or []}
     tarefas = tarefas or list(TASKS)
     res = {"data": datetime.now().isoformat(timespec="seconds"), "modelos": {}}
-    for modelo in modelos:
-        if modelo not in disponiveis:
-            progresso(f"{modelo}: ausente no roteador, pulado")
+    for model in models:
+        if model not in available:
+            progresso(f"{model}: ausente no roteador, pulado")
             continue
         llama.unload()
         t0 = time.monotonic()
         try:
-            _call(modelo, "Responda ok.", Caption)  # carrega o modelo
+            _call(model, "Responda ok.", Caption)  # carrega o modelo
         except requests.RequestException as e:
-            progresso(f"{modelo}: não carregou ({str(e)[:120]})")
+            progresso(f"{model}: não carregou ({str(e)[:120]})")
             continue
         info = {"carga_s": round(time.monotonic() - t0, 1), "vram_gb": _vram_gb(), "tarefas": {}}
-        for tarefa in tarefas:
-            if tarefa == "visao" and not llama.vision(disponiveis[modelo]):
+        for task in tarefas:
+            if task == "visao" and not llama.vision(available[model]):
                 continue
-            lista = cases(tarefa)[:n]
-            if not lista:
+            items = cases(task)[:n]
+            if not items:
                 continue
-            montar, avaliar = TASKS[tarefa]
-            notas, validos, tempos, tps, respostas = [], 0, [], [], []
-            for i, caso in enumerate(lista, 1):
-                texto, esquema, imagens = montar(caso)
+            assemble, evaluate = TASKS[task]
+            notes, valid, times, tps, answers = [], 0, [], [], []
+            for i, instance in enumerate(items, 1):
+                text, schema, images = assemble(instance)
                 try:
-                    conteudo, dt, v = _call(modelo, texto, esquema, imagens,
-                                              6000 if tarefa.startswith("n1_") else 1200)
-                    r = esquema.model_validate_json(conteudo)
-                    validos += 1
-                    nota = avaliar(caso, r)
-                    respostas.append({"id": caso.get("id"), "nota": nota, "r": r.model_dump()})
+                    content, dt, v = _call(model, text, schema, images,
+                                              6000 if task.startswith("n1_") else 1200)
+                    r = schema.model_validate_json(content)
+                    valid += 1
+                    note = evaluate(instance, r)
+                    answers.append({"id": instance.get("id"), "nota": note, "r": r.model_dump()})
                 except (ValidationError, ValueError, requests.RequestException) as e:
-                    dt, v, nota = 0, None, 0.0
-                    respostas.append({"id": caso.get("id"), "nota": 0.0, "erro": str(e)[:200]})
-                notas.append(nota)
-                tempos.append(dt)
+                    dt, v, note = 0, None, 0.0
+                    answers.append({"id": instance.get("id"), "nota": 0.0, "erro": str(e)[:200]})
+                notes.append(note)
+                times.append(dt)
                 if v:
                     tps.append(v)
                 if i % 10 == 0:
-                    progresso(f"{modelo} · {tarefa} {i}/{len(lista)}")
-            item = {"n": len(lista), "nota": round(sum(notas) / len(notas), 3),
-                    "json_ok": round(validos / len(lista), 3),
-                    "ms": round(1000 * sum(tempos) / max(len([t for t in tempos if t]), 1)),
-                    "tok_s": round(sum(tps) / len(tps), 1) if tps else None, "respostas": respostas}
-            if tarefa == "corte":  # gabarito desequilibrado (mais "sai"): acurácia balanceada
-                por = {b: [r["nota"] for r, c in zip(respostas, lista, strict=True) if c["manter"] == b] for b in (True, False)}
+                    progresso(f"{model} · {task} {i}/{len(items)}")
+            item = {"n": len(items), "nota": round(sum(notes) / len(notes), 3),
+                    "json_ok": round(valid / len(items), 3),
+                    "ms": round(1000 * sum(times) / max(len([t for t in times if t]), 1)),
+                    "tok_s": round(sum(tps) / len(tps), 1) if tps else None, "respostas": answers}
+            if task == "corte":  # gabarito desequilibrado (mais "sai"): acurácia balanceada
+                por = {b: [r["nota"] for r, c in zip(answers, items, strict=True) if c["manter"] == b] for b in (True, False)}
                 item["balanceada"] = round(sum(sum(v) / len(v) for v in por.values() if v) / 2, 3)
-            info["tarefas"][tarefa] = item
-            progresso(f"{modelo} · {tarefa}: nota {item['nota']} · json {item['json_ok']} · {item['ms']} ms")
+            info["tarefas"][task] = item
+            progresso(f"{model} · {task}: nota {item['nota']} · json {item['json_ok']} · {item['ms']} ms")
         info["vram_gb"] = max(filter(None, [info["vram_gb"], _vram_gb()]), default=None)
-        res["modelos"][modelo] = info
+        res["modelos"][model] = info
         # grava a cada modelo: uma falha no meio não perde o que já foi medido
         RESULTS.mkdir(parents=True, exist_ok=True)
         (RESULTS / f"{res['data'].replace(':', '-')}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1))
@@ -382,8 +382,8 @@ def last():
     if not arqs:
         return None
     res = {"data": None, "modelos": {}}
-    for arq in arqs:
-        r = json.loads(arq.read_text())
+    for file in arqs:
+        r = json.loads(file.read_text())
         res["data"] = r["data"]
         res["modelos"].update(r["modelos"])
     for info in res["modelos"].values():
@@ -399,12 +399,12 @@ def table(res=None):
         if not arqs:
             return ["sem resultados"]
         res = json.loads(arqs[-1].read_text())
-    tarefas = list(TASKS)
-    linhas = [f"{'modelo':34} {'VRAM':>5} " + " ".join(f"{t:>14}" for t in tarefas)]
+    tasks = list(TASKS)
+    lines = [f"{'modelo':34} {'VRAM':>5} " + " ".join(f"{t:>14}" for t in tasks)]
     for m, info in res["modelos"].items():
         cel = []
-        for t in tarefas:
+        for t in tasks:
             x = info["tarefas"].get(t)
             cel.append(f"{x.get('balanceada', x['nota']):.2f}/{x['ms']:>5}ms".rjust(14) if x else "—".rjust(14))
-        linhas.append(f"{m[:34]:34} {info.get('vram_gb') or 0:>5} " + " ".join(cel))
-    return linhas
+        lines.append(f"{m[:34]:34} {info.get('vram_gb') or 0:>5} " + " ".join(cel))
+    return lines

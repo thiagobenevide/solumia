@@ -67,35 +67,35 @@ class Terms(BaseModel):
     termos: list[str] = Field(max_length=6)
 
 
-def _speech_to_sentence(roteiro_txt):
+def _speech_to_sentence(script_txt):
     """Índice da 1ª frase (ler_roteiro) de cada fala (linha) do roteiro.txt."""
-    saida, k = [], 0
-    for linha in roteiro_txt.splitlines():
-        linha = linha.strip()
-        if not linha or linha.startswith("#"):
+    output, k = [], 0
+    for line in script_txt.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
             continue
-        saida.append(k)
-        k += len([f for f in re.split(r"(?<=[.!?…])\s+", linha) if f.strip()])
-    return saida
+        output.append(k)
+        k += len([f for f in re.split(r"(?<=[.!?…])\s+", line) if f.strip()])
+    return output
 
 
 def _texts(itens):
     """O LLM às vezes devolve objetos (JSON ou dict do Python) dentro da lista de textos: vira "valor título"."""
     import ast
-    saida = []
+    output = []
     for it in itens:
         d = None
         if it.strip().startswith("{"):
-            for ler in (json.loads, ast.literal_eval):
+            for read in (json.loads, ast.literal_eval):
                 try:
-                    d = ler(it)
+                    d = read(it)
                     break
                 except (ValueError, SyntaxError):
                     pass
             # {titulo: 'x', valor: 'y'}: chaves sem aspas
             d = d or dict(re.findall(r"(\w+)\s*:\s*['\"]([^'\"]*)['\"]", it)) or None
-        saida.append(" ".join(str(v) for v in (d.get("valor"), d.get("titulo")) if v) if isinstance(d, dict) else it)
-    return [s for s in saida if s][:3]
+        output.append(" ".join(str(v) for v in (d.get("valor"), d.get("titulo")) if v) if isinstance(d, dict) else it)
+    return [s for s in output if s][:3]
 
 
 def _digits(s):
@@ -116,14 +116,14 @@ def _numbers_of_sentence(texto):
     """[(número como vai na tela, legenda)] de cada número com unidade da frase ("48%", "24 milhões",
     "R$ 400"); a legenda são as palavras que vêm depois dele (até 7, sem passar da pontuação nem do próximo
     número)."""
-    saida = []
+    output = []
     for m in RE_NUMBER.finditer(texto):
         if not (m.group(1) or m.group(2)):
             continue  # número sem unidade (ano, "3 motivos"): fica para o LLM
-        numero = re.sub(r"\s+", " ", m.group(0)).strip().replace("por cento", "%").replace(" %", "%")
-        resto = re.split(r"[.;:!?]|\s(?=R\$|\d)", texto[m.end():])[0].strip(" ,")  # até a pontuação ou o próximo número
-        saida.append((numero, " ".join(resto.split()[:7])))
-    return saida
+        number = re.sub(r"\s+", " ", m.group(0)).strip().replace("por cento", "%").replace(" %", "%")
+        rest = re.split(r"[.;:!?]|\s(?=R\$|\d)", texto[m.end():])[0].strip(" ,")  # até a pontuação ou o próximo número
+        output.append((number, " ".join(rest.split()[:7])))
+    return output
 
 
 ANTICIPATES = 0.35   # s: o gráfico de número começa isto antes da fala (o contador sai do zero quando o número é dito)
@@ -134,10 +134,10 @@ def _instant_number(numero, palavras, t0, t1, perto=None):
     próxima desse instante (senão a primeira). O Whisper parte números ("12", ",5", "%"): junta a palavra com o
     pedaço decimal seguinte antes de comparar."""
     m = re.search(r"\d[\d.,]*", numero)
-    alvo = _digits(m.group()) if m else ""
-    if not alvo:
+    target = _digits(m.group()) if m else ""
+    if not target:
         return None
-    achados = []
+    found = []
     for k, w in enumerate(palavras):
         if not t0 <= w["ini"] <= t1:
             continue
@@ -145,18 +145,18 @@ def _instant_number(numero, palavras, t0, t1, perto=None):
         if not d:
             continue
         j = k + 1
-        while j < len(palavras) and re.match(r"^[.,]\d", palavras[j]["p"].strip()) and len(d) < len(alvo):
+        while j < len(palavras) and re.match(r"^[.,]\d", palavras[j]["p"].strip()) and len(d) < len(target):
             d += _digits(palavras[j]["p"])
             j += 1
-        if d == alvo:
+        if d == target:
             if perto is None:
                 return w["ini"]
-            achados.append(w["ini"])
-    return min(achados, key=lambda x: abs(x - perto)) if achados else None
+            found.append(w["ini"])
+    return min(found, key=lambda x: abs(x - perto)) if found else None
 
 
-def _anchor(c, t, antecipa=ANTICIPATES):
-    c["inicio"], c["ancora"] = round(max(t - antecipa, 0), 2), round(t, 2)
+def _anchor(c, t, anticipates=ANTICIPATES):
+    c["inicio"], c["ancora"] = round(max(t - anticipates, 0), 2), round(t, 2)
 
 
 def _ref(f):
@@ -165,37 +165,37 @@ def _ref(f):
 
 def _source_quoted(texto, fontes):
     """Índice da fonte mencionada na frase (sobrenome do 1º autor, revista ou ano + palavra de estudo)."""
-    melhor, nota_max = None, 0
+    best, note_max = None, 0
     for k, f in enumerate(fontes):
-        sobrenome = re.split(r"[ ,]", f["autores"])[0]
-        nota = 3 * (len(sobrenome) > 2 and sobrenome.lower() in texto.lower())
-        nota += 3 * bool(f["revista"] and f["revista"].lower() in texto.lower())
-        nota += 1 * bool(f["ano"][:4] in texto and RE_STUDY.search(texto))
-        if nota > nota_max:
-            melhor, nota_max = k, nota
-    return melhor if nota_max >= 3 or (nota_max == 1 and sum(f["ano"][:4] in texto for f in fontes) == 1) else None
+        surname = re.split(r"[ ,]", f["autores"])[0]
+        note = 3 * (len(surname) > 2 and surname.lower() in texto.lower())
+        note += 3 * bool(f["revista"] and f["revista"].lower() in texto.lower())
+        note += 1 * bool(f["ano"][:4] in texto and RE_STUDY.search(texto))
+        if note > note_max:
+            best, note_max = k, note
+    return best if note_max >= 3 or (note_max == 1 and sum(f["ano"][:4] in texto for f in fontes) == 1) else None
 
 
-def candidates(projeto):
-    cfg = projeto.cfg
-    rot = json.loads(projeto.caminho("roteiro.json").read_text()) if projeto.caminho("roteiro.json").exists() else {}
-    frases = projeto.carregar_json("frases.json")
-    transc = projeto.carregar_json("transcricao.json")
-    duracao, palavras = transc["duracao"], transc["palavras"]
-    fontes = rot.get("fontes", [])
-    mapa = _speech_to_sentence(projeto.roteiro().read_text())
+def candidates(project):
+    cfg = project.cfg
+    rot = json.loads(project.caminho("roteiro.json").read_text()) if project.caminho("roteiro.json").exists() else {}
+    sentences = project.carregar_json("frases.json")
+    transc = project.carregar_json("transcricao.json")
+    duration, words = transc["duracao"], transc["palavras"]
+    sources = rot.get("fontes", [])
+    mapping = _speech_to_sentence(project.roteiro().read_text())
 
     def t_fala(k):
         """Instante da 1ª frase com tempo a partir da fala k."""
-        for i in range(mapa[min(k, len(mapa) - 1)] if mapa else 0, len(frases)):
-            if frases[i]["ini"] is not None:
-                return frases[i]["ini"]
+        for i in range(mapping[min(k, len(mapping) - 1)] if mapping else 0, len(sentences)):
+            if sentences[i]["ini"] is not None:
+                return sentences[i]["ini"]
         return None
 
     c = []
-    titulo = rot.get("titulo")
-    if titulo and cfg["edicao"].get("titulo_inicio", True):
-        c.append({"modelo": "capitulo", "inicio": 0.4, "dados": {"nome": titulo, "rotulo": ""}, "impacto": 5,
+    title = rot.get("titulo")
+    if title and cfg["edicao"].get("titulo_inicio", True):
+        c.append({"modelo": "capitulo", "inicio": 0.4, "dados": {"nome": title, "rotulo": ""}, "impacto": 5,
                   "origem": "titulo"})
     for cap in rot.get("capitulos", []):
         t = t_fala(cap["fala"])
@@ -204,15 +204,15 @@ def candidates(projeto):
                       "dados": {"nome": cap["nome"], "rotulo": f"PARTE {cap['parte']}"}})
 
     # Citações marcadas no roteiro ([!cite]): PDF, página e trecho já conferidos no vault, sem LLM
-    citadas = set()
+    quoted = set()
     for cit in rot.get("citacoes", []):
         t = t_fala(max(cit["fala"], 0))
         if not cit.get("ok") or t is None:
             continue
-        k = _source_quoted(f"{cit.get('autores', '')} {cit.get('revista', '')}", fontes)
+        k = _source_quoted(f"{cit.get('autores', '')} {cit.get('revista', '')}", sources)
         if k is not None:
-            citadas.add(k)
-        f = fontes[k] if k is not None else {}
+            quoted.add(k)
+        f = sources[k] if k is not None else {}
         c.append({"modelo": "citacao", "inicio": t, "origem": "citacao", "impacto": 7, "roteiro": True,
                   "dados": {"arquivo": cit["arquivo"], "trecho": cit["en"], "pagina": cit["pagina"] - 1,
                             "titulo": cit.get("titulo") or f.get("titulo", ""),
@@ -221,55 +221,55 @@ def candidates(projeto):
                             "ano": (cit.get("ano") or f.get("ano", ""))[:4], "citacao": cit.get("pt", "")}})
 
     # Citações automáticas: 1ª menção de cada fonte que o roteiro não marcou
-    for i, f in enumerate(frases):
+    for i, f in enumerate(sentences):
         if f["ini"] is None:
             continue
-        k = _source_quoted(f["texto"], fontes)
-        if k is None or k in citadas:
+        k = _source_quoted(f["texto"], sources)
+        if k is None or k in quoted:
             continue
-        citadas.add(k)
+        quoted.add(k)
         c.append({"modelo": "citacao", "inicio": f["ini"], "origem": "citacao", "impacto": 5, "fonte": k,
-                  "fala": " ".join(x["texto"] for x in frases[i:i + 3])})
+                  "fala": " ".join(x["texto"] for x in sentences[i:i + 3])})
 
     # Números
-    for i, f in enumerate(frases):
+    for i, f in enumerate(sentences):
         if f["ini"] is None or not RE_NUM.search(f["texto"]):
             continue
-        ctx = " ".join(x["texto"] for x in frases[max(i - 1, 0):i + 2])
+        ctx = " ".join(x["texto"] for x in sentences[max(i - 1, 0):i + 2])
         r = local.ask(local.prompt("grafico_numero", fala=f["texto"], contexto=ctx,
-                                         fontes="; ".join(f"{k}: {_ref(x)}" for k, x in enumerate(fontes)) or "nenhuma"),
+                                         fontes="; ".join(f"{k}: {_ref(x)}" for k, x in enumerate(sources)) or "nenhuma"),
                             Number)
         if r and r.usar and r.numero and _number_in_speech(r.numero, f["texto"]):
-            fonte = _ref(fontes[r.fonte]) if 0 <= r.fonte < len(fontes) else ""
+            source = _ref(sources[r.fonte]) if 0 <= r.fonte < len(sources) else ""
             c.append({"modelo": "numero", "inicio": f["ini"], "origem": "numero", "impacto": r.impacto,
-                      "dados": {"texto": r.numero, "legenda": r.legenda, "fonte": fonte, "rotulo": r.rotulo}})
+                      "dados": {"texto": r.numero, "legenda": r.legenda, "fonte": source, "rotulo": r.rotulo}})
             # entra quando o número é DITO, não no começo da frase
-            t = _instant_number(r.numero, palavras, f["ini"] - 2, (f.get("fim") or f["ini"] + 20) + 3)
+            t = _instant_number(r.numero, words, f["ini"] - 2, (f.get("fim") or f["ini"] + 20) + 3)
             if t is not None:
                 _anchor(c[-1], t)
             else:
                 events.debug("gráfico de número sem a fala do número", numero=r.numero, frase=f["texto"][:80])
         # todo número dito aparece: os que o LLM não escolheu (ou o 2º número da frase) viram gráfico simples
-        feitos = {_digits(c[-1]["dados"]["texto"])} if r and r.usar and c and c[-1]["origem"] == "numero" else set()
-        for numero, legenda in _numbers_of_sentence(f["texto"]):
-            if _digits(numero) in feitos:
+        done = {_digits(c[-1]["dados"]["texto"])} if r and r.usar and c and c[-1]["origem"] == "numero" else set()
+        for number, caption in _numbers_of_sentence(f["texto"]):
+            if _digits(number) in done:
                 continue
-            feitos.add(_digits(numero))
-            t = _instant_number(numero, palavras, f["ini"] - 2, (f.get("fim") or f["ini"] + 20) + 3)
+            done.add(_digits(number))
+            t = _instant_number(number, words, f["ini"] - 2, (f.get("fim") or f["ini"] + 20) + 3)
             if t is None:
                 continue
             c.append({"modelo": "numero", "inicio": f["ini"], "origem": "numero", "impacto": 3,
-                      "dados": {"texto": numero, "legenda": legenda, "fonte": "", "rotulo": ""}})
+                      "dados": {"texto": number, "legenda": caption, "fonte": "", "rotulo": ""}})
             _anchor(c[-1], t)
 
     # Notas de cena do roteiro
-    for nota in rot.get("notas", []):
-        t = t_fala(nota["antes_da_fala"])
+    for note in rot.get("notas", []):
+        t = t_fala(note["antes_da_fala"])
         if t is None:
             continue
-        k0 = mapa[min(nota["antes_da_fala"], len(mapa) - 1)] if mapa else 0
-        falas = " ".join(x["texto"] for x in frases[k0:k0 + 3])
-        r = local.ask(local.prompt("grafico_nota", nota=nota["texto"], falas=falas), Note)
+        k0 = mapping[min(note["antes_da_fala"], len(mapping) - 1)] if mapping else 0
+        speeches = " ".join(x["texto"] for x in sentences[k0:k0 + 3])
+        r = local.ask(local.prompt("grafico_nota", nota=note["texto"], falas=speeches), Note)
         if not r or r.tipo not in ("lista", "numero", "comparacao", "frase", "fonte"):
             continue
         d = {"lista": lambda: {"itens": [i.model_dump() for i in r.itens], "titulo": r.titulo, "rotulo": r.rotulo},
@@ -280,71 +280,71 @@ def candidates(projeto):
              "fonte": lambda: {"linha1": r.linha1, "linha2": r.linha2}}[r.tipo]()
         if r.tipo == "lista" and len(d["itens"]) < 2 or r.tipo == "numero" and not re.search(r"\d", r.numero):
             continue
-        if r.tipo == "fonte" and any(re.split(r"[ ,]", fontes[k]["autores"])[0].lower() in r.linha1.lower()
-                                     for k in citadas):
+        if r.tipo == "fonte" and any(re.split(r"[ ,]", sources[k]["autores"])[0].lower() in r.linha1.lower()
+                                     for k in quoted):
             continue  # a fonte já tem citação própria
         c.append({"modelo": r.tipo, "inicio": t, "origem": "nota", "impacto": r.impacto, "dados": d,
-                  "nota": nota["texto"][:120]})
+                  "nota": note["texto"][:120]})
         if r.tipo == "numero":
-            tn = _instant_number(r.numero, palavras, t - 20, t + 25, perto=t)  # a nota pode vir depois da fala
+            tn = _instant_number(r.numero, words, t - 20, t + 25, perto=t)  # a nota pode vir depois da fala
             if tn is not None:
                 _anchor(c[-1], tn)
         elif r.tipo == "lista":
-            _sync_list(c[-1], palavras, t)
+            _sync_list(c[-1], words, t)
 
     # *Destaques* do roteiro → frase cinética
-    for f in frases:
+    for f in sentences:
         for d in f.get("destaques", []):
             if f["ini"] is not None and len(d.split()) >= 2:
                 c.append({"modelo": "frase", "inicio": f["ini"], "origem": "destaque", "impacto": 2,
                           "dados": {"texto": f"*{d}*"}})
-    return c, fontes, duracao
+    return c, sources, duration
 
 
 def _sync_list(c, palavras, t):
     """Lista de dados "em fila": cada cartão entra quando o valor dele é falado (`tempos`, s desde o início da
     peça). Itens sem valor achado na fala ficam entre os vizinhos."""
-    falas, desde = [], t - 5
+    speeches, since = [], t - 5
     for it in c["dados"]["itens"]:
-        ti = _instant_number(it.get("valor", ""), palavras, desde, t + 60) if it.get("valor") else None
-        falas.append(ti)
+        ti = _instant_number(it.get("valor", ""), palavras, since, t + 60) if it.get("valor") else None
+        speeches.append(ti)
         if ti is not None:
-            desde = ti
-    if not any(x is not None for x in falas):
+            since = ti
+    if not any(x is not None for x in speeches):
         return
-    conhecidos = [k for k, x in enumerate(falas) if x is not None]
-    for k in range(len(falas)):
-        if falas[k] is None:
-            ant = max((j for j in conhecidos if j < k), default=None)
-            prox = min((j for j in conhecidos if j > k), default=None)
-            falas[k] = (falas[ant] + 1.5 if ant is not None else falas[prox] - 1.5)
-    _anchor(c, falas[0], 0.6)
-    c["dados"]["tempos"] = [round(max(x - c["inicio"] - 0.15, 0.3), 2) for x in falas]
+    known = [k for k, x in enumerate(speeches) if x is not None]
+    for k in range(len(speeches)):
+        if speeches[k] is None:
+            ant = max((j for j in known if j < k), default=None)
+            prox = min((j for j in known if j > k), default=None)
+            speeches[k] = (speeches[ant] + 1.5 if ant is not None else speeches[prox] - 1.5)
+    _anchor(c, speeches[0], 0.6)
+    c["dados"]["tempos"] = [round(max(x - c["inicio"] - 0.15, 0.3), 2) for x in speeches]
     c["dur_min"] = round(c["dados"]["tempos"][-1] + 3.2, 2)
 
 
-def _prepare_quote(cand, fontes, projeto):
+def _prepare_quote(cand, fontes, project):
     """Acha PDF + trecho; sem isso, vira tarja de fonte."""
     f = fontes[cand["fonte"]]
-    tarja = {"modelo": "fonte", "dados": {"linha1": f"{f['autores']} ({f['ano']})",
+    strip = {"modelo": "fonte", "dados": {"linha1": f"{f['autores']} ({f['ano']})",
                                           "linha2": f"{f['revista']} {f.get('detalhes', '')}".strip(),
                                           "rotulo": "Estudo"}}
-    pdf = articles.find_pdf(f, projeto.cfg["fontes"].get("artigos"))
+    pdf = articles.find_pdf(f, project.cfg["fontes"].get("artigos"))
     if not pdf:
-        return tarja
+        return strip
     cands = articles.candidates_span(pdf, cand["fala"])
     if len(cands) < 2:
         r = local.ask(local.prompt("termos_en", fala=cand["fala"]), Terms)
         if r:
             cands = articles.candidates_span(pdf, cand["fala"], r.termos)
     if not cands:
-        return tarja
-    lista = "\n".join(f"{k}. {t[2][:300]}" for k, t in enumerate(cands))
-    r = local.ask(local.prompt("grafico_citacao", fala=cand["fala"], estudo=_ref(f), trechos=lista), Span)
+        return strip
+    items = "\n".join(f"{k}. {t[2][:300]}" for k, t in enumerate(cands))
+    r = local.ask(local.prompt("grafico_citacao", fala=cand["fala"], estudo=_ref(f), trechos=items), Span)
     if not r or not 0 <= r.indice < len(cands):
-        return tarja
-    _, pagina, trecho = cands[r.indice]
-    return {"modelo": "citacao", "dados": {"arquivo": str(pdf), "trecho": trecho, "pagina": pagina,
+        return strip
+    _, page, span = cands[r.indice]
+    return {"modelo": "citacao", "dados": {"arquivo": str(pdf), "trecho": span, "pagina": page,
                                            "titulo": f["titulo"], "autores": f["autores"],
                                            "revista": f"{f['revista']} · {f.get('detalhes', '')}".strip(" ·"),
                                            "ano": f["ano"][:4], "citacao": r.traducao}}
@@ -357,8 +357,8 @@ def _duration(c):
     if c["modelo"] == "citacao":
         # tempo de ler o trecho original (EN) e a tradução (PT) com calma, depois da câmera chegar no trecho
         d = c.get("dados") or {}
-        palavras = len((d.get("trecho") or "").split()) + len((d.get("citacao") or "").split())
-        return round(min(max(6.5 + palavras / READING, 13.0), 26.0), 1) if palavras else 15.0
+        words = len((d.get("trecho") or "").split()) + len((d.get("citacao") or "").split())
+        return round(min(max(6.5 + words / READING, 13.0), 26.0), 1) if words else 15.0
     if c["modelo"] == "lista":
         return max(2.4 + 1.1 * len(c["dados"]["itens"]), c.get("dur_min", 0))
     return DURATION[c["modelo"]]
@@ -368,68 +368,68 @@ POSTPONE = {"citacao": 12.0, "nota": 5.0, "numero": 3.0}  # s que um gráfico po
 QUEUE, DURATION_MIN = 0.3, 2.2  # números seguidos: folga entre eles e o mínimo que o anterior fica na tela
 
 
-def schedule(cands, duracao, intervalo=1.5, cobertura_max=0.4, fixos=()):
+def schedule(cands, duration, interval=1.5, coverage_max=0.4, fixos=()):
     """Escolhe por pontos (tipo + impacto), sem sobrepor (com folga) e até `cobertura_max` do vídeo.
     Em colisão, o gráfico mais fraco é adiado até ADIAR s (continua perto da fala); depois disso, sai.
     `fixos`: gráficos editados à mão no painel; ficam onde estão e os automáticos desviam deles."""
     for c in cands:
         c["dur"] = _duration(c)
         c["pontos"] = WEIGHT.get(c["origem"], WEIGHT.get(c["modelo"], 1)) + c.get("impacto", 3)
-    escolhidos, usado = list(fixos), sum(c["dur"] for c in fixos)
-    folga = lambda a, b: QUEUE if a.get("ancora") and b.get("ancora") else intervalo
+    chosen, used = list(fixos), sum(c["dur"] for c in fixos)
+    slack = lambda a, b: QUEUE if a.get("ancora") and b.get("ancora") else interval
     for c in sorted(cands, key=lambda c: -c["pontos"]):
-        ini, fim = c["inicio"], min(c["inicio"] + c["dur"], duracao - 0.2)
+        start, end = c["inicio"], min(c["inicio"] + c["dur"], duration - 0.2)
         # capítulo e número dito sempre entram (o número tem de aparecer quando é falado)
-        if fim - ini < 2.0 or usado + (fim - ini) > cobertura_max * duracao and c["origem"] != "capitulo" \
+        if end - start < 2.0 or used + (end - start) > coverage_max * duration and c["origem"] != "capitulo" \
                 and not (c["modelo"] == "numero" and c.get("ancora")):
             continue
         # ancorado na fala (número dito): quase não pode atrasar; quem cede é a duração dos vizinhos
-        limite = ini + (0.6 if c.get("ancora") else POSTPONE.get(c["origem"], 0))
+        limit = start + (0.6 if c.get("ancora") else POSTPONE.get(c["origem"], 0))
         while True:
-            choque = [e for e in escolhidos if ini < e["inicio"] + e["dur"] + folga(c, e) and e["inicio"] < fim + folga(c, e)]
-            if c.get("ancora") and choque:
-                for e in choque:  # dados em fila: o anterior sai mais cedo para o próximo entrar na hora certa
+            clash = [e for e in chosen if start < e["inicio"] + e["dur"] + slack(c, e) and e["inicio"] < end + slack(c, e)]
+            if c.get("ancora") and clash:
+                for e in clash:  # dados em fila: o anterior sai mais cedo para o próximo entrar na hora certa
                     if not e.get("ancora") or e.get("manual"):
                         continue
-                    if e["inicio"] < ini and ini - QUEUE - e["inicio"] >= DURATION_MIN:
-                        usado -= e["dur"] - (ini - QUEUE - e["inicio"])
-                        e["dur"] = round(ini - QUEUE - e["inicio"], 2)
-                    elif e["inicio"] > ini and e["inicio"] - QUEUE - ini >= DURATION_MIN:
-                        fim = min(fim, e["inicio"] - QUEUE)
-                choque = [e for e in escolhidos if ini < e["inicio"] + e["dur"] + folga(c, e) and e["inicio"] < fim + folga(c, e)]
-            if not choque:
+                    if e["inicio"] < start and start - QUEUE - e["inicio"] >= DURATION_MIN:
+                        used -= e["dur"] - (start - QUEUE - e["inicio"])
+                        e["dur"] = round(start - QUEUE - e["inicio"], 2)
+                    elif e["inicio"] > start and e["inicio"] - QUEUE - start >= DURATION_MIN:
+                        end = min(end, e["inicio"] - QUEUE)
+                clash = [e for e in chosen if start < e["inicio"] + e["dur"] + slack(c, e) and e["inicio"] < end + slack(c, e)]
+            if not clash:
                 break
-            ini = max(e["inicio"] + e["dur"] + intervalo for e in choque)
-            fim = min(ini + c["dur"], duracao - 0.2)
-            if ini > limite:
+            start = max(e["inicio"] + e["dur"] + interval for e in clash)
+            end = min(start + c["dur"], duration - 0.2)
+            if start > limit:
                 break
-        if choque:
+        if clash:
             continue
-        c["inicio"] = round(ini, 2)
-        c["dur"] = round(fim - ini, 2)
-        escolhidos.append(c)
-        usado += fim - ini
-    return sorted(escolhidos, key=lambda c: c["inicio"])
+        c["inicio"] = round(start, 2)
+        c["dur"] = round(end - start, 2)
+        chosen.append(c)
+        used += end - start
+    return sorted(chosen, key=lambda c: c["inicio"])
 
 
-def plan(projeto):
-    cands, fontes, duracao = candidates(projeto)
+def plan(project):
+    cands, sources, duration = candidates(project)
     events.debug("gráficos: candidatos", n=len(cands))
-    antigos = projeto.carregar_json("graficos.json") if projeto.caminho("graficos.json").exists() else []
-    fixos = [c for c in antigos if c.get("manual")]
-    plano = schedule(cands, duracao, fixos=fixos, **projeto.cfg.get("graficos", {}).get("agenda", {}))
-    if fixos:
-        print(f"  {len(fixos)} gráficos editados à mão mantidos")
-    for n, c in enumerate(plano, 1):
-        events.progress(n, len(plano), f"{c['modelo']} {c['inicio']:.0f}s")
+    old = project.carregar_json("graficos.json") if project.caminho("graficos.json").exists() else []
+    fixed = [c for c in old if c.get("manual")]
+    plan = schedule(cands, duration, fixos=fixed, **project.cfg.get("graficos", {}).get("agenda", {}))
+    if fixed:
+        print(f"  {len(fixed)} gráficos editados à mão mantidos")
+    for n, c in enumerate(plan, 1):
+        events.progress(n, len(plan), f"{c['modelo']} {c['inicio']:.0f}s")
         if c["modelo"] == "citacao" and not c.get("roteiro") and not c.get("manual"):
-            c.update(_prepare_quote(c, fontes, projeto))
-    projeto.salvar_json("graficos.json", plano)
-    por_tipo = {}
-    for c in plano:
-        por_tipo[c["modelo"]] = por_tipo.get(c["modelo"], 0) + 1
-    print(f"  {len(plano)} gráficos de {len(cands)} candidatos: {por_tipo}")
-    return plano
+            c.update(_prepare_quote(c, sources, project))
+    project.salvar_json("graficos.json", plan)
+    by_kind = {}
+    for c in plan:
+        by_kind[c["modelo"]] = by_kind.get(c["modelo"], 0) + 1
+    print(f"  {len(plan)} gráficos de {len(cands)} candidatos: {by_kind}")
+    return plan
 
 
 def _key(c, cor, w, h):
@@ -452,56 +452,56 @@ def piece(c, pasta, w, h, pag=None):
     return p[0], dict(p[1], efeito=c.get("efeito"), caixas=c.get("caixas"))
 
 
-def render_graphics(projeto):
+def render_graphics(project):
     """Renderiza o graficos.json. Motor `[graficos] motor`: "effectcraft" (padrão: cada peça também vira um
     `.ecproj` editável) ou "html" (Chromium). Um `.ecproj` salvo à mão no EffectCraft (mais novo que a geração)
     é renderizado como está e a peça vira `manual` (o replanejamento a mantém)."""
     from esteira.graphics import effectcraft
-    plano = projeto.carregar_json("graficos.json")
-    g = projeto.cfg.get("graficos", {})
-    cor = g.get("cor", "#ffd400")
-    w, h = projeto.cfg["video"]["largura"], projeto.cfg["video"]["altura"]
-    fps = projeto.cfg["video"]["fps"]
-    motor = g.get("motor", "effectcraft")
-    if motor == "effectcraft" and not effectcraft.available():
+    plan = project.carregar_json("graficos.json")
+    g = project.cfg.get("graficos", {})
+    color = g.get("cor", "#ffd400")
+    w, h = project.cfg["video"]["largura"], project.cfg["video"]["altura"]
+    fps = project.cfg["video"]["fps"]
+    engine = g.get("motor", "effectcraft")
+    if engine == "effectcraft" and not effectcraft.available():
         events.warning("effectcraft-cli não encontrado: gráficos pelo Chromium (HTML)")
-        motor = "html"
-    pasta = projeto.caminho("graficos")
-    pasta.mkdir(exist_ok=True)
-    rel = lambda a: str(Path(a).relative_to(projeto.pasta))
-    editados = 0
-    for n, c in enumerate(plano, 1):
-        events.progress(n, len(plano), f"{c['modelo']} {c['inicio']:.0f}s")
-        ecp = projeto.pasta / c["ecproj"] if c.get("ecproj") else None
-        if motor == "effectcraft" and ecp and ecp.exists() and ecp.stat().st_mtime > c.get("ec_gerado", 0) + 1:
+        engine = "html"
+    folder = project.caminho("graficos")
+    folder.mkdir(exist_ok=True)
+    rel = lambda a: str(Path(a).relative_to(project.pasta))
+    edited = 0
+    for n, c in enumerate(plan, 1):
+        events.progress(n, len(plan), f"{c['modelo']} {c['inicio']:.0f}s")
+        ecp = project.pasta / c["ecproj"] if c.get("ecproj") else None
+        if engine == "effectcraft" and ecp and ecp.exists() and ecp.stat().st_mtime > c.get("ec_gerado", 0) + 1:
             # editado à mão no EffectCraft: renderiza o projeto como está, com outro nome (o .mov antigo fica)
             mt = ecp.stat().st_mtime
             mov = ecp.with_name(f"{ecp.stem.split('_ec')[0]}_ec{int(mt)}.mov")
             effectcraft.render(ecp, mov, w=w, h=h)
             c.update(arquivo=rel(mov), ec_gerado=mt, manual=True, manual_ec=True)
-            editados += 1
+            edited += 1
             continue
-        if c.get("manual_ec") and c.get("arquivo") and (projeto.pasta / c["arquivo"]).exists():
+        if c.get("manual_ec") and c.get("arquivo") and (project.pasta / c["arquivo"]).exists():
             continue
-        arq = pasta / f"{c['modelo']}_{_key(c, cor, w, h)}.mov"
-        c["arquivo"] = rel(arq)
-        ecp = arq.with_suffix(".ecproj")
-        precisa_ec = motor == "effectcraft" and not ecp.exists()
-        if arq.exists() and not precisa_ec:
+        file = folder / f"{c['modelo']}_{_key(c, color, w, h)}.mov"
+        c["arquivo"] = rel(file)
+        ecp = file.with_suffix(".ecproj")
+        needs_ec = engine == "effectcraft" and not ecp.exists()
+        if file.exists() and not needs_ec:
             continue
-        pc = piece(c, pasta, w, h, pasta / f"pag_{arq.stem}.png")
+        pc = piece(c, folder, w, h, folder / f"pag_{file.stem}.png")
         if not pc:
             events.warning(f"citação em {c['inicio']:.0f}s: trecho não achado no PDF; gráfico pulado")
             c["arquivo"] = None
             continue
-        if motor == "effectcraft":
-            effectcraft.build(*pc, c["dur"], ecp, w, h, cor, fps)
-            if not arq.exists():  # um .mov já feito (ex.: pelo HTML) não é refeito só para ganhar o .ecproj
-                effectcraft.render(ecp, arq, w=w, h=h)
+        if engine == "effectcraft":
+            effectcraft.build(*pc, c["dur"], ecp, w, h, color, fps)
+            if not file.exists():  # um .mov já feito (ex.: pelo HTML) não é refeito só para ganhar o .ecproj
+                effectcraft.render(ecp, file, w=w, h=h)
             c.update(ecproj=rel(ecp), ec_gerado=ecp.stat().st_mtime)
         else:
-            render.render(*pc, c["dur"], arq, cor=cor, paralelo=g.get("paralelo", 6), w=w, h=h, fps=fps)
-    projeto.salvar_json("graficos.json", plano)
-    if editados:
-        print(f"  {editados} gráficos editados à mão no EffectCraft renderizados")
-    print(f"  {sum(1 for c in plano if c.get('arquivo'))} gráficos renderizados em graficos/ ({motor})")
+            render.render(*pc, c["dur"], file, cor=color, paralelo=g.get("paralelo", 6), w=w, h=h, fps=fps)
+    project.salvar_json("graficos.json", plan)
+    if edited:
+        print(f"  {edited} gráficos editados à mão no EffectCraft renderizados")
+    print(f"  {sum(1 for c in plan if c.get('arquivo'))} gráficos renderizados em graficos/ ({engine})")

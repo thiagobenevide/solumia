@@ -22,27 +22,27 @@ def test_three_so_vai_para_os_assets_com_peca_3d(tmp_path):
 
 def test_cota_3d_derruba_a_segunda_peca_3d_na_janela():
     f3 = P.load("barras_3d").model_copy(update={"estado": "aprovada"})
-    fichas = [f3] + P.list_all("aprovada")
-    perfil = R.load("longo")
+    cards = [f3] + P.list_all("aprovada")
+    profile = R.load("longo")
     m = {"ini": 60.0, "fim": 66.0, "texto": "A poupança rendeu 6%, o CDB 11% e o Tesouro 12%."}
     lei = D.ReadingMoment(intencao="comparacao")
-    livre = D.candidates(m, lei, "3d", fichas, None, None, {}, ["16:9"], perfil, [])
-    preso = D.candidates(m, lei, "3d", fichas, None, None, {}, ["16:9"], perfil, [(f3, 10.0)])
-    pontos = lambda cs: next(p for p, f in cs if f.id == "barras_3d")  # noqa: E731
-    assert livre[0][1].id == "barras_3d"
-    assert pontos(preso) <= pontos(livre) - 1.0
+    free = D.candidates(m, lei, "3d", cards, None, None, {}, ["16:9"], profile, [])
+    preso = D.candidates(m, lei, "3d", cards, None, None, {}, ["16:9"], profile, [(f3, 10.0)])
+    points = lambda cs: next(p for p, f in cs if f.id == "barras_3d")  # noqa: E731
+    assert free[0][1].id == "barras_3d"
+    assert points(preso) <= points(free) - 1.0
 
 
 def test_exportar_base_de_treino(tmp_path, monkeypatch):
-    casos = {"corte": [{"id": f"c{i}", "manter": i % 2 == 0} for i in range(40)],
+    cases = {"corte": [{"id": f"c{i}", "manter": i % 2 == 0} for i in range(40)],
              "legenda": [{"id": "l1", "certo": "texto certo"}, {"id": "l1", "certo": "corrigido de novo"}]}
     monkeypatch.setattr(T, "FOLDER", tmp_path)
-    monkeypatch.setattr(T, "_cases", lambda t: casos.get(t, []))
+    monkeypatch.setattr(T, "_cases", lambda t: cases.get(t, []))
     monkeypatch.setattr(T, "_prompt_bench", lambda t, c: f"prompt {t} {c['id']}")
     r = T.export(("corte", "legenda"))
     assert r["tarefas"]["corte"]["treino"] + r["tarefas"]["corte"]["validacao"] == 40
     assert r["tarefas"]["legenda"]["treino"] + r["tarefas"]["legenda"]["validacao"] == 1   # repetido: vale o último
     assert not r["pronta"]                                                                 # abaixo do mínimo
-    linhas = [json.loads(x) for p in tmp_path.glob("*/legenda.*.jsonl") for x in p.read_text().splitlines()]
-    assert json.loads(linhas[0]["messages"][1]["content"]) == {"texto": "corrigido de novo"}
+    lines = [json.loads(x) for p in tmp_path.glob("*/legenda.*.jsonl") for x in p.read_text().splitlines()]
+    assert json.loads(lines[0]["messages"][1]["content"]) == {"texto": "corrigido de novo"}
     assert T.status()["ultima"]["pasta"] == r["pasta"]

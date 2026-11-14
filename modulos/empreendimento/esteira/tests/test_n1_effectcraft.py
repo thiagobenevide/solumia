@@ -63,8 +63,8 @@ def test_esquema_fechado_e_erros():
 
 
 def test_portao_estatico_da_peca_em_n1():
-    erros, _ = ec.check_code("numero_impacto_ec", P.load("numero_impacto_ec"))
-    assert erros == []
+    errors, _ = ec.check_code("numero_impacto_ec", P.load("numero_impacto_ec"))
+    assert errors == []
 
 
 def test_script_gerado_tem_sintaxe_valida():
@@ -99,9 +99,9 @@ def test_grade_ativos_fatias_vertical_e_marcadores():
         {"tipo": "elipse", "nome": "F", "x": 0.5, "y": 0.5, "d": 0.5, "fatia": True, "contorno": 0.1}]}
     js = N1.build({"elementos": [rosca]}, _d(encaixes={"f": [{"valor": "50%"}, {"valor": "30%"}, {"valor": "20%"}]}))
     assert ", 0.0, 0.5);" in js and ", 0.5, 0.8);" in js and ", 0.8, 1.0);" in js
-    lista = {"tipo": "repetir", "nome": "L", "encaixe": "i", "passo": [0, 0.1], "elementos": [
+    items = {"tipo": "repetir", "nome": "L", "encaixe": "i", "passo": [0, 0.1], "elementos": [
         {"tipo": "texto", "nome": "T", "conteudo": "{{item}}", "x": 0.1, "y": 0.2, "tam": 0.04, "vertical": {"y": 0.6}}]}
-    js = N1.build({"elementos": [lista]}, _d(w=1080, h=1920, encaixes={"i": ["a", "b"]}))
+    js = N1.build({"elementos": [items]}, _d(w=1080, h=1920, encaixes={"i": ["a", "b"]}))
     assert ", 1152.0, " in js and ", 1344.0, " in js  # o vertical do molde vale antes do passo (não empilha)
     js = N1.build({"elementos": [{"tipo": "texto", "nome": "V", "conteudo": "{{p.valor}}", "x": 0.1, "y": 0.5,
                                      "tam": 0.05}]}, _d(encaixes={"p": [{"rotulo": "x", "valor": "R$ 9"}]}))

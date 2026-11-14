@@ -48,7 +48,7 @@ def card_size(ficha: dict) -> dict:
     return {**ficha, "encaixes": copy.deepcopy(k["encaixes"])} if k else ficha
 
 
-def unfeasible(ficha: dict, conceito: str = "") -> str:
+def unfeasible(ficha: dict, concept: str = "") -> str:
     """Motivo de a peça não ir para a LLM local (o N1 não a desenha), ou "" se dá."""
     if ficha.get("origem") == "kit" and not kit(ficha):
         return "peça do kit sem molde próprio (o contrato titulo + valores não diz o que desenhar)"
@@ -61,9 +61,9 @@ def unfeasible(ficha: dict, conceito: str = "") -> str:
         return f"peso {ficha['peso']} (o N1 é 2D)"
     if set(ficha.get("intencoes") or []) <= {"fundo", "transicao"}:
         return "fundo ou transição decorativa (sem conteúdo para os moldes)"
-    texto = " ".join([ficha.get("comunica", ""), conceito or "", *(e.get("descricao", "") for e in encs)]).lower()
-    for padrao, o_que in NAO_DRAWS:
-        if m := re.search(padrao, texto):
+    text = " ".join([ficha.get("comunica", ""), concept or "", *(e.get("descricao", "") for e in encs)]).lower()
+    for default, o_que in NAO_DRAWS:
+        if m := re.search(default, text):
             return f"pede {o_que} ('{m.group(0)}'), que o N1 não desenha"
     if not choose(ficha)[0]:
         return "nenhum molde serve aos encaixes da ficha"
@@ -80,8 +80,8 @@ def _draft_broken(ficha: dict) -> str:
     except ValueError:
         return ""
     mid, n1 = draft(ficha)
-    if erros := EC.check_structure(N1.Piece.model_validate(n1), f):
-        return f"o molde {mid!r} não comporta a ficha ({erros[0][:120]})"
+    if errors := EC.check_structure(N1.Piece.model_validate(n1), f):
+        return f"o molde {mid!r} não comporta a ficha ({errors[0][:120]})"
     return ""
 
 
@@ -95,57 +95,57 @@ def _percent(ficha: dict) -> bool:
 
 
 def _hint(slot: dict, enc: dict) -> bool:
-    nome = enc["nome"].lower()
-    return any(d == nome or d in nome.split("_") or (len(d) > 3 and d in nome) for d in slot.get("dicas", []))
+    name = enc["nome"].lower()
+    return any(d == name or d in name.split("_") or (len(d) > 3 and d in name) for d in slot.get("dicas", []))
 
 
-def _enable(molde: dict, encaixes: list[dict]) -> dict | None:
+def _enable(mold: dict, encaixes: list[dict]) -> dict | None:
     """lugar do molde → encaixe da ficha (tipo + dica do nome). None se falta encaixe para um lugar obrigatório.
     Ordem: obrigatórios; opcionais cuja dica bate; opcionais que sobram, pelo tipo."""
-    livres, mapa = list(encaixes), {}
-    slots = molde["slots"]
+    livres, mapping = list(encaixes), {}
+    slots = mold["slots"]
     obrig = [s for s in slots if s.get("obrigatorio")]
     opc = [s for s in slots if not s.get("obrigatorio")]
-    for passo in ("obrig", "dica", "tipo"):
-        for s in (obrig if passo == "obrig" else opc):
-            if s["nome"] in mapa:
+    for step in ("obrig", "dica", "tipo"):
+        for s in (obrig if step == "obrig" else opc):
+            if s["nome"] in mapping:
                 continue
             cands = [e for e in livres if e.get("tipo") in s["tipos"]]
-            if passo == "dica":
+            if step == "dica":
                 cands = [e for e in cands if _hint(s, e)]
             if not cands:
-                if passo == "obrig":
+                if step == "obrig":
                     return None
                 continue
             e = max(cands, key=lambda e: (_hint(s, e) * 10 + e.get("obrigatorio", True) * 2
                                           + (e.get("max_car", 40) / 100 if s["nome"] == "frase" else 0)))
-            mapa[s["nome"]] = e
+            mapping[s["nome"]] = e
             livres.remove(e)
-    return mapa
+    return mapping
 
 
 def choose(ficha: dict) -> tuple[dict | None, dict | None]:
     """O molde que mais serve à ficha (intenções, encaixes ligados, nada de lista sobrando) e a ligação."""
     encs = [e for e in ficha.get("encaixes") or [] if e.get("tipo") not in ("imagem", "pagina")]
     inten = ficha.get("intencoes") or []
-    melhor = (None, None, None)
+    best = (None, None, None)
     forcado = (kit(ficha) or {}).get("molde")
     for k, m in enumerate(load()):
         if forcado and m["id"] != forcado:
             continue
         if m.get("condicao") == "percentual" and not _percent(ficha):
             continue
-        mapa = _enable(m, encs)
-        if mapa is None:
+        mapping = _enable(m, encs)
+        if mapping is None:
             continue
-        sobra = [e for e in encs if all(e is not x for x in mapa.values())]
-        nota = (3 * len(set(m["intencoes"]) & set(inten)) + 2 * bool(inten and inten[0] in m["intencoes"])
-                + len(mapa) - 2 * len(sobra)
-                - sum((6 if e.get("obrigatorio", True) else 1) for e in sobra if e.get("tipo") in LISTS)
+        leftover = [e for e in encs if all(e is not x for x in mapping.values())]
+        note = (3 * len(set(m["intencoes"]) & set(inten)) + 2 * bool(inten and inten[0] in m["intencoes"])
+                + len(mapping) - 2 * len(leftover)
+                - sum((6 if e.get("obrigatorio", True) else 1) for e in leftover if e.get("tipo") in LISTS)
                 + m.get("bonus", 0), -k)
-        if melhor[0] is None or nota > melhor[0]:
-            melhor = (nota, m, mapa)
-    return melhor[1], melhor[2]
+        if best[0] is None or note > best[0]:
+            best = (note, m, mapping)
+    return best[1], best[2]
 
 
 def _refs(el: dict) -> set[str]:
@@ -154,87 +154,87 @@ def _refs(el: dict) -> set[str]:
     return refs | {v[1:] for k in ("encaixe", "ativos") if isinstance(v := el.get(k), str) and v.startswith("$")}
 
 
-def fill(molde: dict, mapa: dict, ficha: dict) -> dict:
+def fill(mold: dict, mapping: dict, ficha: dict) -> dict:
     """Rascunho N1 da ficha: tira o que usa lugar sem encaixe, liga os nomes, põe os encaixes que sobraram em
     textos de apoio, `se` nos opcionais, `maximo` da ficha e o botão de velocidade."""
-    doc = copy.deepcopy(molde["n1"])
-    nomes = {s: e["nome"] for s, e in mapa.items()}
-    opcionais = {s for s, e in mapa.items() if not e.get("obrigatorio", True)}
-    fora: set[str] = set()
+    doc = copy.deepcopy(mold["n1"])
+    names = {s: e["nome"] for s, e in mapping.items()}
+    opcionais = {s for s, e in mapping.items() if not e.get("obrigatorio", True)}
+    outside: set[str] = set()
 
     def podar(els):
-        saida = []
+        output = []
         for el in els:
             refs = _refs(el)
-            if refs - set(nomes):
-                fora.add(el["nome"])
+            if refs - set(names):
+                outside.add(el["nome"])
                 continue
             if el["tipo"] == "caixa":
                 el["filhos"] = podar(el["filhos"])
                 if not el["filhos"]:
-                    fora.add(el["nome"])
+                    outside.add(el["nome"])
                     continue
             if el["tipo"] == "repetir":
                 el["elementos"] = podar(el["elementos"])
                 if not el["elementos"]:
-                    fora.add(el["nome"])
+                    outside.add(el["nome"])
                     continue
-                if (s := (el.get("encaixe") or "")[1:]) in mapa:
-                    el["maximo"] = mapa[s].get("max_itens", el.get("maximo", 8))
-                el["animacoes"] = [a for a in el.get("animacoes", []) if a["alvo"] not in fora]
+                if (s := (el.get("encaixe") or "")[1:]) in mapping:
+                    el["maximo"] = mapping[s].get("max_itens", el.get("maximo", 8))
+                el["animacoes"] = [a for a in el.get("animacoes", []) if a["alvo"] not in outside]
             if (opc := sorted(refs & opcionais)) and "se" not in el:
                 el["se"] = {"encaixe": f"${opc[0]}"}
-            saida.append(el)
-        return saida
+            output.append(el)
+        return output
 
     doc["elementos"] = podar(doc["elementos"])
-    doc["animacoes"] = [a for a in doc.get("animacoes", []) if a["alvo"] not in fora]
-    sobra = [e for e in ficha.get("encaixes") or []
-             if all(e is not x for x in mapa.values()) and e.get("tipo") in (*TEXTUAL, *LISTS)]
-    if sobra:
-        _support(doc, sobra)
+    doc["animacoes"] = [a for a in doc.get("animacoes", []) if a["alvo"] not in outside]
+    leftover = [e for e in ficha.get("encaixes") or []
+             if all(e is not x for x in mapping.values()) and e.get("tipo") in (*TEXTUAL, *LISTS)]
+    if leftover:
+        _support(doc, leftover)
     for b in ficha.get("botoes") or []:
         if len(SPEED & {str(v) for v in b.get("valores", [])}) >= 2:
             doc["botao_velocidade"] = b["nome"]
             break
     txt = json.dumps(doc, ensure_ascii=False)
-    txt = re.sub(r"\{\{\$(\w+)", lambda m: "{{" + nomes[m.group(1)], txt)
-    txt = re.sub(r'"\$(\w+)"', lambda m: json.dumps(nomes[m.group(1)]), txt)
+    txt = re.sub(r"\{\{\$(\w+)", lambda m: "{{" + names[m.group(1)], txt)
+    txt = re.sub(r'"\$(\w+)"', lambda m: json.dumps(names[m.group(1)]), txt)
     return json.loads(txt)
 
 
-def _support(doc: dict, sobra: list[dict]):
+def _support(doc: dict, leftover: list[dict]):
     """Encaixes que o molde não tem lugar: textos (ou lista em linha) na base; com esquerda/direita (que descem
     até a base), no topo."""
-    caixas = {c["nome"]: c for c in doc["elementos"] if c["tipo"] == "caixa"}
-    regioes = {c.get("regiao", "tela") for c in caixas.values()}
-    if "Base" in caixas:
-        alvo = caixas["Base"]
-    elif regioes & {"esquerda", "direita"}:
-        alvo = caixas.get("Topo") or {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": []}
+    boxes = {c["nome"]: c for c in doc["elementos"] if c["tipo"] == "caixa"}
+    regions = {c.get("regiao", "tela") for c in boxes.values()}
+    if "Base" in boxes:
+        target = boxes["Base"]
+    elif regions & {"esquerda", "direita"}:
+        target = boxes.get("Topo") or {"tipo": "caixa", "nome": "Topo", "regiao": "topo", "filhos": []}
     else:
-        alvo = {"tipo": "caixa", "nome": "Base", "regiao": "base", "filhos": []}
-    if alvo not in doc["elementos"]:
-        doc["elementos"].append(alvo)
-    alvo["disposicao"] = "coluna"
-    for e in sobra:
-        nome = f"Apoio_{e['nome']}"
+        target = {"tipo": "caixa", "nome": "Base", "regiao": "base", "filhos": []}
+    if target not in doc["elementos"]:
+        doc["elementos"].append(target)
+    target["disposicao"] = "coluna"
+    for e in leftover:
+        name = f"Apoio_{e['nome']}"
         if e["tipo"] in LISTS:
-            campo = "{{item.rotulo}} {{item.valor}}" if e["tipo"] == "pares" else "{{item}}"
-            el = {"tipo": "caixa", "nome": nome, "disposicao": "linha", "filhos": [
-                {"tipo": "repetir", "nome": f"{nome}_itens", "encaixe": e["nome"], "maximo": e.get("max_itens", 6),
-                 "elementos": [{"tipo": "texto", "nome": f"{nome}_item", "conteudo": campo, "nivel": "rotulo"}]}]}
+            field = "{{item.rotulo}} {{item.valor}}" if e["tipo"] == "pares" else "{{item}}"
+            el = {"tipo": "caixa", "nome": name, "disposicao": "linha", "filhos": [
+                {"tipo": "repetir", "nome": f"{name}_itens", "encaixe": e["nome"], "maximo": e.get("max_itens", 6),
+                 "elementos": [{"tipo": "texto", "nome": f"{name}_item", "conteudo": field, "nivel": "rotulo"}]}]}
         else:
-            el = {"tipo": "texto", "nome": nome, "conteudo": "{{" + e["nome"] + "}}", "nivel": "rotulo",
+            el = {"tipo": "texto", "nome": name, "conteudo": "{{" + e["nome"] + "}}", "nivel": "rotulo",
                   "cor": "apoio"}
             doc.setdefault("animacoes", []).append(
-                {"anim": "entrar", "alvo": nome, "de": "aparecer", "t": 1.2, "dur": "0.5v"})
+                {"anim": "entrar", "alvo": name, "de": "aparecer", "t": 1.2, "dur": "0.5v"})
         if not e.get("obrigatorio", True):
             el["se"] = {"encaixe": e["nome"]}
-        alvo["filhos"].append(el)
+        target["filhos"].append(el)
 
 
 def draft(ficha: dict) -> tuple[str, dict] | None:
     """(id do molde, N1 pronto para a ficha) ou None se nenhum molde serve."""
-    m, mapa = choose(ficha)
-    return (m["id"], fill(m, mapa, ficha)) if m else None
+    m, mapping = choose(ficha)
+    return (m["id"], fill(m, mapping, ficha)) if m else None

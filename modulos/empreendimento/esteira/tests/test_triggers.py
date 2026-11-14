@@ -21,8 +21,8 @@ def test_porcentagem_e_proporcao():
 
 
 def test_comparacao_bloqueia_porcentagem():
-    frase = "Os juros do rotativo passam de 400% ao ano, contra 12% da poupança."
-    assert _id(frase) == "comparacao"
+    sentence = "Os juros do rotativo passam de 400% ao ano, contra 12% da poupança."
+    assert _id(sentence) == "comparacao"
 
 
 def test_numero_recente_nao_dispara():
@@ -45,10 +45,10 @@ def test_cor_pelo_sentido():
 
 def test_testar_roteiro():
     e = Style(id="teste-ap", nome="t", canal="t", modo="apresentador")
-    texto = ("Segundo a CNC, 81,7% das famílias brasileiras estão endividadas. "
+    text = ("Segundo a CNC, 81,7% das famílias brasileiras estão endividadas. "
              "E sabe qual é o maior vilão? "
              "O cartão de crédito. Sem nenhum gatilho por aqui hoje não.")
-    r = triggers.test(triggers.sentences_of_text(texto), e)
+    r = triggers.test(triggers.sentences_of_text(text), e)
     ids = [c["gatilho"] for c in r["cenas"]]
     assert ids[:3] == ["estudo_citado", "pergunta", "termo"]
     assert any(a["tipo"] == "sem_gatilho" for a in r["avisos"])

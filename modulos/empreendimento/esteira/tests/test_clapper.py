@@ -14,8 +14,8 @@ def _mantido(trechos):
 
 
 def test_partes_numeradas_por_paragrafo():
-    partes = K.parts_of_script(ROTEIRO)
-    assert [p["n"] for p in partes] == [1, 2] and partes[1]["f0"] == 2
+    parts = K.parts_of_script(ROTEIRO)
+    assert [p["n"] for p in parts] == [1, 2] and parts[1]["f0"] == 2
 
 
 def test_variacoes_do_marcador():
@@ -25,24 +25,24 @@ def test_variacoes_do_marcador():
 
 
 def test_vale_o_ultimo_corte_e_cancela_descarta():
-    partes = K.parts_of_script(ROTEIRO)
-    fala = ("Vamos lá. Oito em cada dez famílias estão endividadas. Isso assusta. Corte parte um. "
+    parts = K.parts_of_script(ROTEIRO)
+    speech = ("Vamos lá. Oito em cada dez famílias estão endividadas. Isso assusta. Corte parte um. "
             "Mas quase ninguém sabe. Cancela parte dois. "
             "Oito em cada dez famílias estão endividadas. Isso assusta muito. Corte parte um. "
             "Mas quase ninguém explica o motivo. Corte parte dois. Ok, acabou.")
-    trechos, faltando, avisos = K.decide(partes, _p(fala))
-    assert _mantido(trechos) == ("Oito em cada dez famílias estão endividadas. Isso assusta muito. "
+    spans, missing, warnings = K.decide(parts, _p(speech))
+    assert _mantido(spans) == ("Oito em cada dez famílias estão endividadas. Isso assusta muito. "
                                  "Mas quase ninguém explica o motivo.")
-    assert not faltando
+    assert not missing
 
 
 def test_cancela_logo_depois_desfaz_o_corte():
-    partes = K.parts_of_script(ROTEIRO)
-    fala = ("Oito em cada dez famílias estão endividadas. Isso assusta. Corte parte um. Cancela parte um. "
+    parts = K.parts_of_script(ROTEIRO)
+    speech = ("Oito em cada dez famílias estão endividadas. Isso assusta. Corte parte um. Cancela parte um. "
             "Mas quase ninguém explica o motivo. Corte parte dois.")
-    trechos, faltando, avisos = K.decide(partes, _p(fala))
-    assert "Oito" not in _mantido(trechos)
-    assert any("parte 1" in a for a in avisos)
+    spans, missing, warnings = K.decide(parts, _p(speech))
+    assert "Oito" not in _mantido(spans)
+    assert any("parte 1" in a for a in warnings)
 
 
 def test_sem_marcadores_usa_o_fluxo_antigo():

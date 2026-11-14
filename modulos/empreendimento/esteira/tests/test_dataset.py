@@ -36,8 +36,8 @@ def test_portao_reprovado_e_veredito_invalido():
 
 def test_contexto_grande_vai_para_artefato_e_linha_truncada_e_ignorada():
     R.write("montar", grupo="ep:a", contexto={"texto": "x" * 20_000}, saida=[], origem="traducao")
-    arq = next(R.RECORD.glob("**/montar/*.jsonl"))
-    with open(arq, "a") as f:
+    file = next(R.RECORD.glob("**/montar/*.jsonl"))
+    with open(file, "a") as f:
         f.write('{"id": "rg_quebrado", "t"')  # escrita interrompida
     regs = list(R.records("montar"))
     assert len(regs) == 1 and "ref" in regs[0]["contexto"]

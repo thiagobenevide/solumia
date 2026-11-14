@@ -53,8 +53,8 @@ _ORIGINS = re.compile(
 async def _local_only(request: Request, call_next):
     if not _HOSTS_LOCALS.fullmatch(request.headers.get("host", "")):
         return PlainTextResponse("Host não permitido", status_code=403)
-    origem = request.headers.get("origin")
-    if request.method not in ("GET", "HEAD", "OPTIONS") and origem and not _ORIGINS.fullmatch(origem):
+    origin = request.headers.get("origin")
+    if request.method not in ("GET", "HEAD", "OPTIONS") and origin and not _ORIGINS.fullmatch(origin):
         return PlainTextResponse("Origem não permitida", status_code=403)
     return await call_next(request)
 
@@ -109,11 +109,11 @@ def _folder(ep):
     return p
 
 
-def _project_of_script(caminho):
+def _project_of_script(path):
     """Pasta de projeto já criada a partir deste roteiro (roteiro.json guarda a origem)."""
     for rj in PROJECTS.glob("*/*/roteiro.json"):
         try:
-            if json.loads(rj.read_text()).get("origem") == caminho:
+            if json.loads(rj.read_text()).get("origem") == path:
                 return ep_id(rj.parent)
         except ValueError:
             pass
@@ -123,27 +123,27 @@ def _project_of_script(caminho):
 def final_of_ep(pasta):
     """`final.mp4` em vigor: o do Estúdio no formato do episódio, se existir (substitui gráficos + montagem); senão o
     da montagem."""
-    formato = Project(pasta).cfg["video"].get("formato", "16:9").replace(":", "x")
-    estudio = pasta / "estudio" / formato / "final.mp4"
+    fmt = Project(pasta).cfg["video"].get("formato", "16:9").replace(":", "x")
+    estudio = pasta / "estudio" / fmt / "final.mp4"
     return estudio if estudio.exists() else pasta / "final.mp4"
 
 
 def _summary_ep(ep):
-    pasta = folder_ep(ep)
-    est = status.stages(pasta)
-    final = final_of_ep(pasta)
-    de_estudio = final.parent != pasta
-    feitas = sum(1 for e in PIPELINE if est.get(e, {}).get("status") == "ok"
-                 or de_estudio and e in ("graphics", "assemble"))
-    rodando = next((e for e, v in est.items() if v["status"] == "running"), None)
-    erro = next((e for e, v in est.items() if v["status"] == "error"), None)
+    folder = folder_ep(ep)
+    est = status.stages(folder)
+    final = final_of_ep(folder)
+    of_estudio = final.parent != folder
+    done = sum(1 for e in PIPELINE if est.get(e, {}).get("status") == "ok"
+                 or of_estudio and e in ("graphics", "assemble"))
+    running = next((e for e, v in est.items() if v["status"] == "running"), None)
+    error = next((e for e, v in est.items() if v["status"] == "error"), None)
     # roteiro reimportado ou gráficos refeitos depois da exportação: o vídeo não tem as mudanças
-    fontes = ("estudio/mapa.json", "estudio/corte/corte.json") if de_estudio else ("graficos.json",)
-    desatualizado = final.exists() and any((pasta / a).exists() and (pasta / a).stat().st_mtime > final.stat().st_mtime
-                                           for a in (*fontes, "plano.json", "roteiro.json"))
-    return {"feitas": feitas, "total": len(PIPELINE), "rodando": rodando, "erro": erro, "desatualizado": desatualizado,
-            "final": final.exists() and (de_estudio or est.get("assemble", {}).get("status") == "ok"),
-            "thumb": (pasta / "thumb.png").exists()}
+    sources = ("estudio/mapa.json", "estudio/corte/corte.json") if of_estudio else ("graficos.json",)
+    desatualizado = final.exists() and any((folder / a).exists() and (folder / a).stat().st_mtime > final.stat().st_mtime
+                                           for a in (*sources, "plano.json", "roteiro.json"))
+    return {"feitas": done, "total": len(PIPELINE), "rodando": running, "erro": error, "desatualizado": desatualizado,
+            "final": final.exists() and (of_estudio or est.get("assemble", {}).get("status") == "ok"),
+            "thumb": (folder / "thumb.png").exists()}
 
 
 @app.on_event("startup")
@@ -156,39 +156,39 @@ def _start():
 @app.get("/", response_class=HTMLResponse)
 def collection(request: Request, canal: str = "", status_r: str = ""):
     cfg = _cfg()["fontes"]
-    canais = obsidian.channels(cfg["vault"])
-    canal = canal or (canais[0] if canais else "")
-    itens = []
+    channels = obsidian.channels(cfg["vault"])
+    canal = canal or (channels[0] if channels else "")
+    items = []
     for r in obsidian.list_all(cfg["vault"], canal):
         if status_r and r["status"] != status_r:
             continue
         audio = recordings.candidates(cfg["gravacoes"], canal, r["numero"], r["titulo"], n=1, short=bool(r["short"]))
         ep = _project_of_script(r["caminho"])
-        itens.append(dict(r, audio=audio[0] if audio and audio[0]["nota"] >= 0.5 else None,
+        items.append(dict(r, audio=audio[0] if audio and audio[0]["nota"] >= 0.5 else None,
                           ep=ep, prog=_summary_ep(ep) if ep else None))
-    for r in itens:
+    for r in items:
         r["citacoes"] = len(re.findall(r"^>\s*\[!cite\]", Path(r["caminho"]).read_text(), re.M))  # só blocos
     contagem = {c: sum(len(list((obsidian.folder_channels(cfg["vault"]) / c / sub).glob("*.md")))
-                       for sub in ("Roteiros", "Shorts")) for c in canais}
+                       for sub in ("Roteiros", "Shorts")) for c in channels}
     from esteira.project import Project
-    perfil_modo = {}
-    for r in itens:  # modo: do roteiro, senão do projeto/perfil do canal
+    profile_mode = {}
+    for r in items:  # modo: do roteiro, senão do projeto/perfil do canal
         r["modo_definido"] = r["modo"] in ("dark", "apresentador")
         if not r["modo_definido"]:
             r["modo"] = ""
             if r["ep"]:
                 r["modo"] = Project(folder_ep(r["ep"])).cfg.get("producao", {}).get("modo", "dark")
             else:
-                r["modo"] = perfil_modo.setdefault(canal, _mode_of_profile(canal))
-    return tpl.TemplateResponse(request, "biblioteca.html", {"canais": canais, "canal": canal, "itens": itens,
+                r["modo"] = profile_mode.setdefault(canal, _mode_of_profile(canal))
+    return tpl.TemplateResponse(request, "biblioteca.html", {"canais": channels, "canal": canal, "itens": items,
                                                              "contagem": contagem, "status_r": status_r})
 
 
 def _mode_of_profile(canal):
-    perfil = ROOT / "perfis" / f"{canal}.toml"
+    profile = ROOT / "perfis" / f"{canal}.toml"
     cfg = _cfg()
-    if perfil.exists():
-        cfg.update(tomllib.loads(perfil.read_text()))
+    if profile.exists():
+        cfg.update(tomllib.loads(profile.read_text()))
     return cfg.get("producao", {}).get("modo", "dark")
 
 
@@ -196,8 +196,8 @@ def _mode_of_profile(canal):
 async def produce(request: Request):
     from esteira.sources.importer import run_import
     form = await request.form()
-    for caminho in form.getlist("roteiro"):
-        ep = _project_of_script(caminho) or ep_id(run_import(Path(caminho)))
+    for path in form.getlist("roteiro"):
+        ep = _project_of_script(path) or ep_id(run_import(Path(path)))
         queue.add(ep, "all")
     return RedirectResponse("/fila", status_code=303)
 
@@ -210,13 +210,13 @@ def page_queue(request: Request):
 @app.get("/_fila", response_class=HTMLResponse)
 def fragment_queue(request: Request):
     from esteira.core import locks, processes
-    tarefas = list(reversed(queue.list_all()))
-    proc = {r.get("queue"): r["id"] for r in processes.list_recent(400) if r.get("queue")}
-    for t in tarefas:
+    tasks = list(reversed(queue.list_all()))
+    process = {r.get("queue"): r["id"] for r in processes.list_recent(400) if r.get("queue")}
+    for t in tasks:
         t["prog"] = _summary_ep(t["ep"]) if ":" not in t["ep"] and folder_ep(t["ep"]).is_dir() else None
-        t["proc"] = proc.get(str(t["id"]))
-    vagas = {v: locks.owner(v) for v in locks.SLOTS}
-    return tpl.TemplateResponse(request, "_fila.html", {"tarefas": tarefas, "vagas": vagas})
+        t["proc"] = process.get(str(t["id"]))
+    slots = {v: locks.owner(v) for v in locks.SLOTS}
+    return tpl.TemplateResponse(request, "_fila.html", {"tarefas": tasks, "vagas": slots})
 
 
 @app.post("/fila/roteiro")
@@ -242,23 +242,23 @@ def clean_queue():
 
 @app.get("/ep/{ep}", response_class=HTMLResponse)
 def episode(request: Request, ep: str):
-    pasta = _folder(ep)
-    rot = json.loads((pasta / "roteiro.json").read_text()) if (pasta / "roteiro.json").exists() else {}
+    folder = _folder(ep)
+    rot = json.loads((folder / "roteiro.json").read_text()) if (folder / "roteiro.json").exists() else {}
     from esteira.project import Project
-    cfg = Project(pasta).cfg
+    cfg = Project(folder).cfg
     vertical = cfg["video"].get("formato", "16:9") == "9:16"
     from esteira import production
-    proj = Project(pasta)
-    modo = production.mode(proj)
+    proj = Project(folder)
+    mode = production.mode(proj)
     camera = production.info_camera(proj) if production.camera(proj) else None
     return tpl.TemplateResponse(request, "episodio.html", {"ep": ep, "rot": rot, "pipeline": PIPELINE,
-                                                           "final": (pasta / "final.mp4").exists(),
-                                                           "thumb": (pasta / "thumb.png").exists(),
+                                                           "final": (folder / "final.mp4").exists(),
+                                                           "thumb": (folder / "thumb.png").exists(),
                                                            "vertical": vertical,
                                                            "prog": _summary_ep(ep),
-                                                           "modo": modo, "camera": camera,
-                                                           "fcproj": (pasta / "projeto.fcproj").exists(),
-                                                           "manuais": sorted(p.name for p in pasta.glob("projeto.manual-*.fcproj"))})
+                                                           "modo": mode, "camera": camera,
+                                                           "fcproj": (folder / "projeto.fcproj").exists(),
+                                                           "manuais": sorted(p.name for p in folder.glob("projeto.manual-*.fcproj"))})
 
 
 # ---------- Estrutura do roteiro: partes, falas, cenas e citações (o que a esteira leu do vault) ----------
@@ -267,111 +267,111 @@ def _crop_quote(pasta, k, c):
     """PNG do pedaço da página do PDF com o trecho (cache em graficos/) e os retângulos do marca-texto em %."""
     import pymupdf
     from esteira.graphics import pdf as P
-    destino = pasta / "graficos" / f"cite_{k}.png"
-    meta = destino.with_suffix(".json")
-    if destino.exists() and meta.exists() and meta.stat().st_mtime >= Path(c["arquivo"]).stat().st_mtime:
+    destination = pasta / "graficos" / f"cite_{k}.png"
+    meta = destination.with_suffix(".json")
+    if destination.exists() and meta.exists() and meta.stat().st_mtime >= Path(c["arquivo"]).stat().st_mtime:
         return json.loads(meta.read_text())
-    achado = P.locate(c["arquivo"], c["en"], c["pagina"] - 1)
-    if not achado:
+    found = P.locate(c["arquivo"], c["en"], c["pagina"] - 1)
+    if not found:
         return None
-    pg = pymupdf.open(c["arquivo"])[achado["pagina"]]
-    x0, y0 = min(r[0] for r in achado["rects"]), min(r[1] for r in achado["rects"])
-    x1, y1 = max(r[2] for r in achado["rects"]), max(r[3] for r in achado["rects"])
+    pg = pymupdf.open(c["arquivo"])[found["pagina"]]
+    x0, y0 = min(r[0] for r in found["rects"]), min(r[1] for r in found["rects"])
+    x1, y1 = max(r[2] for r in found["rects"]), max(r[3] for r in found["rects"])
     clip = pymupdf.Rect(max(pg.rect.x0, min(x0, pg.rect.width * 0.08) - 10), max(0, y0 - 70),
                         min(pg.rect.x1, max(x1, pg.rect.width * 0.92) + 10), min(pg.rect.y1, y1 + 70))
     pix = pg.get_pixmap(dpi=150, clip=clip)
-    destino.parent.mkdir(exist_ok=True)
-    pix.save(destino)
+    destination.parent.mkdir(exist_ok=True)
+    pix.save(destination)
     w, h = clip.width, clip.height
-    dados = {"img": destino.name, "pagina": achado["pagina"] + 1, "nota": achado["nota"],
+    data = {"img": destination.name, "pagina": found["pagina"] + 1, "nota": found["nota"],
              "rects": [[round((r[0] - clip.x0) / w * 100, 2), round((r[1] - clip.y0) / h * 100, 2),
-                        round((r[2] - r[0]) / w * 100, 2), round((r[3] - r[1]) / h * 100, 2)] for r in achado["rects"]]}
-    meta.write_text(json.dumps(dados))
-    return dados
+                        round((r[2] - r[0]) / w * 100, 2), round((r[3] - r[1]) / h * 100, 2)] for r in found["rects"]]}
+    meta.write_text(json.dumps(data))
+    return data
 
 
 @app.get("/ep/{ep}/roteiro", response_class=HTMLResponse)
 def script(request: Request, ep: str):
-    pasta = _folder(ep)
-    if not (pasta / "roteiro.json").exists():
+    folder = _folder(ep)
+    if not (folder / "roteiro.json").exists():
         return tpl.TemplateResponse(request, "vazio.html", {"ep": ep, "msg": "Projeto sem roteiro.json: importe do vault."})
-    rot = json.loads((pasta / "roteiro.json").read_text())
-    falas = [l for l in (pasta / "roteiro.txt").read_text().splitlines()[1:] if l.strip()]
+    rot = json.loads((folder / "roteiro.json").read_text())
+    speeches = [l for l in (folder / "roteiro.txt").read_text().splitlines()[1:] if l.strip()]
     caps = rot.get("capitulos", [])
-    partes = []
+    parts = []
     for i, cap in enumerate(caps):
-        fim = caps[i + 1]["fala"] if i + 1 < len(caps) else len(falas)
-        partes.append({**cap, "itens": []})
-        for k in range(cap["fala"], fim):
+        end = caps[i + 1]["fala"] if i + 1 < len(caps) else len(speeches)
+        parts.append({**cap, "itens": []})
+        for k in range(cap["fala"], end):
             for n in rot.get("notas", []):
                 if n["antes_da_fala"] == k:
-                    texto = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", n["texto"].replace("<", "&lt;"))
-                    partes[-1]["itens"].append({"tipo": "cena", "texto": texto})
-            fala = re.sub(r"\*([^*]+)\*", r"<mark>\1</mark>", falas[k].replace("<", "&lt;"))
-            partes[-1]["itens"].append({"tipo": "fala", "n": k + 1, "texto": fala})
+                    text = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", n["texto"].replace("<", "&lt;"))
+                    parts[-1]["itens"].append({"tipo": "cena", "texto": text})
+            speech = re.sub(r"\*([^*]+)\*", r"<mark>\1</mark>", speeches[k].replace("<", "&lt;"))
+            parts[-1]["itens"].append({"tipo": "fala", "n": k + 1, "texto": speech})
             for j, c in enumerate(rot.get("citacoes", [])):
                 if c["fala"] == k:
-                    rec = _crop_quote(pasta, j, c) if c.get("ok") and Path(c["arquivo"]).exists() else None
-                    partes[-1]["itens"].append({"tipo": "cite", "c": c, "j": j, "rec": rec})
-    graficos = json.loads((pasta / "graficos.json").read_text()) if (pasta / "graficos.json").exists() else []
-    na_tela = {g["dados"].get("trecho") for g in graficos if g["modelo"] == "citacao" and g.get("arquivo")}
-    citadas = {re.split(r"[ ,]", c["autores"])[0].lower() for c in rot.get("citacoes", []) if c.get("autores")}
+                    rec = _crop_quote(folder, j, c) if c.get("ok") and Path(c["arquivo"]).exists() else None
+                    parts[-1]["itens"].append({"tipo": "cite", "c": c, "j": j, "rec": rec})
+    graphics = json.loads((folder / "graficos.json").read_text()) if (folder / "graficos.json").exists() else []
+    in_screen = {g["dados"].get("trecho") for g in graphics if g["modelo"] == "citacao" and g.get("arquivo")}
+    quoted = {re.split(r"[ ,]", c["autores"])[0].lower() for c in rot.get("citacoes", []) if c.get("autores")}
     for f in rot.get("fontes", []):
-        sobrenome = re.split(r"[ ,]", f["autores"])[0].lower()
-        f["situacao"] = "citação na tela" if sobrenome in citadas else "só tarja / lista"
-    for it in (i for p in partes for i in p["itens"] if i["tipo"] == "cite"):
-        it["no_video"] = it["c"]["en"] in na_tela
-    palavras = sum(len(f.split()) for f in falas)
-    return tpl.TemplateResponse(request, "roteiro.html", {"ep": ep, "rot": rot, "partes": partes,
-                                                          "n_falas": len(falas), "palavras": palavras,
-                                                          "tem_graficos": bool(graficos)})
+        surname = re.split(r"[ ,]", f["autores"])[0].lower()
+        f["situacao"] = "citação na tela" if surname in quoted else "só tarja / lista"
+    for it in (i for p in parts for i in p["itens"] if i["tipo"] == "cite"):
+        it["no_video"] = it["c"]["en"] in in_screen
+    words = sum(len(f.split()) for f in speeches)
+    return tpl.TemplateResponse(request, "roteiro.html", {"ep": ep, "rot": rot, "partes": parts,
+                                                          "n_falas": len(speeches), "palavras": words,
+                                                          "tem_graficos": bool(graphics)})
 
 
 @app.get("/pdf")
 def pdf_of_vault(arq: str):
     """PDFs de Referências/ do vault (para abrir a citação na página certa no navegador)."""
     cfg = _cfg()["fontes"]
-    raiz = (Path(cfg["vault"]).expanduser() / "Referências").resolve()
-    alvo = Path(arq).expanduser().resolve()
-    if raiz not in alvo.parents or alvo.suffix.lower() != ".pdf" or not alvo.is_file():
+    root = (Path(cfg["vault"]).expanduser() / "Referências").resolve()
+    target = Path(arq).expanduser().resolve()
+    if root not in target.parents or target.suffix.lower() != ".pdf" or not target.is_file():
         raise HTTPException(404)
-    return FileResponse(alvo, media_type="application/pdf", headers={"Content-Disposition": "inline"})
+    return FileResponse(target, media_type="application/pdf", headers={"Content-Disposition": "inline"})
 
 
 # ---------- Gráficos: prévia de cada .mov renderizado ----------
 
 @app.get("/ep/{ep}/graficos", response_class=HTMLResponse)
 def graphics(request: Request, ep: str):
-    pasta = _folder(ep)
-    arq = pasta / "graficos.json"
-    if not arq.exists():
+    folder = _folder(ep)
+    file = folder / "graficos.json"
+    if not file.exists():
         return tpl.TemplateResponse(request, "vazio.html", {"ep": ep, "msg": "Os gráficos ainda não foram planejados."})
     from esteira.project import Project
-    v = Project(pasta).cfg["video"]
-    lista = json.loads(arq.read_text())
-    for g in lista:
-        ecp = pasta / g["ecproj"] if g.get("ecproj") else None
+    v = Project(folder).cfg["video"]
+    items = json.loads(file.read_text())
+    for g in items:
+        ecp = folder / g["ecproj"] if g.get("ecproj") else None
         g["ec_editado"] = bool(ecp and ecp.exists() and ecp.stat().st_mtime > g.get("ec_gerado", 0) + 1)
-    por_tipo = {}
-    for g in lista:
-        por_tipo[g["modelo"]] = por_tipo.get(g["modelo"], 0) + 1
-    return tpl.TemplateResponse(request, "graficos.html", {"ep": ep, "graficos": lista, "por_tipo": por_tipo,
-                                                           "editados_ec": sum(g["ec_editado"] for g in lista),
+    by_kind = {}
+    for g in items:
+        by_kind[g["modelo"]] = by_kind.get(g["modelo"], 0) + 1
+    return tpl.TemplateResponse(request, "graficos.html", {"ep": ep, "graficos": items, "por_tipo": by_kind,
+                                                           "editados_ec": sum(g["ec_editado"] for g in items),
                                                            "vertical": v["altura"] > v["largura"]})
 
 
 @app.get("/ep/{ep}/previa/{nome}")
 def preview_graphic(ep: str, nome: str):
     """Quadro do gráfico (aos 65% da duração) sobre fundo cinza; gerado na 1ª visita e guardado ao lado do .mov."""
-    pasta = _folder(ep)
-    mov = (pasta / "graficos" / nome).resolve()
-    if mov.parent != (pasta / "graficos").resolve() or mov.suffix != ".mov" or not mov.exists():
+    folder = _folder(ep)
+    mov = (folder / "graficos" / nome).resolve()
+    if mov.parent != (folder / "graficos").resolve() or mov.suffix != ".mov" or not mov.exists():
         raise HTTPException(404)
     png = mov.with_suffix(".previa.jpg")
     if not png.exists():
         from esteira.media import duration_media
         from esteira.project import Project
-        v = Project(pasta).cfg["video"]
+        v = Project(folder).cfg["video"]
         n = int(duration_media(mov) * v["fps"] * 0.65)  # quadro escolhido por índice: -ss perde o alfa perto do fim
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-i", str(mov),
                         "-f", "lavfi", "-i", f"color=c=0x2a2d33:s={v['largura']}x{v['altura']}", "-filter_complex",
@@ -439,8 +439,8 @@ def api_monitor():
 def api_graph():
     from esteira import graph, monitor
     from esteira.graph import NODES, SEQ, USES
-    atual = monitor.state(0)["atual"]
-    return JSONResponse(dict(graph.state(atual), def_nos=[{"id": i, "rotulo": r, "faixa": f, "motor": m} for i, r, f, m, _ in NODES],
+    current = monitor.state(0)["atual"]
+    return JSONResponse(dict(graph.state(current), def_nos=[{"id": i, "rotulo": r, "faixa": f, "motor": m} for i, r, f, m, _ in NODES],
                              seq=SEQ, usa=USES))
 
 
@@ -476,12 +476,12 @@ def edit_graphic(request: Request, ep: str, i: int, t: float = 0.0):
     from esteira import editor
     p = _project(ep)
     w, h = editor._dim(p)
-    lista = editor.graphics(p)
-    if i >= len(lista):
+    items = editor.graphics(p)
+    if i >= len(items):
         raise HTTPException(404)
     return tpl.TemplateResponse(request, "editor.html", _ctx_editor(p, ep, "grafico") | {
         "i": i, "estado": editor.state_graphic(p, i, t), "w": w, "h": h, "modelos": editor.MODELS,
-        "titulo_pagina": "Novo gráfico" if i < 0 else f"Gráfico {i + 1} de {len(lista)}"})
+        "titulo_pagina": "Novo gráfico" if i < 0 else f"Gráfico {i + 1} de {len(items)}"})
 
 
 @app.get("/ep/{ep}/thumbs", response_class=HTMLResponse)
@@ -489,48 +489,48 @@ def page_thumbs(request: Request, ep: str):
     from esteira import editor
     p = _project(ep)
     from esteira import photocraft
-    vagas = [(k, p.caminho(f"thumb_{k}.png")) for k in (1, 2, 3)]
-    lista = editor.thumbs(p)
-    for t in lista:  # .pcraft salvo à mão no PhotoCraft → refaz o PNG (as vagas 1–3 são cópias: use de novo)
+    slots = [(k, p.caminho(f"thumb_{k}.png")) for k in (1, 2, 3)]
+    items = editor.thumbs(p)
+    for t in items:  # .pcraft salvo à mão no PhotoCraft → refaz o PNG (as vagas 1–3 são cópias: use de novo)
         pc = p.caminho(f"thumbs/{t['arquivo']}").with_suffix(".pcraft")
         if photocraft.edited(pc):
             photocraft.export(pc)
-            marcas = p.caminho("thumbs/editadas_photocraft.json")
-            feitas = set(json.loads(marcas.read_text())) if marcas.exists() else set()
-            marcas.write_text(json.dumps(sorted(feitas | {t["arquivo"]})))
-    marcas = p.caminho("thumbs/editadas_photocraft.json")
-    feitas = set(json.loads(marcas.read_text())) if marcas.exists() else set()
-    for t in lista:
-        t["pc_editado"] = t["arquivo"] in feitas
+            marks = p.caminho("thumbs/editadas_photocraft.json")
+            done = set(json.loads(marks.read_text())) if marks.exists() else set()
+            marks.write_text(json.dumps(sorted(done | {t["arquivo"]})))
+    marks = p.caminho("thumbs/editadas_photocraft.json")
+    done = set(json.loads(marks.read_text())) if marks.exists() else set()
+    for t in items:
+        t["pc_editado"] = t["arquivo"] in done
     return tpl.TemplateResponse(request, "thumbs.html", {
-        "ep": ep, "thumbs": lista, "fundos": editor.backgrounds(p),
-        "vagas": [(k, int(a.stat().st_mtime)) for k, a in vagas if a.exists()]})
+        "ep": ep, "thumbs": items, "fundos": editor.backgrounds(p),
+        "vagas": [(k, int(a.stat().st_mtime)) for k, a in slots if a.exists()]})
 
 
 @app.get("/ep/{ep}/thumbs/editar", response_class=HTMLResponse)
 def edit_thumb(request: Request, ep: str, arq: str = "", fundo: str = ""):
     from esteira import editor
     p = _project(ep)
-    fundos = editor.backgrounds(p)
-    if not fundos:
+    backgrounds = editor.backgrounds(p)
+    if not backgrounds:
         return tpl.TemplateResponse(request, "vazio.html", {"ep": ep, "msg": "Sem fundos: rode a etapa thumb ou envie uma imagem em Thumbs."})
-    estado = next((t["estado"] for t in editor.thumbs(p) if t["arquivo"] == arq), None) or {
+    state = next((t["estado"] for t in editor.thumbs(p) if t["arquivo"] == arq), None) or {
         "texto": "TEXTO DA THUMB", "destaque": "", "layout": "rosto_direita", "seta": False,
-        "fundo": fundo if fundo in fundos else fundos[0]}
+        "fundo": fundo if fundo in backgrounds else backgrounds[0]}
     w, h = editor._dim_thumb(p)
     return tpl.TemplateResponse(request, "editor.html", _ctx_editor(p, ep, "thumb") | {
-        "i": -1, "estado": estado, "w": w, "h": h, "fundos": fundos, "titulo_pagina": "Thumbnail"})
+        "i": -1, "estado": state, "w": w, "h": h, "fundos": backgrounds, "titulo_pagina": "Thumbnail"})
 
 
 @app.post("/ep/{ep}/editor/previa", response_class=HTMLResponse)
 async def editor_preview(request: Request, ep: str):
     from esteira import editor
-    corpo = await request.json()
+    body = await request.json()
     p = _project(ep)
     try:
-        if corpo.get("tipo") == "thumb":
-            return HTMLResponse(editor.preview_thumb(p, ep, corpo["estado"]))
-        return HTMLResponse(editor.preview_graphic(p, ep, corpo["estado"]))
+        if body.get("tipo") == "thumb":
+            return HTMLResponse(editor.preview_thumb(p, ep, body["estado"]))
+        return HTMLResponse(editor.preview_graphic(p, ep, body["estado"]))
     except (ValueError, KeyError, TypeError) as e:
         return _error(e)
 
@@ -540,11 +540,11 @@ async def editor_save_graphic(request: Request, ep: str, i: int):
     from esteira import editor
     p = _project(ep)
     try:
-        novo = editor.save_graphic(p, i, await request.json())
+        new = editor.save_graphic(p, i, await request.json())
     except (ValueError, KeyError, TypeError, IndexError) as e:
         return _error(e)
     queue.add(ep, "graphics", ["--render-only"])  # só a peça editada é renderizada; o resto está em cache
-    return {"i": novo}
+    return {"i": new}
 
 
 @app.post("/ep/{ep}/editor/grafico/{i}/excluir")
@@ -576,32 +576,32 @@ def use_thumb(ep: str, arq: str = Form(...), k: int = Form(...)):
 @app.post("/ep/{ep}/thumbs/fundo")
 async def send_background(ep: str, arquivo: UploadFile = File(...)):
     from esteira import editor
-    sufixo = Path(arquivo.filename or "").suffix.lower()
-    if sufixo not in (".png", ".jpg", ".jpeg", ".webp"):
+    suffix = Path(arquivo.filename or "").suffix.lower()
+    if suffix not in (".png", ".jpg", ".jpeg", ".webp"):
         return _error("envie PNG, JPG ou WebP")
-    nome = editor.store_background(_project(ep), await arquivo.read(), ".png" if sufixo == ".png" else sufixo)
-    return RedirectResponse(f"/ep/{ep}/thumbs/editar?fundo={nome}", status_code=303)
+    name = editor.store_background(_project(ep), await arquivo.read(), ".png" if suffix == ".png" else suffix)
+    return RedirectResponse(f"/ep/{ep}/thumbs/editar?fundo={name}", status_code=303)
 
 
 @app.post("/ep/{ep}/editor/ia")
 async def editor_ai(request: Request, ep: str):
     from esteira import editor
-    corpo = await request.json()
-    pedido = (corpo.get("pedido") or "").strip()
+    body = await request.json()
+    pedido = (body.get("pedido") or "").strip()
     if not pedido:
         return _error("escreva o pedido")
     from esteira.core import locks
-    if corpo.get("motor", "claude") == "local" and not locks.is_free("machine"):
+    if body.get("motor", "claude") == "local" and not locks.is_free("machine"):
         d = locks.owner("machine")
         return _error(f"a máquina está ocupada por `{d['command']}`: só um processo local por vez. "
                      "Use o motor Claude ou espere terminar.")
     try:
         import asyncio
-        novo, explicacao, avisos = await asyncio.to_thread(
-            editor.suggest, _project(ep), ep, corpo["estado"], pedido, corpo.get("motor", "claude"), corpo.get("tipo", "grafico"))
+        new, explanation, warnings = await asyncio.to_thread(
+            editor.suggest, _project(ep), ep, body["estado"], pedido, body.get("motor", "claude"), body.get("tipo", "grafico"))
     except (ValueError, KeyError, TypeError) as e:
         return _error(e)
-    return JSONResponse({"estado": novo, "explicacao": explicacao, "avisos": avisos})
+    return JSONResponse({"estado": new, "explicacao": explanation, "avisos": warnings})
 
 
 # ---------- Edição manual no FilmCraft ----------
@@ -618,22 +618,22 @@ def ensure_ecproj(ep: str, i: int):
     """.ecproj da peça (cria agora se a peça é de antes do EffectCraft); None se a citação não achou o trecho."""
     from esteira.graphics import effectcraft, plan
     p = _project(ep)
-    lista = p.carregar_json("graficos.json")
-    if not 0 <= i < len(lista):
+    items = p.carregar_json("graficos.json")
+    if not 0 <= i < len(items):
         raise HTTPException(404, "peça não encontrada")
-    c = lista[i]
+    c = items[i]
     ecp = p.pasta / c["ecproj"] if c.get("ecproj") else None
     if not ecp or not ecp.exists():
         w, h = p.cfg["video"]["largura"], p.cfg["video"]["altura"]
-        pasta = p.caminho("graficos")
+        folder = p.caminho("graficos")
         base = Path(c["arquivo"]).stem if c.get("arquivo") else f"{c['modelo']}_{int(c['inicio'] * 1000)}"
-        pc = plan.piece(c, pasta, w, h, pasta / f"pag_{base}.png")
+        pc = plan.piece(c, folder, w, h, folder / f"pag_{base}.png")
         if not pc:
             return None
-        ecp = effectcraft.build(*pc, c["dur"], pasta / f"{base}.ecproj", w, h,
+        ecp = effectcraft.build(*pc, c["dur"], folder / f"{base}.ecproj", w, h,
                                     p.cfg.get("graficos", {}).get("cor", "#ffd400"), p.cfg["video"]["fps"])
         c.update(ecproj=str(ecp.relative_to(p.pasta)), ec_gerado=ecp.stat().st_mtime)
-        p.salvar_json("graficos.json", lista)
+        p.salvar_json("graficos.json", items)
     return ecp
 
 
@@ -648,15 +648,15 @@ def open_effectcraft(ep: str, i: int):
     return RedirectResponse(f"/ep/{ep}/graficos", status_code=303)
 
 
-def ensure_pcraft(ep: str, arq: str):
+def ensure_pcraft(ep: str, file: str):
     """Thumb em camadas (.pcraft) ao lado do PNG (cria agora se a thumb é de antes do PhotoCraft)."""
     from esteira import editor
     from esteira.thumbs import compose_file
     p = _project(ep)
-    t = next((t for t in editor.thumbs(p) if t["arquivo"] == arq), None)
+    t = next((t for t in editor.thumbs(p) if t["arquivo"] == file), None)
     if not t:
         raise HTTPException(404, "thumb não encontrada")
-    png = p.caminho(f"thumbs/{arq}")
+    png = p.caminho(f"thumbs/{file}")
     pc = png.with_suffix(".pcraft")
     if not pc.exists():
         compose_file(t["estado"], p.caminho(f"thumbs/{t['estado']['fundo']}"), png, p.cfg)
@@ -673,14 +673,14 @@ def open_photocraft(ep: str, arq: str = Form(...)):
 
 @app.get("/ep/{ep}/_etapas", response_class=HTMLResponse)
 def fragment_stages(request: Request, ep: str):
-    pasta = _folder(ep)
-    est = status.stages(pasta)
-    linhas = [(e, est.get(e)) for e in PIPELINE] + [(e, v) for e, v in est.items() if e not in PIPELINE]
-    evs = [e for e in status.events(pasta) if e["kind"] in ("output", "warning", "error", "claude", "start", "end")]
+    folder = _folder(ep)
+    est = status.stages(folder)
+    lines = [(e, est.get(e)) for e in PIPELINE] + [(e, v) for e, v in est.items() if e not in PIPELINE]
+    evs = [e for e in status.events(folder) if e["kind"] in ("output", "warning", "error", "claude", "start", "end")]
     from esteira.ai import claude
-    gasto = claude.spent(ep)[0]
-    return tpl.TemplateResponse(request, "_etapas.html", {"ep": ep, "linhas": linhas, "eventos": evs[-40:][::-1],
-                                                          "gasto": gasto})
+    spent = claude.spent(ep)[0]
+    return tpl.TemplateResponse(request, "_etapas.html", {"ep": ep, "linhas": lines, "eventos": evs[-40:][::-1],
+                                                          "gasto": spent})
 
 
 @app.post("/ep/{ep}/rodar/{etapa}")
@@ -706,8 +706,8 @@ def _local_models():
     from esteira.ai import llama
     if not llama.server():
         return []
-    saida = [{"nome": m["id"], "gb": llama.gb(m["id"]), "visao": llama.vision(m)} for m in llama.models() or []]
-    return sorted(saida, key=lambda m: m["nome"])
+    output = [{"nome": m["id"], "gb": llama.gb(m["id"]), "visao": llama.vision(m)} for m in llama.models() or []]
+    return sorted(output, key=lambda m: m["nome"])
 
 
 @app.get("/opcoes", response_class=HTMLResponse)
@@ -716,7 +716,7 @@ def page_options(request: Request, salvo: str = ""):
     from esteira.ai import local
     cfg = _cfg().get("claude", {})
     o = options.read()
-    ops = [(k, nome, desc, tipos, options.operation(k)) for k, (nome, desc, tipos) in options.OPERATIONS.items()]
+    ops = [(k, name, desc, kinds, options.operation(k)) for k, (name, desc, kinds) in options.OPERATIONS.items()]
     return tpl.TemplateResponse(request, "opcoes.html", {
         "o": o, "ops": ops, "modelos_claude": options.MODELS, "sugestoes": options.SUGGESTIONS, "locais": _local_models(),
         "padrao": {"text": local.TEXT, "vision": local.VISION}, "cfg_claude": options.claude(cfg), "salvo": salvo})
@@ -728,9 +728,9 @@ async def save_options(request: Request):
     f = await request.form()
     num = lambda v: float(v.replace(",", ".")) if (v or "").strip() else None
     ops = {}
-    for k, (_, _, tipos) in options.OPERATIONS.items():
+    for k, (_, _, kinds) in options.OPERATIONS.items():
         d = {"engine": f.get(f"{k}.motor") or "default"}
-        for t in tipos:
+        for t in kinds:
             d[t] = f.get(f"{k}.{t}") or None
         ops[k] = d
     options.save(engine=f.get("motor") or "local", claude_model=f.get("modelo_claude") or None,
@@ -769,60 +769,60 @@ def fragment_downloading(request: Request):
 
 @app.get("/ep/{ep}/cortes", response_class=HTMLResponse)
 def cuts(request: Request, ep: str, filtro: str = "revisar"):
-    pasta = _folder(ep)
-    arq = pasta / "cortes.json"
-    if not arq.exists():
+    folder = _folder(ep)
+    file = folder / "cortes.json"
+    if not file.exists():
         return tpl.TemplateResponse(request, "vazio.html", {"ep": ep, "msg": "Os cortes ainda não foram decididos."})
-    dados = json.loads(arq.read_text())
-    trechos = [dict(t, k=k) for k, t in enumerate(dados["trechos"])]
+    data = json.loads(file.read_text())
+    spans = [dict(t, k=k) for k, t in enumerate(data["trechos"])]
     if filtro == "revisar":
-        trechos = [t for t in trechos if t["tipo"] != "tomada" or t["confianca"] < 0.85]
+        spans = [t for t in spans if t["tipo"] != "tomada" or t["confianca"] < 0.85]
     elif filtro == "cortados":
-        trechos = [t for t in trechos if not t["manter"]]
-    bruta = next((p.name for p in pasta.glob("narracao_bruta.*")), None)
-    return tpl.TemplateResponse(request, "cortes.html", {"ep": ep, "trechos": trechos, "faltando": dados["faltando"],
-                                                         "bruta": bruta, "filtro": filtro,
-                                                         "editado": dados.get("editado_no_painel", False)})
+        spans = [t for t in spans if not t["manter"]]
+    raw = next((p.name for p in folder.glob("narracao_bruta.*")), None)
+    return tpl.TemplateResponse(request, "cortes.html", {"ep": ep, "trechos": spans, "faltando": data["faltando"],
+                                                         "bruta": raw, "filtro": filtro,
+                                                         "editado": data.get("editado_no_painel", False)})
 
 
 @app.post("/ep/{ep}/cortes/{k}/alternar", response_class=HTMLResponse)
 def toggle_cut(request: Request, ep: str, k: int):
-    arq = _folder(ep) / "cortes.json"
-    dados = json.loads(arq.read_text())
-    t = dados["trechos"][k]
+    file = _folder(ep) / "cortes.json"
+    data = json.loads(file.read_text())
+    t = data["trechos"][k]
     t["manter"] = not t["manter"]
     t["por"] = "painel"
     t["motivo"] = t["motivo"].split(" → painel")[0] + f" → painel: {'fica' if t['manter'] else 'sai'}"
-    dados["editado_no_painel"] = True
-    arq.write_text(json.dumps(dados, ensure_ascii=False, indent=1))
-    bruta = next((p.name for p in arq.parent.glob("narracao_bruta.*")), None)
-    return tpl.TemplateResponse(request, "_corte.html", {"ep": ep, "t": dict(t, k=k), "bruta": bruta})
+    data["editado_no_painel"] = True
+    file.write_text(json.dumps(data, ensure_ascii=False, indent=1))
+    raw = next((p.name for p in file.parent.glob("narracao_bruta.*")), None)
+    return tpl.TemplateResponse(request, "_corte.html", {"ep": ep, "t": dict(t, k=k), "bruta": raw})
 
 
 @app.get("/ep/{ep}/cenas", response_class=HTMLResponse)
 def scenes(request: Request, ep: str):
-    pasta = _folder(ep)
-    if not (pasta / "plano.json").exists():
+    folder = _folder(ep)
+    if not (folder / "plano.json").exists():
         return tpl.TemplateResponse(request, "vazio.html", {"ep": ep, "msg": "As cenas ainda não foram geradas."})
-    plano = json.loads((pasta / "plano.json").read_text())
-    graficos = json.loads((pasta / "graficos.json").read_text()) if (pasta / "graficos.json").exists() else []
-    for c in plano["cenas"]:
-        q = pasta / "midia" / f".aval_{c['id']:03d}.jpg"
+    plan = json.loads((folder / "plano.json").read_text())
+    graphics = json.loads((folder / "graficos.json").read_text()) if (folder / "graficos.json").exists() else []
+    for c in plan["cenas"]:
+        q = folder / "midia" / f".aval_{c['id']:03d}.jpg"
         c["quadro"] = q.name if q.exists() else (Path(c["midia"]).name if c.get("midia", "").endswith(".jpg") else None)
-    return tpl.TemplateResponse(request, "cenas.html", {"ep": ep, "cenas": plano["cenas"], "graficos": graficos,
-                                                        "titulo": plano.get("titulo")})
+    return tpl.TemplateResponse(request, "cenas.html", {"ep": ep, "cenas": plan["cenas"], "graficos": graphics,
+                                                        "titulo": plan.get("titulo")})
 
 
 @app.post("/ep/{ep}/cenas/{cid}/trocar")
 def swap_media(ep: str, cid: int, busca_en: str = Form("")):
-    pasta = _folder(ep)
+    folder = _folder(ep)
     if busca_en.strip():
-        arq = pasta / "plano.json"
-        plano = json.loads(arq.read_text())
-        for c in plano["cenas"]:
+        file = folder / "plano.json"
+        plan = json.loads(file.read_text())
+        for c in plan["cenas"]:
             if c["id"] == cid:
                 c["busca_en"] = busca_en.strip()
-        arq.write_text(json.dumps(plano, ensure_ascii=False, indent=2))
+        file.write_text(json.dumps(plan, ensure_ascii=False, indent=2))
     queue.add(ep, "fetch", ["--redo", "--scenes", str(cid)])
     return RedirectResponse(f"/ep/{ep}/cenas#c{cid}", status_code=303)
 
@@ -831,22 +831,22 @@ def swap_media(ep: str, cid: int, busca_en: str = Form("")):
 def costs(request: Request):
     from esteira.ai import claude
     regs = list(reversed(claude._records()))
-    por_ep = {}
+    by_ep = {}
     for r in regs:
-        por_ep[r["ep"]] = por_ep.get(r["ep"], 0) + (r.get("cost") or 0)
-    hoje = datetime.now().date().isoformat()
+        by_ep[r["ep"]] = by_ep.get(r["ep"], 0) + (r.get("cost") or 0)
+    today = datetime.now().date().isoformat()
     return tpl.TemplateResponse(request, "custos.html", {
-        "regs": regs[:200], "por_ep": sorted(por_ep.items(), key=lambda x: -x[1]), "total": sum(por_ep.values()),
-        "hoje": sum((r.get("cost") or 0) for r in regs if r["t"].startswith(hoje)), "cfg": _cfg().get("claude", {})})
+        "regs": regs[:200], "por_ep": sorted(by_ep.items(), key=lambda x: -x[1]), "total": sum(by_ep.values()),
+        "hoje": sum((r.get("cost") or 0) for r in regs if r["t"].startswith(today)), "cfg": _cfg().get("claude", {})})
 
 
 @app.get("/arq/{ep}/{caminho:path}")
 def file(ep: str, caminho: str):
-    pasta = _folder(ep)
-    alvo = (pasta / caminho).resolve()
-    if pasta not in alvo.parents or not alvo.is_file():
+    folder = _folder(ep)
+    target = (folder / caminho).resolve()
+    if folder not in target.parents or not target.is_file():
         raise HTTPException(404)
-    return FileResponse(alvo)
+    return FileResponse(target)
 
 
 # ---------- Acervo de mídia (reaproveitada entre vídeos) ----------
@@ -864,10 +864,10 @@ def thumbnail_library(mid: str):
     it = library.item(mid)
     if not it:
         raise HTTPException(404)
-    arq = library.thumbnail(it)
-    if not arq.exists():
+    file = library.thumbnail(it)
+    if not file.exists():
         raise HTTPException(404)
-    return FileResponse(arq)
+    return FileResponse(file)
 
 
 # ---------- API JSON do app Flutter (plataforma, módulo Empreendimento) ----------

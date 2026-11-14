@@ -70,16 +70,16 @@ def _slug(t):
 # ---------------------------------------------------------------- 1. plano
 
 def line_of_plan(canal, n):
-    pasta = _vault() / "Notas/Empreendimento/YouTube" / canal / "Temas"
-    for arco in sorted(pasta.rglob("*Arco*.md")):
-        for linha in arco.read_text().splitlines():
-            if re.match(rf"^\|\s*{n}\s*\|", linha):
-                c = [x.strip() for x in linha.strip().strip("|").split("|")]
-                titulo = re.sub(r"\s*·\s*\[\[.*$", "", c[2]).strip("* ")
-                busca = re.search(r"\[([^\]]+)\]\(", c[5])
-                return {"n": n, "fio": c[1], "titulo": titulo, "gancho": c[3], "base": c[4],
-                        "busca": busca.group(1) if busca else titulo, "evidencia": c[6], "fmt": (c[8] or "M")[:1],
-                        "arco": arco.stem}
+    folder = _vault() / "Notas/Empreendimento/YouTube" / canal / "Temas"
+    for arc in sorted(folder.rglob("*Arco*.md")):
+        for line in arc.read_text().splitlines():
+            if re.match(rf"^\|\s*{n}\s*\|", line):
+                c = [x.strip() for x in line.strip().strip("|").split("|")]
+                title = re.sub(r"\s*·\s*\[\[.*$", "", c[2]).strip("* ")
+                search = re.search(r"\[([^\]]+)\]\(", c[5])
+                return {"n": n, "fio": c[1], "titulo": title, "gancho": c[3], "base": c[4],
+                        "busca": search.group(1) if search else title, "evidencia": c[6], "fmt": (c[8] or "M")[:1],
+                        "arco": arc.stem}
     raise SystemExit(f"vídeo {n} não está no plano de {canal}")
 
 
@@ -91,9 +91,9 @@ def _key_openalex():
 
 
 def _openalex(params):
-    chave = _key_openalex()
+    key = _key_openalex()
     try:
-        r = requests.get("https://api.openalex.org/works", params={**params, **({"api_key": chave} if chave else {})},
+        r = requests.get("https://api.openalex.org/works", params={**params, **({"api_key": key} if key else {})},
                          headers=UA, timeout=30)
         if r.status_code == 429:
             raise SystemExit("OpenAlex: cota diária sem chave esgotada (volta à meia-noite UTC). "
@@ -105,16 +105,16 @@ def _openalex(params):
 
 def _candidates_base(base):
     """Artigos-base do plano ("Sobrenome (Ano) — *Revista*"): o trabalho no OpenAlex, se for aberto."""
-    saida = []
+    output = []
     for m in re.finditer(r"([A-ZÀ-Ý][\wÀ-ÿ'\-]+)[^()]*\((\d{4})\)\s*—\s*\*([^*]+)\*", base):
-        sobrenome, ano, revista = m.groups()
-        for w in _openalex({"filter": f"raw_author_name.search:{sobrenome},publication_year:{ano}", "per_page": 10}):
-            fonte = (((w.get("primary_location") or {}).get("source") or {}).get("display_name") or "")
-            if _slug(revista)[:12] in _slug(fonte):  # o mesmo trabalho do plano; entra só se for aberto
+        surname, year, revista = m.groups()
+        for w in _openalex({"filter": f"raw_author_name.search:{surname},publication_year:{year}", "per_page": 10}):
+            source = (((w.get("primary_location") or {}).get("source") or {}).get("display_name") or "")
+            if _slug(revista)[:12] in _slug(source):  # o mesmo trabalho do plano; entra só se for aberto
                 if (w.get("open_access") or {}).get("is_oa") and w.get("doi"):
-                    saida.append(w)
+                    output.append(w)
                 break
-    return saida
+    return output
 
 
 def _candidates_search(busca, n=12):
@@ -123,33 +123,33 @@ def _candidates_search(busca, n=12):
             if w.get("doi") and (w.get("cited_by_count") or 0) >= 5]
 
 
-def sources_open(linha, maximo=4):
+def sources_open(line, maximum=4):
     """PDFs abertos baixados para o vídeo: [{arquivo, titulo, autores, ano, revista, doi}]."""
-    vistos, fontes = set(), []
-    trace.step("openalex", f"base: {linha['base'][:80]} · busca: {linha['busca'][:80]}")
-    for w in _candidates_base(linha["base"]) + _candidates_search(linha["busca"]):
+    seen, sources = set(), []
+    trace.step("openalex", f"base: {line['base'][:80]} · busca: {line['busca'][:80]}")
+    for w in _candidates_base(line["base"]) + _candidates_search(line["busca"]):
         doi = w["doi"].replace("https://doi.org/", "")
-        if doi.lower() in vistos or len(fontes) >= maximo:
+        if doi.lower() in seen or len(sources) >= maximum:
             continue
-        vistos.add(doi.lower())
+        seen.add(doi.lower())
         trace.step("pdf", f"{doi} · {w.get('title', '')[:90]}")
         cod, out, _ = _article("baixar", doi)
         if cod or not out.startswith("ok"):
             continue
-        arq = re.search(r"(Referências/Artigos/\S+\.pdf)", out).group(1)
+        file = re.search(r"(Referências/Artigos/\S+\.pdf)", out).group(1)
         ind = json.loads((_vault() / "Referências/Artigos/indice.json").read_text())
-        reg = next((v for v in ind.values() if v.get("arquivo") == arq), {})
-        fontes.append({"arquivo": arq, "doi": doi, "titulo": reg.get("titulo") or w.get("title", ""),
+        reg = next((v for v in ind.values() if v.get("arquivo") == file), {})
+        sources.append({"arquivo": file, "doi": doi, "titulo": reg.get("titulo") or w.get("title", ""),
                        "autores": reg.get("autores", ""), "ano": reg.get("ano") or str(w.get("publication_year", "")),
                        "revista": reg.get("revista", "")})
-        print(f"  fonte: {arq.split('/')[-1]}")
-    return fontes
+        print(f"  fonte: {file.split('/')[-1]}")
+    return sources
 
 
 def label(f):
-    nomes = [x.strip().split()[-1] for x in f["autores"].split(",") if x.strip()]
-    autor = nomes[0] + (" et al." if len(nomes) > 2 else f" e {nomes[1]}" if len(nomes) == 2 else "") if nomes else "?"
-    return f"{autor} ({f['ano']})"
+    names = [x.strip().split()[-1] for x in f["autores"].split(",") if x.strip()]
+    author = names[0] + (" et al." if len(names) > 2 else f" e {names[1]}" if len(names) == 2 else "") if names else "?"
+    return f"{author} ({f['ano']})"
 
 
 # ---------------------------------------------------------------- 3. fatos (frases do PDF)
@@ -164,49 +164,49 @@ class Findings(BaseModel):
     achados: list[Finding] = Field(max_length=3)
 
 
-def _sentences(pdf, termos, max_paginas=25, n=14):
+def _sentences(pdf, terms, max_pages=25, n=14):
     doc = pymupdf.open(_vault() / pdf)
-    saida = []
-    for k in range(min(len(doc), max_paginas)):
-        texto = re.sub(r"\s+", " ", re.sub(r"-\n(?=[a-z])", "", doc[k].get_text()))
-        for f in re.split(r"(?<=[.!?])\s+(?=[A-Z(])", texto):
+    output = []
+    for k in range(min(len(doc), max_pages)):
+        text = re.sub(r"\s+", " ", re.sub(r"-\n(?=[a-z])", "", doc[k].get_text()))
+        for f in re.split(r"(?<=[.!?])\s+(?=[A-Z(])", text):
             if not 60 <= len(f) <= 380 or not re.search(r"\d", f):
                 continue
-            nota = 2 * bool(re.search(r"\d+(?:\.\d+)?\s*(%|percent)", f)) + sum(t in f.lower() for t in termos)
-            nota += 1 if k < 3 else 0  # resumo e introdução trazem o resultado principal
-            if nota >= 2:
-                saida.append((nota, k + 1, f.strip()))
-    saida.sort(key=lambda x: (-x[0], x[1]))
-    return saida[:n]
+            note = 2 * bool(re.search(r"\d+(?:\.\d+)?\s*(%|percent)", f)) + sum(t in f.lower() for t in terms)
+            note += 1 if k < 3 else 0  # resumo e introdução trazem o resultado principal
+            if note >= 2:
+                output.append((note, k + 1, f.strip()))
+    output.sort(key=lambda x: (-x[0], x[1]))
+    return output[:n]
 
 
-def facts(linha, fontes):
+def facts(line, fontes):
     """[{id, fonte, pagina, en, pt, achado}] verificados no PDF pelo `artigo citar`."""
-    termos = [t for t in re.findall(r"[a-z]{4,}", linha["busca"].lower())]
-    saida = []
+    terms = [t for t in re.findall(r"[a-z]{4,}", line["busca"].lower())]
+    output = []
     for f in fontes:
-        trace.step("trechos", f"{f['arquivo'].split('/')[-1]} · termos: {', '.join(termos[:8])}")
-        frases = _sentences(f["arquivo"], termos)
-        if not frases:
+        trace.step("trechos", f"{f['arquivo'].split('/')[-1]} · termos: {', '.join(terms[:8])}")
+        sentences = _sentences(f["arquivo"], terms)
+        if not sentences:
             continue
-        lista = "\n".join(f"{i}. (p.{p}) {txt}" for i, (_, p, txt) in enumerate(frases))
-        trace.step("fatos", f"{len(frases)} frases com números de {label(f)}")
-        r = local.ask(local.prompt("roteiro_trechos", tema=linha["titulo"], gancho=linha["gancho"],
-                                         estudo=f"{label(f)}, {f['titulo']}", frases=lista),
+        items = "\n".join(f"{i}. (p.{p}) {txt}" for i, (_, p, txt) in enumerate(sentences))
+        trace.step("fatos", f"{len(sentences)} frases com números de {label(f)}")
+        r = local.ask(local.prompt("roteiro_trechos", tema=line["titulo"], gancho=line["gancho"],
+                                         estudo=f"{label(f)}, {f['titulo']}", frases=items),
                             Findings, max_tokens=900)
         for a in (r.achados if r else []):
-            if not 0 <= a.indice < len(frases):
+            if not 0 <= a.indice < len(sentences):
                 continue
-            _, pag, en = frases[a.indice]
+            _, pag, en = sentences[a.indice]
             trace.step("citar", f"p.{pag}: {en[:120]}")
-            cod, bloco, _ = _article("citar", Path(f["arquivo"]).name, "-p", pag, "-t", en, "-r", a.traducao)
+            cod, block, _ = _article("citar", Path(f["arquivo"]).name, "-p", pag, "-t", en, "-r", a.traducao)
             if cod:
                 continue
-            bloco = re.sub(r"^> \[!cite\] .*$", f"> [!cite] {label(f)}" + (f" — {f['revista']}" if f["revista"] else ""),
-                           bloco.strip(), count=1, flags=re.M)  # cabeçalho pelo índice (autor e ano certos)
-            saida.append({"id": len(saida), "fonte": f, "en": en, "pt": a.traducao, "achado": a.achado,
-                          "bloco": bloco})
-    return saida
+            block = re.sub(r"^> \[!cite\] .*$", f"> [!cite] {label(f)}" + (f" — {f['revista']}" if f["revista"] else ""),
+                           block.strip(), count=1, flags=re.M)  # cabeçalho pelo índice (autor e ano certos)
+            output.append({"id": len(output), "fonte": f, "en": en, "pt": a.traducao, "achado": a.achado,
+                          "bloco": block})
+    return output
 
 
 # ---------------------------------------------------------------- 4. texto falado
@@ -225,140 +225,140 @@ def _numbers(t):
     return {re.sub(r"[^\d]", "", x) for x in NUM.findall(t) if re.sub(r"[^\d]", "", x)}
 
 
-def _speech_ok(fala, fatos_):
+def _speech_ok(fala, facts_):
     """Todo número da fala (exceto 1–10 e anos) precisa estar no fato citado (achado ou trecho em inglês)."""
     nums = {n for n in _numbers(fala.texto) if not (len(n) <= 1 or re.fullmatch(r"(19|20)\d\d", n))}
     if not nums:
         return True
-    if not 0 <= fala.fato < len(fatos_):
+    if not 0 <= fala.fato < len(facts_):
         return False
-    base = _numbers(fatos_[fala.fato]["achado"]) | _numbers(fatos_[fala.fato]["en"])
+    base = _numbers(facts_[fala.fato]["achado"]) | _numbers(facts_[fala.fato]["en"])
     return nums <= base
 
 
-def write(linha, fatos_, canal):
-    fmt = linha["fmt"] if linha["fmt"] in PARTS else "M"
-    estrutura, total = PARTS[fmt], WORDS.get(fmt, 1650)
-    lista = "\n".join(f"{x['id']}. {x['achado']} — {label(x['fonte'])}" for x in fatos_) or "(nenhum)"
-    partes, anterior = [], ""
-    for i, (nome, funcao, frac) in enumerate(estrutura, 1):
-        palavras = max(60, int(total * frac))
-        n_falas = max(2, round(palavras / 40) + 1)
+def write(line, facts_, canal):
+    fmt = line["fmt"] if line["fmt"] in PARTS else "M"
+    structure, total = PARTS[fmt], WORDS.get(fmt, 1650)
+    items = "\n".join(f"{x['id']}. {x['achado']} — {label(x['fonte'])}" for x in facts_) or "(nenhum)"
+    parts, previous = [], ""
+    for i, (name, funcao, frac) in enumerate(structure, 1):
+        words = max(60, int(total * frac))
+        n_speeches = max(2, round(words / 40) + 1)
         r = None
-        for tentativa in (1, 2, 3):
-            trace.step("partes", f"parte {i}/{len(estrutura)}: {nome} · ~{palavras} palavras · tentativa {tentativa}")
-            trace.progress(i, len(estrutura), nome)
+        for attempt in (1, 2, 3):
+            trace.step("partes", f"parte {i}/{len(structure)}: {name} · ~{words} palavras · tentativa {attempt}")
+            trace.progress(i, len(structure), name)
             r = local.ask(local.prompt(
-                "roteiro_parte", canal=canal, titulo=linha["titulo"], gancho=linha["gancho"], parte_n=i,
-                total=len(estrutura), parte_nome=nome, funcao=funcao, palavras=palavras, n_falas=n_falas,
-                anterior=f"Última fala da parte anterior: \"{anterior}\"" if anterior else "", fatos=lista)
+                "roteiro_parte", canal=canal, titulo=line["titulo"], gancho=line["gancho"], parte_n=i,
+                total=len(structure), parte_nome=name, funcao=funcao, palavras=words, n_falas=n_speeches,
+                anterior=f"Última fala da parte anterior: \"{previous}\"" if previous else "", fatos=items)
                 + ("\n(Atenção: na tentativa anterior havia número fora dos FATOS ou o texto ficou curto; "
-                   f"escreva {n_falas} falas de 35 a 60 palavras cada.)" if tentativa > 1 else ""),
+                   f"escreva {n_speeches} falas de 35 a 60 palavras cada.)" if attempt > 1 else ""),
                 Part, temperature=0.4, max_tokens=2200)
-            trace.step("validar", f"parte {i}: números de cada fala contra os fatos; tamanho ≥ 70% de {palavras}")
-            if r and all(_speech_ok(f, fatos_) for f in r.falas) and \
-                    sum(len(f.texto.split()) for f in r.falas) >= 0.7 * palavras:
+            trace.step("validar", f"parte {i}: números de cada fala contra os fatos; tamanho ≥ 70% de {words}")
+            if r and all(_speech_ok(f, facts_) for f in r.falas) and \
+                    sum(len(f.texto.split()) for f in r.falas) >= 0.7 * words:
                 break
         if not r:
             raise SystemExit(f"LLM local não respondeu na parte {i}")
-        falas = [f for f in r.falas if _speech_ok(f, fatos_)]  # fala com número sem fonte sai
-        partes.append({"nome": nome, "cena": r.cena, "falas": falas})
-        anterior = falas[-1].texto if falas else anterior
-        print(f"  parte {i}/{len(estrutura)}: {nome} ({sum(len(f.texto.split()) for f in falas)} palavras)")
-    return partes
+        speeches = [f for f in r.falas if _speech_ok(f, facts_)]  # fala com número sem fonte sai
+        parts.append({"nome": name, "cena": r.cena, "falas": speeches})
+        previous = speeches[-1].texto if speeches else previous
+        print(f"  parte {i}/{len(structure)}: {name} ({sum(len(f.texto.split()) for f in speeches)} palavras)")
+    return parts
 
 
 # ---------------------------------------------------------------- 5. markdown
 
-def _file(canal, linha):
-    nome = re.sub(r"[?:/\\]", "", re.sub(r"\s*[—–-]\s*", ", ", linha["titulo"])).strip(" ,.")
-    return _vault() / "Notas/Empreendimento/YouTube" / canal / "Roteiros" / f"Roteiro — {linha['n']:03d} {nome[:90]}.md"
+def _file(canal, line):
+    name = re.sub(r"[?:/\\]", "", re.sub(r"\s*[—–-]\s*", ", ", line["titulo"])).strip(" ,.")
+    return _vault() / "Notas/Empreendimento/YouTube" / canal / "Roteiros" / f"Roteiro — {line['n']:03d} {name[:90]}.md"
 
 
-def assemble(canal, linha, fontes, fatos_, partes, canal_nota):
+def assemble(canal, line, fontes, facts_, parts, channel_note):
     from datetime import datetime
-    hoje = datetime.now().strftime("%Y-%m-%d")
-    fmt = linha["fmt"]
-    t0, linhas_md, usados, passo = 0.0, [], set(), 0
-    for i, p in enumerate(partes, 1):
+    today = datetime.now().strftime("%Y-%m-%d")
+    fmt = line["fmt"]
+    t0, lines_md, used, step = 0.0, [], set(), 0
+    for i, p in enumerate(parts, 1):
         mm = int(t0 // 60)
-        linhas_md += [f"## Parte {i} — {p['nome']} ({mm}:{int(t0 % 60):02d})", "",
+        lines_md += [f"## Parte {i} — {p['nome']} ({mm}:{int(t0 % 60):02d})", "",
                       "> [!example] Cena", f"> {p['cena']}", ""]
         for f in p["falas"]:
-            passo += 1
-            linhas_md += [f"**Passo {passo}**", f"\"{f.texto}\""]
-            if 0 <= f.fato < len(fatos_) and f.fato not in usados:
-                linhas_md += [fatos_[f.fato]["bloco"]]
-                usados.add(f.fato)
-            linhas_md.append("")
+            step += 1
+            lines_md += [f"**Passo {step}**", f"\"{f.texto}\""]
+            if 0 <= f.fato < len(facts_) and f.fato not in used:
+                lines_md += [facts_[f.fato]["bloco"]]
+                used.add(f.fato)
+            lines_md.append("")
             t0 += len(f.texto.split()) / 2.6
-    fontes_md = [f"- [ ] **{label(f)}**: \"{f['titulo']}\", *{f['revista'] or 'acesso aberto'}*. DOI {f['doi']}."
+    sources_md = [f"- [ ] **{label(f)}**: \"{f['titulo']}\", *{f['revista'] or 'acesso aberto'}*. DOI {f['doi']}."
                  for f in fontes]
-    palavras = sum(len(f.texto.split()) for p in partes for f in p["falas"])
+    words = sum(len(f.texto.split()) for p in parts for f in p["falas"])
     md = f"""---
 id: "{datetime.now().strftime('%Y%m%d%H%M')}"
 tipo: roteiro
 tags:
   - empreendimento/youtube/roteiros
-canal: "[[{canal_nota}]]"
-plano: "[[{linha['arco']}]]"
-video: {linha['n']}
-fio: {linha['fio']}
+canal: "[[{channel_note}]]"
+plano: "[[{line['arco']}]]"
+video: {line['n']}
+fio: {line['fio']}
 formato: {fmt}
-evidencia: {linha['evidencia']}
+evidencia: {line['evidencia']}
 anterior: ""
-criado: "{hoje}"
-atualizado: {hoje}
+criado: "{today}"
+atualizado: {today}
 status: rascunho-llm
 modo: dark
 ---
 
-# Roteiro — {linha['n']:03d} {linha['titulo']}
+# Roteiro — {line['n']:03d} {line['titulo']}
 
-> [!info] Vídeo {linha['n']} · Fio {linha['fio']} · Formato {fmt} · Termômetro: **{linha['evidencia']}**
-> **Gancho do plano:** {linha['gancho']}
-> Gerado por Python + LLM local ({local.TEXT}) com fontes de acesso aberto; ~{palavras} palavras de fala. Revisar o texto antes de gravar.
+> [!info] Vídeo {line['n']} · Fio {line['fio']} · Formato {fmt} · Termômetro: **{line['evidencia']}**
+> **Gancho do plano:** {line['gancho']}
+> Gerado por Python + LLM local ({local.TEXT}) com fontes de acesso aberto; ~{words} palavras de fala. Revisar o texto antes de gravar.
 
 ## Leitura antes de gravar
 
-{chr(10).join(fontes_md) or '- (nenhuma fonte aberta encontrada: completar antes de gravar)'}
+{chr(10).join(sources_md) or '- (nenhuma fonte aberta encontrada: completar antes de gravar)'}
 
 > [!warning] Conferir antes de gravar
 > - Texto escrito pelo LLM local: revisar fluidez, exemplos e números (cada número veio de um trecho com `[!cite]`).
 > - Dados brasileiros atuais (Selic, inflação, leis) não foram incluídos automaticamente.
 
-{chr(10).join(linhas_md)}
+{chr(10).join(lines_md)}
 ## Notas de produção
 
 - Fontes: {', '.join(label(f) for f in fontes)}.
-- Gerado por `./dark script` (esteira-dark) em {hoje}.
+- Gerado por `./dark script` (esteira-dark) em {today}.
 """
-    return md, palavras
+    return md, words
 
 
 def generate(alvo, ate=None):
     """`canal:N` (ou `canal:N` + ate=M) → roteiros no vault. Pula os que já existem."""
-    canal, _, n = alvo.partition(":")
-    pasta = _vault() / "Notas/Empreendimento/YouTube" / canal
-    canal_nota = next((p.stem for p in pasta.glob("Canal *.md")), canal)
+    channel, _, n = alvo.partition(":")
+    folder = _vault() / "Notas/Empreendimento/YouTube" / channel
+    channel_note = next((p.stem for p in folder.glob("Canal *.md")), channel)
     for k in range(int(n), int(ate or n) + 1):
-        if any((pasta / "Roteiros").glob(f"Roteiro — {k:03d} *.md")):
+        if any((folder / "Roteiros").glob(f"Roteiro — {k:03d} *.md")):
             print(f"{k:03d}: já existe, pulado")
             continue
-        trace.node(f"roteiro:{canal}:{k}", "plano", f"vídeo {k} (lote {n}–{ate or n})")
-        linha = line_of_plan(canal, k)
-        print(f"{k:03d} · {linha['titulo']} (Fmt {linha['fmt']})")
-        fontes = sources_open(linha)
-        fatos_ = facts(linha, fontes)
-        print(f"  {len(fontes)} fontes abertas, {len(fatos_)} fatos conferidos no PDF")
-        if len(fatos_) < 2:  # sem prova em PDF aberto não há roteiro: o LLM inventaria
+        trace.node(f"roteiro:{channel}:{k}", "plano", f"vídeo {k} (lote {n}–{ate or n})")
+        line = line_of_plan(channel, k)
+        print(f"{k:03d} · {line['titulo']} (Fmt {line['fmt']})")
+        sources = sources_open(line)
+        facts_ = facts(line, sources)
+        print(f"  {len(sources)} fontes abertas, {len(facts_)} fatos conferidos no PDF")
+        if len(facts_) < 2:  # sem prova em PDF aberto não há roteiro: o LLM inventaria
             print(f"  ✗ {k:03d} pulado: menos de 2 fatos de fontes abertas; precisa de pesquisa manual")
             continue
-        partes = write(linha, fatos_, canal)
-        trace.step("montar", f"{len(partes)} partes, {len(fatos_)} blocos [!cite]")
-        md, palavras = assemble(canal, linha, fontes, fatos_, partes, canal_nota)
-        destino = _file(canal, linha)
-        destino.write_text(md)
-        trace.step("checar", destino.name)
-        cod, out, _ = _article("checar", destino)
-        print(f"  ✓ {destino.name} · {palavras} palavras · {out.strip().splitlines()[-1] if out.strip() else ''}")
+        parts = write(line, facts_, channel)
+        trace.step("montar", f"{len(parts)} partes, {len(facts_)} blocos [!cite]")
+        md, words = assemble(channel, line, sources, facts_, parts, channel_note)
+        destination = _file(channel, line)
+        destination.write_text(md)
+        trace.step("checar", destination.name)
+        cod, out, _ = _article("checar", destination)
+        print(f"  ✓ {destination.name} · {words} palavras · {out.strip().splitlines()[-1] if out.strip() else ''}")

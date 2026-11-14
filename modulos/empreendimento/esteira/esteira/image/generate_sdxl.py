@@ -17,14 +17,14 @@ NEGATIVE = ("text, watermark, logo, signature, letters, caption, cartoon, anime,
             "deformed, disfigured, extra fingers, bad hands, blurry, lowres, jpeg artifacts, oversaturated")
 
 
-def main(arq):
-    pedidos = json.load(open(arq))
+def main(file):
+    requests = json.load(open(file))
     pipe = StableDiffusionXLPipeline.from_pretrained(MODEL, torch_dtype=torch.float16, variant="fp16",
                                                      use_safetensors=True)
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config, use_karras_sigmas=True)
     pipe.to("cuda")
     pipe.set_progress_bar_config(disable=True)
-    for p in pedidos:
+    for p in requests:
         t = time.time()
         g = torch.Generator("cuda").manual_seed(p.get("semente", 0))
         img = pipe(prompt=p["prompt"], negative_prompt=p.get("negativo", NEGATIVE), generator=g,

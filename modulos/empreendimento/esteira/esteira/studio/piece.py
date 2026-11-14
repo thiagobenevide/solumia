@@ -96,13 +96,13 @@ class Card(BaseModel):
 
     @model_validator(mode="after")
     def _coerente(self):
-        nomes = [e.nome for e in self.encaixes]
-        if len(set(nomes)) != len(nomes):
+        names = [e.nome for e in self.encaixes]
+        if len(set(names)) != len(names):
             raise ValueError("encaixes com nome repetido")
         if len({b.nome for b in self.botoes}) != len(self.botoes):
             raise ValueError("botões com nome repetido")
-        if fora := [b for b in self.batidas if b not in nomes]:
-            raise ValueError(f"batidas sem encaixe: {fora}")
+        if outside := [b for b in self.batidas if b not in names]:
+            raise ValueError(f"batidas sem encaixe: {outside}")
         if self.duracao_min >= self.duracao_max:
             raise ValueError("duracao_min tem de ser menor que duracao_max")
         if not self.neutra and not any(e.tipo == "tematico" for e in self.encaixes):
@@ -120,23 +120,23 @@ def folder(id_):
 
 
 def load(id_):
-    arq = folder(id_) / "ficha.json"
-    if not arq.exists():
+    file = folder(id_) / "ficha.json"
+    if not file.exists():
         raise KeyError(f"peça inexistente: {id_}")
-    return Card.model_validate_json(arq.read_text())
+    return Card.model_validate_json(file.read_text())
 
 
 def list_all(estado=None):
     """Fichas válidas do acervo (as inválidas ficam de fora; o portão diz o porquê)."""
-    saida = []
-    for arq in sorted(FOLDER.glob("*/ficha.json")):
+    output = []
+    for file in sorted(FOLDER.glob("*/ficha.json")):
         try:
-            f = Card.model_validate_json(arq.read_text())
+            f = Card.model_validate_json(file.read_text())
         except ValidationError:
             continue
         if estado is None or f.estado == estado:
-            saida.append(f)
-    return saida
+            output.append(f)
+    return output
 
 
 def save(ficha: Card):
@@ -144,11 +144,11 @@ def save(ficha: Card):
     (folder(ficha.id) / "ficha.json").write_text(ficha.model_dump_json(indent=1, exclude_defaults=False))
 
 
-def in_channel(fichas, estilo):
+def in_channel(cards, estilo):
     """Peças que o canal pode usar: aprovadas, no formato e fora do filtro (id, intenção ou tema filtrado)."""
-    filtro = set(estilo.regras.filtro)
-    return [f for f in fichas if f.estado == "aprovada" and f.id not in filtro
-            and not filtro & set(f.intencoes) and not filtro & set(f.temas)]
+    criteria = set(estilo.regras.filtro)
+    return [f for f in cards if f.estado == "aprovada" and f.id not in criteria
+            and not criteria & set(f.intencoes) and not criteria & set(f.temas)]
 
 
 # ---------------------------------------------------------------- preenchimento
@@ -160,57 +160,57 @@ def defaults(ficha: Card):
 def validate_data(ficha: Card, encaixes: dict, botoes: dict | None = None):
     """Confere o preenchimento da IA local contra os limites da ficha → lista de erros (vazia = ok). O erro volta
     ao modelo como está, então tem de dizer o que corrigir."""
-    erros = []
+    errors = []
     for e in ficha.encaixes:
         v = encaixes.get(e.nome)
         if v in (None, "", []):
             if e.obrigatorio:
-                erros.append(f"{e.nome}: obrigatório")
+                errors.append(f"{e.nome}: obrigatório")
             continue
         if e.tipo == "pagina":
-            erros += _errors_page(e, v)
+            errors += _errors_page(e, v)
             continue
         if e.tipo == "pares":
             if not isinstance(v, list) or not all(isinstance(x, dict) for x in v):
-                erros.append(f'{e.nome}: lista de {{"rotulo", "valor"}}')
+                errors.append(f'{e.nome}: lista de {{"rotulo", "valor"}}')
                 continue
             if not e.min_itens <= len(v) <= e.max_itens:
-                erros.append(f"{e.nome}: {e.min_itens}–{e.max_itens} pares (veio {len(v)})")
+                errors.append(f"{e.nome}: {e.min_itens}–{e.max_itens} pares (veio {len(v)})")
             for i, x in enumerate(v):
                 if len(str(x.get("rotulo", ""))) > e.max_car:
-                    erros.append(f"{e.nome}[{i}].rotulo: até {e.max_car} caracteres")
+                    errors.append(f"{e.nome}[{i}].rotulo: até {e.max_car} caracteres")
                 if len(str(x.get("valor", ""))) > e.max_valor:
-                    erros.append(f"{e.nome}[{i}].valor: até {e.max_valor} caracteres")
+                    errors.append(f"{e.nome}[{i}].valor: até {e.max_valor} caracteres")
             continue
         if e.tipo == "itens":
             if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
-                erros.append(f"{e.nome}: lista de textos")
+                errors.append(f"{e.nome}: lista de textos")
                 continue
             if not e.min_itens <= len(v) <= e.max_itens:
-                erros.append(f"{e.nome}: {e.min_itens}–{e.max_itens} itens (veio {len(v)})")
-            erros += [f"{e.nome}[{i}]: até {e.max_car} caracteres" for i, x in enumerate(v) if len(x) > e.max_car]
+                errors.append(f"{e.nome}: {e.min_itens}–{e.max_itens} itens (veio {len(v)})")
+            errors += [f"{e.nome}[{i}]: até {e.max_car} caracteres" for i, x in enumerate(v) if len(x) > e.max_car]
             continue
         if not isinstance(v, str):
-            erros.append(f"{e.nome}: texto")
+            errors.append(f"{e.nome}: texto")
             continue
         if len(v) > e.max_car and e.tipo != "imagem":  # imagem é caminho/descrição: limite de texto não se aplica
-            erros.append(f"{e.nome}: até {e.max_car} caracteres (veio {len(v)})")
+            errors.append(f"{e.nome}: até {e.max_car} caracteres (veio {len(v)})")
         if e.tipo == "numero":
             if not re.search(r"\d", v):
-                erros.append(f"{e.nome}: precisa de um número")
+                errors.append(f"{e.nome}: precisa de um número")
             elif e.unidade and not re.search(r"[^\d\s.,]", v):
-                erros.append(f"{e.nome}: número com unidade (%, R$, anos…)")
+                errors.append(f"{e.nome}: número com unidade (%, R$, anos…)")
         if e.opcoes and e.tipo in ("icone", "tematico") and v not in e.opcoes:
-            erros.append(f"{e.nome}: um de {e.opcoes}")
+            errors.append(f"{e.nome}: um de {e.opcoes}")
     if extras := set(encaixes) - {e.nome for e in ficha.encaixes}:
-        erros.append(f"encaixes que a peça não tem: {sorted(extras)}")
-    for nome, v in (botoes or {}).items():
-        b = next((b for b in ficha.botoes if b.nome == nome), None)
+        errors.append(f"encaixes que a peça não tem: {sorted(extras)}")
+    for name, v in (botoes or {}).items():
+        b = next((b for b in ficha.botoes if b.nome == name), None)
         if not b:
-            erros.append(f"botão que a peça não tem: {nome}")
+            errors.append(f"botão que a peça não tem: {name}")
         elif v not in b.valores:
-            erros.append(f"{nome}: um de {b.valores}")
-    return erros
+            errors.append(f"{name}: um de {b.valores}")
+    return errors
 
 
 def _errors_page(e, v):
@@ -244,22 +244,22 @@ def sample_photo():
     import pymupdf
 
     from esteira.project import CACHE
-    arq = CACHE / "estudio" / "amostra_foto.png"
-    if arq.exists():
-        return str(arq)
+    file = CACHE / "estudio" / "amostra_foto.png"
+    if file.exists():
+        return str(file)
     doc = pymupdf.open()
     pg = doc.new_page(width=600, height=400)
     for i in range(40):  # céu: azul escuro → laranja
         k = i / 39
-        cor = (0.16 + 0.8 * k, 0.24 + 0.4 * k, 0.45 - 0.2 * k)
-        pg.draw_rect(pymupdf.Rect(0, i * 7, 600, i * 7 + 8), color=None, fill=cor)
+        color = (0.16 + 0.8 * k, 0.24 + 0.4 * k, 0.45 - 0.2 * k)
+        pg.draw_rect(pymupdf.Rect(0, i * 7, 600, i * 7 + 8), color=None, fill=color)
     pg.draw_circle(pymupdf.Point(420, 230), 46, color=None, fill=(1, 0.86, 0.55))
     for x, w, h in ((20, 70, 150), (100, 50, 110), (160, 90, 190), (270, 60, 130), (480, 80, 170), (540, 60, 120)):
         pg.draw_rect(pymupdf.Rect(x, 280 - h, x + w, 280), color=None, fill=(0.12, 0.1, 0.12))
     pg.draw_rect(pymupdf.Rect(0, 280, 600, 400), color=None, fill=(0.2, 0.17, 0.15))
-    arq.parent.mkdir(parents=True, exist_ok=True)
-    pg.get_pixmap(dpi=150).save(arq)
-    return str(arq)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    pg.get_pixmap(dpi=150).save(file)
+    return str(file)
 
 
 def sample_page():
@@ -267,10 +267,10 @@ def sample_page():
     import pymupdf
 
     from esteira.project import CACHE
-    arq = CACHE / "estudio" / "amostra_pagina.png"
-    meta = arq.with_suffix(".json")
-    if arq.exists() and meta.exists():
-        return {**json.loads(meta.read_text()), "arquivo": str(arq)}
+    file = CACHE / "estudio" / "amostra_pagina.png"
+    meta = file.with_suffix(".json")
+    if file.exists() and meta.exists():
+        return {**json.loads(meta.read_text()), "arquivo": str(file)}
     doc = pymupdf.open()
     pg = doc.new_page(width=612, height=792)
     pg.insert_textbox(pymupdf.Rect(72, 80, 540, 130), SAMPLE_TEXT[0], fontsize=20, fontname="tibo")
@@ -278,59 +278,59 @@ def sample_page():
     k = 150 / 72
     grifos = [[round(r.x0 * k), round(r.y0 * k), round(r.x1 * k), round(r.y1 * k)] for r in pg.search_for(SAMPLE_MARKER)]
     pix = pg.get_pixmap(dpi=150)
-    arq.parent.mkdir(parents=True, exist_ok=True)
-    pix.save(arq)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    pix.save(file)
     d = {"w": pix.width, "h": pix.height, "grifos": grifos}
     meta.write_text(json.dumps(d))
-    return {**d, "arquivo": str(arq)}
+    return {**d, "arquivo": str(file)}
 
 
 def maximums(ficha: Card):
     """Preenchimento no pior caso (texto no limite, itens no máximo): o portão prova que cabe."""
-    saida = {}
+    output = {}
     for e in ficha.encaixes:
         base = e.exemplo if isinstance(e.exemplo, str) and e.exemplo else "Palavra"
         if e.tipo == "pares":
             ex = e.exemplo if isinstance(e.exemplo, list) and e.exemplo and isinstance(e.exemplo[0], dict) \
                 else [{"rotulo": "Rótulo", "valor": "12%"}]
-            saida[e.nome] = [{"rotulo": _fill(ex[i % len(ex)].get("rotulo", ""), e.max_car),
+            output[e.nome] = [{"rotulo": _fill(ex[i % len(ex)].get("rotulo", ""), e.max_car),
                               "valor": str(ex[i % len(ex)].get("valor", ""))[:e.max_valor]} for i in range(e.max_itens)]
         elif e.tipo == "itens":
             ex = e.exemplo if isinstance(e.exemplo, list) and e.exemplo else ["Item de exemplo"]
             # item pode ser objeto (ex.: {"ano": .., "texto": ..}): cada campo de texto vai ao limite
-            saida[e.nome] = [{k: _fill(str(v), e.max_car) for k, v in it.items()} if isinstance(it, dict)
+            output[e.nome] = [{k: _fill(str(v), e.max_car) for k, v in it.items()} if isinstance(it, dict)
                              else _fill(str(it), e.max_car) for it in (ex[i % len(ex)] for i in range(e.max_itens))]
         elif e.tipo == "numero":
-            saida[e.nome] = (e.exemplo or "1.234,5%")[:e.max_car]
+            output[e.nome] = (e.exemplo or "1.234,5%")[:e.max_car]
         elif e.tipo == "pagina":
             a = sample_page()
-            saida[e.nome] = {"src": "assets/amostra_pagina.png", "w": a["w"], "h": a["h"],
+            output[e.nome] = {"src": "assets/amostra_pagina.png", "w": a["w"], "h": a["h"],
                              "grifos": a["grifos"][:e.max_itens]}
         elif e.tipo == "imagem":
-            saida[e.nome] = "assets/amostra_foto.png"
+            output[e.nome] = "assets/amostra_foto.png"
         elif e.opcoes:
-            saida[e.nome] = max(e.opcoes, key=len)
+            output[e.nome] = max(e.opcoes, key=len)
         else:
-            saida[e.nome] = _fill(base, e.max_car)
-    return saida
+            output[e.nome] = _fill(base, e.max_car)
+    return output
 
 
 def _fill(txt, n):
     """Texto de exatamente até n caracteres, repetindo palavras do exemplo (largura realista, não "MMMM")."""
-    palavras = (txt or "Palavra").split() or ["Palavra"]
-    saida, i = "", 0
-    while len(saida) < n:
-        w = palavras[i % len(palavras)]
-        saida = f"{saida} {w}".strip()
+    words = (txt or "Palavra").split() or ["Palavra"]
+    output, i = "", 0
+    while len(output) < n:
+        w = words[i % len(words)]
+        output = f"{output} {w}".strip()
         i += 1
-    if len(saida) > n:  # corta na última palavra inteira: palavra pela metade a visão lê como texto cortado
-        saida = saida[:n + 1].rsplit(" ", 1)[0] if " " in saida[:n + 1] else saida[:n]
-        while " " in saida and not any(c.isalnum() for c in saida.rsplit(" ", 1)[1]):
-            saida = saida.rsplit(" ", 1)[0]  # nem símbolo solto no fim ("% ao ano %")
-    if saida.count("*") % 2:  # a marca de destaque cortada no meio não pode sobrar solta
-        i = saida.rfind("*")
-        saida = saida[:i] + saida[i + 1:]
-    return saida
+    if len(output) > n:  # corta na última palavra inteira: palavra pela metade a visão lê como texto cortado
+        output = output[:n + 1].rsplit(" ", 1)[0] if " " in output[:n + 1] else output[:n]
+        while " " in output and not any(c.isalnum() for c in output.rsplit(" ", 1)[1]):
+            output = output.rsplit(" ", 1)[0]  # nem símbolo solto no fim ("% ao ano %")
+    if output.count("*") % 2:  # a marca de destaque cortada no meio não pode sobrar solta
+        i = output.rfind("*")
+        output = output[:i] + output[i + 1:]
+    return output
 
 
 # ---------------------------------------------------------------- portão de entrada
@@ -357,53 +357,53 @@ def _code(texto):
 
 def check_code(id_, ficha: Card):
     """Checagens estáticas: arquivos, sintaxe, registro do id, pele só por variáveis, encaixes/botões declarados."""
-    erros, avisos = [], []
+    errors, warnings = [], []
     p = folder(id_)
-    js_arq, css_arq = p / "peca.js", p / "peca.css"
-    if not js_arq.exists():
-        return [f"falta {js_arq.name}"], avisos
-    js = js_arq.read_text()
-    css = css_arq.read_text() if css_arq.exists() else ""
+    js_file, css_file = p / "peca.js", p / "peca.css"
+    if not js_file.exists():
+        return [f"falta {js_file.name}"], warnings
+    js = js_file.read_text()
+    css = css_file.read_text() if css_file.exists() else ""
     node = _node()
     if node:
-        r = subprocess.run([node, "--check", str(js_arq)], capture_output=True, text=True)
+        r = subprocess.run([node, "--check", str(js_file)], capture_output=True, text=True)
         if r.returncode:
-            erros.append("sintaxe do peca.js: " + (r.stderr.strip().splitlines() or ["?"])[-1])
+            errors.append("sintaxe do peca.js: " + (r.stderr.strip().splitlines() or ["?"])[-1])
     else:
-        avisos.append("node não encontrado: sintaxe não conferida")
+        warnings.append("node não encontrado: sintaxe não conferida")
     if not re.search(rf"ESTUDIO\.peca\(\s*[\"']{re.escape(id_)}[\"']", js):
-        erros.append(f'peca.js não registra a peça: ESTUDIO.peca("{id_}", (k, c) => ...)')
-    for nome, texto in (("peca.js", _code(js)), ("peca.css", _code(css))):
-        if m := RE_COLOR.search(texto):
-            erros.append(f"{nome}: cor fixa ({m.group(0)}); use var(--destaque), var(--texto)… ou color-mix com elas")
-        if m := RE_COLOR_NAME.search(texto):
-            erros.append(f"{nome}: cor fixa pelo nome ({m.group(0)})")
-        if RE_SOURCE.search(texto):
-            erros.append(f"{nome}: fonte fixa; use var(--fD), var(--fT), var(--fM) ou var(--fE)")
+        errors.append(f'peca.js não registra a peça: ESTUDIO.peca("{id_}", (k, c) => ...)')
+    for name, text in (("peca.js", _code(js)), ("peca.css", _code(css))):
+        if m := RE_COLOR.search(text):
+            errors.append(f"{name}: cor fixa ({m.group(0)}); use var(--destaque), var(--texto)… ou color-mix com elas")
+        if m := RE_COLOR_NAME.search(text):
+            errors.append(f"{name}: cor fixa pelo nome ({m.group(0)})")
+        if RE_SOURCE.search(text):
+            errors.append(f"{name}: fonte fixa; use var(--fD), var(--fT), var(--fM) ou var(--fE)")
     if css:
         for sel in re.findall(r"(?:^|[{}])\s*([^{}@;]+)\{", _code(css)):
-            partes = [s.strip() for s in sel.split(",") if s.strip()]
-            if all(re.fullmatch(r"from|to|[\d.]+%", s) for s in partes):  # quadros de @keyframes
+            parts = [s.strip() for s in sel.split(",") if s.strip()]
+            if all(re.fullmatch(r"from|to|[\d.]+%", s) for s in parts):  # quadros de @keyframes
                 continue
-            if any(f".p-{id_}" not in s for s in partes):
-                erros.append(f"peca.css: seletor fora de .p-{id_} ({sel.strip()[:40]})")
+            if any(f".p-{id_}" not in s for s in parts):
+                errors.append(f"peca.css: seletor fora de .p-{id_} ({sel.strip()[:40]})")
                 break
     if colide := _classes(js) & _classes_kit() - REUSE:
-        erros.append(f"peca.js usa classes do kit ({sorted(colide)[:5]}): o estilo global do kit vaza para a peça; "
+        errors.append(f"peca.js usa classes do kit ({sorted(colide)[:5]}): o estilo global do kit vaza para a peça; "
                      f"use o prefixo da peça (ex.: {id_[:2]}-titulo)")
-    usados_e, usados_b = _used(js, "encaixes"), _used(js, "botoes")
-    nomes_e, nomes_b = {e.nome for e in ficha.encaixes}, {b.nome for b in ficha.botoes}
-    if fora := usados_e - nomes_e - {"*"}:
-        erros.append(f"peca.js usa encaixes que a ficha não declara: {sorted(fora)}")
-    if fora := usados_b - nomes_b:
-        erros.append(f"peca.js usa botões que a ficha não declara: {sorted(fora)}")
-    if "*" in usados_e:
-        usados_e = (usados_e - {"*"}) | nomes_e
-    if parados := nomes_e - usados_e:
-        avisos.append(f"encaixes declarados e não usados: {sorted(parados)}")
-    if parados := nomes_b - usados_b:
-        avisos.append(f"botões declarados e não usados: {sorted(parados)}")
-    return erros, avisos
+    used_and, used_b = _used(js, "encaixes"), _used(js, "botoes")
+    names_and, names_b = {e.nome for e in ficha.encaixes}, {b.nome for b in ficha.botoes}
+    if outside := used_and - names_and - {"*"}:
+        errors.append(f"peca.js usa encaixes que a ficha não declara: {sorted(outside)}")
+    if outside := used_b - names_b:
+        errors.append(f"peca.js usa botões que a ficha não declara: {sorted(outside)}")
+    if "*" in used_and:
+        used_and = (used_and - {"*"}) | names_and
+    if stopped := names_and - used_and:
+        warnings.append(f"encaixes declarados e não usados: {sorted(stopped)}")
+    if stopped := names_b - used_b:
+        warnings.append(f"botões declarados e não usados: {sorted(stopped)}")
+    return errors, warnings
 
 
 # classes do núcleo do kit que as peças reusam de propósito (estilo comum: título, rótulo, etiqueta, número grande)
@@ -419,32 +419,32 @@ def _classes_kit():
 def _classes(js):
     """Classes que a peça cria: k.$("div", "a b", ...), classList.add("x"), class="y" em HTML."""
     js = _code(js)
-    nomes = set()
-    for grupo in re.findall(r"\$\(\s*[\"'][a-z0-9]+[\"']\s*,\s*[\"']([^\"']+)[\"']", js):
-        nomes |= set(grupo.split())
-    for grupo in re.findall(r"classList\.add\(([^)]*)\)", js):
-        nomes |= set(re.findall(r"[\"']([\w-]+)[\"']", grupo))
-    for grupo in re.findall(r"class=\\?[\"']([^\"'\\]+)", js):
-        nomes |= set(grupo.split())
-    for grupo in re.findall(r"\bclass\s*:\s*[\"']([^\"']+)[\"']", js):  # svg("circle", {class: "arco"})
-        nomes |= set(grupo.split())
-    return nomes
+    names = set()
+    for group in re.findall(r"\$\(\s*[\"'][a-z0-9]+[\"']\s*,\s*[\"']([^\"']+)[\"']", js):
+        names |= set(group.split())
+    for group in re.findall(r"classList\.add\(([^)]*)\)", js):
+        names |= set(re.findall(r"[\"']([\w-]+)[\"']", group))
+    for group in re.findall(r"class=\\?[\"']([^\"'\\]+)", js):
+        names |= set(group.split())
+    for group in re.findall(r"\bclass\s*:\s*[\"']([^\"']+)[\"']", js):  # svg("circle", {class: "arco"})
+        names |= set(group.split())
+    return names
 
 
-def _used(js, campo):
+def _used(js, field):
     """Nomes lidos de c.<campo> no código: direto (c.encaixes.x, c.encaixes["x"]), por apelido
     (const e = c.encaixes; e.x) ou por desestruturação (const { x, y } = c.encaixes)."""
     js = _code(js)
-    nomes = {a or b for a, b in re.findall(rf"\bc\.{campo}\s*(?:\.\s*(\w+)|\[\s*[\"'](\w+)[\"']\s*\])", js)}
-    for apelido in re.findall(rf"\b(\w+)\s*=\s*c\.{campo}\b(?!\s*[.\[])", js):
-        nomes |= {a or b for a, b in re.findall(rf"\b{apelido}\s*(?:\.\s*(\w+)|\[\s*[\"'](\w+)[\"']\s*\])", js)}
-    for apelido in re.findall(rf"\b(\w+)\s*=\s*\{{[^{{}}]*\.\.\.c\.{campo}\s*\}}", js):  # const e = { a: 1, ...c.encaixes }
-        nomes |= {a or b for a, b in re.findall(rf"\b{apelido}\s*(?:\.\s*(\w+)|\[\s*[\"'](\w+)[\"']\s*\])", js)}
+    names = {a or b for a, b in re.findall(rf"\bc\.{field}\s*(?:\.\s*(\w+)|\[\s*[\"'](\w+)[\"']\s*\])", js)}
+    for apelido in re.findall(rf"\b(\w+)\s*=\s*c\.{field}\b(?!\s*[.\[])", js):
+        names |= {a or b for a, b in re.findall(rf"\b{apelido}\s*(?:\.\s*(\w+)|\[\s*[\"'](\w+)[\"']\s*\])", js)}
+    for apelido in re.findall(rf"\b(\w+)\s*=\s*\{{[^{{}}]*\.\.\.c\.{field}\s*\}}", js):  # const e = { a: 1, ...c.encaixes }
+        names |= {a or b for a, b in re.findall(rf"\b{apelido}\s*(?:\.\s*(\w+)|\[\s*[\"'](\w+)[\"']\s*\])", js)}
         if re.search(rf"\.\.\.{apelido}\b", js):  # passa tudo adiante (k.proporcao({{ ...c, ...e }}))
-            nomes.add("*")
-    for grupo in re.findall(rf"\b(?:const|let|var)\s*\{{([^{{}}]*)\}}\s*=\s*c\.{campo}\b", js):
-        nomes |= {x.split(":")[0].split("=")[0].strip() for x in grupo.split(",") if x.strip()}
-    return nomes
+            names.add("*")
+    for group in re.findall(rf"\b(?:const|let|var)\s*\{{([^{{}}]*)\}}\s*=\s*c\.{field}\b", js):
+        names |= {x.split(":")[0].split("=")[0].strip() for x in group.split(",") if x.strip()}
+    return names
 
 
 def _node():
@@ -456,31 +456,31 @@ def _node():
 def _scene(ficha: Card, dur, botoes=None, encaixes=None):
     enc = encaixes or maximums(ficha)
     t = 0.3
-    batidas = {b: round(t + 0.4 + 0.5 * k, 2) for k, b in enumerate(ficha.batidas)}
+    beats = {b: round(t + 0.4 + 0.5 * k, 2) for k, b in enumerate(ficha.batidas)}
     return {"cena": ficha.id, "t": t, "ate": round(t + dur, 2), "takeover": ficha.tela_cheia, "titulo": "",
             "valores": [], "frase": "", "encaixes": enc, "botoes": {**defaults(ficha), **(botoes or {})},
-            "batidas": batidas}
+            "batidas": beats}
 
 
-def assemble(destino, cenas, pele: Skin, formato, ids=None, dur=None, medir=False):
+def assemble(destino, cenas, pele: Skin, fmt, ids=None, dur=None, medir=False):
     """Composição mínima (kit + peças + pele + uma ou mais cenas, sem mídia) em `destino`: usada na prova do portão
     e na prévia das peças. `medir`: ao abrir com ?t=S, posiciona a timeline em S e grava o que estoura a tela."""
     from esteira.studio import compiler, style, fonts
     a = destino / "assets"
     a.mkdir(parents=True, exist_ok=True)
-    for nome in ("estudio.js", "estudio.css", "gsap.min.js"):
-        shutil.copy(compiler.KIT / nome, a / nome)
-    tres = join(a, ids)
+    for name in ("estudio.js", "estudio.css", "gsap.min.js"):
+        shutil.copy(compiler.KIT / name, a / name)
+    three = join(a, ids)
     if "assets/amostra_pagina.png" in json.dumps(cenas):
         shutil.copy(sample_page()["arquivo"], a / "amostra_pagina.png")
     if "assets/amostra_foto.png" in json.dumps(cenas):
         shutil.copy(sample_photo(), a / "amostra_foto.png")
-    papeis = ("fonte_destaque", "fonte_texto", "fonte_tecnica", "fonte_legenda", "fonte_editorial")
-    (a / "fontes.css").write_text(fonts.css([getattr(pele, k) for k in papeis], a))
-    pele = pele.model_copy(update={k: fonts.resolve(getattr(pele, k)) for k in papeis})
+    roles = ("fonte_destaque", "fonte_texto", "fonte_tecnica", "fonte_legenda", "fonte_editorial")
+    (a / "fontes.css").write_text(fonts.css([getattr(pele, k) for k in roles], a))
+    pele = pele.model_copy(update={k: fonts.resolve(getattr(pele, k)) for k in roles})
     base = style.Style(id="prova", nome="prova", canal="prova", pele=pele)
     rg = base.regras
-    W, H = DIM[formato]
+    W, H = DIM[fmt]
     dur = dur or max(c["ate"] for c in cenas) + 0.5
     cfg = {"W": W, "H": H, "pele": pele.model_dump(), "efeitos": rg.efeitos, "visual": rg.visual.model_dump(),
            "legenda": {"ativa": False, **rg.legenda_visual.model_dump(), "chaves": []},
@@ -491,7 +491,7 @@ def assemble(destino, cenas, pele: Skin, formato, ids=None, dur=None, medir=Fals
                  "__MIDIA__": "[]", "__CENAS__": json.dumps(cenas, ensure_ascii=False), "__WORDS__": "[]",
                  "__SFX__": "[]"}.items():
         html = html.replace(k, str(v))
-    html = html.replace("__EC__", videos_ec(cenas)).replace("__DE__", "0").replace("__THREE__", TAG_THREE if tres else "")
+    html = html.replace("__EC__", videos_ec(cenas)).replace("__DE__", "0").replace("__THREE__", TAG_THREE if three else "")
     html = re.sub(r'\s*<audio id="voz"[^>]*></audio>', "", html)  # sem narração na prova/prévia
     if medir:
         html = html.replace("</body>", MEASURE.replace("__AREA__", str(AREA_SAFE)) + "</body>")
@@ -535,8 +535,8 @@ def legacy(cena, ficha: Card):
     """Cena do mapa do diretor atual (titulo/valores no topo) → encaixes da peça migrada."""
     if cena.get("encaixes"):
         return cena["encaixes"]
-    nomes = {e.nome for e in ficha.encaixes}
-    return {k: cena[k] for k in ("titulo", "valores") if k in nomes and k in cena}
+    names = {e.nome for e in ficha.encaixes}
+    return {k: cena[k] for k in ("titulo", "valores") if k in names and k in cena}
 
 
 def videos_ec(cenas):
@@ -553,32 +553,32 @@ TAG_THREE = '<script src="assets/three.min.js"></script>\n'
 _SYNTAX = {}
 
 
-def _syntax_ok(arq):
+def _syntax_ok(file):
     """`node --check` do peca.js (em memória por data de modificação); sem node ou sem arquivo, passa."""
     node = _node()
-    if not node or not arq.exists():
+    if not node or not file.exists():
         return True
-    k = (str(arq), arq.stat().st_mtime_ns)
+    k = (str(file), file.stat().st_mtime_ns)
     if k not in _SYNTAX:
-        _SYNTAX[k] = subprocess.run([node, "--check", str(arq)], capture_output=True).returncode == 0
+        _SYNTAX[k] = subprocess.run([node, "--check", str(file)], capture_output=True).returncode == 0
     return _SYNTAX[k]
 
 
-def join(destino_assets, ids=None):
+def join(destination_assets, ids=None):
     """`pecas.js` e `pecas.css` com as peças do acervo (todas as válidas, ou só `ids`) para a composição; com alguma
     peça 3D, copia o Three.js para os assets. → True se a composição precisa do Three.js."""
-    escolhidas = ids if ids is not None else [f.id for f in list_all()]
-    tres = False
-    for i in escolhidas:
+    chosen = ids if ids is not None else [f.id for f in list_all()]
+    three = False
+    for i in chosen:
         try:
-            tres = tres or load(i).peso == "3d"
+            three = three or load(i).peso == "3d"
         except (KeyError, ValidationError):
             continue
-    if tres:
+    if three:
         from esteira.studio import compiler
-        shutil.copy(compiler.KIT / "three.min.js", destino_assets / "three.min.js")
+        shutil.copy(compiler.KIT / "three.min.js", destination_assets / "three.min.js")
     js, css = [], []
-    for i in escolhidas:
+    for i in chosen:
         p = folder(i)
         if not _syntax_ok(p / "peca.js"):
             print(f"  peça {i} fora da composição: erro de sintaxe no peca.js", flush=True)
@@ -587,9 +587,9 @@ def join(destino_assets, ids=None):
             js.append(f"// ── peça {i}\n" + (p / "peca.js").read_text())
         if (p / "peca.css").exists():
             css.append(f"/* ── peça {i} */\n" + (p / "peca.css").read_text())
-    (destino_assets / "pecas.js").write_text("\n".join(js))
-    (destino_assets / "pecas.css").write_text("\n".join(css))
-    return tres
+    (destination_assets / "pecas.js").write_text("\n".join(js))
+    (destination_assets / "pecas.css").write_text("\n".join(css))
+    return three
 
 
 def _chromium(url, W, H, saida=None, budget=2500):
@@ -609,39 +609,39 @@ def _chromium(url, W, H, saida=None, budget=2500):
 def prove(id_, ficha: Card):
     """Monta a peça com o preenchimento máximo nas duas peles × formatos da ficha; mede estouro de tela em
     INSTANTES e fotografa o meio. → (erros, quadros)."""
-    erros, quadros = [], []
-    prova = folder(id_) / "prova"
-    shutil.rmtree(prova, ignore_errors=True)
-    prova.mkdir(parents=True)
-    dur = min(ficha.duracao_max, max(ficha.duracao_min, 4.0))
-    cena = _scene(ficha, dur)
+    errors, frames = [], []
+    proof = folder(id_) / "prova"
+    shutil.rmtree(proof, ignore_errors=True)
+    proof.mkdir(parents=True)
+    duration = min(ficha.duracao_max, max(ficha.duracao_min, 4.0))
+    scene = _scene(ficha, duration)
     with tempfile.TemporaryDirectory() as tmp:
-        for nome_pele, pele in SKINS_PROOF.items():
+        for name_skin, skin in SKINS_PROOF.items():
             for fmt in ficha.formatos:
-                d = Path(tmp) / f"{nome_pele}_{fmt.replace(':', 'x')}"
-                idx = assemble(d, [cena], pele, fmt, ids=[id_], dur=cena["ate"] + 0.5, medir=True)
+                d = Path(tmp) / f"{name_skin}_{fmt.replace(':', 'x')}"
+                idx = assemble(d, [scene], skin, fmt, ids=[id_], dur=scene["ate"] + 0.5, medir=True)
                 W, H = DIM[fmt]
                 for frac in INSTANTS:
-                    t = round(cena["t"] + frac * dur, 2)
+                    t = round(scene["t"] + frac * duration, 2)
                     dom = _chromium(f"file://{idx}?t={t}", W, H)
                     m = re.search(r'data-estouro="([^"]*)"', dom)
                     if not m:
-                        erros.append(f"{nome_pele} {fmt}: a composição não rodou (erro de JavaScript na peça?)")
+                        errors.append(f"{name_skin} {fmt}: a composição não rodou (erro de JavaScript na peça?)")
                         break
-                    fora = json.loads(html_lib.unescape(m.group(1)))
+                    outside = json.loads(html_lib.unescape(m.group(1)))
                     if (e := re.search(r'data-erros="([^"]*)"', dom)) and (lst := json.loads(html_lib.unescape(e.group(1)))):
-                        erros.append(f"{nome_pele} {fmt}: erro de JavaScript na peça: {lst[0]}")
+                        errors.append(f"{name_skin} {fmt}: erro de JavaScript na peça: {lst[0]}")
                         break
-                    if fora:
-                        erros.append(f"{nome_pele} {fmt} em {t:.1f} s: sai da tela com o texto máximo: {fora[:4]}")
-                png = Path(tmp) / f"{nome_pele}_{fmt.replace(':', 'x')}.png"
-                _chromium(f"file://{idx}?t={round(cena['t'] + 0.6 * dur, 2)}", W, H, saida=png)
-                arq = prova / png.with_suffix(".jpg").name  # metade do tamanho, JPG: a prova é para olhar
+                    if outside:
+                        errors.append(f"{name_skin} {fmt} em {t:.1f} s: sai da tela com o texto máximo: {outside[:4]}")
+                png = Path(tmp) / f"{name_skin}_{fmt.replace(':', 'x')}.png"
+                _chromium(f"file://{idx}?t={round(scene['t'] + 0.6 * duration, 2)}", W, H, saida=png)
+                file = proof / png.with_suffix(".jpg").name  # metade do tamanho, JPG: a prova é para olhar
                 if png.exists():
                     subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(png), "-vf", "scale=iw/2:-2",
-                                    "-q:v", "4", str(arq)], check=True)
-                    quadros.append(arq.name)
-    return erros, quadros
+                                    "-q:v", "4", str(file)], check=True)
+                    frames.append(file.name)
+    return errors, frames
 
 
 def gate(id_, render=True):
@@ -649,36 +649,36 @@ def gate(id_, render=True):
     rascunho → vai para a revisão da pessoa (a aprovação é dela). Grava `prova/portao.json`."""
     p = folder(id_)
     try:
-        ficha = Card.model_validate_json((p / "ficha.json").read_text())
+        card = Card.model_validate_json((p / "ficha.json").read_text())
     except FileNotFoundError:
         return {"ok": False, "erros": ["falta ficha.json"], "avisos": [], "quadros": []}
     except ValidationError as e:
         return {"ok": False, "erros": [f"ficha: {x['loc']}: {x['msg']}" for x in e.errors()], "avisos": [],
                 "quadros": []}
     from esteira.studio import ec
-    erros, avisos = (ec.check_code if ficha.motor == "effectcraft" else check_code)(id_, ficha)
-    if ficha.id != id_:
-        erros.append(f"ficha.id ({ficha.id}) diferente da pasta ({id_})")
-    if ficha.motor == "effectcraft" and not ec.available():
-        avisos.append("effectcraft-cli não encontrado: prova não feita")
+    errors, warnings = (ec.check_code if card.motor == "effectcraft" else check_code)(id_, card)
+    if card.id != id_:
+        errors.append(f"ficha.id ({card.id}) diferente da pasta ({id_})")
+    if card.motor == "effectcraft" and not ec.available():
+        warnings.append("effectcraft-cli não encontrado: prova não feita")
         render = False
-    if erros := erros + validate_data(ficha, maximums(ficha)):
+    if errors := errors + validate_data(card, maximums(card)):
         render = False
-    quadros, render_s = [], None
+    frames, render_s = [], None
     if render:
-        if ficha.motor == "effectcraft":
-            e2, quadros, render_s = ec.prove(id_, ficha)
+        if card.motor == "effectcraft":
+            e2, frames, render_s = ec.prove(id_, card)
         else:
             t0 = time.monotonic()
-            e2, quadros = prove(id_, ficha)
+            e2, frames = prove(id_, card)
             render_s = round(time.monotonic() - t0, 2)
-        erros += e2
-    r = {"ok": not erros, "erros": erros, "avisos": avisos, "quadros": quadros, "versao": ficha.versao,
-         "motor": ficha.motor, "render_s": render_s}
+        errors += e2
+    r = {"ok": not errors, "erros": errors, "avisos": warnings, "quadros": frames, "versao": card.versao,
+         "motor": card.motor, "render_s": render_s}
     (p / "prova").mkdir(exist_ok=True)
     (p / "prova" / "portao.json").write_text(json.dumps(r, ensure_ascii=False, indent=1))
-    if r["ok"] and ficha.estado == "rascunho":
-        save(ficha.model_copy(update={"estado": "revisao"}))
+    if r["ok"] and card.estado == "rascunho":
+        save(card.model_copy(update={"estado": "revisao"}))
     return r
 
 
@@ -689,26 +689,26 @@ def previews_dir(id_):
     return DATA / "estudio" / "fabrica" / "previas" / id_
 
 
-def preview(id_, estilo_ref, formato=None):
+def preview(id_, style_ref, formato=None):
     """MP4 curto da peça (preenchimento de exemplo) na pele do estilo de um canal, pelo HyperFrames (GPU) ou, no
     motor EffectCraft, pela engine dele."""
     from esteira.studio import compiler, ec, style
-    ficha = load(id_)
-    est = style.load(estilo_ref)
-    fmt = formato or ficha.formatos[0]
-    if ficha.motor == "effectcraft":
+    card = load(id_)
+    est = style.load(style_ref)
+    fmt = formato or card.formatos[0]
+    if card.motor == "effectcraft":
         return ec.preview(id_, est, fmt)
-    dur = min(ficha.duracao_max, max(ficha.duracao_min, 5.0))
-    enc = {e.nome: e.exemplo for e in ficha.encaixes if e.exemplo and e.tipo not in ("pagina", "imagem")}
-    enc = {**maximums(ficha), **enc}
-    destino = previews_dir(id_) / f"_{est.id}"
-    shutil.rmtree(destino, ignore_errors=True)
-    assemble(destino, [_scene(ficha, dur, encaixes=enc)], est.pele, fmt, ids=[id_], dur=dur + 1.0)
-    bruto = compiler.render(None, fmt, qualidade="draft", p=destino)
-    saida = previews_dir(id_) / f"{est.id}_{fmt.replace(':', 'x')}.mp4"
-    shutil.move(str(bruto), saida)
-    shutil.rmtree(destino, ignore_errors=True)
-    return saida
+    duration = min(card.duracao_max, max(card.duracao_min, 5.0))
+    enc = {e.nome: e.exemplo for e in card.encaixes if e.exemplo and e.tipo not in ("pagina", "imagem")}
+    enc = {**maximums(card), **enc}
+    destination = previews_dir(id_) / f"_{est.id}"
+    shutil.rmtree(destination, ignore_errors=True)
+    assemble(destination, [_scene(card, duration, encaixes=enc)], est.pele, fmt, ids=[id_], dur=duration + 1.0)
+    raw = compiler.render(None, fmt, qualidade="draft", p=destination)
+    output = previews_dir(id_) / f"{est.id}_{fmt.replace(':', 'x')}.mp4"
+    shutil.move(str(raw), output)
+    shutil.rmtree(destination, ignore_errors=True)
+    return output
 
 
 # ---------------------------------------------------------------- prova de troca de pele entre canais
@@ -719,70 +719,70 @@ def examples(ficha: Card):
     return {e.nome: (e.exemplo if e.exemplo and e.tipo not in ("pagina", "imagem") else m[e.nome]) for e in ficha.encaixes}
 
 
-def proof_channels(estilos, formatos=("16:9", "9:16"), ids=None):
+def proof_channels(styles, formatos=("16:9", "9:16"), ids=None):
     """Cada peça aprovada (ou `ids`) com o conteúdo de exemplo na pele de cada estilo: mede erro de JavaScript e
     estouro da área segura e monta uma folha por estilo × formato. A mesma peça tem de funcionar em todos os canais
     só pela pele. → {"folhas": [...], "problemas": [{peca, estilo, formato, erro}]}."""
     from esteira.studio import style as E
-    pasta_saida = previews_dir("_canais").parent / "_prova_canais"
-    pasta_saida.mkdir(parents=True, exist_ok=True)
-    fichas = [load(i) for i in ids] if ids else list_all("aprovada")
-    problemas, folhas = [], []
+    folder_output = previews_dir("_canais").parent / "_prova_canais"
+    folder_output.mkdir(parents=True, exist_ok=True)
+    cards = [load(i) for i in ids] if ids else list_all("aprovada")
+    problems, folhas = [], []
     with tempfile.TemporaryDirectory() as tmp:
-        for ref in estilos:
+        for ref in styles:
             est = E.load(ref)
             for fmt in formatos:
                 W, H = DIM[fmt]
-                quadros = []
-                for f in fichas:
+                frames = []
+                for f in cards:
                     if fmt not in f.formatos:
                         continue
-                    dur = min(f.duracao_max, max(f.duracao_min, 4.0))
-                    cena = _scene(f, dur, encaixes=examples(f))
+                    duration = min(f.duracao_max, max(f.duracao_min, 4.0))
+                    scene = _scene(f, duration, encaixes=examples(f))
                     d = Path(tmp) / f"{est.id}_{fmt.replace(':', 'x')}_{f.id}"
                     if f.motor == "effectcraft":
-                        q = _proof_channel_ec(f, cena, dur, est, fmt, d, problemas)
+                        q = _proof_channel_ec(f, scene, duration, est, fmt, d, problems)
                         if q:
-                            quadros.append(q)
+                            frames.append(q)
                         continue
-                    idx = assemble(d, [cena], est.pele, fmt, ids=[f.id] + _drops(f), dur=cena["ate"] + 0.5, medir=True)
-                    t = round(cena["t"] + 0.6 * dur, 2)
+                    idx = assemble(d, [scene], est.pele, fmt, ids=[f.id] + _drops(f), dur=scene["ate"] + 0.5, medir=True)
+                    t = round(scene["t"] + 0.6 * duration, 2)
                     dom = _chromium(f"file://{idx}?t={t}", W, H)
                     er = re.search(r'data-erros="([^"]*)"', dom)
                     es = re.search(r'data-estouro="([^"]*)"', dom)
-                    lst_e = json.loads(html_lib.unescape(er.group(1))) if er else ["a composição não rodou"]
+                    lst_and = json.loads(html_lib.unescape(er.group(1))) if er else ["a composição não rodou"]
                     lst_s = json.loads(html_lib.unescape(es.group(1))) if es else []
-                    for x in lst_e:
-                        problemas.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"JavaScript: {x}"})
+                    for x in lst_and:
+                        problems.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"JavaScript: {x}"})
                     if lst_s:
-                        problemas.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"sai da área segura: {lst_s[:3]}"})
+                        problems.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"sai da área segura: {lst_s[:3]}"})
                     png = d / "quadro.png"
                     _chromium(f"file://{idx}?t={t}", W, H, saida=png)
                     if png.exists():
-                        quadros.append(png)
-                if quadros:
-                    folha = pasta_saida / f"{est.id}_{fmt.replace(':', 'x')}.jpg"
-                    _sheet(quadros, folha, 6 if W > H else 8)
-                    folhas.append(folha.name)
-    r = {"estilos": list(estilos), "pecas": [f.id for f in fichas], "folhas": folhas, "problemas": problemas}
-    (pasta_saida / "resultado.json").write_text(json.dumps(r, ensure_ascii=False, indent=1))
+                        frames.append(png)
+                if frames:
+                    sheet = folder_output / f"{est.id}_{fmt.replace(':', 'x')}.jpg"
+                    _sheet(frames, sheet, 6 if W > H else 8)
+                    folhas.append(sheet.name)
+    r = {"estilos": list(styles), "pecas": [f.id for f in cards], "folhas": folhas, "problemas": problems}
+    (folder_output / "resultado.json").write_text(json.dumps(r, ensure_ascii=False, indent=1))
     return r
 
 
-def _proof_channel_ec(f, cena, dur, est, fmt, pasta_tmp, problemas):
+def _proof_channel_ec(f, cena, dur, est, fmt, folder_tmp, problemas):
     """Peça EffectCraft na pele do estilo: estouro da área segura e o quadro do meio (ou o erro do script)."""
     from esteira.studio import ec
-    pasta_tmp.mkdir(parents=True, exist_ok=True)
+    folder_tmp.mkdir(parents=True, exist_ok=True)
     t = round(cena["t"] + 0.6 * dur, 2)
     d = ec.data(f, cena["encaixes"], cena["botoes"], cena["batidas"], est.pele, fmt, dur, cena["t"], [t], AREA_SAFE)
     try:
-        estouros, _ = ec.assemble(f.id, d, pasta_tmp / "p.ecproj", est.pele)
+        overflows, _ = ec.assemble(f.id, d, folder_tmp / "p.ecproj", est.pele)
     except (RuntimeError, subprocess.TimeoutExpired) as e:
         problemas.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"EffectCraft: {str(e)[:200]}"})
         return None
-    if estouros:
-        problemas.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"sai da área segura: {estouros[:3]}"})
-    return ec.frame(pasta_tmp / "p.ecproj", t, pasta_tmp / "quadro.jpg", est.pele.fundo, escala=1.0)
+    if overflows:
+        problemas.append({"peca": f.id, "estilo": est.id, "formato": fmt, "erro": f"sai da área segura: {overflows[:3]}"})
+    return ec.frame(folder_tmp / "p.ecproj", t, folder_tmp / "quadro.jpg", est.pele.fundo, escala=1.0)
 
 
 def _drops(ficha: Card):
@@ -791,18 +791,18 @@ def _drops(ficha: Card):
     return sorted(set(re.findall(r'k\.outra\("(\w+)"', js)))
 
 
-def _sheet(quadros, destino, colunas):
+def _sheet(frames, destino, colunas):
     """Folha de contato (ffmpeg xstack) com os quadros em miniatura, na ordem."""
-    n = len(quadros)
-    larg = 320
-    entradas = sum((["-i", str(q)] for q in quadros), [])
-    escala = "".join(f"[{i}]scale={larg}:-2[a{i}];" for i in range(n))
+    n = len(frames)
+    width = 320
+    inputs = sum((["-i", str(q)] for q in frames), [])
+    scale = "".join(f"[{i}]scale={width}:-2[a{i}];" for i in range(n))
     if n == 1:
-        filtro = f"[0]scale={larg}:-2"
+        criteria = f"[0]scale={width}:-2"
     else:
         # posições: colunas de `larg` px; linhas pela altura da primeira miniatura (h0)
         pos = "|".join(("0" if i % colunas == 0 else "+".join(f"w{j}" for j in range(i - i % colunas, i)))
                        + "_" + ("0" if i < colunas else "+".join("h0" for _ in range(i // colunas))) for i in range(n))
-        filtro = escala + "".join(f"[a{i}]" for i in range(n)) + f"xstack=inputs={n}:layout={pos}:fill=black"
-    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", *entradas, "-filter_complex", filtro, "-frames:v", "1",
+        criteria = scale + "".join(f"[a{i}]" for i in range(n)) + f"xstack=inputs={n}:layout={pos}:fill=black"
+    subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", *inputs, "-filter_complex", criteria, "-frames:v", "1",
                     "-q:v", "4", str(destino)], check=True)

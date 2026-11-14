@@ -25,28 +25,28 @@ ORIENT = {"pexels": "landscape", "pixabay": "horizontal"}
 
 # Cada função devolve candidatos: {"id", "url", "tipo", "largura", "duracao", "credito"}
 
-def pexels(termo, tipo, env, idioma):
-    chave = env.get("PEXELS_API_KEY")
-    if not chave:
+def pexels(term, tipo, env, language):
+    key = env.get("PEXELS_API_KEY")
+    if not key:
         return []
-    h = {"Authorization": chave, **UA}
+    h = {"Authorization": key, **UA}
     if tipo == "video":
         r = requests.get("https://api.pexels.com/videos/search", headers=h, timeout=30, params={
-            "query": termo, "orientation": ORIENT["pexels"], "size": "medium", "per_page": 15, "locale": idioma})
+            "query": term, "orientation": ORIENT["pexels"], "size": "medium", "per_page": 15, "locale": language})
         r.raise_for_status()
-        saida = []
+        output = []
         for v in r.json().get("videos", []):
-            arquivos = [f for f in v["video_files"] if f.get("file_type") == "video/mp4" and (f.get("width") or 0) >= 1280]
-            if not arquivos:
+            files = [f for f in v["video_files"] if f.get("file_type") == "video/mp4" and (f.get("width") or 0) >= 1280]
+            if not files:
                 continue
-            f = min(arquivos, key=lambda f: abs(f["width"] - 1920))
-            saida.append({"id": f"pexels-v{v['id']}", "url": f["link"], "tipo": "video", "largura": f["width"],
+            f = min(files, key=lambda f: abs(f["width"] - 1920))
+            output.append({"id": f"pexels-v{v['id']}", "url": f["link"], "tipo": "video", "largura": f["width"],
                           "duracao": v["duration"], "credito": f"Vídeo de {v['user']['name']} (Pexels) {v['url']}",
                           "pagina": v["url"], "licenca": "Pexels", "tags": " ".join(v.get("tags") or []),
                           "titulo": re.sub(r"[-/]", " ", v["url"].rstrip("/").split("/")[-1])})
-        return saida
+        return output
     r = requests.get("https://api.pexels.com/v1/search", headers=h, timeout=30, params={
-        "query": termo, "orientation": ORIENT["pexels"], "per_page": 15, "locale": idioma})
+        "query": term, "orientation": ORIENT["pexels"], "per_page": 15, "locale": language})
     r.raise_for_status()
     return [{"id": f"pexels-f{p['id']}", "url": p["src"]["large2x"], "tipo": "imagem", "largura": p["width"],
              "duracao": None, "credito": f"Foto de {p['photographer']} (Pexels) {p['url']}",
@@ -66,76 +66,76 @@ def _pixabay_get(url, params):
     import json
 
     from esteira.project import CACHE
-    nome = hashlib.sha1(json.dumps([url, sorted(params.items())]).encode()).hexdigest()[:20]
-    arq = CACHE / "pixabay" / f"{nome}.json"
-    if arq.exists() and time.time() - arq.stat().st_mtime < 86400:
-        return json.loads(arq.read_text())
+    name = hashlib.sha1(json.dumps([url, sorted(params.items())]).encode()).hexdigest()[:20]
+    file = CACHE / "pixabay" / f"{name}.json"
+    if file.exists() and time.time() - file.stat().st_mtime < 86400:
+        return json.loads(file.read_text())
     r = requests.get(url, headers=UA, timeout=30, params=params)
     if r.status_code == 429:
         time.sleep(float(r.headers.get("X-RateLimit-Reset", 30)))
         r = requests.get(url, headers=UA, timeout=30, params=params)
     if r.status_code != 200:
         raise requests.HTTPError(f"{r.status_code} {r.text.strip()[:120]}")
-    arq.parent.mkdir(parents=True, exist_ok=True)
-    arq.write_text(r.text)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_text(r.text)
     return r.json()
 
 
-def pixabay(termo, tipo, env, idioma):
-    chave = _key_pixabay(env, tipo)
-    if not chave:
+def pixabay(term, tipo, env, language):
+    key = _key_pixabay(env, tipo)
+    if not key:
         return []
-    comum = {"key": chave, "q": termo[:100], "lang": idioma.split("-")[0], "per_page": 20, "safesearch": "true"}
+    common = {"key": key, "q": term[:100], "lang": language.split("-")[0], "per_page": 20, "safesearch": "true"}
     if tipo == "video":
-        saida = []
-        for v in _pixabay_get("https://pixabay.com/api/videos/", dict(comum, video_type="film")).get("hits", []):
+        output = []
+        for v in _pixabay_get("https://pixabay.com/api/videos/", dict(common, video_type="film")).get("hits", []):
             # medium (1920x1080) basta para 1080p; large é 4K (download pesado) e pode vir vazio
-            versoes = [x for x in v["videos"].values() if x.get("url") and x.get("width", 0) >= 1280]
-            f = min(versoes, key=lambda x: abs(x["width"] - 1920), default=None)
+            versions = [x for x in v["videos"].values() if x.get("url") and x.get("width", 0) >= 1280]
+            f = min(versions, key=lambda x: abs(x["width"] - 1920), default=None)
             if not f or (ORIENT["pixabay"] == "vertical") != (f["height"] > f["width"]):
                 continue  # a API de vídeos não filtra orientação
-            saida.append({"id": f"pixabay-v{v['id']}", "url": f["url"], "tipo": "video", "largura": f["width"],
+            output.append({"id": f"pixabay-v{v['id']}", "url": f["url"], "tipo": "video", "largura": f["width"],
                           "duracao": v["duration"], "credito": f"Vídeo de {v['user']} (Pixabay) {v['pageURL']}",
                           "pagina": v["pageURL"], "licenca": "Pixabay", "tags": v.get("tags", ""),
                           "titulo": re.sub(r"[-/]", " ", v["pageURL"].rstrip("/").split("/")[-1])})
-        return saida
-    dados = _pixabay_get("https://pixabay.com/api/", dict(comum, image_type="photo", orientation=ORIENT["pixabay"],
+        return output
+    data = _pixabay_get("https://pixabay.com/api/", dict(common, image_type="photo", orientation=ORIENT["pixabay"],
                                                           min_width=1600))
     return [{"id": f"pixabay-f{p['id']}", "url": p["largeImageURL"], "tipo": "imagem",
              "largura": p["imageWidth"], "duracao": None,
              "credito": f"Imagem de {p['user']} (Pixabay) {p['pageURL']}", "pagina": p["pageURL"],
              "licenca": "Pixabay", "tags": p.get("tags", ""),
-             "titulo": re.sub(r"[-/]", " ", p["pageURL"].rstrip("/").split("/")[-1])} for p in dados.get("hits", [])]
+             "titulo": re.sub(r"[-/]", " ", p["pageURL"].rstrip("/").split("/")[-1])} for p in data.get("hits", [])]
 
 
-def openverse(termo, tipo, env, idioma):
+def openverse(term, tipo, env, language):
     if tipo == "video":
         return []
     time.sleep(3)  # sem chave o limite é 20 buscas/min
     r = requests.get("https://api.openverse.org/v1/images/", headers=UA, timeout=30, params={
-        "q": termo, "license_type": "commercial,modification", "aspect_ratio": "wide",
+        "q": term, "license_type": "commercial,modification", "aspect_ratio": "wide",
         "page_size": 20, "mature": "false"})
     if r.status_code == 429:
         print("     openverse: limite de buscas atingido (200/dia sem chave)")
         return []
     r.raise_for_status()
-    saida = []
+    output = []
     for p in r.json().get("results", []):
         if (p.get("width") or 0) < 1280:
             continue
-        autor = p.get("creator") or "autor desconhecido"
-        licenca = f"{(p.get('license') or '').upper()} {p.get('license_version') or ''}".strip()
+        author = p.get("creator") or "autor desconhecido"
+        licence = f"{(p.get('license') or '').upper()} {p.get('license_version') or ''}".strip()
         url = p["url"]
         m = re.match(r"(https://upload\.wikimedia\.org/wikipedia/commons)/(\w/\w\w)/([^/]+)$", url)
         if m and p["width"] > 1920:
             # O Wikimedia bloqueia downloads de originais em série; a miniatura de 1920px é liberada.
             url = f"{m[1]}/thumb/{m[2]}/{m[3]}/1920px-{m[3]}"
-        saida.append({"id": f"openverse-{p['id']}", "url": url, "tipo": "imagem", "largura": p["width"],
-                      "duracao": None, "credito": f"\"{p.get('title') or ''}\" de {autor}, {licenca} "
+        output.append({"id": f"openverse-{p['id']}", "url": url, "tipo": "imagem", "largura": p["width"],
+                      "duracao": None, "credito": f"\"{p.get('title') or ''}\" de {author}, {licence} "
                                                   f"({p.get('foreign_landing_url')})",
-                      "pagina": p.get("foreign_landing_url") or "", "licenca": licenca, "titulo": p.get("title") or "",
+                      "pagina": p.get("foreign_landing_url") or "", "licenca": licence, "titulo": p.get("title") or "",
                       "tags": " ".join(t.get("name", "") for t in p.get("tags") or [])})
-    return saida
+    return output
 
 
 PROVIDERS = {"pexels": pexels, "pixabay": pixabay, "openverse": openverse}
@@ -147,10 +147,10 @@ def _ffmpeg(*args):
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", *map(str, args)], check=True)
 
 
-def duration_media(caminho):
-    saida = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
-                            str(caminho)], capture_output=True, text=True).stdout.strip()
-    return float(saida) if saida else 0.0
+def duration_media(path):
+    output = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                            str(path)], capture_output=True, text=True).stdout.strip()
+    return float(output) if output else 0.0
 
 
 def normalize_image(origem, destino, w, h):
@@ -161,37 +161,37 @@ def normalize_image(origem, destino, w, h):
 
 def normalize_video(origem, destino, w, h, fps, segundos):
     """Recorta/estica o vídeo para cobrir a cena (+1 s de folga para as transições), sem áudio."""
-    alvo = segundos + 1.0
-    dur = duration_media(origem)
-    filtros = [f"scale={w}:{h}:force_original_aspect_ratio=increase", f"crop={w}:{h}", f"fps={fps}"]
-    entrada = ["-i", origem]
-    if 0 < dur < alvo:
-        fator = alvo / dur
-        if fator <= 2.0:
-            filtros.insert(0, f"setpts={fator:.4f}*PTS")  # câmera lenta, até 2×
+    target = segundos + 1.0
+    duration = duration_media(origem)
+    filters = [f"scale={w}:{h}:force_original_aspect_ratio=increase", f"crop={w}:{h}", f"fps={fps}"]
+    entry = ["-i", origem]
+    if 0 < duration < target:
+        factor = target / duration
+        if factor <= 2.0:
+            filters.insert(0, f"setpts={factor:.4f}*PTS")  # câmera lenta, até 2×
         else:
-            entrada = ["-stream_loop", "-1", "-i", origem]
-    elif dur > alvo + 2:
-        entrada = ["-ss", f"{min(1.0, dur - alvo):.2f}", "-i", origem]  # pula o começo, muitas vezes tremido
-    _ffmpeg(*entrada, "-t", f"{alvo:.3f}", "-vf", ",".join(filtros), "-an", "-c:v", "libx264", "-preset",
+            entry = ["-stream_loop", "-1", "-i", origem]
+    elif duration > target + 2:
+        entry = ["-ss", f"{min(1.0, duration - target):.2f}", "-i", origem]  # pula o começo, muitas vezes tremido
+    _ffmpeg(*entry, "-t", f"{target:.3f}", "-vf", ",".join(filters), "-an", "-c:v", "libx264", "-preset",
             "veryfast", "-crf", 18, "-pix_fmt", "yuv420p", destino)
 
 
 # ---------------------------------------------------------------- etapa
 
-def _download(url, destino, tentativas=4):
-    for n in range(tentativas):
+def _download(url, destino, attempts=4):
+    for n in range(attempts):
         with requests.get(url, headers=UA, stream=True, timeout=120) as r:
-            if r.status_code == 429 and n < tentativas - 1:
+            if r.status_code == 429 and n < attempts - 1:
                 time.sleep(5 * (n + 1))
                 continue
             r.raise_for_status()
-            total, feito = int(r.headers.get("Content-Length") or 0) or None, 0
+            total, done = int(r.headers.get("Content-Length") or 0) or None, 0
             with open(destino, "wb") as f:
-                for bloco in r.iter_content(1 << 18):
-                    f.write(bloco)
-                    feito += len(bloco)
-                    trace.task("download", f"baixando {Path(destino).name}", feito, total, "B")
+                for block in r.iter_content(1 << 18):
+                    f.write(block)
+                    done += len(block)
+                    trace.task("download", f"baixando {Path(destino).name}", done, total, "B")
             trace.end_task("download")
             return
 
@@ -220,11 +220,11 @@ def relevance(cand, chave):
     acervo vem do modelo de visão, a mais confiável)."""
     if not chave:
         return 0.0
-    alvo = _roots(" ".join(str(cand.get(k) or "") for k in ("tags", "titulo", "descricao")))
+    target = _roots(" ".join(str(cand.get(k) or "") for k in ("tags", "titulo", "descricao")))
     # tags vêm da mais importante para a menos: a chave nas 3 primeiras vale mais ("credit card" no fim de
     # uma foto de barbearia, não)
-    topo = _roots(", ".join(str(cand.get("tags") or "").split(",")[:3]) + " " + str(cand.get("descricao") or ""))
-    return round(len(chave & alvo) / len(chave) + 0.3 * (len(chave & topo) / len(chave)), 2)
+    top = _roots(", ".join(str(cand.get("tags") or "").split(",")[:3]) + " " + str(cand.get("descricao") or ""))
+    return round(len(chave & target) / len(chave) + 0.3 * (len(chave & top) / len(chave)), 2)
 
 
 def terms_of_scene(cena):
@@ -234,30 +234,30 @@ def terms_of_scene(cena):
     return [(t, "en-US") for t in dict.fromkeys(en)] + ([(cena["busca"], None)] if cena.get("busca") else [])
 
 
-def _candidates(cena, tipo, provedores, env, idioma, minimo=6):
+def _candidates(cena, tipo, providers, env, language, minimum=6):
     """Junta candidatos de todos os provedores, termo a termo, até ter `minimo` relevantes (a chave
     nas tags); a ordem final é por relevância (ver `ordenar`), não pela ordem em que os bancos responderam."""
-    chave = key_of_scene(cena)
-    termos = terms_of_scene(cena)
+    key = key_of_scene(cena)
+    terms = terms_of_scene(cena)
     # sem resultado, o termo principal perde palavras do fim (escrito da mais importante para a menos)
-    if termos:
-        t0 = termos[0][0].split()
-        termos += [(" ".join(t0[:n]), termos[0][1]) for n in range(len(t0) - 1, 1, -1)]
-    saida, vistos = [], set()
-    for termo, lang in termos:
-        for nome in provedores:
+    if terms:
+        t0 = terms[0][0].split()
+        terms += [(" ".join(t0[:n]), terms[0][1]) for n in range(len(t0) - 1, 1, -1)]
+    output, seen = [], set()
+    for term, lang in terms:
+        for name in providers:
             try:
-                achados = PROVIDERS[nome](termo, tipo, env, lang or idioma)
+                found = PROVIDERS[name](term, tipo, env, lang or language)
             except requests.RequestException as e:
-                print(f"     {nome}: erro na busca ({e})")
+                print(f"     {name}: erro na busca ({e})")
                 continue
-            for a in achados:
-                if a["id"] not in vistos:
-                    vistos.add(a["id"])
-                    saida.append(a)
-        if sum(relevance(a, chave) >= RELEVANT for a in saida) >= minimo:
+            for a in found:
+                if a["id"] not in seen:
+                    seen.add(a["id"])
+                    output.append(a)
+        if sum(relevance(a, key) >= RELEVANT for a in output) >= minimum:
             break
-    return saida
+    return output
 
 
 def sort(cands, chave, exigir=False):
@@ -272,167 +272,167 @@ def sort(cands, chave, exigir=False):
     return sorted(cands, key=lambda c: (-c["relevancia"], not c.get("arquivo")))
 
 
-def _prepare(cand, cena, pasta, w, h, fps, dur, termo=""):
+def _prepare(cand, cena, pasta, w, h, fps, dur, term=""):
     """Baixa um candidato para o acervo (ou usa o arquivo que já está lá) e converte para a cena;
     devolve o arquivo final ou None se falhar."""
     video = cand["tipo"] == "video"
     final = pasta / f"cena_{cena['id']:03d}{'.mp4' if video else '.jpg'}"
-    bruto = pasta / f"bruto_{cena['id']:03d}{'.mp4' if video else '.img'}"
+    raw = pasta / f"bruto_{cena['id']:03d}{'.mp4' if video else '.img'}"
     try:
         if cand.get("arquivo"):  # veio do acervo: nada de rede
-            origem = library.folder() / cand["arquivo"]
-            library.register(cand, origem, termo)  # só acrescenta o termo
+            origin = library.folder() / cand["arquivo"]
+            library.register(cand, origin, term)  # só acrescenta o termo
         else:
-            _download(cand["url"], bruto)
-            origem = library.register(cand, bruto, termo)
+            _download(cand["url"], raw)
+            origin = library.register(cand, raw, term)
         if video:
-            normalize_video(origem, final, w, h, fps, dur)
+            normalize_video(origin, final, w, h, fps, dur)
         else:
-            normalize_image(origem, final, w, h)
+            normalize_image(origin, final, w, h)
         return final
     except (requests.RequestException, subprocess.CalledProcessError, OSError) as e:
         print(f"     {cand['id']}: falhou ({str(e)[:90]}); tentando o próximo")
         return None
     finally:
-        bruto.unlink(missing_ok=True)
+        raw.unlink(missing_ok=True)
 
 
-def fetch(projeto, refazer=False, cenas=None):
+def fetch(project, refazer=False, cenas=None):
     """refazer: troca a mídia das cenas (todas, ou só as de `cenas`) por outro resultado."""
-    cfg = projeto.cfg
+    cfg = project.cfg
     w, h, fps = cfg["video"]["largura"], cfg["video"]["altura"], cfg["video"]["fps"]
-    retrato = h > w
-    ORIENT.update(pexels="portrait" if retrato else "landscape", pixabay="vertical" if retrato else "horizontal")
-    provedores = cfg["midia"]["provedores"]
-    idioma = cfg["midia"]["idioma_busca"]
-    env = projeto.env
+    portrait = h > w
+    ORIENT.update(pexels="portrait" if portrait else "landscape", pixabay="vertical" if portrait else "horizontal")
+    providers = cfg["midia"]["provedores"]
+    language = cfg["midia"]["idioma_busca"]
+    env = project.env
     if not env.get("PEXELS_API_KEY") and not _key_pixabay(env, "video"):
         print("  aviso: sem PEXELS_API_KEY/PIXABAY_API_KEY_* no .env; só fotos do Openverse (sem vídeos)")
 
     ac = cfg.get("acervo", {})
-    plano = projeto.carregar_json("plano.json")
+    plan = project.carregar_json("plano.json")
     from esteira import production
-    production.mark_presenter(projeto, plano)  # no modo apresentador, cenas de câmera não buscam mídia
-    pasta = projeto.caminho("midia")
-    alvo = set(cenas) if cenas else {c["id"] for c in plano["cenas"]}
-    for cena in plano["cenas"]:
-        if refazer and cena["id"] in alvo and cena.get("midia_id"):
+    production.mark_presenter(project, plan)  # no modo apresentador, cenas de câmera não buscam mídia
+    folder = project.caminho("midia")
+    target = set(cenas) if cenas else {c["id"] for c in plan["cenas"]}
+    for cena in plan["cenas"]:
+        if refazer and cena["id"] in target and cena.get("midia_id"):
             # A mídia trocada não volta a ser escolhida para esta cena.
             cena.setdefault("rejeitados", []).append(cena.pop("midia_id"))
             cena["midia"] = None
-    usados = {c["midia_id"] for c in plano["cenas"] if c.get("midia_id")}
+    used = {c["midia_id"] for c in plan["cenas"] if c.get("midia_id")}
 
-    trava = threading.Lock()
-    pendentes = [c for c in plano["cenas"] if c["id"] in alvo and not c.get("camera")
-                 and not (c.get("midia") and (projeto.pasta / c["midia"]).exists())]
-    feitas = [0]
+    lock = threading.Lock()
+    pending = [c for c in plan["cenas"] if c["id"] in target and not c.get("camera")
+                 and not (c.get("midia") and (project.pasta / c["midia"]).exists())]
+    done = [0]
 
     def uma(cena):
         """Busca, baixa e converte a mídia de uma cena. Roda em paralelo: `usados` é reservado sob trava."""
-        dur = cena["fim"] - cena["inicio"]
-        ordem = [cena["tipo"], "imagem"] if cena["tipo"] == "video" else ["imagem"]
-        escolhido, falhas, final = None, 0, None
-        termos = [t for t, _ in terms_of_scene(cena)]
-        chave = key_of_scene(cena)
-        for tipo in ordem:
+        duration = cena["fim"] - cena["inicio"]
+        order = [cena["tipo"], "imagem"] if cena["tipo"] == "video" else ["imagem"]
+        chosen, failures, final = None, 0, None
+        terms = [t for t, _ in terms_of_scene(cena)]
+        key = key_of_scene(cena)
+        for kind in order:
             # Acervo primeiro (sem rede, sem API); depois os bancos de imagens.
-            do_acervo = library.search(termos, tipo, "retrato" if retrato else "paisagem", dur,
-                                        excluir=set(cena.get("rejeitados", [])) | usados, canal=projeto.canal,
+            of_library = library.search(terms, kind, "retrato" if portrait else "paisagem", duration,
+                                        excluir=set(cena.get("rejeitados", [])) | used, canal=project.canal,
                                         max_usos_canal=ac.get("max_usos_canal", 2)) if ac.get("reaproveitar", True) else []
-            cands = sort([*do_acervo, *_candidates(cena, tipo, provedores, env, idioma)], chave,
-                            exigir=tipo != ordem[-1])
-            events.debug(f"cena {cena['id']}: {len(cands)} candidatos ({tipo})", chave=sorted(chave),
+            cands = sort([*of_library, *_candidates(cena, kind, providers, env, language)], key,
+                            exigir=kind != order[-1])
+            events.debug(f"cena {cena['id']}: {len(cands)} candidatos ({kind})", chave=sorted(key),
                           melhores=[(c["id"], c["relevancia"]) for c in cands[:3]])
             for cand in cands:
                 if cand["id"] in cena.get("rejeitados", []):
                     continue
-                if tipo == "video" and cand["duracao"] and cand["duracao"] * 2 < dur:
+                if kind == "video" and cand["duracao"] and cand["duracao"] * 2 < duration:
                     continue  # curto demais até em câmera lenta
-                with trava:
-                    if cand["id"] in usados:
+                with lock:
+                    if cand["id"] in used:
                         continue
-                    usados.add(cand["id"])
-                final = _prepare(cand, cena, pasta, w, h, fps, dur, termos[0] if termos else "")
+                    used.add(cand["id"])
+                final = _prepare(cand, cena, folder, w, h, fps, duration, terms[0] if terms else "")
                 if final:
-                    escolhido = cand
+                    chosen = cand
                     break
-                with trava:
-                    usados.discard(cand["id"])
-                falhas += 1
-                if falhas >= 5:
+                with lock:
+                    used.discard(cand["id"])
+                failures += 1
+                if failures >= 5:
                     break
-            if escolhido or falhas >= 5:
+            if chosen or failures >= 5:
                 break
-        with trava:
-            feitas[0] += 1
-            events.progress(feitas[0], len(pendentes), f"cena {cena['id']} [{cena.get('busca_en') or cena['busca']}]")
-            if not escolhido:
+        with lock:
+            done[0] += 1
+            events.progress(done[0], len(pending), f"cena {cena['id']} [{cena.get('busca_en') or cena['busca']}]")
+            if not chosen:
                 events.warning(f"cena {cena['id']}: nada encontrado para [{cena.get('busca_en') or cena['busca']}]")
                 return
-            cena.update(midia=str(final.relative_to(projeto.pasta)), midia_id=escolhido["id"],
-                        relevancia=escolhido.get("relevancia"),
-                        midia_tipo=escolhido["tipo"], credito=escolhido["credito"],
-                        midia_origem="acervo" if escolhido.get("arquivo") else "banco")
-            library.mark_usage(escolhido["id"], projeto.canal, projeto.ep, cena["id"])
-            events.debug(f"cena {cena['id']} ← {escolhido['id']}", midia=escolhido["tipo"], busca=cena.get("busca_en"))
-            projeto.salvar_json("plano.json", plano)
+            cena.update(midia=str(final.relative_to(project.pasta)), midia_id=chosen["id"],
+                        relevancia=chosen.get("relevancia"),
+                        midia_tipo=chosen["tipo"], credito=chosen["credito"],
+                        midia_origem="acervo" if chosen.get("arquivo") else "banco")
+            library.mark_usage(chosen["id"], project.canal, project.ep, cena["id"])
+            events.debug(f"cena {cena['id']} ← {chosen['id']}", midia=chosen["tipo"], busca=cena.get("busca_en"))
+            project.salvar_json("plano.json", plan)
 
     with ThreadPoolExecutor(cfg["midia"].get("paralelo", 6)) as ex:
-        list(ex.map(uma, pendentes))
+        list(ex.map(uma, pending))
 
-    creditos = sorted({c["credito"] for c in plano["cenas"] if c.get("credito")})
-    projeto.caminho("creditos.txt").write_text("\n".join(creditos) + "\n")
-    faltando = [c["id"] for c in plano["cenas"] if not c.get("midia") and not c.get("camera")]
-    reuso = sum(1 for c in pendentes if c.get("midia_origem") == "acervo")
-    camera = sum(1 for c in plano["cenas"] if c.get("camera"))
-    print(f"  mídia pronta para {len(plano['cenas']) - len(faltando)}/{len(plano['cenas'])} cenas"
+    credit = sorted({c["credito"] for c in plan["cenas"] if c.get("credito")})
+    project.caminho("creditos.txt").write_text("\n".join(credit) + "\n")
+    missing = [c["id"] for c in plan["cenas"] if not c.get("midia") and not c.get("camera")]
+    reuse = sum(1 for c in pending if c.get("midia_origem") == "acervo")
+    camera = sum(1 for c in plan["cenas"] if c.get("camera"))
+    print(f"  mídia pronta para {len(plan['cenas']) - len(missing)}/{len(plan['cenas'])} cenas"
           + (f" ({camera} na câmera)" if camera else "")
-          + f"; {reuso}/{len(pendentes)} reaproveitadas do acervo" + (f"; faltam {faltando}" if faltando else ""))
+          + f"; {reuse}/{len(pending)} reaproveitadas do acervo" + (f"; faltam {missing}" if missing else ""))
 
 
-def sheet(projeto, quadros, destino, colunas=4, w=384, h=216):
+def sheet(project, frames, destino, colunas=4, w=384, h=216):
     # 4 × 384 = 1536 px: abaixo dos 1568 px em que a imagem é reduzida antes de o Claude vê-la.
     """Grade de quadros [(arquivo, inicio_s ou None, legenda)] numa imagem só."""
-    entradas, filtros = [], []
-    for i, (arq, ss, legenda) in enumerate(quadros):
-        entradas += (["-ss", str(ss)] if ss is not None else []) + ["-i", arq]
-        legenda = legenda.replace(":", "\\:").replace("'", "").replace(",", "\\,")
-        filtros.append(f"[{i}:v]scale={w}:{h},setsar=1,drawbox=y={h - 34}:w={w}:h=34:color=black@0.7:t=fill,"
-                       f"drawtext=text='{legenda}':x=8:y={h - 27}:fontsize=18:fontcolor=white[q{i}]")
-    linhas = -(-len(quadros) // colunas)
-    total = linhas * colunas if linhas > 1 else len(quadros)
-    for i in range(len(quadros), total):  # completa a grade com quadros pretos
-        entradas += ["-f", "lavfi", "-i", f"color=black:s={w}x{h}:d=1"]
-        filtros.append(f"[{i}:v]setsar=1[q{i}]")
+    inputs, filters = [], []
+    for i, (file, ss, caption) in enumerate(frames):
+        inputs += (["-ss", str(ss)] if ss is not None else []) + ["-i", file]
+        caption = caption.replace(":", "\\:").replace("'", "").replace(",", "\\,")
+        filters.append(f"[{i}:v]scale={w}:{h},setsar=1,drawbox=y={h - 34}:w={w}:h=34:color=black@0.7:t=fill,"
+                       f"drawtext=text='{caption}':x=8:y={h - 27}:fontsize=18:fontcolor=white[q{i}]")
+    lines = -(-len(frames) // colunas)
+    total = lines * colunas if lines > 1 else len(frames)
+    for i in range(len(frames), total):  # completa a grade com quadros pretos
+        inputs += ["-f", "lavfi", "-i", f"color=black:s={w}x{h}:d=1"]
+        filters.append(f"[{i}:v]setsar=1[q{i}]")
     layout = "|".join(f"{(i % colunas) * w}_{(i // colunas) * h}" for i in range(total))
-    filtros.append("".join(f"[q{i}]" for i in range(total))
+    filters.append("".join(f"[q{i}]" for i in range(total))
                    + (f"xstack=inputs={total}:layout={layout}" if total > 1 else "null"))
-    _ffmpeg(*entradas, "-filter_complex", ";".join(filtros), "-frames:v", "1", "-q:v", 4, destino)
+    _ffmpeg(*inputs, "-filter_complex", ";".join(filters), "-frames:v", "1", "-q:v", 4, destino)
 
 
-def review(projeto, cenas=None, por_folha=16):
+def review(project, cenas=None, by_sheet=16):
     """Folhas de contato revisao_NN.jpg (16 cenas cada, legíveis e baratas de ler) com número e busca."""
-    plano = projeto.carregar_json("plano.json")
-    cenas = [c for c in plano["cenas"] if c.get("midia") and (not cenas or c["id"] in cenas)]
+    plan = project.carregar_json("plano.json")
+    cenas = [c for c in plan["cenas"] if c.get("midia") and (not cenas or c["id"] in cenas)]
     if not cenas:
         raise SystemExit("nenhuma cena com mídia; rode buscar")
-    for antiga in projeto.pasta.glob("revisao*.jpg"):
-        antiga.unlink()
-    for n in range(0, len(cenas), por_folha):
-        grupo = cenas[n:n + por_folha]
-        destino = projeto.caminho(f"revisao_{n // por_folha + 1:02d}.jpg")
-        sheet(projeto, [(projeto.pasta / c["midia"], 0.5 if c.get("midia_tipo") == "video" else None,
-                         f"{c['id']} {c.get('busca_en') or c['busca']}") for c in grupo], destino)
-        print(f"  {destino.name}: cenas {grupo[0]['id']}–{grupo[-1]['id']}")
+    for old in project.pasta.glob("revisao*.jpg"):
+        old.unlink()
+    for n in range(0, len(cenas), by_sheet):
+        group = cenas[n:n + by_sheet]
+        destination = project.caminho(f"revisao_{n // by_sheet + 1:02d}.jpg")
+        sheet(project, [(project.pasta / c["midia"], 0.5 if c.get("midia_tipo") == "video" else None,
+                         f"{c['id']} {c.get('busca_en') or c['busca']}") for c in group], destination)
+        print(f"  {destination.name}: cenas {group[0]['id']}–{group[-1]['id']}")
 
 
-def frames(projeto, n=8):
+def frames(project, n=8):
     """Folha quadros.jpg com n quadros do final.mp4 espalhados pela duração, para conferir a montagem."""
-    final = projeto.caminho("final.mp4")
+    final = project.caminho("final.mp4")
     if not final.exists():
         raise SystemExit("final.mp4 não existe; rode montar")
-    dur = duration_media(final)
-    tempos = [round(dur * (i + 0.5) / n, 1) for i in range(n)]
-    destino = projeto.caminho("quadros.jpg")
-    sheet(projeto, [(final, t, f"{t:.1f}s") for t in tempos], destino)
-    print(f"  {destino.name}: {', '.join(f'{t:.1f}s' for t in tempos)}")
+    duration = duration_media(final)
+    times = [round(duration * (i + 0.5) / n, 1) for i in range(n)]
+    destination = project.caminho("quadros.jpg")
+    sheet(project, [(final, t, f"{t:.1f}s") for t in times], destination)
+    print(f"  {destination.name}: {', '.join(f'{t:.1f}s' for t in times)}")

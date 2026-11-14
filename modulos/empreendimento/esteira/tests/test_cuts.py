@@ -11,10 +11,10 @@ DADOS = Path(__file__).parent / "dados"
 
 @pytest.fixture(scope="module")
 def resultado():
-    frases = C.sentences_of_script((DADOS / "ep003_roteiro.txt").read_text())
+    sentences = C.sentences_of_script((DADOS / "ep003_roteiro.txt").read_text())
     pal = json.loads((DADOS / "ep003_transcricao_bruta.json").read_text())["palavras"]
-    trechos, faltando = C.decide(frases, pal)
-    return trechos, faltando
+    spans, missing = C.decide(sentences, pal)
+    return spans, missing
 
 
 def _em(trechos, t):
@@ -22,8 +22,8 @@ def _em(trechos, t):
 
 
 def test_quase_todas_as_frases_tem_tomada(resultado):
-    _, faltando = resultado
-    assert len(faltando) <= 2
+    _, missing = resultado
+    assert len(missing) <= 2
 
 
 def test_bastidor_sai(resultado):

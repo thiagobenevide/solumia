@@ -41,61 +41,61 @@ def _heuristica(texto):
 def choose(frases):
     """{índice da frase: [palavras-chave]}."""
     from esteira.ai import local
-    saida = {}
+    output = {}
     for a in range(0, len(frases), BATCH):
-        bloco = frases[a:a + BATCH]
-        lista = "\n".join(f"{a + k}: {f['texto']}" for k, f in enumerate(bloco))
-        r = local.ask(local.prompt("chaves", frases=lista), Choice, max_tokens=1500, operation="graphics")
-        dadas = {i.frase: i.palavras for i in r.itens} if r else {}
-        for k, f in enumerate(bloco):
-            saida[a + k] = [p for p in dadas.get(a + k, []) if p.strip()] or _heuristica(f["texto"])
+        block = frases[a:a + BATCH]
+        items = "\n".join(f"{a + k}: {f['texto']}" for k, f in enumerate(block))
+        r = local.ask(local.prompt("chaves", frases=items), Choice, max_tokens=1500, operation="graphics")
+        given = {i.frase: i.palavras for i in r.itens} if r else {}
+        for k, f in enumerate(block):
+            output[a + k] = [p for p in given.get(a + k, []) if p.strip()] or _heuristica(f["texto"])
         events.progress(min(a + BATCH, len(frases)), len(frases), "palavras-chave")
-    return saida
+    return output
 
 
 def _find(chave, palavras, t0, t1):
     """(início, fim) da sequência de palavras `chave` dita entre t0 e t1 (comparação sem acento/pontuação)."""
-    alvo = [norm(w) for w in chave.split() if norm(w)]
-    if not alvo:
+    target = [norm(w) for w in chave.split() if norm(w)]
+    if not target:
         return None
-    janela = [(k, w) for k, w in enumerate(palavras) if t0 - 0.5 <= w["ini"] <= t1 + 0.5]
-    for n, (k, w) in enumerate(janela):
-        seq = [norm(x["p"]) for x in palavras[k:k + len(alvo)]]
-        if len(seq) == len(alvo) and all(s[:5] == a[:5] for s, a in zip(seq, alvo)):
-            return w["ini"], palavras[k + len(alvo) - 1]["fim"]
+    window = [(k, w) for k, w in enumerate(palavras) if t0 - 0.5 <= w["ini"] <= t1 + 0.5]
+    for n, (k, w) in enumerate(window):
+        seq = [norm(x["p"]) for x in palavras[k:k + len(target)]]
+        if len(seq) == len(target) and all(s[:5] == a[:5] for s, a in zip(seq, target)):
+            return w["ini"], palavras[k + len(target) - 1]["fim"]
     return None
 
 
-def plan(projeto, graficos, refazer=False):
-    arq = projeto.caminho("chaves.json")
-    if arq.exists() and not refazer:
-        return projeto.carregar_json("chaves.json")
-    frases = projeto.carregar_json("frases.json")
-    palavras = (projeto.carregar_json("alinhamento.json") if projeto.caminho("alinhamento.json").exists()
-                else projeto.carregar_json("transcricao.json")["palavras"])
-    escolhas = choose(frases)
-    ocupado = [(g["inicio"] - SLACK_GRAPHIC, g["inicio"] + g["dur"] + SLACK_GRAPHIC) for g in graficos]
-    achadas = []
-    for k, f in enumerate(frases):
+def plan(project, graphics, refazer=False):
+    file = project.caminho("chaves.json")
+    if file.exists() and not refazer:
+        return project.carregar_json("chaves.json")
+    sentences = project.carregar_json("frases.json")
+    words = (project.carregar_json("alinhamento.json") if project.caminho("alinhamento.json").exists()
+                else project.carregar_json("transcricao.json")["palavras"])
+    choices = choose(sentences)
+    busy = [(g["inicio"] - SLACK_GRAPHIC, g["inicio"] + g["dur"] + SLACK_GRAPHIC) for g in graphics]
+    found = []
+    for k, f in enumerate(sentences):
         if f["ini"] is None:
             continue
-        for chave in escolhas.get(k, []):
-            t = _find(chave, palavras, f["ini"], f.get("fim") or f["ini"] + 15)
+        for key in choices.get(k, []):
+            t = _find(key, words, f["ini"], f.get("fim") or f["ini"] + 15)
             if t:
-                achadas.append({"texto": chave.strip(".,;:!?\"'*").upper(), "inicio": round(max(t[0] - 0.08, 0), 2),
+                found.append({"texto": key.strip(".,;:!?\"'*").upper(), "inicio": round(max(t[0] - 0.08, 0), 2),
                                 "dita_ate": t[1]})
-    saida, livre = [], 0.0
-    for c in sorted(achadas, key=lambda c: c["inicio"]):
-        if c["inicio"] < livre or any(a < c["inicio"] + DURATION[0] and c["inicio"] < b for a, b in ocupado):
+    output, free = [], 0.0
+    for c in sorted(found, key=lambda c: c["inicio"]):
+        if c["inicio"] < free or any(a < c["inicio"] + DURATION[0] and c["inicio"] < b for a, b in busy):
             continue
-        prox = next((g for g, _ in sorted(ocupado) if g > c["inicio"]), 1e9)
-        dur = min(DURATION[1], max(DURATION[0], c["dita_ate"] - c["inicio"] + 0.9), prox - c["inicio"])
-        if dur < DURATION[0]:
+        prox = next((g for g, _ in sorted(busy) if g > c["inicio"]), 1e9)
+        duration = min(DURATION[1], max(DURATION[0], c["dita_ate"] - c["inicio"] + 0.9), prox - c["inicio"])
+        if duration < DURATION[0]:
             continue
-        n = len(saida)
-        saida.append({"texto": c["texto"], "inicio": c["inicio"], "dur": round(dur, 2),
+        n = len(output)
+        output.append({"texto": c["texto"], "inicio": c["inicio"], "dur": round(duration, 2),
                       "pos": ("baixo", "centro", "baixo", "alto")[n % 4], "cor": "destaque" if n % 3 == 0 else "branco"})
-        livre = c["inicio"] + dur + SLACK
-    projeto.salvar_json("chaves.json", saida)
-    print(f"  {len(saida)} palavras-chave animadas ({len(achadas)} escolhidas e achadas na fala)")
-    return saida
+        free = c["inicio"] + duration + SLACK
+    project.salvar_json("chaves.json", output)
+    print(f"  {len(output)} palavras-chave animadas ({len(found)} escolhidas e achadas na fala)")
+    return output

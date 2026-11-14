@@ -28,17 +28,17 @@ def _ruido(seg, amp=0.002):
 
 def _montar(partes, total):
     x = _ruido(total)
-    for t0, sinal in partes:
+    for t0, signal in partes:
         i = int(t0 * SR)
-        x[i:i + len(sinal)] += sinal
+        x[i:i + len(signal)] += signal
     return x.astype(np.float32)
 
 
 def test_fricativa_final_conta_como_fala():
     # "mais": vogal 1,0–1,3 s + "s" 1,3–1,45 s; o detector antigo (graves > agudos) tirava o "s"
     x = _montar([(1.0, _voz(0.3)), (1.3, _fric(0.15))], 3.0)
-    fala = B.analysis(x)["fala"]
-    assert fala[int(1.33 / B.Q):int(1.42 / B.Q)].mean() > 0.8
+    speech = B.analysis(x)["fala"]
+    assert speech[int(1.33 / B.Q):int(1.42 / B.Q)].mean() > 0.8
 
 
 def test_respiracao_isolada_nao_e_fala():
@@ -48,13 +48,13 @@ def test_respiracao_isolada_nao_e_fala():
 
 def test_piso_local_acompanha_volume_que_cai():
     # 20 s alto, 20 s baixo (microfone mais longe): o fim fraco da palavra baixa ainda é fala
-    partes = [(t, _voz(0.4, 0.3)) for t in np.arange(1, 19, 2.0)]
-    partes += [(t, _voz(0.4, 0.02)) for t in np.arange(21, 39, 2.0)]
-    partes.append((31.4, _fric(0.12, 0.03)))  # "s" final fraco da palavra em 31,0–31,4
-    x = _montar(partes, 40.0)
-    fala = B.analysis(x)["fala"]
-    assert fala[int(31.05 / B.Q):int(31.35 / B.Q)].mean() > 0.8
-    assert fala[int(31.42 / B.Q):int(31.5 / B.Q)].mean() > 0.5
+    parts = [(t, _voz(0.4, 0.3)) for t in np.arange(1, 19, 2.0)]
+    parts += [(t, _voz(0.4, 0.02)) for t in np.arange(21, 39, 2.0)]
+    parts.append((31.4, _fric(0.12, 0.03)))  # "s" final fraco da palavra em 31,0–31,4
+    x = _montar(parts, 40.0)
+    speech = B.analysis(x)["fala"]
+    assert speech[int(31.05 / B.Q):int(31.35 / B.Q)].mean() > 0.8
+    assert speech[int(31.42 / B.Q):int(31.5 / B.Q)].mean() > 0.5
 
 
 def test_borda_dentro_da_palavra_vai_para_fora():
@@ -75,21 +75,21 @@ def test_palavra_mantida_que_ficou_de_fora_volta():
 
 
 def test_nucleo_estende_ate_o_fim_real_e_para_no_retake():
-    som = np.zeros(400, bool)
-    som[100:150] = True    # "casa" com som até 1,5 s; o Whisper disse 1,0–1,3
-    som[150:200] = True    # retake colado começa em 1,5 (Whisper: 1,5–2,0) e sai
-    n = B.cores([(1.0, 1.3)], som, [(1.0, 1.3), (1.5, 2.0)])[0]
+    sound = np.zeros(400, bool)
+    sound[100:150] = True    # "casa" com som até 1,5 s; o Whisper disse 1,0–1,3
+    sound[150:200] = True    # retake colado começa em 1,5 (Whisper: 1,5–2,0) e sai
+    n = B.cores([(1.0, 1.3)], sound, [(1.0, 1.3), (1.5, 2.0)])[0]
     assert n[1] >= 1.5 - 1e-9 and n[1] <= 1.5 + B.NEIGHBOR_CUT + 1e-9
 
 
 def test_palavra_sem_som_nao_e_protegida():
-    som = np.zeros(300, bool)
-    assert B.cores([(1.0, 1.4)], som, [(1.0, 1.4)]) == []
+    sound = np.zeros(300, bool)
+    assert B.cores([(1.0, 1.4)], sound, [(1.0, 1.4)]) == []
 
 
 def test_perdas_acha_palavra_cortada_pela_metade():
-    alertas = B.losses([(1.0, 1.4), (2.0, 2.4)], [[0.0, 1.2], [1.9, 3.0]], ["casa", "mais"])
-    assert [a["texto"] for a in alertas] == ["casa"] and alertas[0]["perdeu"] == 0.5
+    alerts = B.losses([(1.0, 1.4), (2.0, 2.4)], [[0.0, 1.2], [1.9, 3.0]], ["casa", "mais"])
+    assert [a["texto"] for a in alerts] == ["casa"] and alerts[0]["perdeu"] == 0.5
 
 
 def test_corte_do_estudio_mantem_palavra_pela_metade_na_mascara():
@@ -108,9 +108,9 @@ def test_vicio_esticado_nao_leva_o_comeco_da_seguinte():
     sp = np.zeros(500, bool)
     sp[100:260] = True                        # "e" esticado 1,0–1,9 (o Whisper estica até 2,0) + "sempre" 1,9–2,6
     ws = [[1.0, 2.0, "e"], [1.9, 2.6, "sempre"]]
-    cortes = C.fillers(ws)
-    assert cortes and cortes[0][2].endswith("(esticado)")
-    segs, _, _ = C.segments(sp, ws, cortes, dur=5.0)
+    cuts = C.fillers(ws)
+    assert cuts and cuts[0][2].endswith("(esticado)")
+    segs, _, _ = C.segments(sp, ws, cuts, dur=5.0)
     assert any(a <= 1.9 - B.BEFORE + 1e-9 and b >= 2.6 for a, b, _ in segs)
 
 
@@ -123,8 +123,8 @@ def test_bordas_da_esteira_nunca_dentro_da_palavra():
     env = {"db": db, "lim": np.full(400, -48.0)}
     pal = [{"p": "porcento", "ini": 1.0, "fim": 1.2}, {"p": "porcento", "ini": 1.5, "fim": 1.8},
            {"p": "agora.", "ini": 2.5, "fim": 3.0}]
-    trechos = [{"i": 0, "j": 1, "manter": True}, {"i": 1, "j": 2, "manter": False}, {"i": 2, "j": 3, "manter": True}]
-    ivs = C._intervals(trechos, pal, [], env)
+    spans = [{"i": 0, "j": 1, "manter": True}, {"i": 1, "j": 2, "manter": False}, {"i": 2, "j": 3, "manter": True}]
+    ivs = C._intervals(spans, pal, [], env)
     assert any(a <= 1.0 and b >= 1.42 for a, b in ivs)          # o fim real ficou
     assert not any(a < 1.55 < b for a, b in ivs)                # o retake saiu
 

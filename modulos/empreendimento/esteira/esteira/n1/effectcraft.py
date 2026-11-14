@@ -300,11 +300,11 @@ class Compiler:
         if m.group(1) == "T0":
             base = self.t0
         else:
-            nome = m.group(2)
-            if nome in self.bat:
-                base = self.bat[nome]
-            elif nome in self.doc.batidas_padrao:
-                base = self.t0 + self.doc.batidas_padrao[nome]
+            name = m.group(2)
+            if name in self.bat:
+                base = self.bat[name]
+            elif name in self.doc.batidas_padrao:
+                base = self.t0 + self.doc.batidas_padrao[name]
             else:  # batida que os dados não trazem e sem padrão declarado: logo depois da entrada
                 base = self.t0 + 0.15
         delta = sum(float(n) * (self.vel if v else 1) for n, v in re.findall(r"([+-]\d+(?:\.\d+)?)(v?)", m.group(3)))
@@ -320,13 +320,13 @@ class Compiler:
 
     def texto(self, s: str) -> str:
         def valor(m):
-            v, campo = self.enc.get(m.group(1)), m.group(2)
+            v, field = self.enc.get(m.group(1)), m.group(2)
             if isinstance(v, list):  # lista fora do `repetir`: o primeiro item (ou o campo dele, nos pares)
                 v = v[0] if v else ""
                 if isinstance(v, dict):
-                    v = v.get(campo or "valor", "")
+                    v = v.get(field or "valor", "")
             elif isinstance(v, dict):
-                v = v.get(campo or "valor", "")
+                v = v.get(field or "valor", "")
             return str(v or "")
         s = re.sub(r"\{\{(\w+)(?:\.(\w+))?\}\}", valor, s)
         if m := re.search(r"\{\{[^}]*\}\}", s):  # o que sobrar apareceria literal na tela
@@ -357,36 +357,36 @@ class Compiler:
             lin = -(-n // c)
             cw, ch = (w - g * (c - 1)) / c, (h - g * (lin - 1)) / lin
             return [(x + (i % c) * (cw + g), y + (i // c) * (ch + g), cw, ch) for i in range(n)]
-        pesos = (cx.pesos or [])[:n]
-        pesos = pesos + [1.0] * (n - len(pesos))
-        total = sum(max(p, 0.01) for p in pesos)
+        weights = (cx.pesos or [])[:n]
+        weights = weights + [1.0] * (n - len(weights))
+        total = sum(max(p, 0.01) for p in weights)
         util = (h if disp == "coluna" else w) - g * (n - 1)
         cel, pos = [], (y if disp == "coluna" else x)
-        for p in pesos:
+        for p in weights:
             t = util * max(p, 0.01) / total
             cel.append((x, pos, w, t) if disp == "coluna" else (pos, y, t, h))
             pos += t + g
         return cel
 
-    def _encaixar(self, e, cel, cx: "Box", grade=False, barra=None):
+    def _encaixar(self, e, cel, cx: "Box", grade=False, bar=None):
         """Elemento → posição e tamanho absolutos dentro da célula (frações da tela, como o N1 solto)."""
         x, y, w, h = cel
         if isinstance(e, Text):
-            tam = (e.tam or LEVELS[e.nivel or "corpo"]) * self.U
-            tam = min(tam, h * 0.9)
+            size = (e.tam or LEVELS[e.nivel or "corpo"]) * self.U
+            size = min(size, h * 0.9)
             # o bloco do EffectCraft fixa o topo e quebra para baixo: centrar como uma linha só fazia o texto de
             # várias linhas invadir a célula de baixo. Estima as linhas e encolhe até caber na célula.
-            n = self._linhas(e, tam, w)
+            n = self._linhas(e, size, w)
             # a palavra mais longa também cabe na largura: o bloco não quebra no meio dela ("1.234,5" vazava do anel)
-            while (n * tam * 1.25 > h or self._palavra(e, tam) > w * 0.95) and tam > LEVELS["rotulo"] * self.U:
-                tam *= 0.92
-                n = self._linhas(e, tam, w)
-            if tam < 0.6 * (e.tam or LEVELS[e.nivel or "corpo"]) * self.U and tam < 0.026 * self.U:  # < 28 px no 1080
+            while (n * size * 1.25 > h or self._palavra(e, size) > w * 0.95) and size > LEVELS["rotulo"] * self.U:
+                size *= 0.92
+                n = self._linhas(e, size, w)
+            if size < 0.6 * (e.tam or LEVELS[e.nivel or "corpo"]) * self.U and size < 0.026 * self.U:  # < 28 px no 1080
                 self.miudos.append(e.nome)
-            ty = y + max(0.0, (h - n * tam * 1.25) / 2)
+            ty = y + max(0.0, (h - n * size * 1.25) / 2)
             self.limites[e.nome] = (x, y, x + w, y + h)
             return e.model_copy(update={
-                "x": x / self.W, "y": ty / self.H, "largura": w / self.W, "tam": tam / self.U, "apos": None,
+                "x": x / self.W, "y": ty / self.H, "largura": w / self.W, "tam": size / self.U, "apos": None,
                 "alinhar": {"inicio": "esquerda", "centro": "centro", "fim": "direita"}[cx.alinhar], "vertical": {}})
         if isinstance(e, Ellipse):
             d = min(e.d * self.U if e.d else 1e9, min(w, h) * 0.92)
@@ -394,14 +394,14 @@ class Compiler:
                                         "vertical": {}})
         if isinstance(e, Rectangle):
             if grade and not (e.w or e.h):
-                lado = min(w, h) * 0.86
-                rw, rh = lado, lado
+                side = min(w, h) * 0.86
+                rw, rh = side, side
             else:
                 rw = min(e.w * self.U, w) if e.w else w
                 rh = min(e.h * self.U, h) if e.h else h
             if e.proporcional and e.escala_valor is not None:  # barra: cresce da base (alta) ou da esquerda (larga)
                 f = max(e.escala_valor, 0.03)
-                if barra == "alta" or (barra is None and h >= w):
+                if bar == "alta" or (bar is None and h >= w):
                     rh = h * f
                     rw = rw if e.w else min(rw, w * 0.6)
                     return e.model_copy(update={"x": (x + (w - rw) / 2) / self.W, "y": (y + h - rh) / self.H,
@@ -419,8 +419,8 @@ class Compiler:
             s = self.texto(e.conteudo)
         except ErrorN1:
             s = e.conteudo
-        maior = max((len(p) for p in s.replace("*", "").split()), default=0)
-        return maior * tam * (0.62 + e.tracking / 1000) * (1.12 if e.caps else 1)
+        largest = max((len(p) for p in s.replace("*", "").split()), default=0)
+        return largest * tam * (0.62 + e.tracking / 1000) * (1.12 if e.caps else 1)
 
     def _linhas(self, e: "Text", tam: float, w: float) -> int:
         """Linhas estimadas do texto na largura w (largura média do caractere ≈ 0,55 do corpo; caps e tracking a mais)."""
@@ -431,21 +431,21 @@ class Compiler:
         car = tam * (0.55 + e.tracking / 1000) * (1.12 if e.caps else 1)
         return max(1, math.ceil(len(s.replace("*", "")) * car / max(w * 0.95, 1)))
 
-    def _miolo(self, rect, formas):
+    def _miolo(self, rect, shapes):
         """Área para texto por cima das formas da camada: dentro do furo do anel (elipse com contorno), dentro da
         elipse cheia ou do retângulo, com folga."""
         x, y, w, h = rect
-        lado = min(w, h)
-        el = [f for f in formas if isinstance(f, Ellipse)]
+        side = min(w, h)
+        el = [f for f in shapes if isinstance(f, Ellipse)]
         if el:
-            d = min(min(f.d * self.U if f.d else 1e9 for f in el), lado * 0.92)
-            borda = max((f.contorno or (0.2 * (f.d or 0) if (f.inicio > 0 or f.fim < 1 or f.fatia) else 0)) * self.U
+            d = min(min(f.d * self.U if f.d else 1e9 for f in el), side * 0.92)
+            edge = max((f.contorno or (0.2 * (f.d or 0) if (f.inicio > 0 or f.fim < 1 or f.fatia) else 0)) * self.U
                         for f in el)
             if any(f.fatia for f in el):
-                borda = max(borda, d * 0.2)
-            m = (d - 2 * borda) * 0.68
+                edge = max(edge, d * 0.2)
+            m = (d - 2 * edge) * 0.68
             return (x + (w - m) / 2, y + (h - m) / 2, m, m)
-        if any(isinstance(f, Rectangle) for f in formas):
+        if any(isinstance(f, Rectangle) for f in shapes):
             return (x + w * 0.08, y + h * 0.1, w * 0.84, h * 0.8)
         return rect
 
@@ -453,7 +453,7 @@ class Compiler:
         cx = self._el(cx)
         if not self.ativo(cx.se):
             return [], []
-        itens, anims = [], []
+        items, anims = [], []
         for f in cx.filhos:
             if not self.ativo(self._el(f).se):
                 continue
@@ -463,74 +463,74 @@ class Compiler:
                 anims += an
                 k = max(len(r.elementos), 1)
                 for i in range(0, len(els), k):
-                    itens.append(("item", els[i:i + k], (r.disposicao_item, r.pesos_item)))
+                    items.append(("item", els[i:i + k], (r.disposicao_item, r.pesos_item)))
             elif isinstance(f, Box):
-                itens.append(("caixa", f, None))
+                items.append(("caixa", f, None))
             else:
-                itens.append(("el", self._el(f), None))
+                items.append(("el", self._el(f), None))
         disp = cx.disposicao
         if disp == "fluxo":
             disp = "coluna" if self.vert else "linha"
-        saida = []
-        celulas = self._celulas(disp, rect, len(itens), cx)
+        output = []
+        cells = self._celulas(disp, rect, len(items), cx)
         if disp == "camadas":  # texto sobre forma: no furo do anel ou dentro da forma, vários textos em coluna
-            miolo = self._miolo(rect, [c for t, c, _ in itens if t == "el"] +
-                                [e for t, c, _ in itens if t == "item" for e in c])
-            textos = [k for k, (t, c, _) in enumerate(itens) if t == "el" and isinstance(c, Text)]
-            pilha = Box(tipo="caixa", nome="_miolo", espaco=cx.espaco / 2, filhos=[],
-                          pesos=[2.0 if itens[k][1].nivel in ("numero", "destaque", "titulo") else 1.0 for k in textos])
-            celulas = list(celulas)
-            for k, c in zip(textos, self._celulas("coluna", miolo, len(textos), pilha), strict=False):
-                celulas[k] = c
-        for (tipo, coisa, sub), cel in zip(itens, celulas, strict=False):
-            if tipo == "el":
-                saida.append(self._encaixar(coisa, cel, cx, disp == "grade"))
-            elif tipo == "caixa":
-                els, an = self._resolver(coisa, cel)
-                saida += els
+            middle = self._miolo(rect, [c for t, c, _ in items if t == "el"] +
+                                [e for t, c, _ in items if t == "item" for e in c])
+            texts = [k for k, (t, c, _) in enumerate(items) if t == "el" and isinstance(c, Text)]
+            stack = Box(tipo="caixa", nome="_miolo", espaco=cx.espaco / 2, filhos=[],
+                          pesos=[2.0 if items[k][1].nivel in ("numero", "destaque", "titulo") else 1.0 for k in texts])
+            cells = list(cells)
+            for k, c in zip(texts, self._celulas("coluna", middle, len(texts), stack), strict=False):
+                cells[k] = c
+        for (kind, thing, sub), cel in zip(items, cells, strict=False):
+            if kind == "el":
+                output.append(self._encaixar(thing, cel, cx, disp == "grade"))
+            elif kind == "caixa":
+                els, an = self._resolver(thing, cel)
+                output += els
                 anims += an
             else:
-                sub, pesos_item = sub
-                interna = Box(tipo="caixa", nome="_item", disposicao=sub, espaco=cx.espaco / 2, alinhar=cx.alinhar,
-                                filhos=[], pesos=pesos_item or [1.0 if isinstance(e, Text) else 3.0 for e in coisa])
-                barra = {"linha": "alta", "coluna": "larga"}.get(disp)
-                for e, c in zip(coisa, self._celulas(sub, cel, len(coisa), interna), strict=False):
-                    saida.append(self._encaixar(e, c, interna, disp == "grade", barra))
+                sub, weights_item = sub
+                inner = Box(tipo="caixa", nome="_item", disposicao=sub, espaco=cx.espaco / 2, alinhar=cx.alinhar,
+                                filhos=[], pesos=weights_item or [1.0 if isinstance(e, Text) else 3.0 for e in thing])
+                bar = {"linha": "alta", "coluna": "larga"}.get(disp)
+                for e, c in zip(thing, self._celulas(sub, cel, len(thing), inner), strict=False):
+                    output.append(self._encaixar(e, c, inner, disp == "grade", bar))
         if disp == "camadas":  # formas atrás, textos na frente
-            saida.sort(key=lambda e: isinstance(e, Text))
-        return saida, anims
+            output.sort(key=lambda e: isinstance(e, Text))
+        return output, anims
 
     def _desdobrar(self, r: Repeat) -> tuple[list, list]:
         r = self._el(r)  # `vertical` do repetir (passo, colunas, posição) vale no 9:16
         if r.encaixe:
-            lista = self.enc.get(r.encaixe) or []
-            if not isinstance(lista, list):
-                lista = [lista]
-            lista = lista[: r.maximo]
+            items = self.enc.get(r.encaixe) or []
+            if not isinstance(items, list):
+                items = [items]
+            items = items[: r.maximo]
         else:
-            lista = [str(n + 1) for n in range(r.quantidade or r.maximo)]
-        vals = [_number(x.get("valor") if isinstance(x, dict) else x) or 0 for x in lista]
+            items = [str(n + 1) for n in range(r.quantidade or r.maximo)]
+        vals = [_number(x.get("valor") if isinstance(x, dict) else x) or 0 for x in items]
         total = sum(vals) or 1
-        n_ativos = None
+        n_active = None
         if r.ativos:
             v = self.enc.get(r.ativos)
             v = v[0] if isinstance(v, list) and v else v
             v = v.get("valor") if isinstance(v, dict) else v
             n = _number(v)
             if n is not None:  # percentual sobre uma grade: 34% de 100 itens = 34 acesos
-                n_ativos = round(n * len(lista) / 100) if "%" in str(v) else round(n)
+                n_active = round(n * len(items) / 100) if "%" in str(v) else round(n)
         els, anims = [], []
-        for i, item in enumerate(lista):
+        for i, item in enumerate(items):
             def troca(txt, item=item):
                 if isinstance(item, dict):
                     txt = re.sub(r"\{\{item\.(\w+)\}\}", lambda m: str(item.get(m.group(1), "")), txt)
                 return txt.replace("{{item}}", str(item if not isinstance(item, dict) else item.get("rotulo", "")))
-            nomes = {e.nome: f"{e.nome} {i + 1}" for e in r.elementos}
+            names = {e.nome: f"{e.nome} {i + 1}" for e in r.elementos}
             col, lin = (i % r.colunas, i // r.colunas) if r.colunas else (i, i)
             for e in map(self._el, r.elementos):  # o `vertical` do molde antes do passo (senão empilha os itens)
-                upd = {"nome": nomes[e.nome], "x": None if e.x is None else e.x + col * r.passo[0],
+                upd = {"nome": names[e.nome], "x": None if e.x is None else e.x + col * r.passo[0],
                        "y": None if e.y is None else e.y + lin * r.passo[1]}
-                if n_ativos is not None and i < n_ativos and not isinstance(e, Text):
+                if n_active is not None and i < n_active and not isinstance(e, Text):
                     upd["cor"] = r.cor_ativa
                 if isinstance(e, Rectangle) and e.proporcional and vals:
                     upd["escala_valor"] = max(vals[i], 0) / (max(vals) or 1)
@@ -540,9 +540,9 @@ class Compiler:
                 if isinstance(e, Text):
                     upd["conteudo"] = troca(e.conteudo)
                     if e.apos:
-                        upd["apos"] = {"nome": nomes.get(e.apos.nome, e.apos.nome), "folga": e.apos.folga}
+                        upd["apos"] = {"nome": names.get(e.apos.nome, e.apos.nome), "folga": e.apos.folga}
                     if e.unidade_de:
-                        upd["unidade_de"] = nomes.get(e.unidade_de, e.unidade_de)
+                        upd["unidade_de"] = names.get(e.unidade_de, e.unidade_de)
                 els.append(type(e).model_validate({**e.model_dump(), **upd}))
             atraso = i * r.intervalo
             for a in r.animacoes:
@@ -550,7 +550,7 @@ class Compiler:
                     if isinstance(t, (int, float)):
                         return t + atraso
                     return f"{t}+{atraso:g}" if atraso else t
-                upd = {"alvo": nomes.get(a.alvo, a.alvo)}
+                upd = {"alvo": names.get(a.alvo, a.alvo)}
                 if hasattr(a, "t"):
                     upd["t"] = mais(a.t)
                 if hasattr(a, "pares"):
@@ -559,58 +559,58 @@ class Compiler:
         return els, anims
 
     def compilar(self) -> str:
-        doc, linhas = self.doc, []
-        declarados = {e.nome for e in walk(doc.elementos)}  # inclui os desligados por `se` dentro de caixas
-        planos, extras = [], []
+        doc, lines = self.doc, []
+        declared = {e.nome for e in walk(doc.elementos)}  # inclui os desligados por `se` dentro de caixas
+        plans, extras = [], []
         for e in doc.elementos:
             if isinstance(e, Box):
                 els, anims = self._resolver(e, self._regiao(self._el(e).regiao))
-                planos += els
+                plans += els
                 extras += anims
             elif isinstance(e, Repeat):
                 if self.ativo(e.se):
                     els, anims = self._desdobrar(e)
-                    planos += els
+                    plans += els
                     extras += anims
             else:
-                planos.append(e)
-        for e in planos:
+                plans.append(e)
+        for e in plans:
             if e.x is None or e.y is None:
                 raise ErrorN1(f"{e.nome!r} sem posição: ponha o elemento dentro de uma caixa (ou dê x e y)")
         contados = {a.alvo for a in [*doc.animacoes, *extras] if a.anim == "contar"}
-        planos = [e.model_copy(update={"numero": True}) if isinstance(e, Text) and e.nome in contados else e
-                  for e in planos]  # `contar` num texto implica que ele é número
-        planos = _sort(planos)
-        doc = doc.model_copy(update={"elementos": planos, "animacoes": [*doc.animacoes, *extras]})
-        self.nomes = {e.nome for e in planos}
-        fundo = doc.fundo_tela_cheia if self.d.get("tela_cheia") else doc.fundo
-        if fundo == "tela":
-            linhas.append("fundoTela();")
-        elif fundo == "veu":
-            linhas.append(f"veuBaixo({_num(doc.opacidade_veu)});")
+        plans = [e.model_copy(update={"numero": True}) if isinstance(e, Text) and e.nome in contados else e
+                  for e in plans]  # `contar` num texto implica que ele é número
+        plans = _sort(plans)
+        doc = doc.model_copy(update={"elementos": plans, "animacoes": [*doc.animacoes, *extras]})
+        self.nomes = {e.nome for e in plans}
+        background = doc.fundo_tela_cheia if self.d.get("tela_cheia") else doc.fundo
+        if background == "tela":
+            lines.append("fundoTela();")
+        elif background == "veu":
+            lines.append(f"veuBaixo({_num(doc.opacidade_veu)});")
         for k, e in enumerate(doc.elementos):
             e = self._el(e)
             if not self.ativo(e.se):
                 continue
             v = f"e{k}"
             self.vars[e.nome] = v
-            linhas += getattr(self, f"_{e.tipo}")(e, v)
+            lines += getattr(self, f"_{e.tipo}")(e, v)
         for a in doc.animacoes:
             if not self.ativo(a.se):
                 continue
             if a.alvo not in self.vars:
-                if any(x.nome == a.alvo for x in doc.elementos) or a.alvo in declarados:
+                if any(x.nome == a.alvo for x in doc.elementos) or a.alvo in declared:
                     continue  # alvo desligado por `se`
                 raise ErrorN1(f"animação de elemento inexistente: {a.alvo}")
             v = self.vars[a.alvo]
-            linhas += [f"if ({v}) {x}" for x in getattr(self, f"_{a.anim}")(a, v)]
-        for nome, (x0, y0, x1, y1) in self.limites.items():  # texto de caixa: não sai da própria célula
-            if nome in self.vars:
-                linhas.append(f"if ({self.vars[nome]}) LIMITE[{self.vars[nome]}.id] = "
+            lines += [f"if ({v}) {x}" for x in getattr(self, f"_{a.anim}")(a, v)]
+        for name, (x0, y0, x1, y1) in self.limites.items():  # texto de caixa: não sai da própria célula
+            if name in self.vars:
+                lines.append(f"if ({self.vars[name]}) LIMITE[{self.vars[name]}.id] = "
                               f"[{_num(x0)}, {_num(y0)}, {_num(x1)}, {_num(y1)}];")
         if self.textos:  # texto máximo encolhe para caber na área segura (depois das animações, nos instantes medidos)
-            linhas.append(f"caber([{', '.join(self.textos)}]);")
-        return "// peça gerada do N1 (esteira/n1/effectcraft.py)\n" + "\n".join(linhas) + "\n"
+            lines.append(f"caber([{', '.join(self.textos)}]);")
+        return "// peça gerada do N1 (esteira/n1/effectcraft.py)\n" + "\n".join(lines) + "\n"
 
     # ---------- elementos ----------
 
@@ -618,20 +618,20 @@ class Compiler:
         s = self.texto(e.conteudo)
         if e.caps and e.largura is None:  # o bloco usa allCaps (o texto editável fica como foi escrito)
             s = s.upper()
-        tam = (e.tam or LEVELS[e.nivel or "corpo"]) * self.U
+        size = (e.tam or LEVELS[e.nivel or "corpo"]) * self.U
         x, m = e.x * self.W, self.m
         if e.largura is None:  # a âncora da linha fica dentro da área segura (o caber só encolhe em volta dela)
             x = min(max(x, m), self.W - m)  # (y não se move: empilharia textos; o portão acusa e a LLM corrige)
         else:  # o parágrafo cabe na largura útil
-            x = min(max(x, m), self.W - m - 4 * tam)
-            larg = min(e.largura * self.W, self.W - m - x)
-            e = e.model_copy(update={"largura": larg / self.W})
+            x = min(max(x, m), self.W - m - 4 * size)
+            width = min(e.largura * self.W, self.W - m - x)
+            e = e.model_copy(update={"largura": width / self.W})
         self.textos.append(v)
         out = []
         if e.apos and e.apos.nome == e.nome:  # autorreferência: sem `apos`
             e = e.model_copy(update={"apos": None})
-        existe = e.apos and e.apos.nome in self.nomes
-        if e.apos and not existe:  # referência a texto que não existe: fica no próprio x
+        exists = e.apos and e.apos.nome in self.nomes
+        if e.apos and not exists:  # referência a texto que não existe: fica no próprio x
             e = e.model_copy(update={"apos": None})
         if e.apos and e.apos.nome not in self.vars:  # a referência está desligada por `se`: fica no próprio x
             e = e.model_copy(update={"apos": None})
@@ -639,25 +639,25 @@ class Compiler:
             ref = self.vars[e.apos.nome]
             out.append(f"var r_{v} = {ref}.sourceRectAtTime(DUR, false);")
             x_js = (f"Math.min({_num(self.x_px[e.apos.nome])} + r_{v}.left + r_{v}.width + {_num(e.apos.folga * self.U)}, "
-                    f"{_num(self.W - self.m - 3 * tam)})")  # no fim da tela, a âncora fica onde o caber() ainda age
+                    f"{_num(self.W - self.m - 3 * size)})")  # no fim da tela, a âncora fica onde o caber() ainda age
             s = re.sub(r"^\s+", "", s)
         else:
             x_js = _num(x)
         self.x_px[e.nome] = x
-        estilo = {"papel": e.fonte, "peso": e.peso, "tam": round(tam, 3), "cor": e.cor}
+        style = {"papel": e.fonte, "peso": e.peso, "tam": round(size, 3), "cor": e.cor}
         if e.tracking:
-            estilo["tracking"] = e.tracking
+            style["tracking"] = e.tracking
         if e.italico:
-            estilo["italico"] = True
+            style["italico"] = True
         if e.unidade_de and e.unidade_de not in self.numeros:  # não é texto-número: vira texto comum
             e = e.model_copy(update={"unidade_de": None})
         if e.unidade_de:  # só existe se o número tiver unidade (decidido no script, pelo valor dito)
             ref = self.vars.get(e.unidade_de)
             s_js = f"n_{ref}.depois.replace(/^\\s+/, \"\")"
-            corpo = [l.replace(f"var r_{v}", f"  var r_{v}") for l in out]
-            estilo["justify"] = "left"
-            return [f"var {v} = null;", f"if (n_{ref} && n_{ref}.depois) {{", *corpo,
-                    f"  {v} = linha({_js(e.nome)}, {s_js}, {x_js}, {_num(e.y * self.H)}, {_js(estilo)});", "}"]
+            body = [l.replace(f"var r_{v}", f"  var r_{v}") for l in out]
+            style["justify"] = "left"
+            return [f"var {v} = null;", f"if (n_{ref} && n_{ref}.depois) {{", *body,
+                    f"  {v} = linha({_js(e.nome)}, {s_js}, {x_js}, {_num(e.y * self.H)}, {_js(style)});", "}"]
         if e.numero:  # número dito → formato pt-BR; `contar` anima de 0 até ele
             self.numeros.add(e.nome)
             out += [f"var n_{v} = numero({_js(s)});",
@@ -667,16 +667,16 @@ class Compiler:
         else:
             s_js = _js(s)
         if e.largura is None:
-            estilo["justify"] = {"esquerda": "left", "centro": "center", "direita": "right"}[e.alinhar]
-            out.append(f"var {v} = linha({_js(e.nome)}, {s_js}, {x_js}, {_num(e.y * self.H)}, {_js(estilo)});")
+            style["justify"] = {"esquerda": "left", "centro": "center", "direita": "right"}[e.alinhar]
+            out.append(f"var {v} = linha({_js(e.nome)}, {s_js}, {x_js}, {_num(e.y * self.H)}, {_js(style)});")
         else:
-            estilo["alinhar"] = e.alinhar
+            style["alinhar"] = e.alinhar
             if e.caps:
-                estilo["caps"] = True
+                style["caps"] = True
             if e.entrelinha:
-                estilo["entrelinha"] = e.entrelinha
+                style["entrelinha"] = e.entrelinha
             out.append(f"var {v} = bloco({_js(e.nome)}, {s_js}, {x_js}, {_num(e.y * self.H)}, "
-                       f"{_num(e.largura * self.W)}, {_js(estilo)});")
+                       f"{_num(e.largura * self.W)}, {_js(style)});")
         return out
 
     def _retangulo(self, e: Rectangle, v):
@@ -688,10 +688,10 @@ class Compiler:
 
     def _elipse(self, e: Ellipse, v):
         self.x_px[e.nome] = e.x * self.W - e.d * self.U / 2
-        arco = e.inicio > 0 or e.fim < 1
-        espessura = e.contorno or (0.2 * e.d if arco else 0)  # arco cheio não existe: vira anel
+        arc = e.inicio > 0 or e.fim < 1
+        espessura = e.contorno or (0.2 * e.d if arc else 0)  # arco cheio não existe: vira anel
         contorno = _num(espessura * self.U) if espessura else "undefined"
-        extra = f", {_num(round(e.inicio, 4))}, {_num(round(e.fim, 4))}" if arco else ""
+        extra = f", {_num(round(e.inicio, 4))}, {_num(round(e.fim, 4))}" if arc else ""
         return [f"var {v} = elipse({_js(e.nome)}, {_num(e.x * self.W)}, {_num(e.y * self.H)}, {_num(e.d * self.U)}, "
                 f"{_js(e.cor)}, {contorno}{extra});"]
 
@@ -709,7 +709,7 @@ class Compiler:
         return [f"if (n_{v}) contagem({v}, n_{v}.n, n_{v}.casas, {_num(self.tempo(a.t))}, {_num(self.dur(a.dur))}, "
                 f"n_{v}.antes, \"\");"]
 
-    def _valor(self, prop, val, todos):
+    def _valor(self, prop, val, everything):
         """Normaliza o que modelos escrevem de jeitos diferentes: escala como fator ou número, opacidade 0–1,
         posição em frações da tela."""
         if prop == "escala":
@@ -717,7 +717,7 @@ class Compiler:
             return [round(x * 100 if x <= 10 else x, 2) for x in vs[:2]]
         if prop == "opacidade":
             x = val[0] if isinstance(val, list) else val
-            return round(x * 100, 2) if max(abs(y if not isinstance(y, list) else y[0]) for y in todos) <= 1 else x
+            return round(x * 100, 2) if max(abs(y if not isinstance(y, list) else y[0]) for y in everything) <= 1 else x
         if prop == "posicao":
             vs = val if isinstance(val, list) else [val, val]
             if all(abs(x) <= 1.5 for x in vs[:2]):
@@ -726,9 +726,9 @@ class Compiler:
         return val[0] if isinstance(val, list) else val
 
     def _chaves(self, a: Keys, v):
-        todos = [val for _, val in a.pares]
-        pares = [[round(self.tempo(t), 3), self._valor(a.prop, val, todos)] for t, val in a.pares]
-        return [f"chaves(tr({v}, {_js(_PROP[a.prop])}), {_js(pares)});"]
+        everything = [val for _, val in a.pares]
+        pairs = [[round(self.tempo(t), 3), self._valor(a.prop, val, everything)] for t, val in a.pares]
+        return [f"chaves(tr({v}, {_js(_PROP[a.prop])}), {_js(pairs)});"]
 
     def _desfocar(self, a: Blur, v):
         return [f"desfoque({v}, {_js([[round(self.tempo(t), 3), val] for t, val in a.pares])});"]
@@ -770,17 +770,17 @@ def _number(v) -> float | None:
 
 def _sort(els: list) -> list:
     """Elementos referenciados por `apos`/`unidade_de` vêm antes de quem os usa (ordem estável no resto)."""
-    feitos, saida, pendentes = set(), [], list(els)
+    done, output, pending = set(), [], list(els)
     for _ in range(len(els) + 1):
-        resto = []
-        for e in pendentes:
+        rest = []
+        for e in pending:
             deps = {x for x in (getattr(e, "apos", None) and e.apos.nome, getattr(e, "unidade_de", None)) if x}
             deps &= {x.nome for x in els} - {e.nome}
-            (saida.append(e) or feitos.add(e.nome)) if deps <= feitos else resto.append(e)
-        if not resto or len(resto) == len(pendentes):
-            return saida + resto  # ciclo: mantém a ordem (o compilador acusa a referência)
-        pendentes = resto
-    return saida
+            (output.append(e) or done.add(e.nome)) if deps <= done else rest.append(e)
+        if not rest or len(rest) == len(pending):
+            return output + rest  # ciclo: mantém a ordem (o compilador acusa a referência)
+        pending = rest
+    return output
 
 
 def build(doc: Piece | dict, d: dict) -> str:

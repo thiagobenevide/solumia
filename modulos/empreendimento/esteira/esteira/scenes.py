@@ -27,59 +27,59 @@ MOTIONS = ["zoom_in", "pan_dir", "zoom_out", "pan_esq"]
 RE_DIRECTIVE = re.compile(r"\[(busca|video|vídeo|imagem)\s*:\s*([^\]]+)\]", re.I)
 
 
-def normalize(palavra):
-    s = unicodedata.normalize("NFKD", palavra.lower())
+def normalize(word):
+    s = unicodedata.normalize("NFKD", word.lower())
     s = "".join(c for c in s if not unicodedata.combining(c))
     return re.sub(r"[^a-z0-9]", "", s)
 
 
 def read_script(texto):
     """Devolve (titulo, frases); cada frase: {texto, destaques, busca, tipo}."""
-    titulo, frases, pendente = None, [], None
-    for linha in texto.splitlines():
-        linha = linha.strip()
-        if not linha:
+    title, sentences, pendente = None, [], None
+    for line in texto.splitlines():
+        line = line.strip()
+        if not line:
             continue
-        if linha.startswith("#"):
-            titulo = titulo or linha.lstrip("#").strip()
+        if line.startswith("#"):
+            title = title or line.lstrip("#").strip()
             continue
-        for m in RE_DIRECTIVE.finditer(linha):
-            tipo = {"busca": None, "imagem": "imagem"}.get(m.group(1).lower(), "video")
-            pendente = {"busca": m.group(2).strip(), "tipo": tipo}
-        linha = RE_DIRECTIVE.sub("", linha).strip()
-        if not linha:
+        for m in RE_DIRECTIVE.finditer(line):
+            kind = {"busca": None, "imagem": "imagem"}.get(m.group(1).lower(), "video")
+            pendente = {"busca": m.group(2).strip(), "tipo": kind}
+        line = RE_DIRECTIVE.sub("", line).strip()
+        if not line:
             continue
-        for frase in re.split(r"(?<=[.!?…])\s+", linha):
-            if not frase.strip():
+        for sentence in re.split(r"(?<=[.!?…])\s+", line):
+            if not sentence.strip():
                 continue
-            item = {"texto": frase.replace("*", "").strip(), "destaques": re.findall(r"\*([^*]+)\*", frase),
+            item = {"texto": sentence.replace("*", "").strip(), "destaques": re.findall(r"\*([^*]+)\*", sentence),
                     "busca": None, "tipo": None}
             if pendente:
                 item.update(pendente)
                 pendente = None
-            frases.append(item)
-    return titulo, frases
+            sentences.append(item)
+    return title, sentences
 
 
 def sentences_of_transcript(transc):
-    frases, atual = [], []
+    sentences, current = [], []
     for w in transc["palavras"]:
-        atual.append(w["p"])
+        current.append(w["p"])
         if re.search(r"[.!?…]$", w["p"]):
-            frases.append(" ".join(atual))
-            atual = []
-    if atual:
-        frases.append(" ".join(atual))
-    return [{"texto": f, "destaques": [], "busca": None, "tipo": None} for f in frases]
+            sentences.append(" ".join(current))
+            current = []
+    if current:
+        sentences.append(" ".join(current))
+    return [{"texto": f, "destaques": [], "busca": None, "tipo": None} for f in sentences]
 
 
 def align(frases, transc):
     """Dá a cada palavra do roteiro um tempo (ini) usando a transcrição; devolve lista por frase."""
-    palavras_w = transc["palavras"]
-    norm_w = [normalize(w["p"]) for w in palavras_w]
+    words_w = transc["palavras"]
+    norm_w = [normalize(w["p"]) for w in words_w]
     # número partido pelo Whisper ("12", ",5", "%") vira uma palavra só, como no roteiro ("12,5%" → "125")
     for k in range(1, len(norm_w)):
-        if re.match(r"^[.,]\d", palavras_w[k]["p"].strip()) and norm_w[k - 1][-1:].isdigit():
+        if re.match(r"^[.,]\d", words_w[k]["p"].strip()) and norm_w[k - 1][-1:].isdigit():
             norm_w[k - 1], norm_w[k] = norm_w[k - 1] + norm_w[k], ""
     tokens = []  # (indice_frase, texto_original)
     for i, f in enumerate(frases):
@@ -88,155 +88,155 @@ def align(frases, transc):
                 tokens.append((i, p))
     norm_r = [normalize(p) for _, p in tokens]
 
-    tempos = [None] * len(tokens)
+    times = [None] * len(tokens)
     fins = [None] * len(tokens)
-    for bloco in SequenceMatcher(None, norm_r, norm_w, autojunk=False).get_matching_blocks():
-        for k in range(bloco.size):
-            w = palavras_w[bloco.b + k]
-            tempos[bloco.a + k] = w["ini"]
-            fins[bloco.a + k] = w["fim"]
+    for block in SequenceMatcher(None, norm_r, norm_w, autojunk=False).get_matching_blocks():
+        for k in range(block.size):
+            w = words_w[block.b + k]
+            times[block.a + k] = w["ini"]
+            fins[block.a + k] = w["fim"]
 
     # Palavras do roteiro sem par na transcrição: interpola entre os vizinhos alinhados.
-    duracao = transc["duracao"]
-    conhecidos = [k for k, t in enumerate(tempos) if t is not None]
-    if not conhecidos:
+    duration = transc["duracao"]
+    known = [k for k, t in enumerate(times) if t is not None]
+    if not known:
         raise SystemExit("o roteiro não bate com a narração (nenhuma palavra alinhada)")
     for k in range(len(tokens)):
-        if tempos[k] is not None:
+        if times[k] is not None:
             continue
-        ant = max((j for j in conhecidos if j < k), default=None)
-        prox = min((j for j in conhecidos if j > k), default=None)
+        ant = max((j for j in known if j < k), default=None)
+        prox = min((j for j in known if j > k), default=None)
         t0, k0 = (fins[ant], ant) if ant is not None else (0.0, -1)
-        t1, k1 = (tempos[prox], prox) if prox is not None else (duracao, len(tokens))
-        tempos[k] = t0 + (t1 - t0) * (k - k0) / (k1 - k0)
-        fins[k] = tempos[k]
+        t1, k1 = (times[prox], prox) if prox is not None else (duration, len(tokens))
+        times[k] = t0 + (t1 - t0) * (k - k0) / (k1 - k0)
+        fins[k] = times[k]
 
-    por_frase = [[] for _ in frases]
-    for (i, p), t, f in zip(tokens, tempos, fins):
-        por_frase[i].append({"p": p, "ini": t, "fim": f})
-    return por_frase
+    by_sentence = [[] for _ in frases]
+    for (i, p), t, f in zip(tokens, times, fins):
+        by_sentence[i].append({"p": p, "ini": t, "fim": f})
+    return by_sentence
 
 
 def _start_highlight(palavras, destaque):
     """Momento em que a primeira palavra do destaque é falada, ou None se não está nestas palavras."""
-    alvo = normalize(destaque.split()[0])
-    return next((p["ini"] for p in palavras if normalize(p["p"]) == alvo), None)
+    target = normalize(destaque.split()[0])
+    return next((p["ini"] for p in palavras if normalize(p["p"]) == target), None)
 
 
-def _divide_long(blocos, alvo, maximo):
-    saida = []
-    for b in blocos:
-        fila = [b]
-        while fila:
-            atual = fila.pop(0)
-            ps = atual["palavras"]
-            dur = atual["fim"] - atual["ini"]
-            if dur <= maximo or len(ps) < 4:
-                saida.append(atual)
+def _divide_long(blocks, alvo, maximum):
+    output = []
+    for b in blocks:
+        queue = [b]
+        while queue:
+            current = queue.pop(0)
+            ps = current["palavras"]
+            duration = current["fim"] - current["ini"]
+            if duration <= maximum or len(ps) < 4:
+                output.append(current)
                 continue
             # Corte perto do alvo, preferindo logo após uma vírgula.
-            melhor, nota = None, None
+            best, note = None, None
             for k in range(2, len(ps) - 1):
                 t = ps[k]["ini"]
-                dist = abs((t - atual["ini"]) - alvo)
+                dist = abs((t - current["ini"]) - alvo)
                 if ps[k - 1]["p"].endswith((",", ";", ":")):
                     dist -= 1.5
-                if nota is None or dist < nota:
-                    melhor, nota = k, dist
-            t = ps[melhor]["ini"]
-            a = dict(atual, palavras=ps[:melhor], fim=t)
-            b2 = dict(atual, palavras=ps[melhor:], ini=t, busca=None, tipo=None)
+                if note is None or dist < note:
+                    best, note = k, dist
+            t = ps[best]["ini"]
+            a = dict(current, palavras=ps[:best], fim=t)
+            b2 = dict(current, palavras=ps[best:], ini=t, busca=None, tipo=None)
             # Cada destaque fica no pedaço que contém a palavra destacada.
-            a["destaques"] = [d for d in atual["destaques"] if _start_highlight(a["palavras"], d) is not None]
-            b2["destaques"] = [d for d in atual["destaques"] if d not in a["destaques"]]
-            fila[:0] = [a, b2]
-    return saida
+            a["destaques"] = [d for d in current["destaques"] if _start_highlight(a["palavras"], d) is not None]
+            b2["destaques"] = [d for d in current["destaques"] if d not in a["destaques"]]
+            queue[:0] = [a, b2]
+    return output
 
 
-def _join_short(blocos, minimo):
-    saida = []
-    for b in blocos:
-        if saida and (saida[-1]["fim"] - saida[-1]["ini"]) < minimo:
-            ant = saida[-1]
+def _join_short(blocks, minimum):
+    output = []
+    for b in blocks:
+        if output and (output[-1]["fim"] - output[-1]["ini"]) < minimum:
+            ant = output[-1]
             ant["palavras"] += b["palavras"]
             ant["fim"] = b["fim"]
             ant["busca"] = ant["busca"] or b["busca"]
             ant["tipo"] = ant["tipo"] or b["tipo"]
             ant["destaques"] = ant["destaques"] + b["destaques"]
         else:
-            saida.append(b)
-    if len(saida) > 1 and saida[-1]["fim"] - saida[-1]["ini"] < minimo:
-        ult = saida.pop()
-        saida[-1]["palavras"] += ult["palavras"]
-        saida[-1]["fim"] = ult["fim"]
-        saida[-1]["destaques"] = saida[-1]["destaques"] + ult["destaques"]
-    return saida
+            output.append(b)
+    if len(output) > 1 and output[-1]["fim"] - output[-1]["ini"] < minimum:
+        ult = output.pop()
+        output[-1]["palavras"] += ult["palavras"]
+        output[-1]["fim"] = ult["fim"]
+        output[-1]["destaques"] = output[-1]["destaques"] + ult["destaques"]
+    return output
 
 
 def words_key(texto, freq, n=2):
     """Heurística local: palavras longas, nomes próprios e termos raros no roteiro."""
-    candidatos = []
-    for pos, bruto in enumerate(texto.split()):
-        p = re.sub(r"[^\wÀ-ÿ-]", "", bruto)
+    candidates = []
+    for pos, raw in enumerate(texto.split()):
+        p = re.sub(r"[^\wÀ-ÿ-]", "", raw)
         if len(p) < 4 or p.lower() in STOPWORDS or p.isdigit():
             continue
-        nota = len(p) + (4 if pos > 0 and p[0].isupper() else 0) + 3.0 / freq.get(p.lower(), 1)
-        candidatos.append((nota, pos, p.lower()))
-    escolhidos = sorted(sorted(candidatos, reverse=True)[:n], key=lambda c: c[1])
-    vistos = []
-    for _, _, p in escolhidos:
-        if p not in vistos:
-            vistos.append(p)
-    return " ".join(vistos)
+        note = len(p) + (4 if pos > 0 and p[0].isupper() else 0) + 3.0 / freq.get(p.lower(), 1)
+        candidates.append((note, pos, p.lower()))
+    chosen = sorted(sorted(candidates, reverse=True)[:n], key=lambda c: c[1])
+    seen = []
+    for _, _, p in chosen:
+        if p not in seen:
+            seen.append(p)
+    return " ".join(seen)
 
 
-def generate_scenes(projeto):
-    cfg = projeto.cfg["cenas"]
-    transc = projeto.carregar_json("transcricao.json")
-    arq = projeto.roteiro()
-    if arq:
-        titulo, frases = read_script(arq.read_text())
+def generate_scenes(project):
+    cfg = project.cfg["cenas"]
+    transc = project.carregar_json("transcricao.json")
+    file = project.roteiro()
+    if file:
+        title, sentences = read_script(file.read_text())
     else:
         print("  sem roteiro.txt: usando as frases da própria transcrição")
-        titulo, frases = None, sentences_of_transcript(transc)
+        title, sentences = None, sentences_of_transcript(transc)
 
-    por_frase = align(frases, transc)
+    by_sentence = align(sentences, transc)
     # Tempo de cada frase do roteiro na narração editada: os gráficos entram no instante em que ela é falada.
-    projeto.salvar_json("frases.json", [
+    project.salvar_json("frases.json", [
         {"texto": f["texto"], "destaques": f["destaques"], "ini": ps[0]["ini"] if ps else None,
-         "fim": ps[-1]["fim"] if ps else None} for f, ps in zip(frases, por_frase)])
+         "fim": ps[-1]["fim"] if ps else None} for f, ps in zip(sentences, by_sentence)])
     # Texto do roteiro com o tempo de cada palavra: as legendas usam isto (o Whisper erra palavras).
-    projeto.salvar_json("alinhamento.json", [
+    project.salvar_json("alinhamento.json", [
         {"p": p["p"].replace("*", ""), "ini": round(p["ini"], 3), "fim": round(max(p["fim"], p["ini"] + 0.15), 3)}
-        for ps in por_frase for p in ps])
-    blocos = []
-    for f, ps in zip(frases, por_frase):
+        for ps in by_sentence for p in ps])
+    blocks = []
+    for f, ps in zip(sentences, by_sentence):
         if ps:
-            blocos.append(dict(f, palavras=ps, ini=ps[0]["ini"], fim=None))
-    for a, b in zip(blocos, blocos[1:]):
+            blocks.append(dict(f, palavras=ps, ini=ps[0]["ini"], fim=None))
+    for a, b in zip(blocks, blocks[1:]):
         a["fim"] = b["ini"]
-    blocos[-1]["fim"] = transc["duracao"]
-    blocos[0]["ini"] = 0.0
+    blocks[-1]["fim"] = transc["duracao"]
+    blocks[0]["ini"] = 0.0
 
-    blocos = _divide_long(blocos, cfg["alvo_segundos"], cfg["max_segundos"])
-    blocos = _join_short(blocos, cfg["min_segundos"])
+    blocks = _divide_long(blocks, cfg["alvo_segundos"], cfg["max_segundos"])
+    blocks = _join_short(blocks, cfg["min_segundos"])
 
-    todo = " ".join(f["texto"] for f in frases).lower()
+    todo = " ".join(f["texto"] for f in sentences).lower()
     freq = {}
     for p in re.findall(r"[\wÀ-ÿ]+", todo):
         freq[p] = freq.get(p, 0) + 1
 
-    passo_video = round(5 * cfg["proporcao_video"])
-    cenas = []
-    for i, b in enumerate(blocos):
-        texto = " ".join(p["p"] for p in b["palavras"]).replace("*", "")
-        cenas.append({
+    step_video = round(5 * cfg["proporcao_video"])
+    scenes = []
+    for i, b in enumerate(blocks):
+        text = " ".join(p["p"] for p in b["palavras"]).replace("*", "")
+        scenes.append({
             "id": i + 1,
             "inicio": round(b["ini"], 3),
             "fim": round(b["fim"], 3),
-            "texto": texto,
-            "busca": b["busca"] or words_key(texto, freq),
-            "tipo": b["tipo"] or ("video" if (i % 5) < passo_video else "imagem"),
+            "texto": text,
+            "busca": b["busca"] or words_key(text, freq),
+            "tipo": b["tipo"] or ("video" if (i % 5) < step_video else "imagem"),
             "destaques": [{"texto": d, "inicio": round(_start_highlight(b["palavras"], d) or b["ini"], 3)}
                           for d in b["destaques"]],
             "movimento": MOTIONS[i % len(MOTIONS)],
@@ -245,19 +245,19 @@ def generate_scenes(projeto):
         })
 
     # Rodar de novo (ex.: após mudar o roteiro) preserva o trabalho feito nas cenas que não mudaram.
-    if projeto.caminho("plano.json").exists():
-        antigo = projeto.carregar_json("plano.json")
-        projeto.salvar_json("plano.anterior.json", antigo)
-        por_tempo = {(c["inicio"], c["fim"]): c for c in antigo["cenas"]}
-        for c in cenas:
-            velha = por_tempo.get((c["inicio"], c["fim"]))
+    if project.caminho("plano.json").exists():
+        old = project.carregar_json("plano.json")
+        project.salvar_json("plano.anterior.json", old)
+        by_time = {(c["inicio"], c["fim"]): c for c in old["cenas"]}
+        for c in scenes:
+            velha = by_time.get((c["inicio"], c["fim"]))
             if velha and velha["texto"] == c["texto"]:
                 for k in ("busca", "busca_en", "tipo", "movimento", "midia", "midia_id", "midia_tipo",
                           "credito", "rejeitados", "busca_definida"):
                     if k in velha:
                         c[k] = velha[k]
 
-    plano = {"titulo": titulo, "audio": transc["audio"], "duracao": transc["duracao"], "cenas": cenas}
-    projeto.salvar_json("plano.json", plano)
-    print(f"  {len(cenas)} cenas → plano.json (ver com: ./dark summary {projeto.ep})")
-    return plano
+    plan = {"titulo": title, "audio": transc["audio"], "duracao": transc["duracao"], "cenas": scenes}
+    project.salvar_json("plano.json", plan)
+    print(f"  {len(scenes)} cenas → plano.json (ver com: ./dark summary {project.ep})")
+    return plan

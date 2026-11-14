@@ -32,11 +32,11 @@ video: 5
 
 
 def test_citacao_do_roteiro():
-    titulo, linhas, notas, fontes, citacoes = obsidian.convert(ROTEIRO)
-    assert [l["fala"][:8] for l in linhas if "fala" in l] == ["Em 2021,", "E o resu"]
-    assert len(notas) == 2 and notas[1]["texto"] == "cérebro acendendo"
-    assert len(fontes) == 1
-    (c,) = citacoes
+    title, lines, notes, sources, quotes = obsidian.convert(ROTEIRO)
+    assert [l["fala"][:8] for l in lines if "fala" in l] == ["Em 2021,", "E o resu"]
+    assert len(notes) == 2 and notes[1]["texto"] == "cérebro acendendo"
+    assert len(sources) == 1
+    (c,) = quotes
     assert c["fala"] == 0 and c["pagina"] == 7 and c["arquivo"] == "Referências/Artigos/banker-2021.pdf"
     assert c["en"].startswith("Exposure") and not c["en"].endswith("==")
     assert c["pt"].startswith("Ver o logotipo")

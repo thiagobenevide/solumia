@@ -39,33 +39,33 @@ def _mark(texto):
     return Markup(re.sub(r"\*(.+?)\*", r'<span class="d">\1</span>', str(escape(texto))).replace("\n", "<br>"))
 
 
-def html(modelo, dados, segundos, w=1920, h=1080, cor="#ffd400", estatico=False):
+def html(model, dados, segundos, w=1920, h=1080, cor="#ffd400", estatico=False):
     """`dados` pode trazer "efeito" ({entrada, saida, vel}) e "caixas" (lista de caixas de texto livres)."""
     dados = dict(dados)
-    efeito = dados.pop("efeito", None) or {}
-    caixas = [dict(BOX, **c, html=_mark(c.get("texto", ""))) for c in dados.pop("caixas", None) or []]
-    return _jinja.get_template(f"{modelo}.html").render(
-        **dados, dur=segundos, w=w, h=h, vertical=h > w, cor=cor, raiz=ROOT.as_uri(), efeito=efeito,
-        caixas=caixas, estatico=estatico)
+    effect = dados.pop("efeito", None) or {}
+    boxes = [dict(BOX, **c, html=_mark(c.get("texto", ""))) for c in dados.pop("caixas", None) or []]
+    return _jinja.get_template(f"{model}.html").render(
+        **dados, dur=segundos, w=w, h=h, vertical=h > w, cor=cor, raiz=ROOT.as_uri(), efeito=effect,
+        caixas=boxes, estatico=estatico)
 
 
-def preview(modelo, dados, segundos, w, h, cor, trocas, estatico=False):
+def preview(model, dados, segundos, w, h, cor, swaps, estatico=False):
     """HTML para o editor do painel: com `seek` e caminhos file:// trocados por URLs do servidor."""
-    s = html(modelo, dados, segundos, w, h, cor, estatico).replace("<head>", f"<head><script>{_SEEK}</script>", 1)
-    for de, para in trocas.items():
+    s = html(model, dados, segundos, w, h, cor, estatico).replace("<head>", f"<head><script>{_SEEK}</script>", 1)
+    for de, para in swaps.items():
         s = s.replace(de, para)
     return s
 
 
-def _frames(pagina_html, indices, fps, w, h, pasta, feito=None, total=0, rotulo=""):
+def _frames(page_html, indexes, fps, w, h, pasta, feito=None, total=0, rotulo=""):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
         nav = pw.chromium.launch()
         pg = nav.new_page(viewport={"width": w, "height": h})
         pg.add_init_script(_SEEK)
-        pg.goto(pagina_html.as_uri())
+        pg.goto(page_html.as_uri())
         pg.evaluate("document.fonts.ready")
-        for i in indices:
+        for i in indexes:
             pg.evaluate(f"seek({i / fps})")
             pg.screenshot(path=str(pasta / f"q{i:05d}.png"), omit_background=True)
             if feito is not None:
@@ -74,25 +74,25 @@ def _frames(pagina_html, indices, fps, w, h, pasta, feito=None, total=0, rotulo=
         nav.close()
 
 
-def render(modelo, dados, segundos, destino, fps=30, w=1920, h=1080, cor="#ffd400", paralelo=4,
-               previa=None):
+def render(model, dados, segundos, destino, fps=30, w=1920, h=1080, cor="#ffd400", paralelo=4,
+               preview=None):
     """Gera `destino` (.mov ProRes 4444 com alfa). `previa`: instante (s) salvo em PNG sobre fundo cinza."""
     destino = Path(destino)
     tmp = Path(tempfile.mkdtemp(prefix="graf_"))
     try:
-        pagina = tmp / "pagina.html"
-        pagina.write_text(html(modelo, dados, segundos, w, h, cor))
+        page = tmp / "pagina.html"
+        page.write_text(html(model, dados, segundos, w, h, cor))
         n = round(segundos * fps)
-        partes = [range(k, n, paralelo) for k in range(paralelo)]
-        feito, rotulo = [0], f"quadros de {destino.name} ({paralelo} abas do Chromium)"
+        parts = [range(k, n, paralelo) for k in range(paralelo)]
+        done, label = [0], f"quadros de {destino.name} ({paralelo} abas do Chromium)"
         with ThreadPoolExecutor(paralelo) as ex:
-            list(ex.map(lambda r: _frames(pagina, r, fps, w, h, tmp, feito, n, rotulo), partes))
+            list(ex.map(lambda r: _frames(page, r, fps, w, h, tmp, done, n, label), parts))
         trace.task("render", f"ffmpeg: {n} PNG → ProRes 4444 com alfa", 0, None)
         subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-framerate", str(fps),
                         "-i", tmp / "q%05d.png", "-c:v", "prores_ks", "-profile:v", "4444",
                         "-pix_fmt", "yuva444p10le", "-vendor", "apl0", destino], check=True)
-        if previa is not None:
-            q = tmp / f"q{min(round(previa * fps), n - 1):05d}.png"
+        if preview is not None:
+            q = tmp / f"q{min(round(preview * fps), n - 1):05d}.png"
             subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-f", "lavfi",
                             "-i", f"color=c=0x2a2d33:s={w}x{h}", "-i", q, "-filter_complex",
                             "overlay", "-frames:v", "1", destino.with_suffix(".png")], check=True)
@@ -102,17 +102,17 @@ def render(modelo, dados, segundos, destino, fps=30, w=1920, h=1080, cor="#ffd40
     return destino
 
 
-def image(modelo, dados, destino, w=1280, h=720):
+def image(model, dados, destino, w=1280, h=720):
     """Um quadro só (thumbnail): modelo HTML → PNG."""
     from playwright.sync_api import sync_playwright
     tmp = Path(tempfile.mkdtemp(prefix="img_"))
     try:
-        pagina = tmp / "pagina.html"
-        pagina.write_text(html(modelo, dados, 1, w, h, estatico=True))
+        page = tmp / "pagina.html"
+        page.write_text(html(model, dados, 1, w, h, estatico=True))
         with sync_playwright() as pw:
             nav = pw.chromium.launch()
             pg = nav.new_page(viewport={"width": w, "height": h})
-            pg.goto(pagina.as_uri())
+            pg.goto(page.as_uri())
             pg.evaluate("document.fonts.ready")
             pg.wait_for_timeout(150)
             pg.screenshot(path=str(destino))

@@ -46,27 +46,27 @@ def _db() -> sqlite3.Connection:
     return db
 
 
-def query(**filtros) -> list[dict]:
+def query(**filters) -> list[dict]:
     """Registros que batem com os filtros de coluna (app, tarefa, grupo, origem, veredito, uso)."""
     cols = {"app", "tarefa", "grupo", "origem", "veredito", "uso"}
-    onde = [f"{k} = ?" for k in filtros if k in cols]
+    where = [f"{k} = ?" for k in filters if k in cols]
     with closing(_db()) as db:
-        linhas = db.execute(f"SELECT dados FROM registros {'WHERE ' + ' AND '.join(onde) if onde else ''} "
-                            "ORDER BY id", [v for k, v in filtros.items() if k in cols]).fetchall()
-    return [json.loads(x["dados"]) for x in linhas]
+        lines = db.execute(f"SELECT dados FROM registros {'WHERE ' + ' AND '.join(where) if where else ''} "
+                            "ORDER BY id", [v for k, v in filters.items() if k in cols]).fetchall()
+    return [json.loads(x["dados"]) for x in lines]
 
 
 def status() -> dict:
     """Por tarefa: total, por uso e quanto falta para o mínimo de treino."""
     reindex()
     with closing(_db()) as db:
-        linhas = db.execute("SELECT tarefa, uso, COUNT(*) n FROM registros GROUP BY tarefa, uso").fetchall()
-    saida = {t: {"total": 0, "sft": 0, "dpo_ruim": 0, "pendente": 0, "descartar": 0, "minimo": m}
+        lines = db.execute("SELECT tarefa, uso, COUNT(*) n FROM registros GROUP BY tarefa, uso").fetchall()
+    output = {t: {"total": 0, "sft": 0, "dpo_ruim": 0, "pendente": 0, "descartar": 0, "minimo": m}
              for t, m in MINIMUM.items()}
-    for x in linhas:
-        s = saida.setdefault(x["tarefa"], {"total": 0, "minimo": 0})
+    for x in lines:
+        s = output.setdefault(x["tarefa"], {"total": 0, "minimo": 0})
         s[x["uso"]] = s.get(x["uso"], 0) + x["n"]
         s["total"] += x["n"]
-    for s in saida.values():
+    for s in output.values():
         s["pronta"] = bool(s["minimo"]) and s.get("sft", 0) >= s["minimo"]
-    return saida
+    return output

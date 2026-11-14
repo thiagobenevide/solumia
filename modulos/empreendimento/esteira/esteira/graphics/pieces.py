@@ -11,7 +11,7 @@ GEOMETRY = {False: dict(jx=110, jy=110, jw=1000, jh=860, fx=1190, fy=150, fw=640
 READING = 3.0  # palavras/s lidas na tela: o trecho original e a tradução ficam o tempo de serem lidos
 
 
-def quote(arquivo, trecho, destino_img, titulo="", autores="", revista="", ano="", citacao="", pagina=None,
+def quote(arquivo, trecho, destination_img, titulo="", autores="", revista="", year="", citacao="", pagina=None,
             rotulo="Estudo", vertical=False, link=True):
     """Página do PDF aproximando até `trecho` (texto como está no PDF); `citacao` é o que aparece na ficha
     (ex.: a tradução do trecho). Devolve None se o trecho não estiver no PDF.
@@ -19,10 +19,10 @@ def quote(arquivo, trecho, destino_img, titulo="", autores="", revista="", ano="
     Ritmo (lento, para ler): a página entra, a câmera aproxima devagar até o trecho (1,0 → 4,2 s), o marca-texto
     passa linha a linha, o trecho original aparece na ficha e, depois do tempo de lê-lo, a tradução. Autor e
     "link na descrição" ficam visíveis o tempo todo."""
-    achado = P.locate(arquivo, trecho, pagina)
-    if not achado:
+    found = P.locate(arquivo, trecho, pagina)
+    if not found:
         return None
-    img = P.image_of_page(arquivo, achado["pagina"], destino_img, achado["rects"])
+    img = P.image_of_page(arquivo, found["pagina"], destination_img, found["rects"])
     iw, ih, rects = img["img_w"], img["img_h"], img["rects"]
     g = GEOMETRY[vertical]
     JW, JH = g["jw"], g["jh"]
@@ -39,32 +39,32 @@ def quote(arquivo, trecho, destino_img, titulo="", autores="", revista="", ano="
         s1=round(s1, 4), tx1=round(JW / 2 - (x0 + x1) / 2 * s1, 1), ty1=round(JH / 2 - (y0 + y1) / 2 * s1, 1),
         cam=1.0, cam_dur=3.2, t_marca=4.4, passo_marca=0.55,
         t_pt=round(4.4 + 0.55 * len(rects) + 0.6 + len(trecho.split()) / READING * 0.6, 2) if citacao else None,
-        rotulo=f"{rotulo} · {ano}" if ano else rotulo, en=trecho if citacao else "",
+        rotulo=f"{rotulo} · {year}" if year else rotulo, en=trecho if citacao else "",
         titulo=titulo or meta["titulo"], autores=autores or meta["autores"], revista=revista, link=link,
-        citacao=citacao, pagina=achado["pagina"] + 1, nota=achado["nota"])
+        citacao=citacao, pagina=found["pagina"] + 1, nota=found["nota"])
 
 
 def number(texto, legenda="", fonte="", rotulo=""):
     """`texto` como falado/escrito: "97,1%", "R$ 1.200", "1,4 milhão". Legenda aceita *destaque*."""
     m = re.match(r"\s*([^\d\-]*)(-?[\d.,]+)\s*(.*)", texto)
-    prefixo, num, sufixo = m.groups()
-    inteiro, _, dec = num.replace(".", "").partition(",")
-    valor = float(f"{inteiro}.{dec or 0}")
-    return "numero", dict(prefixo=prefixo.strip() + (" " if prefixo.strip() else ""), valor=valor,
-                          casas=len(dec), sufixo=sufixo.strip(), rotulo=rotulo, fonte=fonte,
+    prefix, num, suffix = m.groups()
+    whole, _, dec = num.replace(".", "").partition(",")
+    value = float(f"{whole}.{dec or 0}")
+    return "numero", dict(prefixo=prefix.strip() + (" " if prefix.strip() else ""), valor=value,
+                          casas=len(dec), sufixo=suffix.strip(), rotulo=rotulo, fonte=fonte,
                           legenda=re.sub(r"\*(.+?)\*", r"<b>\1</b>", _escape(legenda)))
 
 
 def sentence(texto, posicao="baixo", alinhar="centro", tamanho=None):
     """Texto cinético; palavras entre *asteriscos* ficam na cor de destaque."""
-    palavras, dentro = [], False
+    words, inside = [], False
     for t in texto.split():
-        ini, fim = t.startswith("*"), t.endswith("*")
-        dentro = dentro or ini
-        palavras.append({"t": t.strip("*"), "d": dentro})
-        dentro = dentro and not fim
-    n = len(palavras)
-    return "frase", dict(palavras=palavras, posicao=posicao, alinhar=alinhar,
+        start, end = t.startswith("*"), t.endswith("*")
+        inside = inside or start
+        words.append({"t": t.strip("*"), "d": inside})
+        inside = inside and not end
+    n = len(words)
+    return "frase", dict(palavras=words, posicao=posicao, alinhar=alinhar,
                          tamanho=tamanho or (120 if n <= 4 else 96 if n <= 8 else 76),
                          passo=min(0.12, 1.2 / max(n, 1)))
 
@@ -85,11 +85,11 @@ def listing(itens, titulo="", rotulo="", foco=None, tempos=None):
     """itens: [{titulo, valor?, detalhe?}] (até 4); `foco`: índice do item destacado. `tempos`: s desde o início
     da peça em que cada cartão entra (o valor dele sendo falado); sem eles, entram em sequência fixa."""
     itens = [dict(it, foco=(k == foco)) for k, it in enumerate(itens[:4])]
-    passo = 0.45 if len(itens) <= 3 else 0.35
+    step = 0.45 if len(itens) <= 3 else 0.35
     tempos = list(tempos or [])[:len(itens)] or [0.45]
     while len(tempos) < len(itens):  # itens sem tempo: logo depois do anterior
-        tempos.append(round(tempos[-1] + passo, 2))
-    return "lista", dict(itens=itens, titulo=titulo, rotulo=rotulo, passo=passo, tempos=tempos)
+        tempos.append(round(tempos[-1] + step, 2))
+    return "lista", dict(itens=itens, titulo=titulo, rotulo=rotulo, passo=step, tempos=tempos)
 
 
 def comparison(nome_a, itens_a, nome_b, itens_b, rotulo_a="", rotulo_b=""):

@@ -24,19 +24,19 @@ def _merge(base, extra):
 
 def load_env():
     env = {}
-    arq = ROOT / ".env"
-    if arq.exists():
-        for linha in arq.read_text().splitlines():
-            if "=" in linha and not linha.lstrip().startswith("#"):
-                k, v = linha.split("=", 1)
+    file = ROOT / ".env"
+    if file.exists():
+        for line in file.read_text().splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.split("=", 1)
                 env[k.strip()] = v.strip().strip('"').strip("'")
     return env
 
 
 def folder_ep(ep):
     """Episódio "finlumia-003" → projetos/finlumia/003 (o canal é o que vem antes do primeiro "-")."""
-    canal, _, resto = ep.partition("-")
-    return PROJECTS / canal / resto if resto else PROJECTS / ep
+    channel, _, rest = ep.partition("-")
+    return PROJECTS / channel / rest if rest else PROJECTS / ep
 
 
 def ep_id(pasta):
@@ -58,12 +58,12 @@ class Project:
             raise SystemExit(f"pasta de projeto não encontrada: {self.pasta}")
         # config.toml geral ← perfis/<canal>.toml ← config.toml do projeto
         self.cfg = tomllib.loads((ROOT / "config.toml").read_text())
-        arq = self.pasta / "config.toml"
-        local = tomllib.loads(arq.read_text()) if arq.exists() else {}
+        file = self.pasta / "config.toml"
+        local = tomllib.loads(file.read_text()) if file.exists() else {}
         self.canal = local.get("canal") or self.cfg.get("canal")
-        perfil = ROOT / "perfis" / f"{self.canal}.toml"
-        if self.canal and perfil.exists():
-            _merge(self.cfg, tomllib.loads(perfil.read_text()))
+        profile = ROOT / "perfis" / f"{self.canal}.toml"
+        if self.canal and profile.exists():
+            _merge(self.cfg, tomllib.loads(profile.read_text()))
         _merge(self.cfg, local)
         if self.vertical:
             _merge(self.cfg, self.cfg.get("vertical", {}))
@@ -76,19 +76,19 @@ class Project:
         return self.cfg["video"].get("formato", "16:9") == "9:16"
 
     def audio(self):
-        for nome in ("narracao", "audio", "narração"):
+        for name in ("narracao", "audio", "narração"):
             for ext in AUDIO_EXT:
-                p = self.pasta / f"{nome}{ext}"
+                p = self.pasta / f"{name}{ext}"
                 if p.exists():
                     return p
-        achados = sorted(p for p in self.pasta.iterdir() if p.suffix.lower() in AUDIO_EXT)
-        if not achados:
+        found = sorted(p for p in self.pasta.iterdir() if p.suffix.lower() in AUDIO_EXT)
+        if not found:
             raise SystemExit(f"nenhum áudio de narração em {self.pasta} (ex.: narracao.mp3)")
-        return achados[0]
+        return found[0]
 
     def roteiro(self):
-        for nome in ("roteiro.txt", "roteiro.md"):
-            p = self.pasta / nome
+        for name in ("roteiro.txt", "roteiro.md"):
+            p = self.pasta / name
             if p.exists():
                 return p
         return None

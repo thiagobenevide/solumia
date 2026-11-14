@@ -45,18 +45,18 @@ def test_montagem_basica_resolve_nomes_trilhas_e_ticks():
         {"op": "transicao", "alvo": "c1", "tipo": "glitch", "borda": "saida"},
         {"op": "musica", "ate": 100, "ganho_db": -18},
     ])
-    nomes = [c for c, _ in cmds]
-    assert nomes[0] == "file.import" and len(cmds[0][1]["paths"]) == 3
+    names = [c for c, _ in cmds]
+    assert names[0] == "file.import" and len(cmds[0][1]["paths"]) == 3
     assert cmds[1] == ("file.newSequence", {"name": "ep", "width": 1080, "height": 1920, "fps": 30, "video": 4,
                                             "audio": 2})
-    cena = cmds[3][1]
-    assert cena["track"] == "V1" and cena["duration"] == ticks(3) and cena["audio"] is False
+    scene = cmds[3][1]
+    assert scene["track"] == "V1" and scene["duration"] == ticks(3) and scene["audio"] is False
     pos = [p for c, p in cmds if c == "effects.setParam" and p["param"] == "position"]
     assert len(pos) == 2 and pos[0]["value"][0] > 540 > pos[1]["value"][0]  # pan para a direita
     trans = next(p for c, p in cmds if c == "sequence.applyVideoTransition")
     assert trans["edge"] == "out" and trans["effect"] == "glitch"
     assert sum(1 for c, p in cmds if c == "timeline.place" and p["track"] == "A2") == 3  # 100 s em loops de 40
-    assert ("essentialSound.generateDucking" in nomes)
+    assert ("essentialSound.generateDucking" in names)
 
 
 def test_texto_pop_e_correcoes():
@@ -82,5 +82,5 @@ def test_esquema_fechado_e_erros():
         _executar([{"op": "sequencia", "nome": "e"}, {"op": "remover", "alvo": "fantasma"}])
     with pytest.raises(N1.ErrorN1):
         _executar([{"op": "colocar", "id": "x", "midia": "cena:999", "trilha": "base", "em": 0}])
-    esquema = N1.esquema_json(N1.Assembly) if hasattr(N1, "esquema_json") else N1.Assembly.model_json_schema()
-    assert "ops" in esquema["properties"]
+    schema = N1.esquema_json(N1.Assembly) if hasattr(N1, "esquema_json") else N1.Assembly.model_json_schema()
+    assert "ops" in schema["properties"]

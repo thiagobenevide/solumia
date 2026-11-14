@@ -20,8 +20,8 @@ TRACKS = {"Video 1": "base", "Video 2": "apoio", "Video 3": "texto", "Video 4": 
 TOL = 1 / 60  # s: diferença abaixo de meio quadro não é edição
 
 
-def _sha(arq: Path) -> str:
-    return hashlib.sha1(arq.read_bytes()).hexdigest()
+def _sha(file: Path) -> str:
+    return hashlib.sha1(file.read_bytes()).hexdigest()
 
 
 def _already_registered(sha: str) -> bool:
@@ -30,95 +30,95 @@ def _already_registered(sha: str) -> bool:
 
 # ---------- FilmCraft ----------
 
-def clips_fcproj(arq: Path) -> list[dict]:
-    d = json.loads(Path(arq).read_text())
-    itens = d["project"]["items"]
-    seq = next(x["kind"]["Sequence"] for x in itens.values() if "Sequence" in x["kind"])
-    saida = []
+def clips_fcproj(file: Path) -> list[dict]:
+    d = json.loads(Path(file).read_text())
+    items = d["project"]["items"]
+    seq = next(x["kind"]["Sequence"] for x in items.values() if "Sequence" in x["kind"])
+    output = []
     for t in [*seq["video_tracks"], *seq.get("audio_tracks", [])]:
-        trilha = TRACKS.get(t["name"])
-        if not trilha:
+        track = TRACKS.get(t["name"])
+        if not track:
             continue
         for c in t["items"]:
-            media = itens.get(str(c.get("item")), {}).get("kind", {}).get("Media", {}).get("media", {})
-            caminho = (media.get("File") or {}).get("path")
-            saida.append({"trilha": trilha, "arquivo": Path(caminho).name if caminho else None, "nome": c.get("name"),
+            media = items.get(str(c.get("item")), {}).get("kind", {}).get("Media", {}).get("media", {})
+            path = (media.get("File") or {}).get("path")
+            output.append({"trilha": track, "arquivo": Path(path).name if path else None, "nome": c.get("name"),
                           "em": c["start"] / TICKS, "dur": c["duration"] / TICKS,
                           "origem": (c.get("source_in") or 0) / TICKS, "velocidade": c.get("speed", 1.0),
                           "efeitos": len(c.get("effects") or [])})
-    return saida
+    return output
 
 
-def clips_n1(doc: dict, midias: dict) -> list[dict]:
-    saida = []
+def clips_n1(doc: dict, medias: dict) -> list[dict]:
+    output = []
     for o in doc["ops"]:
         if o["op"] == "colocar":
-            saida.append({"id": o["id"], "trilha": o["trilha"], "arquivo": midias.get(o["midia"]), "em": o["em"],
+            output.append({"id": o["id"], "trilha": o["trilha"], "arquivo": medias.get(o["midia"]), "em": o["em"],
                           "dur": o.get("dur"), "origem": o.get("origem") or 0, "velocidade": 1.0})
         elif o["op"] == "texto":
-            saida.append({"id": o["id"], "trilha": "texto", "arquivo": None, "nome": o["conteudo"], "em": o["em"],
+            output.append({"id": o["id"], "trilha": "texto", "arquivo": None, "nome": o["conteudo"], "em": o["em"],
                           "dur": o["dur"], "origem": 0, "velocidade": 1.0})
-    return saida
+    return output
 
 
-def lift_fc(doc: dict, midias: dict, editado: Path) -> tuple[list[dict], list[dict]]:
+def lift_fc(doc: dict, medias: dict, editado: Path) -> tuple[list[dict], list[dict]]:
     """Diferença N1 gerado × `.fcproj` editado → (operações N1 de correção, brutos)."""
-    antes, depois = clips_n1(doc, midias), clips_fcproj(editado)
-    ops, brutos, usados = [], [], set()
-    for a in antes:
-        cands = [(abs(b["em"] - a["em"]), k) for k, b in enumerate(depois) if k not in usados
+    before, after = clips_n1(doc, medias), clips_fcproj(editado)
+    ops, raw, used = [], [], set()
+    for a in before:
+        cands = [(abs(b["em"] - a["em"]), k) for k, b in enumerate(after) if k not in used
                  and b["trilha"] == a["trilha"] and (b["arquivo"] == a["arquivo"] if a["arquivo"] else b["nome"] == a.get("nome"))]
         if not cands:
             ops.append({"op": "remover", "alvo": a["id"], "fechar": False})
             continue
         _, k = min(cands)
-        usados.add(k)
-        b = depois[k]
-        d_origem = b["origem"] - a["origem"]
-        if abs(d_origem) > TOL:
-            ops.append({"op": "aparar", "alvo": a["id"], "borda": "entrada", "delta": round(-d_origem, 3)})
-        em_esperado = a["em"] + (d_origem if abs(d_origem) > TOL else 0)
-        if abs(b["em"] - em_esperado) > TOL:
+        used.add(k)
+        b = after[k]
+        d_origin = b["origem"] - a["origem"]
+        if abs(d_origin) > TOL:
+            ops.append({"op": "aparar", "alvo": a["id"], "borda": "entrada", "delta": round(-d_origin, 3)})
+        em_expected = a["em"] + (d_origin if abs(d_origin) > TOL else 0)
+        if abs(b["em"] - em_expected) > TOL:
             ops.append({"op": "mover", "alvo": a["id"], "para": round(b["em"], 3)})
         if a["dur"] is not None:
-            dur_esperada = a["dur"] - (d_origem if abs(d_origem) > TOL else 0)
-            if abs(b["dur"] - dur_esperada) > TOL:
-                ops.append({"op": "aparar", "alvo": a["id"], "borda": "saida", "delta": round(b["dur"] - dur_esperada, 3)})
+            duration_esperada = a["dur"] - (d_origin if abs(d_origin) > TOL else 0)
+            if abs(b["dur"] - duration_esperada) > TOL:
+                ops.append({"op": "aparar", "alvo": a["id"], "borda": "saida", "delta": round(b["dur"] - duration_esperada, 3)})
         if abs(b["velocidade"] - 1.0) > 1e-3:
             ops.append({"op": "velocidade", "alvo": a["id"], "fator": round(b["velocidade"], 3)})
-    for k, b in enumerate(depois):
-        if k in usados:
+    for k, b in enumerate(after):
+        if k in used:
             continue
         if b["arquivo"]:
             ops.append({"op": "colocar", "id": f"novo{k}", "midia": f"arquivo:{b['arquivo']}", "trilha": b["trilha"],
                         "em": round(b["em"], 3), "dur": round(b["dur"], 3), "origem": round(b["origem"], 3)})
         else:
-            brutos.append({"clipe_sem_midia": b["nome"], "trilha": b["trilha"], "em": round(b["em"], 3)})
-    return ops, brutos
+            raw.append({"clipe_sem_midia": b["nome"], "trilha": b["trilha"], "em": round(b["em"], 3)})
+    return ops, raw
 
 
-def fcproj_edited(projeto: Project, editado: Path) -> str | None:
+def fcproj_edited(project: Project, editado: Path) -> str | None:
     """Registra `corrigir_montagem` para um `.fcproj` salvo à mão. → id do registro (None se já estava)."""
     sha = _sha(editado)
     if _already_registered(sha):
         return None
     # a base tem de ser a montagem que a app executou ANTES da edição (com o rastro N0); uma tradução feita
     # depois, pelo plano atual, misturaria replanejamento com edição humana
-    base = R.last(f"ep:{projeto.ep}", "montar")
-    quando = __import__("datetime").datetime.fromtimestamp(editado.stat().st_mtime).strftime("%Y-%m-%dT%H:%M:%S")
-    if not base or base.get("n0") is None or base["t"] > quando or not (base.get("extra") or {}).get("midias"):
+    base = R.last(f"ep:{project.ep}", "montar")
+    when = __import__("datetime").datetime.fromtimestamp(editado.stat().st_mtime).strftime("%Y-%m-%dT%H:%M:%S")
+    if not base or base.get("n0") is None or base["t"] > when or not (base.get("extra") or {}).get("midias"):
         raise ValueError("sem a montagem executada antes da edição (edição anterior ao registro)")
     doc = R.read_artifact(base["saida"]["n1"])
-    ops, brutos = lift_fc(doc, base["extra"]["midias"], editado)
-    if not ops and not brutos:
+    ops, raw = lift_fc(doc, base["extra"]["midias"], editado)
+    if not ops and not raw:
         return None
-    return R.write("corrigir_montagem", grupo=f"ep:{projeto.ep}", pai=base["id"], origem="humano",
-                    contexto={"montagem": base["saida"]["n1"], "episodio": projeto.ep,
+    return R.write("corrigir_montagem", grupo=f"ep:{project.ep}", pai=base["id"], origem="humano",
+                    contexto={"montagem": base["saida"]["n1"], "episodio": project.ep,
                               "formato": base["contexto"].get("formato"), "modo": base["contexto"].get("modo")},
                     saida={"versao": 1, "ops": ops}, humano={"veredito": "editada", "nota": None, "motivo": None,
                                                               "comentario": None, "em": R._now()},
                     versoes={"n1": 1, "app": "filmcraft"},
-                    extra={"episodio": projeto.ep, "arquivo": editado.name, "sha": sha, "brutos": brutos[:50]})
+                    extra={"episodio": project.ep, "arquivo": editado.name, "sha": sha, "brutos": raw[:50]})
 
 
 # ---------- PhotoCraft ----------
@@ -132,74 +132,74 @@ def _info(pcraft: Path) -> dict:
 
 def lift_pc(doc: dict, info: dict) -> tuple[dict, list[dict]]:
     """Composição N1 + árvore de camadas do `.pcraft` editado → (composição com os textos editados, brutos)."""
-    camadas = {lay["name"]: lay for lay in info.get("layers", [])}
-    novo, brutos = json.loads(json.dumps(doc)), []
-    caixas = 0
-    for e in novo["elementos"]:
-        nome = {"titulo": "Título", "selo": "Selo (texto)"}.get(e["tipo"])
+    layers = {lay["name"]: lay for lay in info.get("layers", [])}
+    new, raw = json.loads(json.dumps(doc)), []
+    boxes = 0
+    for e in new["elementos"]:
+        name = {"titulo": "Título", "selo": "Selo (texto)"}.get(e["tipo"])
         if e["tipo"] == "caixa":
-            caixas += 1
-            nome = f"Caixa {caixas}"
-        if not nome:
+            boxes += 1
+            name = f"Caixa {boxes}"
+        if not name:
             continue
-        lay = camadas.get(nome)
+        lay = layers.get(name)
         if lay is None:
-            brutos.append({"camada_removida": nome})
+            raw.append({"camada_removida": name})
             continue
-        texto = (lay.get("text") or {}).get("text")
-        if texto is not None and texto.replace("*", "") != e["conteudo"].replace("*", "").upper() \
-                and texto != e["conteudo"].replace("*", ""):
-            e["conteudo"] = texto
+        text = (lay.get("text") or {}).get("text")
+        if text is not None and text.replace("*", "") != e["conteudo"].replace("*", "").upper() \
+                and text != e["conteudo"].replace("*", ""):
+            e["conteudo"] = text
         pt = (lay.get("text") or {}).get("sizePt")
         if e["tipo"] in ("titulo", "caixa") and pt and abs(pt - e["tamanho"] * info["height"]) > 1:
             e["tamanho"] = round(pt / info["height"], 4)
-    conhecidas = {"Título", "Selo (texto)", "Selo (fundo)", "Seta", "Vinheta das bordas", "Vinheta lateral",
+    known = {"Título", "Selo (texto)", "Selo (fundo)", "Seta", "Vinheta das bordas", "Vinheta lateral",
                   "Ajuste: saturação", "Ajuste: contraste", "Ajuste: look", "Fundo", "Background", "Tarja"}
-    for nome in camadas:
-        if nome not in conhecidas and not nome.startswith(("Caixa ", "Fundo da ")):
-            brutos.append({"camada_nova": nome})
-    return novo, brutos
+    for name in layers:
+        if name not in known and not name.startswith(("Caixa ", "Fundo da ")):
+            raw.append({"camada_nova": name})
+    return new, raw
 
 
-def pcraft_edited(projeto: Project, pcraft: Path) -> str | None:
+def pcraft_edited(project: Project, pcraft: Path) -> str | None:
     sha = _sha(pcraft)
     if _already_registered(sha):
         return None
-    base = R.last(f"thumb:{projeto.ep}", "thumb_compor", arquivo=pcraft.with_suffix(".png").name)
+    base = R.last(f"thumb:{project.ep}", "thumb_compor", arquivo=pcraft.with_suffix(".png").name)
     if not base or "elementos" not in (R.read_artifact(base["saida"]["n1"]) or {}):
         return None
     doc = R.read_artifact(base["saida"]["n1"])
-    novo, brutos = lift_pc(doc, _info(pcraft))
-    if novo == doc and not brutos:
+    new, raw = lift_pc(doc, _info(pcraft))
+    if new == doc and not raw:
         return None
-    return R.write("thumb_compor", grupo=f"thumb:{projeto.ep}", pai=base["id"], origem="humano",
-                    contexto=base["contexto"], saida=novo,
+    return R.write("thumb_compor", grupo=f"thumb:{project.ep}", pai=base["id"], origem="humano",
+                    contexto=base["contexto"], saida=new,
                     humano={"veredito": "editada", "nota": None, "motivo": None, "comentario": None, "em": R._now()},
                     versoes={"n1": 1, "app": "photocraft"},
-                    extra={"episodio": projeto.ep, "arquivo": pcraft.with_suffix(".png").name, "sha": sha,
-                           "brutos": brutos[:50]})
+                    extra={"episodio": project.ep, "arquivo": pcraft.with_suffix(".png").name, "sha": sha,
+                           "brutos": raw[:50]})
 
 
 def sweep() -> list[str]:
     """Procura edições à mão ainda não registradas em todos os episódios. → linhas de relatório."""
     from esteira import photocraft
-    saida = []
-    for pasta in episodes():
+    output = []
+    for folder in episodes():
         try:
-            p = Project(pasta)
+            p = Project(folder)
         except SystemExit:
             continue
-        for arq in sorted(p.pasta.glob("projeto.manual-*.fcproj")):
+        for file in sorted(p.pasta.glob("projeto.manual-*.fcproj")):
             try:
-                if rg := fcproj_edited(p, arq):
-                    saida.append(f"{p.ep}: {arq.name} → {rg}")
+                if rg := fcproj_edited(p, file):
+                    output.append(f"{p.ep}: {file.name} → {rg}")
             except (KeyError, ValueError, StopIteration) as e:
-                saida.append(f"{p.ep}: {arq.name} não levantado ({e})")
+                output.append(f"{p.ep}: {file.name} não levantado ({e})")
         for pc in sorted(p.caminho("thumbs").glob("*.pcraft")) if p.caminho("thumbs").exists() else []:
             if photocraft.edited(pc):
                 try:
                     if rg := pcraft_edited(p, pc):
-                        saida.append(f"{p.ep}: {pc.name} → {rg}")
+                        output.append(f"{p.ep}: {pc.name} → {rg}")
                 except (RuntimeError, KeyError, ValueError) as e:
-                    saida.append(f"{p.ep}: {pc.name} não levantado ({e})")
-    return saida or ["nenhuma edição nova"]
+                    output.append(f"{p.ep}: {pc.name} não levantado ({e})")
+    return output or ["nenhuma edição nova"]

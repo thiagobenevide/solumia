@@ -26,13 +26,13 @@ def reference(est):
     """Episódio cujo mapa serve de roteiro da amostra: o mais recente do canal, senão o mais recente da rede."""
     from esteira import production
     mapas = sorted(PROJECTS.glob("*/*/estudio/mapa.json"), key=lambda a: a.stat().st_mtime, reverse=True)
-    projetos = [Project(a.parent.parent) for a in mapas]
+    projects = [Project(a.parent.parent) for a in mapas]
     if est.modo == "apresentador":
-        projetos = [p for p in projetos if production.camera(p)]
-    if not projetos:
+        projects = [p for p in projects if production.camera(p)]
+    if not projects:
         raise SystemExit("nenhuma produção com mapa de cenas" + (" e câmera" if est.modo == "apresentador" else "")
                          + ": produza um episódio no Estúdio antes de gerar exemplos")
-    return next((p for p in projetos if p.canal == est.canal), projetos[0])
+    return next((p for p in projects if p.canal == est.canal), projects[0])
 
 
 def generate(alvo):

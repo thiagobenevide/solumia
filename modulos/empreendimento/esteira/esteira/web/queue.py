@@ -28,10 +28,10 @@ def _read():
     return json.loads(FILE.read_text()) if FILE.exists() else []
 
 
-def _save(fila):
+def _save(queue):
     FILE.parent.mkdir(exist_ok=True)
     tmp = FILE.with_suffix(f".{os.getpid()}.tmp")  # troca atômica: quem lê de outro processo nunca vê o arquivo pela metade
-    tmp.write_text(json.dumps(fila, ensure_ascii=False, indent=1))
+    tmp.write_text(json.dumps(queue, ensure_ascii=False, indent=1))
     tmp.replace(FILE)
 
 
@@ -45,32 +45,32 @@ def add(ep, comando, args=(), motor="local"):
     v = locks.slot(comando, motor)
     args = list(args) + (["--engine", "claude"] if v == "claude" else [])
     with _lock:
-        fila = _read()
-        if any(t["ep"] == ep and t["comando"] == comando and t["estado"] in ("na fila", "rodando") for t in fila):
+        queue = _read()
+        if any(t["ep"] == ep and t["comando"] == comando and t["estado"] in ("na fila", "rodando") for t in queue):
             return None  # já está na fila
         t = {"id": int(time.time() * 1000), "ep": ep, "comando": comando, "args": args, "vaga": v,
              "estado": "na fila", "criado": datetime.now().isoformat(timespec="seconds")}
-        fila.append(t)
-        _save(fila)
+        queue.append(t)
+        _save(queue)
         return t
 
 
 def _processes_of(t):
     """Processo da tarefa (pelo pid gravado ou, em tarefas antigas, pela linha de comando) e seus filhos."""
-    raiz = None
+    root = None
     if t.get("pid") and psutil.pid_exists(t["pid"]):
-        raiz = psutil.Process(t["pid"])
+        root = psutil.Process(t["pid"])
     else:
-        alvo = ["esteira.py", t["comando"], t["ep"]]
+        target = ["esteira.py", t["comando"], t["ep"]]
         for p in psutil.process_iter(["cmdline"]):
             c = p.info["cmdline"] or []
-            if any(a.endswith(alvo[0]) for a in c) and c[-len(t["args"]) - 2:][:2] == alvo[1:]:
-                raiz = p
+            if any(a.endswith(target[0]) for a in c) and c[-len(t["args"]) - 2:][:2] == target[1:]:
+                root = p
                 break
-    if not raiz:
+    if not root:
         return []
     try:
-        return [raiz] + raiz.children(recursive=True)
+        return [root] + root.children(recursive=True)
     except psutil.NoSuchProcess:
         return []
 
@@ -84,8 +84,8 @@ def _close(t):
             p.terminate()
         except psutil.NoSuchProcess:
             pass
-    _, vivos = psutil.wait_procs(procs, timeout=5)
-    for p in vivos:
+    _, live = psutil.wait_procs(procs, timeout=5)
+    for p in live:
         try:
             p.kill()
         except psutil.NoSuchProcess:
@@ -95,15 +95,15 @@ def _close(t):
 
 def cancel(tid):
     with _lock:
-        fila = _read()
-        alvo = next((t for t in fila if t["id"] == tid), None)
-        if not alvo or alvo["estado"] not in ("na fila", "rodando"):
+        queue = _read()
+        target = next((t for t in queue if t["id"] == tid), None)
+        if not target or target["estado"] not in ("na fila", "rodando"):
             return
-        rodando = alvo["estado"] == "rodando"
-        alvo.update(estado="cancelado", fim=datetime.now().isoformat(timespec="seconds"))
-        _save(fila)
-    if rodando:
-        _close(alvo)
+        running = target["estado"] == "rodando"
+        target.update(estado="cancelado", fim=datetime.now().isoformat(timespec="seconds"))
+        _save(queue)
+    if running:
+        _close(target)
 
 
 def clean_finished():
@@ -111,45 +111,45 @@ def clean_finished():
         _save([t for t in _read() if t["estado"] in ("na fila", "rodando")])
 
 
-def _next(vaga):
+def _next(slot):
     with _lock:
-        fila = _read()
-        t = next((t for t in fila if t["estado"] == "na fila" and t.get("vaga", "machine") == vaga), None)
+        queue = _read()
+        t = next((t for t in queue if t["estado"] == "na fila" and t.get("vaga", "machine") == slot), None)
         if t:
             t.update(estado="rodando", inicio=datetime.now().isoformat(timespec="seconds"))
-            _save(fila)
+            _save(queue)
         return t
 
 
 def _finish(tid, codigo):
     with _lock:
-        fila = _read()
-        for t in fila:
+        queue = _read()
+        for t in queue:
             if t["id"] == tid and t["estado"] != "cancelado":
                 t.update(estado="ok" if codigo == 0 else "erro", codigo=codigo,
                          fim=datetime.now().isoformat(timespec="seconds"))
-        _save(fila)
+        _save(queue)
 
 
 def _mark_pid(tid, pid):
     with _lock:
-        fila = _read()
-        for t in fila:
+        queue = _read()
+        for t in queue:
             if t["id"] == tid:
                 t["pid"] = pid
-        _save(fila)
+        _save(queue)
 
 
 def _log(t):
     # roteiro (canal:N) não tem pasta de episódio
-    pasta = CACHE / "fila_logs" if ":" in t["ep"] else folder_ep(t["ep"]) / "log"
-    pasta.mkdir(parents=True, exist_ok=True)
-    return pasta / f"fila_{t['id']}.log"
+    folder = CACHE / "fila_logs" if ":" in t["ep"] else folder_ep(t["ep"]) / "log"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / f"fila_{t['id']}.log"
 
 
-def _worker(vaga):
+def _worker(slot):
     while True:
-        t = _next(vaga)
+        t = _next(slot)
         if not t:
             time.sleep(1.5)
             continue
@@ -157,11 +157,11 @@ def _worker(vaga):
             p = subprocess.Popen([str(ROOT / "dark"), t["comando"], t["ep"], *t["args"]], cwd=ROOT,
                                  stdout=log, stderr=subprocess.STDOUT,
                                  env={**os.environ, "ESTEIRA_QUEUE": str(t["id"])})
-            _process[vaga] = p
+            _process[slot] = p
             _mark_pid(t["id"], p.pid)
-            codigo = p.wait()
-            _process[vaga] = None
-        _finish(t["id"], codigo)
+            code = p.wait()
+            _process[slot] = None
+        _finish(t["id"], code)
 
 
 def start():
@@ -173,13 +173,13 @@ def start():
     except BlockingIOError:
         return False
     with _lock:
-        fila = _read()
-        for t in fila:
+        queue = _read()
+        for t in queue:
             if t["estado"] == "rodando" and not _processes_of(t):
                 t["estado"] = "interrompido"
-        _save(fila)
-        fabrica_viva = any(t["estado"] == "rodando" and str(t.get("ep", "")).startswith("fabrica:") for t in fila)
-    if not fabrica_viva:
+        _save(queue)
+        factory_viva = any(t["estado"] == "rodando" and str(t.get("ep", "")).startswith("fabrica:") for t in queue)
+    if not factory_viva:
         try:  # peças da LLM local que o reinício deixou no meio da revisão do Claude
             from esteira.studio import factory
             factory.clean_orphans()
@@ -191,7 +191,7 @@ def start():
     return True
 
 
-def _clock(intervalo=900):
+def _clock(interval=900):
     """A cada 15 min: ampliação contínua do acervo (estudio/fabrica.ampliar; não faz nada se estiver desligada) e
     retomada dos pedidos do Claude parados pela cota (fabrica.retomar)."""
     while True:
@@ -201,4 +201,4 @@ def _clock(intervalo=900):
             factory.resume()  # a janela da cota virou: os pedidos do Claude voltam a trabalhar
         except Exception as e:  # noqa: BLE001 — o relógio não pode derrubar o worker da fila
             print(f"  relógio da fila: {str(e)[:200]}")
-        time.sleep(intervalo)
+        time.sleep(interval)

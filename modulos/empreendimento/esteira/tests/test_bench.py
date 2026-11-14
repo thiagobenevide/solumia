@@ -20,20 +20,20 @@ def test_so_trocas():
 
 
 def test_nota_cena():
-    caso = {"frase": "Em setembro de 2026, eram 81,7%.", "aceitas": ["contador"]}
+    instance = {"frase": "Em setembro de 2026, eram 81,7%.", "aceitas": ["contador"]}
     certa = B.Scene(cena="contador", ancora="eram 81,7%", titulo="Endividadas",
                    valores=[B.Value(rotulo="famílias", valor="81,7%")])
-    assert B.score_scene(caso, certa) == 1
+    assert B.score_scene(instance, certa) == 1
     inventada = certa.model_copy(update={"valores": [B.Value(rotulo="x", valor="90%")]})
-    assert B.score_scene(caso, inventada) == 0.75
+    assert B.score_scene(instance, inventada) == 0.75
     errada = B.Scene(cena="midia", ancora="não está na frase", titulo="", valores=[])
-    assert B.score_scene(caso, errada) == 0.25  # só "não inventou número"
+    assert B.score_scene(instance, errada) == 0.25  # só "não inventou número"
 
 
 def test_nota_legenda_e_visao():
-    caso = {"whisper": "um consignato", "certo": "um consignado"}
-    assert B.score_caption(caso, B.Caption(texto="um consignado")) == 1
-    assert B.score_caption(caso, B.Caption(texto="um consignato")) == 0.5
-    assert B.score_caption(caso, B.Caption(texto="outra coisa")) == 0
+    instance = {"whisper": "um consignato", "certo": "um consignado"}
+    assert B.score_caption(instance, B.Caption(texto="um consignado")) == 1
+    assert B.score_caption(instance, B.Caption(texto="um consignato")) == 0.5
+    assert B.score_caption(instance, B.Caption(texto="outra coisa")) == 0
     v = {"certo": {"texto_cortado": True, "sobreposicao": False, "ilegivel": False, "rosto_coberto": False}}
     assert B.score_vision(v, B.Vision(texto_cortado=True, sobreposicao=True, ilegivel=False, rosto_coberto=False)) == 0.75

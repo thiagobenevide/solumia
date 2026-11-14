@@ -57,21 +57,21 @@ def context_model(r: dict) -> dict:
     c = dict(_context(r))
     if r["tarefa"] == "peca_animar":
         s = R.read_artifact(r["saida"]["n1"])
-        ficha = {k: v for k, v in (s.get("ficha") or {}).items()
+        card = {k: v for k, v in (s.get("ficha") or {}).items()
                  if k not in ("estado", "versao", "origem", "notas", "id", "motor")}
-        return {"ficha": ficha, "pedido": c.get("pedido"), "modo": c.get("modo"), "comentario": c.get("comentario")}
+        return {"ficha": card, "pedido": c.get("pedido"), "modo": c.get("modo"), "comentario": c.get("comentario")}
     if r["tarefa"] == "corrigir_montagem" and isinstance(c.get("montagem"), str):
         c["montagem"] = R.read_artifact(c["montagem"])
     return c
 
 
 def prompt(tarefa: str, contexto: dict, exemplos=()) -> str:
-    partes = [INSTRUCTIONS[tarefa], "Responda só com JSON válido no esquema. Nada de texto fora do JSON."]
+    parts = [INSTRUCTIONS[tarefa], "Responda só com JSON válido no esquema. Nada de texto fora do JSON."]
     for k, (cx, rx) in enumerate(exemplos, 1):
-        partes.append(f"<exemplo {k}>\n<contexto>{json.dumps(cx, ensure_ascii=False)}</contexto>\n"
+        parts.append(f"<exemplo {k}>\n<contexto>{json.dumps(cx, ensure_ascii=False)}</contexto>\n"
                       f"<resposta>{json.dumps(rx, ensure_ascii=False)}</resposta>\n</exemplo {k}>")
-    partes.append(f"<contexto>{json.dumps(contexto, ensure_ascii=False)}</contexto>")
-    return "\n\n".join(partes)
+    parts.append(f"<contexto>{json.dumps(contexto, ensure_ascii=False)}</contexto>")
+    return "\n\n".join(parts)
 
 
 def _system(tarefa: str) -> str:
@@ -86,54 +86,54 @@ def _system(tarefa: str) -> str:
 def spans_assembly(ctx: dict, doc: dict) -> list[tuple[dict, dict]]:
     """Divide uma montagem em janelas de ~TRECHO s: (contexto do trecho, ops do trecho). As operações globais
     (sequência, narração, cor, música, legendas) ficam no primeiro trecho."""
-    dur = ctx.get("duracao") or max((o.get("em", 0) + (o.get("dur") or 0) for o in doc["ops"]), default=0)
-    if dur <= SPAN * 1.5:
+    duration = ctx.get("duracao") or max((o.get("em", 0) + (o.get("dur") or 0) for o in doc["ops"]), default=0)
+    if duration <= SPAN * 1.5:
         return [(ctx, doc)]
-    janelas, a = [], 0.0
-    while a < dur:
-        janelas.append((a, min(dur, a + SPAN)))
+    windows, a = [], 0.0
+    while a < duration:
+        windows.append((a, min(duration, a + SPAN)))
         a += SPAN
-    nomes_de = {}
+    names_of = {}
     for o in doc["ops"]:
         if o["op"] in ("colocar", "texto"):
-            k = next((i for i, (x, y) in enumerate(janelas) if x <= o["em"] < y), len(janelas) - 1)
-            nomes_de[o["id"]] = k
-    saida = []
-    for i, (x, y) in enumerate(janelas):
-        ops = [o for o in doc["ops"] if nomes_de.get(o.get("id") or o.get("alvo"), 0) == i]
+            k = next((i for i, (x, y) in enumerate(windows) if x <= o["em"] < y), len(windows) - 1)
+            names_of[o["id"]] = k
+    output = []
+    for i, (x, y) in enumerate(windows):
+        ops = [o for o in doc["ops"] if names_of.get(o.get("id") or o.get("alvo"), 0) == i]
         cx = {**{k: v for k, v in ctx.items() if k not in ("cenas", "graficos", "chaves")}, "trecho": [x, y],
               "cenas": [c for c in ctx.get("cenas", []) if x <= (c.get("inicio") or 0) < y],
               "graficos": [g for g in ctx.get("graficos", []) if x <= (g.get("inicio") or 0) < y],
               "chaves": [k for k in ctx.get("chaves", []) if x <= (k.get("inicio") or 0) < y]}
-        saida.append((cx, {"versao": 1, "ops": ops}))
-    return saida
+        output.append((cx, {"versao": 1, "ops": ops}))
+    return output
 
 
 # ---------- ouro ----------
 
 def gold(tarefa: str) -> set[str]:
     """Ids do ouro da tarefa. Sem arquivo, escolhe os grupos pelo sha1 (≈8%, ao menos 1 com 5+ grupos) e grava."""
-    arq = _folders()[1] / R.TASKS[tarefa] / f"{tarefa}.jsonl"
-    if arq.exists():
-        return {json.loads(x)["id"] for x in arq.read_text().splitlines() if x.strip()}
-    bons = [r for r in R.records(tarefa) if r["uso"] == "sft"]
-    grupos = sorted({r["grupo"] for r in bons}, key=lambda g: _fraction("ouro:" + g))
-    if len(grupos) < 5:
+    file = _folders()[1] / R.TASKS[tarefa] / f"{tarefa}.jsonl"
+    if file.exists():
+        return {json.loads(x)["id"] for x in file.read_text().splitlines() if x.strip()}
+    good = [r for r in R.records(tarefa) if r["uso"] == "sft"]
+    groups = sorted({r["grupo"] for r in good}, key=lambda g: _fraction("ouro:" + g))
+    if len(groups) < 5:
         return set()
-    escolhidos = {g for g in grupos if _fraction("ouro:" + g) < FRACTION_GOLD} or {grupos[0]}
-    ids = [r["id"] for r in bons if r["grupo"] in escolhidos]
-    arq.parent.mkdir(parents=True, exist_ok=True)
-    arq.write_text("".join(json.dumps({"id": i, "auto": True}) + "\n" for i in ids))
+    chosen = {g for g in groups if _fraction("ouro:" + g) < FRACTION_GOLD} or {groups[0]}
+    ids = [r["id"] for r in good if r["grupo"] in chosen]
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_text("".join(json.dumps({"id": i, "auto": True}) + "\n" for i in ids))
     return set(ids)
 
 
 def mark_gold(tarefa: str, ids: list[str]) -> None:
-    arq = _folders()[1] / R.TASKS[tarefa] / f"{tarefa}.jsonl"
-    atuais = gold(tarefa) if arq.exists() else set()
-    arq.parent.mkdir(parents=True, exist_ok=True)
-    with open(arq, "a") as f:
+    file = _folders()[1] / R.TASKS[tarefa] / f"{tarefa}.jsonl"
+    current = gold(tarefa) if file.exists() else set()
+    file.parent.mkdir(parents=True, exist_ok=True)
+    with open(file, "a") as f:
         for i in ids:
-            if i not in atuais:
+            if i not in current:
                 f.write(json.dumps({"id": i, "auto": False}) + "\n")
 
 
@@ -158,69 +158,69 @@ def _pairs(tarefa: str) -> list[tuple[dict, dict]]:
 
 def cases_eval(tarefa: str) -> list[dict]:
     ids = gold(tarefa)
-    casos = []
+    cases = []
     for r, cx, resp in _pairs(tarefa):
         if r["id"] in ids:
-            casos.append({"id": r["id"], "tarefa": tarefa, "contexto": cx, "referencia": resp})
-    return casos
+            cases.append({"id": r["id"], "tarefa": tarefa, "contexto": cx, "referencia": resp})
+    return cases
 
 
 def _dpo(tarefa: str) -> list[dict]:
     """Pares do mesmo grupo: bom × ruim. Nas thumbs, a escolhida × as outras candidatas do mesmo episódio."""
     por: dict[str, dict[str, list]] = {}
     for r in R.records(tarefa):
-        lado = ("bom" if r["uso"] == "sft" else "ruim" if r["uso"] == "dpo_ruim"
+        side = ("bom" if r["uso"] == "sft" else "ruim" if r["uso"] == "dpo_ruim"
                 else "ruim" if tarefa == "thumb_compor" and r["uso"] == "pendente" else None)
-        if lado:
-            por.setdefault(r["grupo"], {"bom": [], "ruim": []})[lado].append(r)
-    saida = []
+        if side:
+            por.setdefault(r["grupo"], {"bom": [], "ruim": []})[side].append(r)
+    output = []
     for g in por.values():
         for b in g["bom"]:
             for m in g["ruim"]:
                 rb, rm = answer(b), answer(m)
                 if rb is None or rm is None or rb == rm:
                     continue
-                saida.append({"grupo": b["grupo"], "prompt": prompt(tarefa, context_model(b)),
+                output.append({"grupo": b["grupo"], "prompt": prompt(tarefa, context_model(b)),
                               "chosen": json.dumps(rb, ensure_ascii=False), "rejected": json.dumps(rm, ensure_ascii=False)})
-    return saida
+    return output
 
 
 def export(tarefas=None) -> dict:
     from esteira.n1 import save_schemas
-    destino = _folders()[0] / datetime.now().strftime("%Y%m%d-%H%M%S")
-    resumo = {"em": datetime.now().isoformat(timespec="seconds"), "pasta": str(destino), "tarefas": {}}
-    arquivos = save_schemas(destino / "esquemas")
+    destination = _folders()[0] / datetime.now().strftime("%Y%m%d-%H%M%S")
+    summary = {"em": datetime.now().isoformat(timespec="seconds"), "pasta": str(destination), "tarefas": {}}
+    files = save_schemas(destination / "esquemas")
     for t in tarefas or TASKS:
-        ids_ouro = gold(t)
+        ids_gold = gold(t)
         sft = {"train": [], "val": []}
-        avaliacao = []
+        evaluation = []
         for r, cx, resp in _pairs(t):
-            if r["id"] in ids_ouro:
-                avaliacao.append({"id": r["id"], "contexto": cx, "referencia": resp})
+            if r["id"] in ids_gold:
+                evaluation.append({"id": r["id"], "contexto": cx, "referencia": resp})
                 continue
-            linha = {"id": r["id"], "tarefa": t, "grupo": r["grupo"], "messages": [
+            line = {"id": r["id"], "tarefa": t, "grupo": r["grupo"], "messages": [
                 {"role": "system", "content": _system(t)},
                 {"role": "user", "content": prompt(t, cx)},
                 {"role": "assistant", "content": json.dumps(resp, ensure_ascii=False)}]}
-            sft["val" if _fraction(r["grupo"]) < VALIDATION else "train"].append(linha)
+            sft["val" if _fraction(r["grupo"]) < VALIDATION else "train"].append(line)
         dpo = _dpo(t)
-        for nome, linhas in (("sft/" + t + ".train.jsonl", sft["train"]), ("sft/" + t + ".val.jsonl", sft["val"]),
-                             ("dpo/" + t + ".jsonl", dpo), ("eval/" + t + ".jsonl", avaliacao)):
-            arq = destino / nome
-            arq.parent.mkdir(parents=True, exist_ok=True)
-            arq.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in linhas))
-            arquivos.append(arq)
-        resumo["tarefas"][t] = {"sft": len(sft["train"]), "val": len(sft["val"]), "dpo": len(dpo),
-                                "eval": len(avaliacao)}
-    resumo["manifesto"] = {str(a.relative_to(destino)): hashlib.sha256(a.read_bytes()).hexdigest() for a in arquivos}
-    (destino / "manifesto.json").write_text(json.dumps(resumo, ensure_ascii=False, indent=1))
-    return resumo
+        for name, lines in (("sft/" + t + ".train.jsonl", sft["train"]), ("sft/" + t + ".val.jsonl", sft["val"]),
+                             ("dpo/" + t + ".jsonl", dpo), ("eval/" + t + ".jsonl", evaluation)):
+            file = destination / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in lines))
+            files.append(file)
+        summary["tarefas"][t] = {"sft": len(sft["train"]), "val": len(sft["val"]), "dpo": len(dpo),
+                                "eval": len(evaluation)}
+    summary["manifesto"] = {str(a.relative_to(destination)): hashlib.sha256(a.read_bytes()).hexdigest() for a in files}
+    (destination / "manifesto.json").write_text(json.dumps(summary, ensure_ascii=False, indent=1))
+    return summary
 
 
 def last() -> Path | None:
     base = _folders()[0]
-    pastas = sorted(base.glob("*/manifesto.json")) if base.exists() else []
-    return pastas[-1].parent if pastas else None
+    folders = sorted(base.glob("*/manifesto.json")) if base.exists() else []
+    return folders[-1].parent if folders else None
 
 
 def hash_export(pasta: Path) -> str:

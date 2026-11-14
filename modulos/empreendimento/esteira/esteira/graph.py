@@ -72,77 +72,77 @@ USES = [("r_openalex", "openalex"), ("r_pdf", "openalex"), ("r_fatos", "qwen3"),
 IDS = {n[0] for n in NODES}
 
 
-def node_id(fluxo, no):
+def node_id(flow, no):
     if not no:
         return None
-    if fluxo and fluxo.startswith("roteiro:"):
+    if flow and flow.startswith("roteiro:"):
         return f"r_{no}" if f"r_{no}" in IDS else None
-    if fluxo and fluxo.startswith("editor:"):
+    if flow and flow.startswith("editor:"):
         return "editor"
-    if fluxo and fluxo.startswith("fabrica:"):
+    if flow and flow.startswith("fabrica:"):
         return "fabrica"
     if no.startswith("estudio-"):  # etapas do Estúdio: estudio-<etapa>[-<formato>]
         return f"estudio_{no.split('-')[1]}" if f"estudio_{no.split('-')[1]}" in IDS else None
     return no if no in IDS else None
 
 
-def resource_of_model(motor, modelo):
+def resource_of_model(motor, model):
     if motor == "claude":
         return "claude"
-    return "qwen_vl" if modelo and "vl" in modelo else "qwen3"
+    return "qwen_vl" if model and "vl" in model else "qwen3"
 
 
 def _external(pid):
     """Barras gravadas por subprocessos (ex.: download do `artigo baixar`) ligadas ao processo `pid`."""
-    saida = {}
-    for arq in trace.DIR.glob(f"{pid}.ext-*.json"):
+    output = {}
+    for file in trace.DIR.glob(f"{pid}.ext-*.json"):
         try:
-            t = json.loads(arq.read_text())
+            t = json.loads(file.read_text())
         except (OSError, ValueError):
             continue
         if time.time() - t.get("t", 0) < 15:
-            saida[arq.stem.split(".ext-", 1)[1]] = _task_external(t)
-    return saida
+            output[file.stem.split(".ext-", 1)[1]] = _task_external(t)
+    return output
 
 
 def _task_external(t):
     """The vault script (`artigo`) still writes its bar with the old keys; the panel reads the core ones."""
-    nova = dict(t)
-    for antiga, chave in (("rotulo", "label"), ("feito", "done"), ("unidade", "unit"), ("inicio", "start")):
-        if antiga in nova:
-            nova[chave] = nova.pop(antiga)
-    return nova
+    new = dict(t)
+    for old, key in (("rotulo", "label"), ("feito", "done"), ("unidade", "unit"), ("inicio", "start")):
+        if old in new:
+            new[key] = new.pop(old)
+    return new
 
 
 def live():
-    saida = []
-    for arq in trace.DIR.glob("*.json") if trace.DIR.exists() else []:
-        if ".ext-" in arq.name:
-            if not psutil.pid_exists(int(arq.name.split(".", 1)[0])):
-                arq.unlink(missing_ok=True)
+    output = []
+    for file in trace.DIR.glob("*.json") if trace.DIR.exists() else []:
+        if ".ext-" in file.name:
+            if not psutil.pid_exists(int(file.name.split(".", 1)[0])):
+                file.unlink(missing_ok=True)
             continue
         try:
-            v = json.loads(arq.read_text())
+            v = json.loads(file.read_text())
         except (OSError, ValueError):
             continue
         v["tasks"] = {**v.get("tasks", {}), **_external(v.get("pid"))}
         if not psutil.pid_exists(v.get("pid", -1)):
-            arq.unlink(missing_ok=True)
+            file.unlink(missing_ok=True)
             continue
         v["id_no"] = node_id(v.get("flow"), v.get("node"))
         if v["id_no"]:
-            saida.append(v)
-    return saida
+            output.append(v)
+    return output
 
 
-def history(limite_bytes=600_000):
+def history(limit_bytes=600_000):
     if not trace.LOG.exists():
         return []
     with open(trace.LOG, "rb") as f:
-        f.seek(max(0, trace.LOG.stat().st_size - limite_bytes))
-        linhas = f.read().decode("utf-8", "replace").splitlines()[1:]
+        f.seek(max(0, trace.LOG.stat().st_size - limit_bytes))
+        lines = f.read().decode("utf-8", "replace").splitlines()[1:]
     regs = []
-    for l in linhas:
+    for l in lines:
         try:
             r = json.loads(l)
         except ValueError:
@@ -152,17 +152,17 @@ def history(limite_bytes=600_000):
     return regs
 
 
-def state(monitor_atual):
+def state(monitor_current):
     """Estado de cada nó: ativo/recente/parado, contadores e o que o processo faz agora."""
-    agora = time.time()
+    now = time.time()
     vv, hist = live(), history()
-    nos = {i: {"ativo": False, "recente": None, "chamadas": 0, "cache": 0, "tok_s": [], "agora": None} for i in IDS}
+    nodes = {i: {"ativo": False, "recente": None, "chamadas": 0, "cache": 0, "tok_s": [], "agora": None} for i in IDS}
     for r in hist:
-        alvos = [r["id_no"]] if r["id_no"] else []
+        targets = [r["id_no"]] if r["id_no"] else []
         if r.get("kind") in ("call", "cache"):
-            alvos.append(resource_of_model(r.get("engine", "local"), r.get("model")))
-        for a in alvos:
-            n = nos.get(a)
+            targets.append(resource_of_model(r.get("engine", "local"), r.get("model")))
+        for a in targets:
+            n = nodes.get(a)
             if not n:
                 continue
             n["recente"] = max(n["recente"] or 0, r["t"])
@@ -173,62 +173,62 @@ def state(monitor_atual):
             elif r["kind"] == "cache":
                 n["cache"] += 1
     for v in vv:
-        n = nos[v["id_no"]]
+        n = nodes[v["id_no"]]
         n["ativo"] = True
         c = v.get("call")
         n["agora"] = {"detalhe": v.get("detail"), "progresso": v.get("progress"), "desde": v.get("since"),
                       "tarefas": list(v.get("tasks", {}).values()),
                       "chamada": c and {"nome": c["name"], "modelo": c["model"], "tokens": c["tokens"],
                                         "max": (c.get("params") or {}).get("num_predict"),
-                                        "seg": round(agora - c["start"], 1)}}
+                                        "seg": round(now - c["start"], 1)}}
         if c:
-            nos[resource_of_model(c["engine"], c["model"])]["ativo"] = True
+            nodes[resource_of_model(c["engine"], c["model"])]["ativo"] = True
     # processos sem rastro (iniciados antes dele) e programas auxiliares
-    rastreados = {v["pid"] for v in vv}
-    legado = []
-    for p in monitor_atual.get("esteira", []):
+    tracked = {v["pid"] for v in vv}
+    legacy = []
+    for p in monitor_current.get("esteira", []):
         sub = (p.get("comando") or "").split()
-        if p["pid"] in rastreados or not sub or sub[0] == "painel":
+        if p["pid"] in tracked or not sub or sub[0] == "painel":
             continue
-        legado.append({"pid": p["pid"], "comando": p["comando"], "linhas": p.get("linhas", [])})
+        legacy.append({"pid": p["pid"], "comando": p["comando"], "linhas": p.get("linhas", [])})
         if sub[0] in IDS:
-            nos[sub[0]]["ativo"] = True
-        for cmd, alvo in (("artigo baixar", "r_pdf"), ("artigo citar", "r_citar"), ("artigo checar", "r_checar")):
+            nodes[sub[0]]["ativo"] = True
+        for cmd, target in (("artigo baixar", "r_pdf"), ("artigo citar", "r_citar"), ("artigo checar", "r_checar")):
             if cmd in p["comando"]:
-                nos[alvo]["ativo"] = True
-    gpu = monitor_atual.get("gpu") or {}
-    for o in monitor_atual.get("ollama") or []:
+                nodes[target]["ativo"] = True
+    gpu = monitor_current.get("gpu") or {}
+    for o in monitor_current.get("ollama") or []:
         if (gpu.get("uso") or 0) > 40:
-            nos[resource_of_model("local", o["modelo"])]["ativo"] = True
-    for g in monitor_atual.get("grupos", []):
-        alvo = {"Chromium (gráficos)": "chromium", "RealVisXL (thumbs)": "sdxl", "FilmCraft": "filmcraft",
+            nodes[resource_of_model("local", o["modelo"])]["ativo"] = True
+    for g in monitor_current.get("grupos", []):
+        target = {"Chromium (gráficos)": "chromium", "RealVisXL (thumbs)": "sdxl", "FilmCraft": "filmcraft",
                 "EffectCraft": "effectcraft", "PhotoCraft": "photocraft"}.get(g["rotulo"])
-        if alvo and g["cpu"] > 5:
-            nos[alvo]["ativo"] = True
-    for n in nos.values():
+        if target and g["cpu"] > 5:
+            nodes[target]["ativo"] = True
+    for n in nodes.values():
         ts = n.pop("tok_s")
         n["tok_s"] = round(sum(ts[-20:]) / len(ts[-20:]), 1) if ts else None
-        n["recente"] = round(agora - n["recente"]) if n["recente"] else None
-    return {"nos": nos, "legado": legado}
+        n["recente"] = round(now - n["recente"]) if n["recente"] else None
+    return {"nos": nodes, "legado": legacy}
 
 
-def detail(id_no, monitor_atual, hist_monitor=()):
-    info = next(n for n in NODES if n[0] == id_no)
-    recurso = info[2] == _X
-    vv = [v for v in live() if v["id_no"] == id_no or
-          (recurso and v.get("call") and resource_of_model(v["call"]["engine"], v["call"]["model"]) == id_no)]
+def detail(id_node, monitor_current, hist_monitor=()):
+    info = next(n for n in NODES if n[0] == id_node)
+    resource = info[2] == _X
+    vv = [v for v in live() if v["id_no"] == id_node or
+          (resource and v.get("call") and resource_of_model(v["call"]["engine"], v["call"]["model"]) == id_node)]
     hist = history()
-    if recurso:
-        chamadas = [r for r in hist if r.get("kind") == "call" and resource_of_model(r.get("engine"), r.get("model")) == id_no]
-        caches = sum(1 for r in hist if r.get("kind") == "cache" and resource_of_model(r.get("engine", "local"), r.get("model")) == id_no)
+    if resource:
+        calls = [r for r in hist if r.get("kind") == "call" and resource_of_model(r.get("engine"), r.get("model")) == id_node]
+        caches = sum(1 for r in hist if r.get("kind") == "cache" and resource_of_model(r.get("engine", "local"), r.get("model")) == id_node)
     else:
-        chamadas = [r for r in hist if r.get("kind") == "call" and r["id_no"] == id_no]
-        caches = sum(1 for r in hist if r.get("kind") == "cache" and r["id_no"] == id_no)
-    passos = [r for r in hist if r.get("kind") == "node" and r["id_no"] == id_no][-8:]
-    return {"id": id_no, "rotulo": info[1], "faixa": info[2], "motor": info[3], "como": info[4],
-            "usa": [b for a, b in USES if a == id_no], "usado_por": [a for a, b in USES if b == id_no],
-            "vivos": vv, "chamadas": chamadas[-8:][::-1], "n_chamadas": len(chamadas), "n_cache": caches,
-            "passos": [{"t": r["t"], "detalhe": r.get("detail"), "fluxo": r.get("flow")} for r in passos][::-1],
-            "gpu": monitor_atual.get("gpu") if id_no in ("qwen3", "qwen_vl", "whisper", "sdxl") else None,
-            "extras": graph_data.extras(id_no, chamadas, hist_monitor),
-            "ollama": monitor_atual.get("ollama") if id_no in ("qwen3", "qwen_vl") else None}
+        calls = [r for r in hist if r.get("kind") == "call" and r["id_no"] == id_node]
+        caches = sum(1 for r in hist if r.get("kind") == "cache" and r["id_no"] == id_node)
+    steps = [r for r in hist if r.get("kind") == "node" and r["id_no"] == id_node][-8:]
+    return {"id": id_node, "rotulo": info[1], "faixa": info[2], "motor": info[3], "como": info[4],
+            "usa": [b for a, b in USES if a == id_node], "usado_por": [a for a, b in USES if b == id_node],
+            "vivos": vv, "chamadas": calls[-8:][::-1], "n_chamadas": len(calls), "n_cache": caches,
+            "passos": [{"t": r["t"], "detalhe": r.get("detail"), "fluxo": r.get("flow")} for r in steps][::-1],
+            "gpu": monitor_current.get("gpu") if id_node in ("qwen3", "qwen_vl", "whisper", "sdxl") else None,
+            "extras": graph_data.extras(id_node, calls, hist_monitor),
+            "ollama": monitor_current.get("ollama") if id_node in ("qwen3", "qwen_vl") else None}

@@ -45,12 +45,12 @@ def _version(app: str) -> int:
 
 def _stop_services() -> list[str]:
     """Para os serviços do PC que seguram VRAM durante o treino. → os que estavam ativos (religados no fim)."""
-    parados = []
+    stopped = []
     for s in ("agent-worker",):
         if subprocess.run(["systemctl", "--user", "is-active", "--quiet", s]).returncode == 0:
             subprocess.run(["systemctl", "--user", "stop", s], check=False)
-            parados.append(s)
-    return parados
+            stopped.append(s)
+    return stopped
 
 
 def missing(app: str) -> dict[str, int]:
@@ -58,7 +58,7 @@ def missing(app: str) -> dict[str, int]:
     return {t: max(0, index.MINIMUM[t] - s.get(t, {}).get("sft", 0)) for t in TASKS_APP[app]}
 
 
-def train(app: str, base: str = BASE, epocas: float = 2.0, forcar: bool = False) -> dict:
+def train(app: str, base: str = BASE, epochs: float = 2.0, forcar: bool = False) -> dict:
     from esteira.core import locks
     from esteira.studio import training
     from esteira.ai import local
@@ -72,41 +72,41 @@ def train(app: str, base: str = BASE, epocas: float = 2.0, forcar: bool = False)
         raise SystemExit("ambiente de treino ausente: ~/.local/bin/uv venv .venv-treino --python 3.12 && "
                          "~/.local/bin/uv pip install --python .venv-treino/bin/python unsloth gguf")
     exp = X.last() or Path(X.export()["pasta"])
-    nome = f"{ACRONYM[app]}-v{_version(app)}"
-    saida = R.FOLDER / "treinos" / nome
-    dados = saida / "dados"
-    dados.mkdir(parents=True, exist_ok=True)
+    name = f"{ACRONYM[app]}-v{_version(app)}"
+    output = R.FOLDER / "treinos" / name
+    data = output / "dados"
+    data.mkdir(parents=True, exist_ok=True)
     n = 0
     for t in TASKS_APP[app]:
-        for lado in ("train", "val"):
-            arq = exp / "sft" / f"{t}.{lado}.jsonl"
-            if arq.exists() and arq.stat().st_size:
-                shutil.copy(arq, dados / arq.name)
-                n += lado == "train" and sum(1 for _ in arq.open())
+        for side in ("train", "val"):
+            file = exp / "sft" / f"{t}.{side}.jsonl"
+            if file.exists() and file.stat().st_size:
+                shutil.copy(file, data / file.name)
+                n += side == "train" and sum(1 for _ in file.open())
     if not n:
         raise SystemExit(f"{app}: a exportação {exp.name} não tem casos de treino")
     if "machine" not in locks._held:  # o `./dark` já ocupa a vaga ao iniciar; segunda trava no mesmo processo trava
-        locks.acquire("machine", f"treino {nome}")
+        locks.acquire("machine", f"treino {name}")
     local.free_gpu()
-    parados = _stop_services()  # worker da plataforma (+ voz XTTS) ocupa ~3 GB de VRAM
+    stopped = _stop_services()  # worker da plataforma (+ voz XTTS) ocupa ~3 GB de VRAM
     try:
-        subprocess.run([str(py), str(ROOT / "esteira/ai/train_lora.py"), str(dados), str(saida), "--base", base,
-                        "--epochs", str(epocas), "--adapter-only"], check=True,
+        subprocess.run([str(py), str(ROOT / "esteira/ai/train_lora.py"), str(data), str(output), "--base", base,
+                        "--epochs", str(epochs), "--adapter-only"], check=True,
                        env={**__import__("os").environ, "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
     finally:
-        for s in parados:
+        for s in stopped:
             subprocess.run(["systemctl", "--user", "start", s], check=False)
-    info = json.loads((saida / "training.json").read_text())
-    destino = _folder() / f"{nome}.gguf"
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(info["adapter"], destino)
+    info = json.loads((output / "training.json").read_text())
+    destination = _folder() / f"{name}.gguf"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(info["adapter"], destination)
     from esteira.n1 import effectcraft, filmcraft, photocraft
-    manifesto = {"nome": nome, "app": app, "base": base, "base_gguf": BASE_GGUF, "em": datetime.now().isoformat(),
+    manifesto = {"nome": name, "app": app, "base": base, "base_gguf": BASE_GGUF, "em": datetime.now().isoformat(),
                  "exportacao": exp.name, "hash_exportacao": X.hash_export(exp), "casos_treino": n,
                  "n1": {"filmcraft": filmcraft.VERSION, "photocraft": photocraft.VERSION,
                         "effectcraft": effectcraft.VERSION}[app],
                  "perda": info.get("loss"), "perda_val": info.get("val_loss"), "forcado": forcar, "promovido": False}
-    destino.with_suffix(".json").write_text(json.dumps(manifesto, ensure_ascii=False, indent=1))
+    destination.with_suffix(".json").write_text(json.dumps(manifesto, ensure_ascii=False, indent=1))
     return manifesto
 
 
@@ -116,63 +116,63 @@ def _base_gguf() -> Path:
         else llama.MODELS_DIR / f"{BASE_GGUF}.gguf"
 
 
-def _write_presets(entradas: dict[str, Path]) -> None:
+def _write_presets(inputs: dict[str, Path]) -> None:
     from esteira.ai import llama
     base = next(p for p in _base_gguf().parent.glob("*.gguf") if not p.name.startswith("mmproj")) \
         if _base_gguf().parent.is_dir() else _base_gguf()
-    linhas = ["; gerado por esteira/dataset/app_training.py: base + adaptador LoRA por app", ""]
-    for nome, adaptador in sorted(entradas.items()):
-        linhas += [f"[{nome}]", f"model = {base}", f"lora = {adaptador}", ""]
+    lines = ["; gerado por esteira/dataset/app_training.py: base + adaptador LoRA por app", ""]
+    for name, adapter in sorted(inputs.items()):
+        lines += [f"[{name}]", f"model = {base}", f"lora = {adapter}", ""]
     llama.PRESETS.parent.mkdir(parents=True, exist_ok=True)
-    llama.PRESETS.write_text("\n".join(linhas))
+    llama.PRESETS.write_text("\n".join(lines))
 
 
 def _read_presets() -> dict[str, Path]:
     from esteira.ai import llama
     if not llama.PRESETS.exists():
         return {}
-    saida, atual = {}, None
-    for linha in llama.PRESETS.read_text().splitlines():
-        if m := re.match(r"^\[(.+)\]$", linha.strip()):
-            atual = m.group(1)
-        elif atual and linha.startswith("lora = "):
-            saida[atual] = Path(linha.split("=", 1)[1].strip())
-    return saida
+    output, current = {}, None
+    for line in llama.PRESETS.read_text().splitlines():
+        if m := re.match(r"^\[(.+)\]$", line.strip()):
+            current = m.group(1)
+        elif current and line.startswith("lora = "):
+            output[current] = Path(line.split("=", 1)[1].strip())
+    return output
 
 
 def promoted(app: str) -> str | None:
-    nome = f"{ACRONYM[app]}-atual"
-    return nome if nome in _read_presets() else None
+    name = f"{ACRONYM[app]}-atual"
+    return name if name in _read_presets() else None
 
 
 def promote(app: str, nome: str, n: int | None = None) -> dict:
     """Portão de promoção: base × candidato no ouro das tarefas da app (bancada). Promove só se ganhar."""
     from esteira import bench
     from esteira.ai import llama
-    adaptador = _folder() / f"{nome}.gguf"
-    if not adaptador.exists():
-        raise SystemExit(f"adaptador inexistente: {adaptador}")
+    adapter = _folder() / f"{nome}.gguf"
+    if not adapter.exists():
+        raise SystemExit(f"adaptador inexistente: {adapter}")
     presets = _read_presets()
-    candidato = f"{nome}-candidato"
-    _write_presets({**presets, candidato: adaptador})
+    candidate = f"{nome}-candidato"
+    _write_presets({**presets, candidate: adapter})
     if not llama.restart():
         raise SystemExit("o roteador não voltou com o preset novo")
-    tarefas = [f"n1_{t}" for t in TASKS_APP[app] if bench.cases(f"n1_{t}")]
-    if not tarefas:
+    tasks = [f"n1_{t}" for t in TASKS_APP[app] if bench.cases(f"n1_{t}")]
+    if not tasks:
         raise SystemExit(f"{app}: sem casos no ouro para comparar")
-    res = bench.run([BASE_GGUF, candidato], tarefas, n)
-    nota = {m: sum(x["nota"] for x in info["tarefas"].values()) / max(len(info["tarefas"]), 1)
+    res = bench.run([BASE_GGUF, candidate], tasks, n)
+    note = {m: sum(x["nota"] for x in info["tarefas"].values()) / max(len(info["tarefas"]), 1)
             for m, info in res["modelos"].items()}
-    ganhou = nota.get(candidato, 0) > nota.get(BASE_GGUF, 0)
-    presets.pop(candidato, None)
-    if ganhou:
-        presets[f"{ACRONYM[app]}-atual"] = adaptador
+    won = note.get(candidate, 0) > note.get(BASE_GGUF, 0)
+    presets.pop(candidate, None)
+    if won:
+        presets[f"{ACRONYM[app]}-atual"] = adapter
     _write_presets(presets)
     llama.restart()
-    man = adaptador.with_suffix(".json")
+    man = adapter.with_suffix(".json")
     if man.exists():
         d = json.loads(man.read_text())
-        d.update(promovido=ganhou, bancada={"base": nota.get(BASE_GGUF), "adaptador": nota.get(candidato),
-                                            "tarefas": tarefas, "em": datetime.now().isoformat()})
+        d.update(promovido=won, bancada={"base": note.get(BASE_GGUF), "adaptador": note.get(candidate),
+                                            "tarefas": tasks, "em": datetime.now().isoformat()})
         man.write_text(json.dumps(d, ensure_ascii=False, indent=1))
-    return {"nome": nome, "promovido": ganhou, "notas": nota}
+    return {"nome": nome, "promovido": won, "notas": note}
