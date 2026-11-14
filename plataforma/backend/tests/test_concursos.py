@@ -10,7 +10,7 @@ from backend.core.config import Settings
 from backend.main import create_app
 from concursos import schedule
 from concursos.api import IA
-from concursos.exams import Concursos
+from concursos.exams import Exams
 
 HOJE = date(2026, 11, 2)  # segunda-feira
 PROVA = date(2027, 1, 24)
@@ -93,43 +93,43 @@ def _pdf() -> bytes:
 
 
 def test_cronograma_distribui_ate_uma_semana_antes() -> None:
-    tarefas, resumo = schedule.gerar(ESTRUTURA, HOJE, PROVA, 120, 240)
-    datas = {t["data"] for t in tarefas}
-    conteudo = [t for t in tarefas if t["tipo"] == "conteudo"]
-    assert resumo["fator"] == 1.0 and resumo["conteudo_pendente"] == 0
-    assert max(t["data"] for t in conteudo) <= (PROVA - timedelta(7)).isoformat()
+    tasks, summary = schedule.generate(ESTRUTURA, HOJE, PROVA, 120, 240)
+    datas = {t["data"] for t in tasks}
+    content = [t for t in tasks if t["tipo"] == "conteudo"]
+    assert summary["fator"] == 1.0 and summary["conteudo_pendente"] == 0
+    assert max(t["data"] for t in content) <= (PROVA - timedelta(7)).isoformat()
     assert PROVA.isoformat() not in datas
     # ordem do fluxo: Interpretação antes de Sintaxe
-    titulos = [t["titulo"] for t in conteudo if t["disciplina"] == "Língua Portuguesa"]
+    titulos = [t["titulo"] for t in content if t["disciplina"] == "Língua Portuguesa"]
     assert titulos[0].endswith("Interpretação (1/4)")
     # nenhum dia passa da capacidade
     for d in datas:
-        dia = date.fromisoformat(d)
-        cap = 240 if dia.weekday() >= 5 else 120
-        assert sum(t["minutos"] for t in tarefas if t["data"] == d) <= cap
-    tipos = {t["tipo"] for t in tarefas}
-    assert {"conteudo", "revisao", "simulado", "discursiva", "final"} <= tipos
-    assert any(t["titulo"].startswith("Véspera") and t["data"] == "2027-01-23" for t in tarefas)
+        day = date.fromisoformat(d)
+        cap = 240 if day.weekday() >= 5 else 120
+        assert sum(t["minutos"] for t in tasks if t["data"] == d) <= cap
+    kinds = {t["tipo"] for t in tasks}
+    assert {"conteudo", "revisao", "simulado", "discursiva", "final"} <= kinds
+    assert any(t["titulo"].startswith("Véspera") and t["data"] == "2027-01-23" for t in tasks)
 
 
 def test_cronograma_comprime_quando_falta_tempo() -> None:
-    _, resumo = schedule.gerar(ESTRUTURA, PROVA - timedelta(21), PROVA, 60, 60)
-    assert resumo["fator"] < 1 and resumo["conteudo_pendente"] == 0
+    _, summary = schedule.generate(ESTRUTURA, PROVA - timedelta(21), PROVA, 60, 60)
+    assert summary["fator"] < 1 and summary["conteudo_pendente"] == 0
 
 
 @pytest.fixture
 def app_concursos(tmp_path: Path) -> tuple[TestClient, list[dict[str, Any]]]:
     s = Settings(client_api_keys=CLIENT_API_KEY, concursos_dir=str(tmp_path))
     app = create_app(settings=s)
-    pedidos: list[dict[str, Any]] = []
+    requests: list[dict[str, Any]] = []
 
     async def executar(pedido: dict[str, Any]) -> dict[str, Any]:
-        pedidos.append(pedido)
+        requests.append(pedido)
         return ESTRUTURA
 
-    app.state.concursos = Concursos(tmp_path, hoje=lambda: HOJE)
+    app.state.concursos = Exams(tmp_path, hoje=lambda: HOJE)
     app.state.concursos_ia = IA(executar, lambda: None)
-    return TestClient(app, headers=AUTH_HEADERS), pedidos
+    return TestClient(app, headers=AUTH_HEADERS), requests
 
 
 def test_exige_chave(tmp_path: Path) -> None:
@@ -140,8 +140,8 @@ def test_exige_chave(tmp_path: Path) -> None:
 def test_fluxo_completo(
     app_concursos: tuple[TestClient, list[dict[str, Any]]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    api, pedidos = app_concursos
-    monkeypatch.setattr("concursos.exams.texto_pdf", lambda _: "EDITAL TJPB " * 100)
+    api, requests = app_concursos
+    monkeypatch.setattr("concursos.exams.text_pdf", lambda _: "EDITAL TJPB " * 100)
     c = api.post(
         "/api/concursos",
         json={"nome": "TJPB 2026", "cargo": "TI – Desenvolvimento", "banca": "FGV"},
@@ -158,14 +158,14 @@ def test_fluxo_completo(
 
     r = api.post(f"/api/concursos/{cid}/plano")
     assert r.status_code == 202
-    assert "TI – Desenvolvimento" in pedidos[0]["prompt"] and "EDITAL TJPB" in pedidos[0]["prompt"]
+    assert "TI – Desenvolvimento" in requests[0]["prompt"] and "EDITAL TJPB" in requests[0]["prompt"]
     c = api.get(f"/api/concursos/{cid}").json()
     assert c["geracao"]["estado"] == "pronto" and c["data_prova"] == "2027-01-24"
     assert [p["titulo"] for p in c["prazos"]] == ["Fim das inscrições", "Pagamento da GRJ"]
     assert c["tarefas"] and c["situacao"]["dias_para_prova"] == 83
 
-    lista = api.get("/api/concursos").json()
-    assert lista[0]["proximo_prazo"]["titulo"] == "Fim das inscrições"
+    items = api.get("/api/concursos").json()
+    assert items[0]["proximo_prazo"]["titulo"] == "Fim das inscrições"
 
     # marcar feita, adiantar o relógio e replanejar: a feita fica, o resto vai de hoje em diante
     primeira = c["tarefas"][0]
@@ -173,12 +173,12 @@ def test_fluxo_completo(
         "feito"
     ]
     api.app.state.concursos.hoje = lambda: HOJE + timedelta(5)  # type: ignore[attr-defined]
-    alertas = api.get("/api/concursos/alertas").json()
-    assert any("atrasada" in a["texto"] for a in alertas)
-    assert any("Fim das inscrições em 11 dias" in a["texto"] for a in alertas)
+    alerts = api.get("/api/concursos/alertas").json()
+    assert any("atrasada" in a["texto"] for a in alerts)
+    assert any("Fim das inscrições em 11 dias" in a["texto"] for a in alerts)
     c = api.post(f"/api/concursos/{cid}/replanejar").json()
-    pendentes = [t for t in c["tarefas"] if not t["feito"]]
-    assert min(t["data"] for t in pendentes) == (HOJE + timedelta(5)).isoformat()
+    pending = [t for t in c["tarefas"] if not t["feito"]]
+    assert min(t["data"] for t in pending) == (HOJE + timedelta(5)).isoformat()
     assert sum(1 for t in c["tarefas"] if t.get("chave") == primeira["chave"]) == 1
 
     p = api.post(
@@ -193,7 +193,7 @@ def test_erro_do_claude_fica_no_concurso(
     app_concursos: tuple[TestClient, list[dict[str, Any]]], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     api, _ = app_concursos
-    monkeypatch.setattr("concursos.exams.texto_pdf", lambda _: "EDITAL " * 200)
+    monkeypatch.setattr("concursos.exams.text_pdf", lambda _: "EDITAL " * 200)
 
     async def falha(_: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("Claude Code falhou: limite da assinatura")

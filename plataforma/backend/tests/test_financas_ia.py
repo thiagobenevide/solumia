@@ -54,73 +54,73 @@ MERCADO_PAGO = (
     ],
 )
 def test_formatos_dos_bancos(texto: str, fatura: bool, esperado: list[tuple[float, str]]) -> None:
-    itens = statement.ler_csv(texto, fatura=fatura)
-    tipo = "cartao" if fatura else "corrente"
-    assert [(i["valor"], statement.forma_pagamento(i["descricao"], tipo)) for i in itens] == esperado
+    items = statement.read_csv(texto, fatura=fatura)
+    kind = "cartao" if fatura else "corrente"
+    assert [(i["valor"], statement.shape_payment(i["descricao"], kind)) for i in items] == esperado
 
 
 def test_inter_junta_historico_e_descricao() -> None:
-    assert statement.ler_csv(INTER)[0]["descricao"] == "Pix enviado - Padaria Bom Pão"
+    assert statement.read_csv(INTER)[0]["descricao"] == "Pix enviado - Padaria Bom Pão"
 
 
 def test_planilha_xlsx_do_itau() -> None:
     from openpyxl import Workbook
 
-    livro = Workbook()
-    folha = livro.active
-    folha.append(["Extrato Itaú"])
-    folha.append(["data", "lançamento", "ag./origem", "valor (R$)"])
-    folha.append([date(2026, 9, 3), "PIX TRANSF JOSE", "", -50.0])
-    folha.append([date(2026, 9, 4), "SALARIO", "", 3000.0])
+    book = Workbook()
+    sheet = book.active
+    sheet.append(["Extrato Itaú"])
+    sheet.append(["data", "lançamento", "ag./origem", "valor (R$)"])
+    sheet.append([date(2026, 9, 3), "PIX TRANSF JOSE", "", -50.0])
+    sheet.append([date(2026, 9, 4), "SALARIO", "", 3000.0])
     buf = io.BytesIO()
-    livro.save(buf)
-    itens = statement.ler_arquivo("itau.xlsx", buf.getvalue(), "corrente")
-    assert [(i["data"], i["valor"]) for i in itens] == [
+    book.save(buf)
+    items = statement.read_file("itau.xlsx", buf.getvalue(), "corrente")
+    assert [(i["data"], i["valor"]) for i in items] == [
         ("2026-09-03", -50.0),
         ("2026-09-04", 3000.0),
     ]
 
 
 def test_formato_desconhecido_vai_para_a_ia() -> None:
-    with pytest.raises(statement.PrecisaIA):
-        statement.ler_arquivo("x.csv", b"coluna;outra\n1;2\n", "corrente")
+    with pytest.raises(statement.NeedsAi):
+        statement.read_file("x.csv", b"coluna;outra\n1;2\n", "corrente")
 
 
 def test_financiamento_price_e_sac() -> None:
-    price = scenarios.financiamento(40000, 0.24, 48, "price")
+    price = scenarios.financing(40000, 0.24, 48, "price")
     assert price["primeira"] == price["ultima"] and 1250 < price["primeira"] < 1300
-    sac = scenarios.financiamento(40000, 0.24, 48, "sac")
+    sac = scenarios.financing(40000, 0.24, 48, "sac")
     assert sac["primeira"] > sac["ultima"] and sac["juros"] < price["juros"]
 
 
 def test_faixas_mcmv() -> None:
-    assert scenarios.faixa_mcmv(2500)["faixa"] == "Faixa 1"
-    assert scenarios.faixa_mcmv(9000)["faixa"] == "Faixa 4"
-    assert scenarios.faixa_mcmv(20000) is None
+    assert scenarios.band_mcmv(2500)["faixa"] == "Faixa 1"
+    assert scenarios.band_mcmv(9000)["faixa"] == "Faixa 4"
+    assert scenarios.band_mcmv(20000) is None
 
 
 async def _llm_falso(mensagens: list[dict[str, str]]) -> str:
-    sistema = mensagens[0]["content"]
-    if "parâmetros de simulação" in sistema:
+    system = mensagens[0]["content"]
+    if "parâmetros de simulação" in system:
         return (
             '<think>…</think>{"descricao": "EcoSport 2015", "tipo": "carro", "valor": 45000, '
             '"marca": "Ford", "modelo": "EcoSport", "ano": 2015}'
         )
-    if "planejador financeiro" in sistema:
+    if "planejador financeiro" in system:
         return "Em 11 meses você junta. Financiar custa juros."
-    if "classifica lançamentos" in sistema:
-        pedido = json.loads(mensagens[1]["content"])
-        gasto = next(c["cat"] for c in pedido["categorias"] if c["nome"] == "Restaurantes")
-        renda = next(c["cat"] for c in pedido["categorias"] if c["tipo"] == "receita")
+    if "classifica lançamentos" in system:
+        request = json.loads(mensagens[1]["content"])
+        spent = next(c["cat"] for c in request["categorias"] if c["nome"] == "Restaurantes")
+        renda = next(c["cat"] for c in request["categorias"] if c["tipo"] == "receita")
         return json.dumps(
             {
                 "itens": [
                     {
                         "n": t["n"],
-                        "cat": renda if t["sentido"] == "entrada" else gasto,
+                        "cat": renda if t["sentido"] == "entrada" else spent,
                         "forma": "debito",
                     }
-                    for t in pedido["lancamentos"]
+                    for t in request["lancamentos"]
                 ]
             }
         )
@@ -163,36 +163,36 @@ def _esperar(api: TestClient, tid: str) -> dict:
 
 
 def _salario_e_gastos(api: TestClient, conta: str) -> None:
-    hoje = date.today()
-    linhas = ["Data;Descrição;Valor"]
+    today = date.today()
+    lines = ["Data;Descrição;Valor"]
     for i in range(1, 7):  # seis meses completos: 6.000 de receita e 4.500 de gasto
-        a, m = divmod(hoje.month - 1 - i, 12)
-        mes = f"{hoje.year + a}-{m + 1:02d}"
-        linhas += [f"{mes}-05;SALARIO;6000,00", f"{mes}-10;MERCADO;-4500,00"]
+        a, m = divmod(today.month - 1 - i, 12)
+        month = f"{today.year + a}-{m + 1:02d}"
+        lines += [f"{month}-05;SALARIO;6000,00", f"{month}-10;MERCADO;-4500,00"]
     r = api.post(
         "/api/financas/importar",
         data={"conta_id": conta},
-        files={"arquivo": ("e.csv", "\n".join(linhas).encode())},
+        files={"arquivo": ("e.csv", "\n".join(lines).encode())},
     )
     assert r.status_code == 200 and r.json()["importadas"] == 12
 
 
 def test_importar_guarda_original_no_arquivos_e_pdf_vai_para_ia(api: TestClient) -> None:
-    conta = api.post("/api/financas/contas", json={"nome": "Nubank"}).json()["id"]
+    account = api.post("/api/financas/contas", json={"nome": "Nubank"}).json()["id"]
     r = api.post(
         "/api/financas/importar",
-        data={"conta_id": conta},
+        data={"conta_id": account},
         files={"arquivo": ("nubank.csv", NUBANK_CONTA.encode())},
     )
     assert r.json()["importadas"] == 2
-    arquivos = api.get("/api/arquivos").json()
-    assert [(a["nome_original"], a["pasta"], a["tipo"]) for a in arquivos] == [
+    files = api.get("/api/arquivos").json()
+    assert [(a["nome_original"], a["pasta"], a["tipo"]) for a in files] == [
         ("nubank.csv", "Finanças/Extratos/Nubank", "planilha")
     ]
     # formato que o código não lê: tarefa da IA
     r = api.post(
         "/api/financas/importar",
-        data={"conta_id": conta},
+        data={"conta_id": account},
         files={"arquivo": ("estranho.csv", b"a;b\n1;2\n")},
     )
     assert r.status_code == 202
@@ -201,10 +201,10 @@ def test_importar_guarda_original_no_arquivos_e_pdf_vai_para_ia(api: TestClient)
 
 
 def test_categorizar_com_ia(api: TestClient) -> None:
-    conta = api.post("/api/financas/contas", json={"nome": "Inter"}).json()["id"]
+    account = api.post("/api/financas/contas", json={"nome": "Inter"}).json()["id"]
     r = api.post(
         "/api/financas/importar",
-        data={"conta_id": conta},
+        data={"conta_id": account},
         files={"arquivo": ("inter.csv", INTER.encode())},
     ).json()
     assert "ids" not in r
@@ -218,16 +218,16 @@ def test_categorizar_com_ia(api: TestClient) -> None:
 def test_extrato_completo_na_conta_do_cartao(api: TestClient) -> None:
     """Extrato do banco digital (Pix, depósito, cartão) importado na conta do cartão: o sinal fica
     e a forma vem do texto, não é tudo `credito`."""
-    conta = api.post("/api/financas/contas", json={"nome": "Nu", "tipo": "cartao"}).json()["id"]
-    texto = NUBANK_CONTA + (
+    account = api.post("/api/financas/contas", json={"nome": "Nu", "tipo": "cartao"}).json()["id"]
+    text = NUBANK_CONTA + (
         "07/09/2026,-50.00,ghi,Compra no débito - Padaria\n"
         "08/09/2026,-80.00,jkl,Uber Trip\n"
         "09/09/2026,300.00,mno,Depósito recebido\n"
     )
     r = api.post(
         "/api/financas/importar",
-        data={"conta_id": conta},
-        files={"arquivo": ("nu.csv", texto.encode())},
+        data={"conta_id": account},
+        files={"arquivo": ("nu.csv", text.encode())},
     )
     assert r.status_code == 200, r.text
     ts = api.get("/api/financas/transacoes").json()
@@ -243,10 +243,10 @@ def test_extrato_completo_na_conta_do_cartao(api: TestClient) -> None:
 def test_corrigir_o_que_a_importacao_antiga_gravou(api: TestClient) -> None:
     """Simula a importação antiga (tudo invertido e `credito` no cartão) e conserta pelo original
     guardado no Arquivos; reimportar o mesmo arquivo depois não duplica."""
-    conta = api.post("/api/financas/contas", json={"nome": "Nu", "tipo": "cartao"}).json()["id"]
+    account = api.post("/api/financas/contas", json={"nome": "Nu", "tipo": "cartao"}).json()["id"]
     api.post(
         "/api/financas/importar",
-        data={"conta_id": conta},
+        data={"conta_id": account},
         files={"arquivo": ("nu.csv", NUBANK_CONTA.encode())},
     )
     arm = api.app.state.financas
@@ -257,38 +257,38 @@ def test_corrigir_o_que_a_importacao_antiga_gravou(api: TestClient) -> None:
     assert t["estado"] == "pronto", t
     assert (t["resultado"]["sinais"], t["resultado"]["formas"]) == (2, 2)
     ts = api.get("/api/financas/transacoes").json()
-    pares = sorted((x["valor"], x["forma_pagamento"]) for x in ts)
-    assert pares == [(-120.5, "pix"), (5000.0, "pix")]
+    pairs = sorted((x["valor"], x["forma_pagamento"]) for x in ts)
+    assert pairs == [(-120.5, "pix"), (5000.0, "pix")]
     assert all(x["categoria_id"] for x in ts)
     r = api.post(
         "/api/financas/importar",
-        data={"conta_id": conta},
+        data={"conta_id": account},
         files={"arquivo": ("nu.csv", NUBANK_CONTA.encode())},
     ).json()
     assert r["duplicadas"] == 2
 
 
 def test_parcelamentos(api: TestClient) -> None:
-    conta = api.post("/api/financas/contas", json={"nome": "Cartão", "tipo": "cartao"}).json()["id"]
-    hoje = date.today()
-    linhas = ["date,title,amount"]
+    account = api.post("/api/financas/contas", json={"nome": "Cartão", "tipo": "cartao"}).json()["id"]
+    today = date.today()
+    lines = ["date,title,amount"]
     for n in (1, 2, 3):
-        a, m = divmod(hoje.month - 1 - (3 - n), 12)
-        linhas.append(f"{hoje.year + a}-{m + 1:02d}-12,Notebook Loja - Parcela {n}/10,350.00")
+        a, m = divmod(today.month - 1 - (3 - n), 12)
+        lines.append(f"{today.year + a}-{m + 1:02d}-12,Notebook Loja - Parcela {n}/10,350.00")
     api.post(
         "/api/financas/importar",
-        data={"conta_id": conta},
-        files={"arquivo": ("fatura.csv", "\n".join(linhas).encode())},
+        data={"conta_id": account},
+        files={"arquivo": ("fatura.csv", "\n".join(lines).encode())},
     )
     [p] = api.get("/api/financas/parcelamentos").json()
     assert (p["pagas"], p["restantes"], p["valor_restante"], p["ativo"]) == (3, 7, 2450.0, True)
 
 
 def test_ecosport_juntar_ou_financiar(api: TestClient) -> None:
-    conta = api.post("/api/financas/contas", json={"nome": "BB", "saldo_inicial": 10000}).json()[
+    account = api.post("/api/financas/contas", json={"nome": "BB", "saldo_inicial": 10000}).json()[
         "id"
     ]
-    _salario_e_gastos(api, conta)
+    _salario_e_gastos(api, account)
     r = api.post("/api/financas/cenarios/simular", json={"valor": 45000, "tipo": "carro"}).json()
     assert r["realidade"]["sobra_media"] == 1500.0
     assert r["realidade"]["reserva"] == 19000.0  # 10.000 + 6 × 1.500
@@ -314,14 +314,14 @@ def test_ecosport_juntar_ou_financiar(api: TestClient) -> None:
 
 
 def test_conversa_usa_os_dados_e_o_modo_rapido(api: TestClient) -> None:
-    conta = api.post("/api/financas/contas", json={"nome": "BB", "saldo_inicial": 10000}).json()[
+    account = api.post("/api/financas/contas", json={"nome": "BB", "saldo_inicial": 10000}).json()[
         "id"
     ]
-    _salario_e_gastos(api, conta)
-    vistos: list[list[dict[str, str]]] = []
+    _salario_e_gastos(api, account)
+    seen: list[list[dict[str, str]]] = []
 
     async def rapido(mensagens: list[dict[str, str]]) -> str:
-        vistos.append(mensagens)
+        seen.append(mensagens)
         return "Sobra uns 1.500 por mês."
 
     api.app.state.financas_llms["local_rapido"] = rapido
@@ -334,8 +334,8 @@ def test_conversa_usa_os_dados_e_o_modo_rapido(api: TestClient) -> None:
         },
     )
     assert r.json() == {"resposta": "Sobra uns 1.500 por mês."}
-    sistema = vistos[0][0]["content"]
-    assert '"sobra": 1500.0' in sistema and "EcoSport de 45 mil" in sistema
-    assert vistos[0][-1] == {"role": "user", "content": "Quanto sobra por mês?"}
-    vazia = api.post("/api/financas/cenarios/conversar", json={"mensagens": []})
-    assert vazia.status_code == 422
+    system = seen[0][0]["content"]
+    assert '"sobra": 1500.0' in system and "EcoSport de 45 mil" in system
+    assert seen[0][-1] == {"role": "user", "content": "Quanto sobra por mês?"}
+    empty = api.post("/api/financas/cenarios/conversar", json={"mensagens": []})
+    assert empty.status_code == 422

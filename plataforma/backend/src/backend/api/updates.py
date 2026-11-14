@@ -21,27 +21,27 @@ router = APIRouter(
     dependencies=[Depends(require_client_api_key)],
 )
 
-PACOTES = {"android": "agent.apk", "linux": "agent-linux.tar.gz", "relogio": "relogio.apk"}
+PACKAGES = {"android": "agent.apk", "linux": "agent-linux.tar.gz", "relogio": "relogio.apk"}
 
 
-def _pasta(settings) -> Path:
+def _folder(settings) -> Path:
     return Path(settings.atualizacoes_dir).expanduser()
 
 
 @router.get("")
-def versao(settings: SettingsDep) -> dict:
+def version(settings: SettingsDep) -> dict:
     """Última versão publicada; `build` 0 = nada publicado ainda."""
-    arq = _pasta(settings) / "versao.json"
-    dados = json.loads(arq.read_text()) if arq.is_file() else {"build": 0}
-    dados["plataformas"] = [p for p, nome in PACOTES.items() if (_pasta(settings) / nome).is_file()]
-    return dados
+    file = _folder(settings) / "versao.json"
+    data = json.loads(file.read_text()) if file.is_file() else {"build": 0}
+    data["plataformas"] = [p for p, name in PACKAGES.items() if (_folder(settings) / name).is_file()]
+    return data
 
 
 @router.get("/{plataforma}")
-def baixar(plataforma: str, settings: SettingsDep) -> FileResponse:
-    nome = PACOTES.get(plataforma)
-    if not nome or not (_pasta(settings) / nome).is_file():
+def download(plataforma: str, settings: SettingsDep) -> FileResponse:
+    name = PACKAGES.get(plataforma)
+    if not name or not (_folder(settings) / name).is_file():
         raise openai_error(404, f"Sem pacote publicado para {plataforma}.", "not_found")
     return FileResponse(
-        _pasta(settings) / nome, filename=nome, media_type="application/octet-stream"
+        _folder(settings) / name, filename=name, media_type="application/octet-stream"
     )

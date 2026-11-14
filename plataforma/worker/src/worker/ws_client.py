@@ -20,13 +20,13 @@ from shared.protocol import (
     parse_gateway_message,
 )
 from worker import pc, resources
-from worker.coding import TAREFAS as TAREFAS_CODIGO
-from worker.coding import Codigo
-from worker.claude_accounts import TAREFAS as TAREFAS_CONTAS
-from worker.claude_accounts import Contas
+from worker.coding import TASKS as TAREFAS_CODIGO
+from worker.coding import Code
+from worker.claude_accounts import TASKS as TAREFAS_CONTAS
+from worker.claude_accounts import Accounts
 from worker.core.config import WorkerSettings
 from worker.providers.base import Provider
-from worker.voice import TAREFAS, Voz
+from worker.voice import TASKS, Voice
 
 logger = logging.getLogger("worker.ws_client")
 
@@ -39,17 +39,17 @@ class WorkerClient:
     """
 
     def __init__(
-        self, settings: WorkerSettings, provider: Provider, voz: Voz | None = None
+        self, settings: WorkerSettings, provider: Provider, voice: Voice | None = None
     ) -> None:
         self._settings = settings
         self._provider = provider
-        self._voz = voz or Voz(settings)
+        self._voz = voice or Voice(settings)
         self._background_tasks: set[asyncio.Task[None]] = set()
         self._websocket: websockets.WebSocketClientProtocol | None = None
         # Sessões do Claude Code sobrevivem a reconexões: a etapa vai pela conexão do momento.
-        self._codigo = Codigo(settings, self._emitir_codigo)
+        self._codigo = Code(settings, self._emitir_codigo)
         # conta do Claude Code ativa (troca pelo app): vale para todo `claude` deste processo
-        self._contas = Contas(settings.claude_contas_dir, settings.codigo_claude_bin)
+        self._contas = Accounts(settings.claude_contas_dir, settings.codigo_claude_bin)
 
     async def run_forever(self) -> None:
         backoff = self._settings.reconnect_min_backoff_seconds
@@ -108,8 +108,8 @@ class WorkerClient:
         interval = self._settings.heartbeat_interval_seconds
         while True:
             await asyncio.sleep(interval)
-            uso = await asyncio.to_thread(resources.coletar)
-            await websocket.send(Heartbeat(recursos=uso).model_dump_json())
+            usage = await asyncio.to_thread(resources.collect)
+            await websocket.send(Heartbeat(recursos=usage).model_dump_json())
 
     async def _receive_loop(self, websocket: websockets.WebSocketClientProtocol) -> None:
         async for raw_message in websocket:
@@ -129,25 +129,25 @@ class WorkerClient:
         self, websocket: websockets.WebSocketClientProtocol, message: ChatRequest
     ) -> None:
         try:
-            tarefa = message.payload.get("task")
-            if tarefa in TAREFAS:
-                payload = await self._voz.executar(tarefa, message.payload)
-            elif tarefa in TAREFAS_CODIGO:
-                payload = await self._codigo.executar(tarefa, message.payload)
-            elif tarefa in TAREFAS_CONTAS:
-                payload = await self._contas.executar(tarefa, message.payload)
-            elif tarefa == pc.TAREFA:
-                payload = await pc.executar(message.payload)
-            elif tarefa == "carregar_modelo":
+            task = message.payload.get("task")
+            if task in TASKS:
+                payload = await self._voz.executar(task, message.payload)
+            elif task in TAREFAS_CODIGO:
+                payload = await self._codigo.executar(task, message.payload)
+            elif task in TAREFAS_CONTAS:
+                payload = await self._contas.executar(task, message.payload)
+            elif task == pc.TASK:
+                payload = await pc.execute(message.payload)
+            elif task == "carregar_modelo":
                 payload = await self._provider.carregar(str(message.payload["modelo"]))
-            elif tarefa == "simular_spice":
+            elif task == "simular_spice":
                 payload = await run_ngspice(
                     str(message.payload["netlist"]), float(message.payload.get("timeout_s", 120))
                 )
-            elif tarefa == "reescrever":
+            elif task == "reescrever":
                 # Claude Code com a assinatura logada neste PC (nunca a API da Anthropic)
                 payload = await rewrite(message.payload)
-            elif tarefa == "claude_json":
+            elif task == "claude_json":
                 # genérico (ex.: plano de Concursos): prompt, sistema e esquema vêm do backend
                 p = message.payload
                 payload = await claude_json(
@@ -159,11 +159,11 @@ class WorkerClient:
                     effort=str(p.get("effort") or "high"),
                     tools=str(p.get("ferramentas") or ""),
                 )
-            elif tarefa == "buscar_web":
+            elif task == "buscar_web":
                 # do IP de casa: os buscadores barram o da VPS (see shared.web_search)
                 async with httpx.AsyncClient(follow_redirects=True) as cliente:
                     payload = await web_search.search(cliente, str(message.payload["consulta"]))
-            elif tarefa == "listar_modelos":
+            elif task == "listar_modelos":
                 payload = await self._provider.estado()
             else:
                 payload = await self._provider.chat_completion(message.payload)

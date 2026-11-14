@@ -17,44 +17,44 @@ from worker.core.config import WorkerSettings
 
 logger = logging.getLogger("worker.coding")
 
-TAREFAS = {
+TASKS = {
     "codigo.enviar", "codigo.parar", "codigo.git",
     "codigo.arvore", "codigo.arquivo", "codigo.buscar",
 }
 
 # Navegador de código (só leitura): commit pedido pelo app e tamanho máximo do arquivo enviado.
 _COMMIT = re.compile(r"^[0-9a-f]{4,40}$")
-_LIMITE_ARQUIVO = 400_000
-_LIMITE_BUSCA = 400
+_LIMIT_FILE = 400_000
+_LIMIT_SEARCH = 400
 # Observações = comentários: o termo tem que aparecer depois de um marcador de comentário;
 # sem termo, as marcações de pendência (TODO, FIXME...).
-_COMENTARIO = re.compile(r"(//|#|/\*|^\s*\*|<!--|^\s*--\s)")
-_MARCAS = re.compile(r"\b(TODO|FIXME|XXX|HACK|NOTE|OBS)\b")
+_COMMENT = re.compile(r"(//|#|/\*|^\s*\*|<!--|^\s*--\s)")
+_MARKS = re.compile(r"\b(TODO|FIXME|XXX|HACK|NOTE|OBS)\b")
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
-def linhas_novas(diff: str) -> list[int]:
+def lines_new(diff: str) -> list[int]:
     """Números (lado novo) das linhas adicionadas num diff `-U0` (hunk `+início,n` = n linhas)."""
-    novas: list[int] = []
-    for linha in diff.splitlines():
-        m = _HUNK.match(linha)
+    new: list[int] = []
+    for line in diff.splitlines():
+        m = _HUNK.match(line)
         if m:
-            inicio, n = int(m[1]), int(m[2] if m[2] is not None else 1)
-            novas.extend(range(inicio, inicio + n))
-    return novas
+            start, n = int(m[1]), int(m[2] if m[2] is not None else 1)
+            new.extend(range(start, start + n))
+    return new
 
 
-def mudancas(name_status: str) -> list[dict[str, str]]:
+def changes(name_status: str) -> list[dict[str, str]]:
     """`git diff-tree --name-status` → `[{caminho, status}]` (A, M, D, R…; renomeado: nome novo)."""
-    saida = []
-    for linha in name_status.splitlines():
-        partes = linha.split("\t")
-        if len(partes) >= 2:
-            saida.append({"caminho": partes[-1], "status": partes[0][:1]})
-    return saida
+    output = []
+    for line in name_status.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2:
+            output.append({"caminho": parts[-1], "status": parts[0][:1]})
+    return output
 
 # Vai junto do CLAUDE.md do repositório (carregado normalmente, pois roda na pasta do projeto).
-SISTEMA = """Você está sendo acionado a distância pelo app (módulo Código), sem ninguém no terminal.
+SYSTEM = """Você está sendo acionado a distância pelo app (módulo Código), sem ninguém no terminal.
 - Siga à risca o CLAUDE.md do repositório e os CLAUDE.md das pastas que tocar (economia de tokens, \
 validação com infra/scripts/verificar, estilo em português).
 - Não faça perguntas: decida pelo padrão do projeto e diga no fim o que assumiu.
@@ -63,66 +63,66 @@ mudanças que não são suas.
 - Só faça commit, push ou publicação quando o pedido mandar.
 - Termine com um resumo curto: o que mudou (arquivo:linha), o que falhou e o próximo passo."""
 
-_LIMITE_RESUMO = 600
+_LIMIT_SUMMARY = 600
 
-Emitir = Callable[[dict[str, Any]], Awaitable[None]]
-
-
-def _curto(texto: str, limite: int = _LIMITE_RESUMO) -> str:
-    texto = texto.strip()
-    return texto if len(texto) <= limite else texto[:limite] + "…"
+Issue = Callable[[dict[str, Any]], Awaitable[None]]
 
 
-def _resumo_ferramenta(nome: str, entrada: dict[str, Any]) -> str:
+def _short(text: str, limite: int = _LIMIT_SUMMARY) -> str:
+    text = text.strip()
+    return text if len(text) <= limite else text[:limite] + "…"
+
+
+def _summary_tool(nome: str, entry: dict[str, Any]) -> str:
     """O que a ferramenta vai fazer, numa linha: comando, arquivo ou padrão buscado."""
-    for chave in ("command", "file_path", "pattern", "path", "url", "description", "prompt"):
-        if entrada.get(chave):
-            return _curto(str(entrada[chave]), 300)
-    return _curto(json.dumps(entrada, ensure_ascii=False), 300)
+    for key in ("command", "file_path", "pattern", "path", "url", "description", "prompt"):
+        if entry.get(key):
+            return _short(str(entry[key]), 300)
+    return _short(json.dumps(entry, ensure_ascii=False), 300)
 
 
-def _texto_resultado(conteudo: Any) -> str:
-    if isinstance(conteudo, list):
-        return "\n".join(str(c.get("text", "")) for c in conteudo if isinstance(c, dict))
-    return str(conteudo or "")
+def _text_result(content: Any) -> str:
+    if isinstance(content, list):
+        return "\n".join(str(c.get("text", "")) for c in content if isinstance(c, dict))
+    return str(content or "")
 
 
-def etapas(msg: dict[str, Any]) -> list[dict[str, Any]]:
+def stages(msg: dict[str, Any]) -> list[dict[str, Any]]:
     """Uma linha do `--output-format stream-json` → etapas mostradas no app."""
-    tipo = msg.get("type")
-    if tipo == "system" and msg.get("subtype") == "init":
+    kind = msg.get("type")
+    if kind == "system" and msg.get("subtype") == "init":
         return [
             {"tipo": "inicio", "claude_sessao": msg.get("session_id"), "modelo": msg.get("model")}
         ]
-    if tipo == "assistant":
-        saida: list[dict[str, Any]] = []
-        for bloco in (msg.get("message") or {}).get("content") or []:
-            if bloco.get("type") == "text" and str(bloco.get("text", "")).strip():
-                saida.append({"tipo": "texto", "texto": bloco["text"]})
-            elif bloco.get("type") == "tool_use":
-                nome = str(bloco.get("name", ""))
-                saida.append(
+    if kind == "assistant":
+        output: list[dict[str, Any]] = []
+        for block in (msg.get("message") or {}).get("content") or []:
+            if block.get("type") == "text" and str(block.get("text", "")).strip():
+                output.append({"tipo": "texto", "texto": block["text"]})
+            elif block.get("type") == "tool_use":
+                name = str(block.get("name", ""))
+                output.append(
                     {
                         "tipo": "ferramenta",
-                        "nome": nome,
-                        "resumo": _resumo_ferramenta(nome, bloco.get("input") or {}),
+                        "nome": name,
+                        "resumo": _summary_tool(name, block.get("input") or {}),
                     }
                 )
-        return saida
-    if tipo == "user":
-        conteudo = (msg.get("message") or {}).get("content")
-        if not isinstance(conteudo, list):
+        return output
+    if kind == "user":
+        content = (msg.get("message") or {}).get("content")
+        if not isinstance(content, list):
             return []
         return [
             {
                 "tipo": "resultado",
                 "erro": bool(b.get("is_error")),
-                "resumo": _curto(_texto_resultado(b.get("content"))),
+                "resumo": _short(_text_result(b.get("content"))),
             }
-            for b in conteudo
+            for b in content
             if isinstance(b, dict) and b.get("type") == "tool_result"
         ]
-    if tipo == "result":
+    if kind == "result":
         return [
             {
                 "tipo": "fim",
@@ -137,16 +137,16 @@ def etapas(msg: dict[str, Any]) -> list[dict[str, Any]]:
     return []
 
 
-def _nome_seguro(nome: str) -> str:
+def _name_safe(nome: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]", "_", nome)[-80:] or "imagem.png"
 
 
-class Codigo:
+class Code:
     """Sessões em andamento (uma execução do `claude` por sessão por vez)."""
 
-    def __init__(self, settings: WorkerSettings, emitir: Emitir) -> None:
+    def __init__(self, settings: WorkerSettings, issue: Issue) -> None:
         self._settings = settings
-        self._emitir = emitir
+        self._emitir = issue
         self._processos: dict[str, asyncio.subprocess.Process] = {}
         self._tarefas: set[asyncio.Task[None]] = set()
 
@@ -158,16 +158,16 @@ class Codigo:
     def _imagens_dir(self) -> Path:
         return Path(self._settings.codigo_imagens_dir).expanduser()
 
-    async def executar(self, tarefa: str, payload: dict[str, Any]) -> dict[str, Any]:
-        if tarefa == "codigo.enviar":
+    async def executar(self, task: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if task == "codigo.enviar":
             return await self.enviar(payload)
-        if tarefa == "codigo.parar":
+        if task == "codigo.parar":
             return self.parar(str(payload["sessao_id"]))
-        if tarefa == "codigo.arvore":
+        if task == "codigo.arvore":
             return await self.arvore(str(payload.get("commit") or ""))
-        if tarefa == "codigo.arquivo":
+        if task == "codigo.arquivo":
             return await self.arquivo(str(payload["caminho"]), str(payload.get("commit") or ""))
-        if tarefa == "codigo.buscar":
+        if task == "codigo.buscar":
             return await self.buscar(
                 str(payload.get("termo") or ""),
                 str(payload.get("commit") or ""),
@@ -177,36 +177,36 @@ class Codigo:
 
     async def enviar(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Grava as imagens, sobe o `claude` e volta na hora; as etapas seguem por `evento`."""
-        sessao = str(payload["sessao_id"])
-        if sessao in self._processos:
+        session = str(payload["sessao_id"])
+        if session in self._processos:
             raise RuntimeError("Esta aba ainda está trabalhando. Pare ou espere terminar.")
-        texto = str(payload.get("texto") or "").strip()
-        caminhos = self._gravar_imagens(sessao, payload.get("imagens") or [])
-        if caminhos:
-            texto += "\n\nImagens de referência (abra com a ferramenta Read):\n" + "\n".join(
-                f"- {c}" for c in caminhos
+        text = str(payload.get("texto") or "").strip()
+        paths = self._gravar_imagens(session, payload.get("imagens") or [])
+        if paths:
+            text += "\n\nImagens de referência (abra com a ferramenta Read):\n" + "\n".join(
+                f"- {c}" for c in paths
             )
-        comando = [
+        command = [
             self._settings.codigo_claude_bin, "-p",
             "--output-format", "stream-json",
             "--verbose",
             "--permission-mode", self._settings.codigo_permissao,
-            "--append-system-prompt", SISTEMA,
+            "--append-system-prompt", SYSTEM,
             "--add-dir", str(self._imagens_dir),
         ]
         if self._settings.codigo_ferramentas.strip():
-            comando += ["--allowedTools", *self._settings.codigo_ferramentas.split(",")]
+            command += ["--allowedTools", *self._settings.codigo_ferramentas.split(",")]
         if self._settings.codigo_ferramentas_proibidas.strip():
-            comando += [
+            command += [
                 "--disallowedTools", *self._settings.codigo_ferramentas_proibidas.split(",")
             ]
         if payload.get("claude_sessao"):
-            comando += ["--resume", str(payload["claude_sessao"])]
+            command += ["--resume", str(payload["claude_sessao"])]
         if payload.get("modelo"):
-            comando += ["--model", str(payload["modelo"])]
+            command += ["--model", str(payload["modelo"])]
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *comando,
+            process = await asyncio.create_subprocess_exec(
+                *command,
                 cwd=self._repo,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -215,73 +215,73 @@ class Codigo:
             )
         except FileNotFoundError as e:
             raise RuntimeError("Claude Code (`claude`) não está instalado neste computador.") from e
-        self._processos[sessao] = proc
-        assert proc.stdin is not None
-        proc.stdin.write(texto.encode())
-        await proc.stdin.drain()
-        proc.stdin.close()
-        tarefa = asyncio.create_task(self._acompanhar(sessao, proc))
-        self._tarefas.add(tarefa)
-        tarefa.add_done_callback(self._tarefas.discard)
-        return {"ok": True, "imagens": caminhos}
+        self._processos[session] = process
+        assert process.stdin is not None
+        process.stdin.write(text.encode())
+        await process.stdin.drain()
+        process.stdin.close()
+        task = asyncio.create_task(self._acompanhar(session, process))
+        self._tarefas.add(task)
+        task.add_done_callback(self._tarefas.discard)
+        return {"ok": True, "imagens": paths}
 
-    def _gravar_imagens(self, sessao: str, imagens: list[dict[str, Any]]) -> list[str]:
-        pasta = self._imagens_dir / _nome_seguro(sessao)
-        caminhos = []
-        for img in imagens:
-            pasta.mkdir(parents=True, exist_ok=True)
-            arq = pasta / f"{datetime.now(UTC):%Y%m%d%H%M%S%f}-{_nome_seguro(str(img['nome']))}"
-            arq.write_bytes(base64.b64decode(str(img["b64"])))
-            caminhos.append(str(arq))
-        return caminhos
+    def _gravar_imagens(self, session: str, images: list[dict[str, Any]]) -> list[str]:
+        folder = self._imagens_dir / _name_safe(session)
+        paths = []
+        for img in images:
+            folder.mkdir(parents=True, exist_ok=True)
+            file = folder / f"{datetime.now(UTC):%Y%m%d%H%M%S%f}-{_name_safe(str(img['nome']))}"
+            file.write_bytes(base64.b64decode(str(img["b64"])))
+            paths.append(str(file))
+        return paths
 
-    async def _acompanhar(self, sessao: str, proc: asyncio.subprocess.Process) -> None:
-        assert proc.stdout is not None and proc.stderr is not None
+    async def _acompanhar(self, session: str, process: asyncio.subprocess.Process) -> None:
+        assert process.stdout is not None and process.stderr is not None
         terminou = False
         try:
-            async for linha in proc.stdout:
+            async for line in process.stdout:
                 try:
-                    msg = json.loads(linha)
+                    msg = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                for etapa in etapas(msg):
-                    terminou = terminou or etapa["tipo"] == "fim"
-                    await self._avisar(sessao, etapa)
-            erro = (await proc.stderr.read()).decode(errors="replace").strip()
-            codigo = await proc.wait()
+                for stage in stages(msg):
+                    terminou = terminou or stage["tipo"] == "fim"
+                    await self._avisar(session, stage)
+            error = (await process.stderr.read()).decode(errors="replace").strip()
+            code = await process.wait()
             if not terminou:
-                motivo = "Parado pelo app." if codigo < 0 else _curto(erro or f"saída {codigo}")
-                await self._avisar(sessao, {"tipo": "fim", "erro": codigo != 0, "texto": motivo})
+                reason = "Parado pelo app." if code < 0 else _short(error or f"saída {code}")
+                await self._avisar(session, {"tipo": "fim", "erro": code != 0, "texto": reason})
         except Exception as e:
-            logger.exception("Falha acompanhando a sessão %s", sessao)
-            await self._avisar(sessao, {"tipo": "fim", "erro": True, "texto": str(e)})
+            logger.exception("Falha acompanhando a sessão %s", session)
+            await self._avisar(session, {"tipo": "fim", "erro": True, "texto": str(e)})
         finally:
-            self._processos.pop(sessao, None)
+            self._processos.pop(session, None)
 
-    async def _avisar(self, sessao: str, etapa: dict[str, Any]) -> None:
+    async def _avisar(self, session: str, etapa: dict[str, Any]) -> None:
         try:
-            await self._emitir({**etapa, "sessao_id": sessao, "em": datetime.now(UTC).isoformat()})
+            await self._emitir({**etapa, "sessao_id": session, "em": datetime.now(UTC).isoformat()})
         except Exception:
             # Sem conexão com o Gateway agora: a etapa se perde, o Claude segue trabalhando.
-            logger.warning("Etapa da sessão %s não entregue ao Gateway", sessao)
+            logger.warning("Etapa da sessão %s não entregue ao Gateway", session)
 
-    def parar(self, sessao: str) -> dict[str, Any]:
-        proc = self._processos.get(sessao)
-        if proc is None:
+    def parar(self, session: str) -> dict[str, Any]:
+        process = self._processos.get(session)
+        if process is None:
             return {"ok": False}
-        proc.terminate()
+        process.terminate()
         return {"ok": True}
 
     async def git(self) -> dict[str, Any]:
         """Branch, arquivos alterados e últimos commits do repositório."""
 
         async def rodar(*args: str) -> str:
-            proc = await asyncio.create_subprocess_exec(
+            process = await asyncio.create_subprocess_exec(
                 "git", *args, cwd=self._repo,
                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
             )
-            saida, _ = await proc.communicate()
-            return saida.decode(errors="replace").rstrip()
+            output, _ = await process.communicate()
+            return output.decode(errors="replace").rstrip()
 
         return {
             "status": await rodar("status", "--short", "--branch"),
@@ -292,97 +292,97 @@ class Codigo:
     async def _git(self, *args: str, vazio_ok: bool = False) -> bytes:
         """Saída do `git` no repositório; código de saída ≠ 0 → RuntimeError com o stderr
         ([vazio_ok]: código 1 = nada encontrado, como no `git grep`)."""
-        proc = await asyncio.create_subprocess_exec(
+        process = await asyncio.create_subprocess_exec(
             "git", *args, cwd=self._repo,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        saida, erro = await proc.communicate()
-        if proc.returncode == 1 and vazio_ok:
+        output, error = await process.communicate()
+        if process.returncode == 1 and vazio_ok:
             return b""
-        if proc.returncode:
-            raise RuntimeError(erro.decode(errors="replace").strip() or f"git {args[0]} falhou")
-        return saida
+        if process.returncode:
+            raise RuntimeError(error.decode(errors="replace").strip() or f"git {args[0]} falhou")
+        return output
 
     async def _commit(self, commit: str) -> str:
         """Hash completo do [commit] (vazio = HEAD); só aceita hash, nunca ref ou opção."""
         if commit and not _COMMIT.match(commit):
             raise RuntimeError("Commit inválido")
-        saida = await self._git("rev-parse", "--verify", f"{commit or 'HEAD'}^{{commit}}")
-        return saida.decode().strip()
+        output = await self._git("rev-parse", "--verify", f"{commit or 'HEAD'}^{{commit}}")
+        return output.decode().strip()
 
     async def arvore(self, commit: str) -> dict[str, Any]:
         """Arquivos do repositório no [commit], o que ele mudou e os últimos commits."""
-        alvo = await self._commit(commit)
+        target = await self._commit(commit)
         log = await self._git("log", "-40", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%cI")
-        campos = ("hash", "curto", "assunto", "autor", "data")
+        fields = ("hash", "curto", "assunto", "autor", "data")
         commits = [
-            dict(zip(campos, linha.split("\x1f"), strict=False))
-            for linha in log.decode(errors="replace").splitlines()
+            dict(zip(fields, line.split("\x1f"), strict=False))
+            for line in log.decode(errors="replace").splitlines()
         ]
-        arquivos = await self._git("ls-tree", "-r", "--name-only", "-z", alvo)
+        files = await self._git("ls-tree", "-r", "--name-only", "-z", target)
         status = await self._git(
-            "diff-tree", "--no-commit-id", "-r", "--root", "--name-status", "-M", alvo
+            "diff-tree", "--no-commit-id", "-r", "--root", "--name-status", "-M", target
         )
         return {
-            "commit": alvo,
+            "commit": target,
             "commits": commits,
-            "arquivos": [a for a in arquivos.decode(errors="replace").split("\0") if a],
-            "mudancas": mudancas(status.decode(errors="replace")),
+            "arquivos": [a for a in files.decode(errors="replace").split("\0") if a],
+            "mudancas": changes(status.decode(errors="replace")),
         }
 
     async def arquivo(self, caminho: str, commit: str) -> dict[str, Any]:
         """Conteúdo do arquivo no [commit] e as linhas que esse commit adicionou nele."""
         if not caminho or caminho.startswith(("/", "-")) or ".." in caminho.split("/"):
             raise RuntimeError("Caminho inválido")
-        alvo = await self._commit(commit)
-        dados = await self._git("show", f"{alvo}:{caminho}")
-        if b"\0" in dados[:8000]:
-            return {"caminho": caminho, "binario": True, "tamanho": len(dados)}
+        target = await self._commit(commit)
+        data = await self._git("show", f"{target}:{caminho}")
+        if b"\0" in data[:8000]:
+            return {"caminho": caminho, "binario": True, "tamanho": len(data)}
         diff = await self._git(
-            "show", "--format=", "-U0", "--no-color", "-M", alvo, "--", caminho
+            "show", "--format=", "-U0", "--no-color", "-M", target, "--", caminho
         )
         return {
             "caminho": caminho,
             "binario": False,
-            "tamanho": len(dados),
-            "cortado": len(dados) > _LIMITE_ARQUIVO,
-            "texto": dados[:_LIMITE_ARQUIVO].decode(errors="replace"),
-            "novas": linhas_novas(diff.decode(errors="replace")),
+            "tamanho": len(data),
+            "cortado": len(data) > _LIMIT_FILE,
+            "texto": data[:_LIMIT_FILE].decode(errors="replace"),
+            "novas": lines_new(diff.decode(errors="replace")),
         }
 
-    async def buscar(self, termo: str, commit: str, *, observacoes: bool = False) -> dict[str, Any]:
+    async def buscar(self, term: str, commit: str, *, observacoes: bool = False) -> dict[str, Any]:
         """Linhas com o [termo] (sem diferenciar maiúsculas) nos arquivos de texto do [commit];
         [observacoes]: só onde o termo está num comentário (sem termo: TODO/FIXME/...)."""
-        termo = termo.strip()
-        if not termo and not observacoes:
+        term = term.strip()
+        if not term and not observacoes:
             raise RuntimeError("Digite o que buscar")
-        if len(termo) > 200:
+        if len(term) > 200:
             raise RuntimeError("Busca longa demais")
-        alvo = await self._commit(commit)
-        padrao = ["-F", "-i", "-e", termo] if termo else ["-w", "-E", "-e", _MARCAS.pattern[3:-3]]
-        saida = await self._git(
-            "grep", "-n", "-I", "-z", "--no-color", "--max-count=50", *padrao, alvo, "--",
+        target = await self._commit(commit)
+        default = ["-F", "-i", "-e", term] if term else ["-w", "-E", "-e", _MARKS.pattern[3:-3]]
+        output = await self._git(
+            "grep", "-n", "-I", "-z", "--no-color", "--max-count=50", *default, target, "--",
             vazio_ok=True,
         )
-        resultados: list[dict[str, Any]] = []
+        results: list[dict[str, Any]] = []
         cortado = False
-        prefixo = f"{alvo}:"
-        for linha in saida.decode(errors="replace").splitlines():
-            partes = linha.split("\0", 2)
-            if len(partes) < 3 or not partes[1].isdigit():
+        prefix = f"{target}:"
+        for line in output.decode(errors="replace").splitlines():
+            parts = line.split("\0", 2)
+            if len(parts) < 3 or not parts[1].isdigit():
                 continue
-            caminho, numero, texto = partes
+            path, number, text = parts
             if observacoes:
-                inicio = _COMENTARIO.search(texto)
-                resto = texto[inicio.start():] if inicio else ""
-                if not (termo.lower() in resto.lower() if termo else _MARCAS.search(resto)):
+                start = _COMMENT.search(text)
+                rest = text[start.start():] if start else ""
+                if not (term.lower() in rest.lower() if term else _MARKS.search(rest)):
                     continue
-            if len(resultados) >= _LIMITE_BUSCA:
+            if len(results) >= _LIMIT_SEARCH:
                 cortado = True
                 break
-            resultados.append({
-                "caminho": caminho.removeprefix(prefixo),
-                "linha": int(numero),
-                "texto": texto.strip()[:240],
+            results.append({
+                "caminho": path.removeprefix(prefix),
+                "linha": int(number),
+                "texto": text.strip()[:240],
             })
-        return {"commit": alvo, "resultados": resultados, "cortado": cortado}
+        return {"commit": target, "resultados": results, "cortado": cortado}

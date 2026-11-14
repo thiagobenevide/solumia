@@ -13,8 +13,8 @@ from test_concursos import ESTRUTURA, HOJE
 from backend.core.config import Settings
 from backend.main import create_app
 from concursos.api import IA
-from concursos.exams import Concursos
-from concursos.radar import Radar, esfera_do_orgao, ler_listagem
+from concursos.exams import Exams
+from concursos.radar import Radar, sphere_of_agency, read_listing
 
 LISTA = """<div id="PB" class="ua"><div class="uf">PARAÍBA</div></div>
 <div class="ea" data-url="https://www.pciconcursos.com.br/noticias/tre-pb-abre-concurso" style="x">
@@ -109,36 +109,36 @@ def _transporte() -> httpx.MockTransport:
 
 
 def test_ler_listagem() -> None:
-    itens = ler_listagem(LISTA, "nordeste")
-    assert [i["uf"] for i in itens] == ["PB", "BA"]
-    assert itens[0]["inscricao_ate"] == "2026-11-30"
-    assert itens[0]["cargos_txt"].startswith("Analista Judiciário - Tecnologia")
+    items = read_listing(LISTA, "nordeste")
+    assert [i["uf"] for i in items] == ["PB", "BA"]
+    assert items[0]["inscricao_ate"] == "2026-11-30"
+    assert items[0]["cargos_txt"].startswith("Analista Judiciário - Tecnologia")
 
 
 def test_radar_detalha_e_acha_o_local_mais_proximo(tmp_path: Path) -> None:
-    pedidos: list[str] = []
+    requests: list[str] = []
 
     async def llm(m: list[dict[str, str]]) -> str:
-        pedidos.append(m[1]["content"])
+        requests.append(m[1]["content"])
         return "Aqui está: " + json.dumps(DETALHE)
 
     radar = Radar(tmp_path, llm, transporte=_transporte(), hoje=lambda: HOJE)
     r = asyncio.run(radar.atualizar())
     assert r == {"novos": 1, "detalhados": 1}  # a prefeitura (gari) nem entra
-    lista = radar.listar()
-    assert lista["origem"]["cidade"] == "Custódia"
-    item = lista["itens"][0]
+    items = radar.listar()
+    assert items["origem"]["cidade"] == "Custódia"
+    item = items["itens"][0]
     assert item["total_vagas_ti"] == 12 and item["salario_max"] == 13994.78
     assert item["mais_proximo"]["cidade"] == "Campina Grande" and item["mais_proximo"]["km"] == 180
     # a LLM citou um PDF que não estava na página oficial: fica o 1º PDF de edital do site
     assert item["edital_url"] == "https://www.tre-pb.jus.br/arquivos/edital-tre.pdf"
     assert item["provas_url"] == "https://www.pciconcursos.com.br/provas/cebraspe"
-    assert "edital-tre.pdf" in pedidos[0]
-    rota = asyncio.run(radar.rota(item["id"]))
-    assert rota is not None and len(rota["linha"]) >= 2
+    assert "edital-tre.pdf" in requests[0]
+    route = asyncio.run(radar.rota(item["id"]))
+    assert route is not None and len(route["linha"]) >= 2
     # segunda coleta não chama a LLM de novo
     asyncio.run(radar.atualizar())
-    assert len(pedidos) == 1
+    assert len(requests) == 1
 
 
 def test_radar_tenta_de_novo_quando_a_llm_falha(tmp_path: Path) -> None:
@@ -151,20 +151,20 @@ def test_radar_tenta_de_novo_quando_a_llm_falha(tmp_path: Path) -> None:
 
     radar = Radar(tmp_path, llm, transporte=_transporte(), hoje=lambda: HOJE)
     asyncio.run(radar.atualizar())
-    lista = radar.listar()
-    assert lista["itens"] == [] and lista["falhas"] == 1
-    assert "worker desligado" in lista["erro"]
+    items = radar.listar()
+    assert items["itens"] == [] and items["falhas"] == 1
+    assert "worker desligado" in items["erro"]
     falhar[0] = False
     asyncio.run(radar.atualizar())
-    lista = radar.listar()
-    assert len(lista["itens"]) == 1 and lista["falhas"] == 0 and lista["erro"] == ""
+    items = radar.listar()
+    assert len(items["itens"]) == 1 and items["falhas"] == 0 and items["erro"] == ""
 
 
 def test_radar_pesquisa_com_o_claude(tmp_path: Path) -> None:
-    pedidos: list[dict] = []
+    requests: list[dict] = []
 
     async def executar(p: dict) -> dict:
-        pedidos.append(p)
+        requests.append(p)
         return {
             "concursos": [
                 {**DETALHE, "orgao": "TRE-PB", "uf": "pb", "situacao": "previsto",
@@ -177,13 +177,13 @@ def test_radar_pesquisa_com_o_claude(tmp_path: Path) -> None:
     radar = Radar(tmp_path, None, transporte=_transporte(), hoje=lambda: HOJE)
     assert asyncio.run(radar.pesquisar_claude(executar)) == {"achados": 1}
     # uma rodada por esfera
-    assert [p["prompt"].count("FEDERAIS") for p in pedidos] == [1, 0, 0]
-    assert "WebSearch" in pedidos[0]["ferramentas"]
-    lista = radar.listar()
-    item = lista["itens"][0]
+    assert [p["prompt"].count("FEDERAIS") for p in requests] == [1, 0, 0]
+    assert "WebSearch" in requests[0]["ferramentas"]
+    items = radar.listar()
+    item = items["itens"][0]
     assert item["id"] == "claude-tre-pb-pb" and item["fonte"] == "claude"
     assert item["situacao"] == "previsto" and item["mais_proximo"]["cidade"] == "Campina Grande"
-    assert lista["claude"]["achados"] == 1 and not lista["pesquisando_claude"]
+    assert items["claude"]["achados"] == 1 and not items["pesquisando_claude"]
 
 
 def test_radar_federal_sem_cidades_vai_para_as_capitais(tmp_path: Path) -> None:
@@ -200,20 +200,20 @@ def test_radar_federal_sem_cidades_vai_para_as_capitais(tmp_path: Path) -> None:
 
     radar = Radar(tmp_path, None, transporte=_transporte(), hoje=lambda: HOJE)
     assert asyncio.run(radar.pesquisar_claude(executar)) == {"achados": 1}
-    lista = radar.listar()
-    item = lista["itens"][0]
+    items = radar.listar()
+    item = items["itens"][0]
     assert item["esfera"] == "federal" and item["mais_proximo"]["cidade"] == "João Pessoa"
-    assert "estadual: limite" in lista["claude"]["erro"]
-    assert esfera_do_orgao("Prefeitura de Custódia") == "municipal"
-    assert esfera_do_orgao("Ministério Público do Estado de PE") == "estadual"
-    assert esfera_do_orgao("TRT 6ª Região") == "federal"
+    assert "estadual: limite" in items["claude"]["erro"]
+    assert sphere_of_agency("Prefeitura de Custódia") == "municipal"
+    assert sphere_of_agency("Ministério Público do Estado de PE") == "estadual"
+    assert sphere_of_agency("TRT 6ª Região") == "federal"
 
 
 @pytest.fixture
 def api(tmp_path: Path) -> TestClient:
     s = Settings(client_api_keys=CLIENT_API_KEY, concursos_dir=str(tmp_path))
     app = create_app(settings=s)
-    app.state.concursos = Concursos(tmp_path, hoje=lambda: HOJE)
+    app.state.concursos = Exams(tmp_path, hoje=lambda: HOJE)
 
     async def executar(p: dict[str, Any]) -> dict[str, Any]:
         if p["esquema"] is not ESTRUTURA and "questoes" in p["esquema"]["properties"]:
@@ -305,8 +305,8 @@ def test_acompanhar_do_radar(
     radar = Radar(tmp_path, llm, transporte=_transporte(), hoje=lambda: HOJE)
     asyncio.run(radar.atualizar())
     api.app.state.concursos_radar = radar  # type: ignore[attr-defined]
-    monkeypatch.setattr("concursos.api._baixar", lambda _: b"%PDF-1.4")
-    monkeypatch.setattr("concursos.exams.texto_pdf", lambda _: "EDITAL TRE " * 100)
+    monkeypatch.setattr("concursos.api._download", lambda _: b"%PDF-1.4")
+    monkeypatch.setattr("concursos.exams.text_pdf", lambda _: "EDITAL TRE " * 100)
     assert api.get("/api/concursos/radar").json()["itens"][0]["orgao"].startswith("TRE")
     iid = radar.listar()["itens"][0]["id"]
     c = api.post(
@@ -322,11 +322,11 @@ def test_acompanhar_do_radar(
 def test_baixar_recusa_rede_interna_e_outros_esquemas():
     import urllib.error
 
-    from concursos.api import _baixar
+    from concursos.api import _download
 
     for url in ("http://127.0.0.1:48080/health", "http://169.254.169.254/", "file:///etc/passwd",
                 "http://collabora:9980/", "http://[::1]/"):
         with pytest.raises(OSError):
-            _baixar(url)
+            _download(url)
     with pytest.raises(urllib.error.URLError, match="interno"):
-        _baixar("http://localhost/edital.pdf")
+        _download("http://localhost/edital.pdf")

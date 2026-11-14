@@ -36,8 +36,8 @@ def test_bing_primeiro():
 
 
 def test_bing_vazio_cai_no_duckduckgo():
-    vazio = httpx.Response(200, text="<rss><channel></channel></rss>")
-    r = _buscar(vazio, httpx.Response(200, text=DDG))
+    empty = httpx.Response(200, text="<rss><channel></channel></rss>")
+    r = _buscar(empty, httpx.Response(200, text=DDG))
     assert r["fonte"] == "DuckDuckGo"
     assert r["resultados"][0] == {
         "titulo": "Título",

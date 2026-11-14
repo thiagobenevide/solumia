@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Any
 
 from concursos import schedule
-from concursos.study import Estudo
+from concursos.study import Study
 
-CAMPOS_EDITAVEIS = {
+FIELDS_EDITABLE = {
     "nome",
     "banca",
     "cargo",
@@ -29,60 +29,60 @@ CAMPOS_EDITAVEIS = {
 }
 
 
-class NaoEncontrado(Exception):
+class NotFound(Exception):
     pass
 
 
-class Invalido(Exception):
+class Invalid(Exception):
     pass
 
 
-def _agora() -> str:
+def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def _data(texto: str | None) -> date | None:
+def _data(text: str | None) -> date | None:
     try:
-        return date.fromisoformat(str(texto)[:10]) if texto else None
+        return date.fromisoformat(str(text)[:10]) if text else None
     except ValueError:
         return None
 
 
-def texto_pdf(pdf: Path) -> str:
+def text_pdf(pdf: Path) -> str:
     try:
         r = subprocess.run(
             ["pdftotext", "-layout", str(pdf), "-"], capture_output=True, timeout=120, text=True
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-        raise Invalido("Não foi possível ler o PDF (pdftotext ausente ou demorou demais).") from e
+        raise Invalid("Não foi possível ler o PDF (pdftotext ausente ou demorou demais).") from e
     return r.stdout
 
 
-class Concursos:
-    def __init__(self, raiz: str | Path, hoje: Callable[[], date] = date.today) -> None:
-        self.raiz = Path(raiz).expanduser()
+class Exams:
+    def __init__(self, root: str | Path, hoje: Callable[[], date] = date.today) -> None:
+        self.raiz = Path(root).expanduser()
         self.raiz.mkdir(parents=True, exist_ok=True)
         self.hoje = hoje
         self._trava = threading.RLock()
-        self.estudo = Estudo(self.raiz)
+        self.estudo = Study(self.raiz)
 
     # --- arquivos ---
     def _pasta(self, id_: str) -> Path:
-        pasta = self.raiz / id_
-        if not id_.isalnum() or not (pasta / "concurso.json").exists():
-            raise NaoEncontrado(id_)
-        return pasta
+        folder = self.raiz / id_
+        if not id_.isalnum() or not (folder / "concurso.json").exists():
+            raise NotFound(id_)
+        return folder
 
     def _ler(self, id_: str) -> dict[str, Any]:
-        dados: dict[str, Any] = json.loads((self._pasta(id_) / "concurso.json").read_text("utf-8"))
-        return dados
+        data: dict[str, Any] = json.loads((self._pasta(id_) / "concurso.json").read_text("utf-8"))
+        return data
 
     def _gravar(self, c: dict[str, Any]) -> None:
-        c["atualizado"] = _agora()
-        arquivo = self.raiz / c["id"] / "concurso.json"
-        tmp = arquivo.with_suffix(".tmp")
+        c["atualizado"] = _now()
+        file = self.raiz / c["id"] / "concurso.json"
+        tmp = file.with_suffix(".tmp")
         tmp.write_text(json.dumps(c, ensure_ascii=False, indent=1), "utf-8")
-        os.replace(tmp, arquivo)
+        os.replace(tmp, file)
 
     # --- CRUD ---
     def criar(self, dados: dict[str, Any]) -> dict[str, Any]:
@@ -98,7 +98,7 @@ class Concursos:
             "observacoes": dados.get("observacoes", ""),
             "edital_url": dados.get("edital_url", ""),
             "edital": None,
-            "criado": _agora(),
+            "criado": _now(),
             "geracao": {"estado": "sem_plano", "erro": "", "inicio": None, "fim": None},
             "radar": dados.get("radar"),
             "estrutura": None,
@@ -112,19 +112,19 @@ class Concursos:
         return c
 
     def listar(self) -> list[dict[str, Any]]:
-        saida = []
-        for arq in sorted(self.raiz.glob("*/concurso.json")):
-            c = json.loads(arq.read_text("utf-8"))
-            saida.append(self.resumo(c))
-        return sorted(saida, key=lambda c: (c["data_prova"] or "9999", c["nome"]))
+        output = []
+        for file in sorted(self.raiz.glob("*/concurso.json")):
+            c = json.loads(file.read_text("utf-8"))
+            output.append(self.resumo(c))
+        return sorted(output, key=lambda c: (c["data_prova"] or "9999", c["nome"]))
 
     def resumo(self, c: dict[str, Any]) -> dict[str, Any]:
-        hoje = self.hoje()
-        tarefas = c["tarefas"]
-        feitas = sum(1 for t in tarefas if t["feito"])
-        prova = _data(c["data_prova"])
+        today = self.hoje()
+        tasks = c["tarefas"]
+        done = sum(1 for t in tasks if t["feito"])
+        proof = _data(c["data_prova"])
         futuros = sorted(
-            (p for p in c["prazos"] if (_data(p["data"]) or date.min) >= hoje),
+            (p for p in c["prazos"] if (_data(p["data"]) or date.min) >= today),
             key=lambda p: p["data"],
         )
         return {
@@ -133,12 +133,12 @@ class Concursos:
             "banca": c["banca"],
             "cargo": c["cargo"],
             "data_prova": c["data_prova"],
-            "dias_para_prova": (prova - hoje).days if prova else None,
+            "dias_para_prova": (proof - today).days if proof else None,
             "estado": c["geracao"]["estado"],
             "tem_edital": bool(c["edital"]),
-            "tarefas": len(tarefas),
-            "feitas": feitas,
-            "atrasadas": sum(1 for t in tarefas if not t["feito"] and t["data"] < hoje.isoformat()),
+            "tarefas": len(tasks),
+            "feitas": done,
+            "atrasadas": sum(1 for t in tasks if not t["feito"] and t["data"] < today.isoformat()),
             "proximo_prazo": futuros[0] if futuros else None,
         }
 
@@ -147,11 +147,11 @@ class Concursos:
         c["situacao"] = self.resumo(c)
         return c
 
-    def atualizar(self, id_: str, campos: dict[str, Any]) -> dict[str, Any]:
+    def atualizar(self, id_: str, fields: dict[str, Any]) -> dict[str, Any]:
         with self._trava:
             c = self._ler(id_)
-            for k, v in campos.items():
-                if k in CAMPOS_EDITAVEIS:
+            for k, v in fields.items():
+                if k in FIELDS_EDITABLE:
                     c[k] = v
             self._gravar(c)
         return self.obter(id_)
@@ -161,31 +161,31 @@ class Concursos:
             shutil.rmtree(self._pasta(id_))
 
     # --- edital ---
-    def salvar_edital(self, id_: str, nome: str, conteudo: bytes) -> dict[str, Any]:
-        if not conteudo.startswith(b"%PDF"):
-            raise Invalido("O edital precisa ser um PDF.")
-        pasta = self._pasta(id_)
-        (pasta / "edital.pdf").write_bytes(conteudo)
-        texto = texto_pdf(pasta / "edital.pdf")
-        if len(texto.strip()) < 500:
-            raise Invalido("O PDF não tem texto legível (edital escaneado?).")
-        (pasta / "edital.txt").write_text(texto, "utf-8")
+    def salvar_edital(self, id_: str, nome: str, content: bytes) -> dict[str, Any]:
+        if not content.startswith(b"%PDF"):
+            raise Invalid("O edital precisa ser um PDF.")
+        folder = self._pasta(id_)
+        (folder / "edital.pdf").write_bytes(content)
+        text = text_pdf(folder / "edital.pdf")
+        if len(text.strip()) < 500:
+            raise Invalid("O PDF não tem texto legível (edital escaneado?).")
+        (folder / "edital.txt").write_text(text, "utf-8")
         with self._trava:
             c = self._ler(id_)
             c["edital"] = {
                 "nome": nome,
-                "bytes": len(conteudo),
-                "caracteres": len(texto),
-                "enviado": _agora(),
+                "bytes": len(content),
+                "caracteres": len(text),
+                "enviado": _now(),
             }
             self._gravar(c)
         return self.obter(id_)
 
     def texto_edital(self, id_: str) -> str:
-        arq = self._pasta(id_) / "edital.txt"
-        if not arq.exists():
-            raise Invalido("Envie o edital (PDF) antes de gerar o plano.")
-        return arq.read_text("utf-8")
+        file = self._pasta(id_) / "edital.txt"
+        if not file.exists():
+            raise Invalid("Envie o edital (PDF) antes de gerar o plano.")
+        return file.read_text("utf-8")
 
     # --- plano ---
     def marcar_geracao(self, id_: str, estado: str, erro: str = "") -> None:
@@ -194,45 +194,45 @@ class Concursos:
             g = c["geracao"]
             g.update(estado=estado, erro=erro)
             if estado == "gerando":
-                g.update(inicio=_agora(), fim=None)
+                g.update(inicio=_now(), fim=None)
             else:
-                g["fim"] = _agora()
+                g["fim"] = _now()
             self._gravar(c)
 
-    def aplicar_estrutura(self, id_: str, estrutura: dict[str, Any]) -> dict[str, Any]:
+    def aplicar_estrutura(self, id_: str, structure: dict[str, Any]) -> dict[str, Any]:
         """Guarda a estrutura do Claude, troca os prazos vindos do edital (os manuais ficam) e
         gera o calendário de hoje até a prova."""
         with self._trava:
             c = self._ler(id_)
-            c["estrutura"] = estrutura
-            if not _data(c["data_prova"]) and _data(estrutura.get("data_prova")):
-                c["data_prova"] = estrutura["data_prova"][:10]
+            c["estrutura"] = structure
+            if not _data(c["data_prova"]) and _data(structure.get("data_prova")):
+                c["data_prova"] = structure["data_prova"][:10]
             manuais = [p for p in c["prazos"] if p.get("origem") == "manual"]
-            do_edital = [
+            of_notice = [
                 {**p, "id": uuid.uuid4().hex[:10], "origem": "edital"}
-                for p in estrutura.get("prazos", [])
+                for p in structure.get("prazos", [])
                 if _data(p.get("data"))
             ]
-            c["prazos"] = sorted(manuais + do_edital, key=lambda p: (p["data"], p.get("hora", "")))
+            c["prazos"] = sorted(manuais + of_notice, key=lambda p: (p["data"], p.get("hora", "")))
             c["tarefas"] = []
             self._replanejar(c)
-            c["geracao"].update(estado="pronto", erro="", fim=_agora())
+            c["geracao"].update(estado="pronto", erro="", fim=_now())
             self._gravar(c)
         return self.obter(id_)
 
     def _replanejar(self, c: dict[str, Any]) -> None:
-        prova = _data(c["data_prova"])
-        if not prova or not c["estrutura"]:
-            raise Invalido("Sem data da prova ou sem plano gerado.")
-        hoje = self.hoje()
+        proof = _data(c["data_prova"])
+        if not proof or not c["estrutura"]:
+            raise Invalid("Sem data da prova ou sem plano gerado.")
+        today = self.hoje()
         # feitas ficam; o resto (inclusive atrasadas) é redistribuído de hoje em diante
-        mantidas = [t for t in c["tarefas"] if t["feito"]]
-        chaves = {t["chave"] for t in mantidas if t.get("chave")}
-        novas, resumo = schedule.gerar(
-            c["estrutura"], hoje, prova, c["minutos_util"], c["minutos_fds"], chaves
+        kept = [t for t in c["tarefas"] if t["feito"]]
+        keys = {t["chave"] for t in kept if t.get("chave")}
+        new, summary = schedule.generate(
+            c["estrutura"], today, proof, c["minutos_util"], c["minutos_fds"], keys
         )
-        c["tarefas"] = sorted(mantidas + novas, key=lambda t: t["data"])
-        c["resumo_plano"] = {**resumo, "gerado_em": hoje.isoformat()}
+        c["tarefas"] = sorted(kept + new, key=lambda t: t["data"])
+        c["resumo_plano"] = {**summary, "gerado_em": today.isoformat()}
 
     def replanejar(self, id_: str) -> dict[str, Any]:
         with self._trava:
@@ -241,92 +241,92 @@ class Concursos:
             self._gravar(c)
         return self.obter(id_)
 
-    def marcar_tarefa(self, id_: str, tarefa_id: str, feito: bool) -> dict[str, Any]:
+    def marcar_tarefa(self, id_: str, task_id: str, done: bool) -> dict[str, Any]:
         with self._trava:
             c = self._ler(id_)
             for t in c["tarefas"]:
-                if t["id"] == tarefa_id:
-                    t["feito"] = feito
-                    t["feito_em"] = self.hoje().isoformat() if feito else None
+                if t["id"] == task_id:
+                    t["feito"] = done
+                    t["feito_em"] = self.hoje().isoformat() if done else None
                     self._gravar(c)
                     return t
-        raise NaoEncontrado(tarefa_id)
+        raise NotFound(task_id)
 
     # --- prazos manuais ---
-    def adicionar_prazo(self, id_: str, prazo: dict[str, Any]) -> dict[str, Any]:
-        if not _data(prazo.get("data")):
-            raise Invalido("Data inválida (use AAAA-MM-DD).")
-        novo = {
+    def adicionar_prazo(self, id_: str, deadline: dict[str, Any]) -> dict[str, Any]:
+        if not _data(deadline.get("data")):
+            raise Invalid("Data inválida (use AAAA-MM-DD).")
+        new = {
             "hora": "",
             "tipo": "outro",
             "detalhe": "",
-            **prazo,
+            **deadline,
             "id": uuid.uuid4().hex[:10],
             "origem": "manual",
         }
         with self._trava:
             c = self._ler(id_)
-            c["prazos"] = sorted(c["prazos"] + [novo], key=lambda p: (p["data"], p.get("hora", "")))
+            c["prazos"] = sorted(c["prazos"] + [new], key=lambda p: (p["data"], p.get("hora", "")))
             self._gravar(c)
-        return novo
+        return new
 
-    def remover_prazo(self, id_: str, prazo_id: str) -> None:
+    def remover_prazo(self, id_: str, deadline_id: str) -> None:
         with self._trava:
             c = self._ler(id_)
-            antes = len(c["prazos"])
-            c["prazos"] = [p for p in c["prazos"] if p["id"] != prazo_id]
-            if len(c["prazos"]) == antes:
-                raise NaoEncontrado(prazo_id)
+            before = len(c["prazos"])
+            c["prazos"] = [p for p in c["prazos"] if p["id"] != deadline_id]
+            if len(c["prazos"]) == before:
+                raise NotFound(deadline_id)
             self._gravar(c)
 
     # --- alertas ---
     def alertas(self) -> list[dict[str, Any]]:
         """Alertas de todos os concursos para hoje: prazos dos próximos 15 dias, contagem até a
         prova, tarefas de hoje e atrasadas. `nivel`: critico | aviso | info."""
-        hoje = self.hoje()
-        saida: list[dict[str, Any]] = []
-        for arq in sorted(self.raiz.glob("*/concurso.json")):
-            c = json.loads(arq.read_text("utf-8"))
+        today = self.hoje()
+        output: list[dict[str, Any]] = []
+        for file in sorted(self.raiz.glob("*/concurso.json")):
+            c = json.loads(file.read_text("utf-8"))
 
-            def alerta(nivel: str, texto: str, c: dict[str, Any] = c) -> None:
-                saida.append(
-                    {"nivel": nivel, "texto": texto, "concurso_id": c["id"], "concurso": c["nome"]}
+            def alerta(nivel: str, text: str, c: dict[str, Any] = c) -> None:
+                output.append(
+                    {"nivel": nivel, "texto": text, "concurso_id": c["id"], "concurso": c["nome"]}
                 )
 
-            prova = _data(c["data_prova"])
-            if prova and prova >= hoje:
-                dias = (prova - hoje).days
-                if dias == 0:
+            proof = _data(c["data_prova"])
+            if proof and proof >= today:
+                days = (proof - today).days
+                if days == 0:
                     alerta("critico", f"{c['nome']}: a prova é hoje.")
-                elif dias <= 7:
+                elif days <= 7:
                     alerta(
                         "critico",
-                        f"{c['nome']}: prova em {dias} dia(s). Semana final: só revisão leve.",
+                        f"{c['nome']}: prova em {days} dia(s). Semana final: só revisão leve.",
                     )
                 else:
-                    alerta("info", f"{c['nome']}: faltam {dias} dias para a prova.")
+                    alerta("info", f"{c['nome']}: faltam {days} dias para a prova.")
             for p in c["prazos"]:
                 d = _data(p["data"])
-                if not d or d < hoje or (d - hoje).days > 15 or p.get("tipo") == "prova":
+                if not d or d < today or (d - today).days > 15 or p.get("tipo") == "prova":
                     continue
-                dias = (d - hoje).days
-                quando = "hoje" if dias == 0 else "amanhã" if dias == 1 else f"em {dias} dias"
-                hora = f" às {p['hora']}" if p.get("hora") else ""
-                nivel = "critico" if dias <= 2 else "aviso" if dias <= 7 else "info"
-                alerta(nivel, f"{c['nome']}: {p['titulo']} {quando} ({d.strftime('%d/%m')}{hora}).")
-            pendentes = [t for t in c["tarefas"] if not t["feito"]]
-            atrasadas = [t for t in pendentes if t["data"] < hoje.isoformat()]
-            de_hoje = [t for t in pendentes if t["data"] == hoje.isoformat()]
+                days = (d - today).days
+                when = "hoje" if days == 0 else "amanhã" if days == 1 else f"em {days} dias"
+                hour = f" às {p['hora']}" if p.get("hora") else ""
+                nivel = "critico" if days <= 2 else "aviso" if days <= 7 else "info"
+                alerta(nivel, f"{c['nome']}: {p['titulo']} {when} ({d.strftime('%d/%m')}{hour}).")
+            pending = [t for t in c["tarefas"] if not t["feito"]]
+            atrasadas = [t for t in pending if t["data"] < today.isoformat()]
+            of_today = [t for t in pending if t["data"] == today.isoformat()]
             if atrasadas:
                 nivel = "critico" if len(atrasadas) >= 5 else "aviso"
                 alerta(
                     nivel,
                     f"{c['nome']}: {len(atrasadas)} tarefa(s) atrasada(s). Use Replanejar.",
                 )
-            if de_hoje:
-                minutos = sum(t["minutos"] for t in de_hoje)
+            if of_today:
+                minutes = sum(t["minutos"] for t in of_today)
                 alerta(
-                    "info", f"{c['nome']}: hoje {len(de_hoje)} tarefa(s) de estudo ({minutos} min)."
+                    "info", f"{c['nome']}: hoje {len(of_today)} tarefa(s) de estudo ({minutes} min)."
                 )
-        ordem = {"critico": 0, "aviso": 1, "info": 2}
-        return sorted(saida, key=lambda a: ordem[a["nivel"]])
+        order = {"critico": 0, "aviso": 1, "info": 2}
+        return sorted(output, key=lambda a: order[a["nivel"]])

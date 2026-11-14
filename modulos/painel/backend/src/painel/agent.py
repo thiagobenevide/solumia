@@ -9,12 +9,12 @@ import unicodedata
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-from painel.nagger import Cobrador, Invalido, NaoEncontrado
+from painel.nagger import Nagger, Invalid, NotFound
 
 if TYPE_CHECKING:
-    from painel.api import Fontes
+    from painel.api import Sources
 
-INSTRUCOES = """
+INSTRUCTIONS = """
 ## Ações
 Você pode agir, não só falar. Quando o usuário pedir (ou concordar) uma mudança, termine a
 resposta com um bloco assim, e só com as ações necessárias:
@@ -50,7 +50,7 @@ Use `pesquisar_web` para fatos atuais ou externos, `pesquisar_notas` para o que 
 anotou e `analisar_desempenho` quando ele perguntar como está indo nas tarefas e na agenda.
 """
 
-COMPUTADOR = """
+COMPUTER = """
 ## Computador do usuário
 Você também comanda o PC dele (Linux, navegador Brave). Quando ele pedir para abrir, pesquisar ou
 desligar algo no computador, responda numa frase e use o bloco ```acoes```:
@@ -75,9 +75,9 @@ PC = {
 }
 
 # Ações que trazem informação ao LLM em vez de mudar algo; o servidor executa e pergunta de novo.
-CONSULTAS = ("pesquisar_web", "pesquisar_notas", "analisar_desempenho")
+QUERIES = ("pesquisar_web", "pesquisar_notas", "analisar_desempenho")
 
-ANALISE = """
+ANALYSIS = """
 ## Como analisar o desempenho
 Comente os números acima sem inventar outros: o que melhorou ou piorou, onde está o gargalo
 (prazos estourados, prioridade alta parada, blocos não cumpridos, dia da semana fraco) e termine
@@ -85,175 +85,175 @@ com até 3 ajustes concretos para os próximos dias. Se o usuário pedir, transf
 tarefas ou numa nota com `criar_tarefa`/`criar_nota`.
 """
 
-_BLOCO = re.compile(r"```acoes\s*(.*?)```", re.S)
+_BLOCK = re.compile(r"```acoes\s*(.*?)```", re.S)
 
 
-def _chave(texto: str) -> str:
-    sem = unicodedata.normalize("NFD", texto.lower())
+def _key(text: str) -> str:
+    sem = unicodedata.normalize("NFD", text.lower())
     return " ".join("".join(c for c in sem if unicodedata.category(c) != "Mn").split())
 
 
-def extrair(texto: str) -> tuple[str, list[dict[str, Any]]]:
+def extract(text: str) -> tuple[str, list[dict[str, Any]]]:
     """Separa o texto para o usuário das ações pedidas (bloco inválido = nenhuma ação)."""
-    acoes: list[dict[str, Any]] = []
-    for m in _BLOCO.finditer(texto):
+    actions: list[dict[str, Any]] = []
+    for m in _BLOCK.finditer(text):
         try:
-            lido = json.loads(m.group(1))
+            read = json.loads(m.group(1))
         except json.JSONDecodeError:
             continue
-        acoes += [a for a in (lido if isinstance(lido, list) else [lido]) if isinstance(a, dict)]
-    return _BLOCO.sub("", texto).strip(), acoes
+        actions += [a for a in (read if isinstance(read, list) else [read]) if isinstance(a, dict)]
+    return _BLOCK.sub("", text).strip(), actions
 
 
-def separar(acoes: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def separate(actions: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """(consultas, ações que mudam algo)."""
-    consultas = [a for a in acoes if a.get("tipo") in CONSULTAS]
-    return consultas, [a for a in acoes if a.get("tipo") not in CONSULTAS]
+    queries = [a for a in actions if a.get("tipo") in QUERIES]
+    return queries, [a for a in actions if a.get("tipo") not in QUERIES]
 
 
-def separar_pc(acoes: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def separate_pc(actions: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """(ações no PC, demais)."""
-    return [a for a in acoes if a.get("tipo") in PC], [a for a in acoes if a.get("tipo") not in PC]
+    return [a for a in actions if a.get("tipo") in PC], [a for a in actions if a.get("tipo") not in PC]
 
 
-async def executar_pc(
-    acoes: list[dict[str, Any]], pc: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None
+async def execute_pc(
+    actions: list[dict[str, Any]], pc: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None
 ) -> list[dict[str, Any]]:
     """Manda cada ação ao worker (tarefa `pc`); sem worker ou com erro, volta com ok=False."""
-    feitas = []
-    for a in acoes:
-        tipo = str(a["tipo"])
+    done = []
+    for a in actions:
+        kind = str(a["tipo"])
         if pc is None:
-            feitas.append({"tipo": tipo, "ok": False, "detalhe": "Comandos no PC indisponíveis"})
+            done.append({"tipo": kind, "ok": False, "detalhe": "Comandos no PC indisponíveis"})
             continue
-        pedido = {k: v for k, v in a.items() if k != "tipo"} | {"acao": PC[tipo]}
+        request = {k: v for k, v in a.items() if k != "tipo"} | {"acao": PC[kind]}
         try:
-            r = await pc(pedido)
-            feitas.append({"tipo": tipo, "ok": True, "detalhe": str(r.get("detalhe", "Feito"))})
+            r = await pc(request)
+            done.append({"tipo": kind, "ok": True, "detalhe": str(r.get("detalhe", "Feito"))})
         except Exception as e:  # PC desligado ou pedido recusado não derruba a conversa
-            feitas.append({"tipo": tipo, "ok": False, "detalhe": f"No PC: {e}"})
-    return feitas
+            done.append({"tipo": kind, "ok": False, "detalhe": f"No PC: {e}"})
+    return done
 
 
-def instrucoes_modulos(modulos: "dict[str, tuple[str, Any]]") -> str:
+def instructions_modules(modules: "dict[str, tuple[str, Any]]") -> str:
     """Seção do prompt com as ações que os outros módulos registraram (ver `Fontes.modulos`)."""
-    if not modulos:
+    if not modules:
         return ""
-    exemplos = ",\n ".join(exemplo for exemplo, _ in modulos.values())
+    examples = ",\n ".join(example for example, _ in modules.values())
     return (
         "\n## Outros módulos da ferramenta\nVocê também cria coisas nos outros módulos, com o mesmo"
-        " bloco ```acoes```:\n```acoes\n[" + exemplos + "]\n```\n"
+        " bloco ```acoes```:\n```acoes\n[" + examples + "]\n```\n"
         "Caderno = anotações à caneta (aba Design); quadro = lousa/diagrama livre; fluxograma = "
         "fluxo de processo desenhado a partir da `descricao`; projeto de estudo = organiza leituras"
         " sobre um tema; leitura = livro/artigo na lista de leitura.\n"
     )
 
 
-def separar_modulos(
-    acoes: list[dict[str, Any]], modulos: "dict[str, tuple[str, Any]]"
+def separate_modules(
+    actions: list[dict[str, Any]], modules: "dict[str, tuple[str, Any]]"
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """(ações de outros módulos, demais)."""
     return (
-        [a for a in acoes if a.get("tipo") in modulos],
-        [a for a in acoes if a.get("tipo") not in modulos],
+        [a for a in actions if a.get("tipo") in modules],
+        [a for a in actions if a.get("tipo") not in modules],
     )
 
 
-async def executar_modulos(
-    acoes: list[dict[str, Any]], modulos: "dict[str, tuple[str, Any]]", llm: Any
+async def execute_modules(
+    actions: list[dict[str, Any]], modules: "dict[str, tuple[str, Any]]", llm: Any
 ) -> list[dict[str, Any]]:
     """Executa as ações dos outros módulos; uma falha vira ok=False e não para as outras."""
-    feitas = []
-    for a in acoes:
-        tipo = str(a["tipo"])
+    done = []
+    for a in actions:
+        kind = str(a["tipo"])
         try:
-            detalhe = await modulos[tipo][1](a, llm)
-            feitas.append({"tipo": tipo, "ok": True, "detalhe": detalhe})
+            detail = await modules[kind][1](a, llm)
+            done.append({"tipo": kind, "ok": True, "detalhe": detail})
         except Exception as e:  # módulo recusou ou IA fora do ar: avisa sem derrubar a conversa
-            feitas.append({"tipo": tipo, "ok": False, "detalhe": f"Não consegui: {e}"})
-    return feitas
+            done.append({"tipo": kind, "ok": False, "detalhe": f"Não consegui: {e}"})
+    return done
 
 
-def _achar(itens: list[dict[str, Any]], titulo: str) -> dict[str, Any]:
-    alvo = _chave(titulo)
-    for item in itens:
-        if _chave(item["titulo"]) == alvo:
+def _find(items: list[dict[str, Any]], titulo: str) -> dict[str, Any]:
+    target = _key(titulo)
+    for item in items:
+        if _key(item["titulo"]) == target:
             return item
-    parecidos = [i for i in itens if alvo and alvo in _chave(i["titulo"])]
+    parecidos = [i for i in items if target and target in _key(i["titulo"])]
     if len(parecidos) == 1:
         return parecidos[0]
-    raise NaoEncontrado(titulo)
+    raise NotFound(titulo)
 
 
-def executar(
-    acoes: list[dict[str, Any]], cobrador: Cobrador, fontes: "Fontes", motivo: str
+def execute(
+    actions: list[dict[str, Any]], nagger: Nagger, sources: "Sources", motivo: str
 ) -> list[dict[str, Any]]:
     """Executa na ordem; cada ação devolve `{tipo, ok, detalhe}` e uma falha não para as outras."""
-    feitas = []
-    dia = cobrador.agora().date().isoformat()
-    for a in acoes:
-        tipo = str(a.get("tipo", ""))
+    done = []
+    day = nagger.agora().date().isoformat()
+    for a in actions:
+        kind = str(a.get("tipo", ""))
         try:
-            detalhe = _uma(tipo, a, cobrador, fontes, dia, motivo)
-            feitas.append({"tipo": tipo, "ok": True, "detalhe": detalhe})
-        except NaoEncontrado as e:
-            feitas.append({"tipo": tipo, "ok": False, "detalhe": f"Não achei “{e}”."})
-        except (Invalido, KeyError, ValueError, TypeError) as e:
-            feitas.append({"tipo": tipo, "ok": False, "detalhe": f"Ação inválida: {e}"})
-    return feitas
+            detail = _one(kind, a, nagger, sources, day, motivo)
+            done.append({"tipo": kind, "ok": True, "detalhe": detail})
+        except NotFound as e:
+            done.append({"tipo": kind, "ok": False, "detalhe": f"Não achei “{e}”."})
+        except (Invalid, KeyError, ValueError, TypeError) as e:
+            done.append({"tipo": kind, "ok": False, "detalhe": f"Ação inválida: {e}"})
+    return done
 
 
-def _uma(
-    tipo: str, a: dict[str, Any], cobrador: Cobrador, fontes: "Fontes", dia: str, motivo: str
+def _one(
+    tipo: str, a: dict[str, Any], nagger: Nagger, sources: "Sources", day: str, motivo: str
 ) -> str:
     if tipo == "criar_tarefa":
-        dados = {"titulo": a["titulo"], "prioridade": a.get("prioridade", "media")}
+        data = {"titulo": a["titulo"], "prioridade": a.get("prioridade", "media")}
         if a.get("prazo"):
-            dados["prazo"] = a["prazo"]
-        t = fontes.criar_tarefa(dados)
+            data["prazo"] = a["prazo"]
+        t = sources.criar_tarefa(data)
         return f"Tarefa criada: {t['titulo']}"
     if tipo == "criar_nota":
         tags = [str(t) for t in a.get("tags") or [] if str(t).strip()]
-        n = fontes.criar_nota(
+        n = sources.criar_nota(
             {"titulo": a["titulo"], "corpo": a.get("corpo", ""), "tags": ["cobrador", *tags]}
         )
         return f"Nota criada: {n['titulo']}"
     if tipo in ("concluir_tarefa", "mover_tarefa"):
         coluna = "concluida" if tipo == "concluir_tarefa" else a["coluna"]
-        t = _achar(fontes.tarefas(), a["titulo"])
-        fontes.mover_tarefa(t["id"], coluna)
+        t = _find(sources.tarefas(), a["titulo"])
+        sources.mover_tarefa(t["id"], coluna)
         return f"Tarefa {t['titulo']} → {coluna}"
     if tipo == "criar_meta":
-        dados = {k: a[k] for k in ("frequencia", "alvo", "unidade") if a.get(k)}
-        meta = cobrador.criar_meta({"titulo": str(a["titulo"]), **dados})
+        data = {k: a[k] for k in ("frequencia", "alvo", "unidade") if a.get(k)}
+        meta = nagger.criar_meta({"titulo": str(a["titulo"]), **data})
         return f"Meta criada: {meta['titulo']}"
     if tipo == "registrar_meta":
-        meta = _achar(cobrador.metas(), a["meta"])
-        cobrador.registrar_acao(meta["id"], float(a.get("quantidade", 1)))
+        meta = _find(nagger.metas(), a["meta"])
+        nagger.registrar_acao(meta["id"], float(a.get("quantidade", 1)))
         return f"Registrado em {meta['titulo']}"
 
-    blocos = cobrador.agenda(dia)["blocos"]
+    blocks = nagger.agenda(day)["blocos"]
     if tipo == "concluir_bloco":
-        b = _achar(blocos, a["titulo"])
-        cobrador.marcar(dia, b["id"])
+        b = _find(blocks, a["titulo"])
+        nagger.marcar(day, b["id"])
         return f"Concluído: {b['titulo']}"
     if tipo == "adicionar_bloco":
-        novo = {k: a[k] for k in ("titulo", "inicio", "fim")} | {
+        new = {k: a[k] for k in ("titulo", "inicio", "fim")} | {
             "prioridade": a.get("prioridade", "media")
         }
-        blocos = [*blocos, novo]
-        resumo = f"Bloco {novo['inicio']}–{novo['fim']}: {novo['titulo']}"
+        blocks = [*blocks, new]
+        summary = f"Bloco {new['inicio']}–{new['fim']}: {new['titulo']}"
     elif tipo == "mover_bloco":
-        b = _achar(blocos, a["titulo"])
+        b = _find(blocks, a["titulo"])
         b |= {"inicio": a["inicio"], "fim": a["fim"]}
-        resumo = f"{b['titulo']} agora {b['inicio']}–{b['fim']}"
+        summary = f"{b['titulo']} agora {b['inicio']}–{b['fim']}"
     elif tipo == "remover_bloco":
-        b = _achar(blocos, a["titulo"])
-        blocos = [x for x in blocos if x is not b]
-        resumo = f"Removido: {b['titulo']}"
+        b = _find(blocks, a["titulo"])
+        blocks = [x for x in blocks if x is not b]
+        summary = f"Removido: {b['titulo']}"
     else:
-        raise Invalido(f"tipo {tipo!r}")
-    salva = cobrador.salvar(dia, blocos, motivo)
+        raise Invalid(f"tipo {tipo!r}")
+    salva = nagger.salvar(day, blocks, motivo)
     if salva["contestacoes"]:
-        resumo += " (contestado: " + " ".join(salva["contestacoes"]) + ")"
-    return resumo
+        summary += " (contestado: " + " ".join(salva["contestacoes"]) + ")"
+    return summary

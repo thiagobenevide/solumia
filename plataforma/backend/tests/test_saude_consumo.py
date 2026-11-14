@@ -7,9 +7,9 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from saude.api_consumption import montar_contexto
-from saude.consumption import Consumo, afrouxa
-from saude.workouts import Invalido
+from saude.api_consumption import assemble_context
+from saude.consumption import Consumption, loosens
+from saude.workouts import Invalid
 
 
 class Relogio:
@@ -26,22 +26,22 @@ def rel() -> Relogio:
 
 
 @pytest.fixture
-def c(tmp_path: Path, rel: Relogio) -> Consumo:
-    return Consumo(tmp_path, agora=rel)
+def c(tmp_path: Path, rel: Relogio) -> Consumption:
+    return Consumption(tmp_path, agora=rel)
 
 
 def test_afrouxa() -> None:
-    lim = {"modo": "limite", "limite_min": 30, "horarios": [{"inicio": "22:00", "fim": "07:00"}]}
-    assert afrouxa(lim, {**lim, "limite_min": 40})
-    assert not afrouxa(lim, {**lim, "limite_min": 10})
-    assert afrouxa(lim, {**lim, "horarios": []})
+    limit = {"modo": "limite", "limite_min": 30, "horarios": [{"inicio": "22:00", "fim": "07:00"}]}
+    assert loosens(limit, {**limit, "limite_min": 40})
+    assert not loosens(limit, {**limit, "limite_min": 10})
+    assert loosens(limit, {**limit, "horarios": []})
     almoco = {"inicio": "12:00", "fim": "13:00"}
-    assert not afrouxa(lim, {**lim, "horarios": [*lim["horarios"], almoco]})
-    assert afrouxa(lim, {"modo": "livre", "limite_min": 0, "horarios": lim["horarios"]})
-    assert not afrouxa(lim, {"modo": "bloqueado", "limite_min": 0, "horarios": []})
+    assert not loosens(limit, {**limit, "horarios": [*limit["horarios"], almoco]})
+    assert loosens(limit, {"modo": "livre", "limite_min": 0, "horarios": limit["horarios"]})
+    assert not loosens(limit, {"modo": "bloqueado", "limite_min": 0, "horarios": []})
 
 
-def test_apertar_na_hora_afrouxar_em_24h(c: Consumo, rel: Relogio) -> None:
+def test_apertar_na_hora_afrouxar_em_24h(c: Consumption, rel: Relogio) -> None:
     r = c.definir_regra("redes_sociais", {"modo": "limite", "limite_min": 10, "horarios": []})
     assert r["pendencia"] is not None  # tirou o horário noturno: afrouxa
     r = c.definir_regra("compras", {"modo": "bloqueado"})
@@ -56,7 +56,7 @@ def test_apertar_na_hora_afrouxar_em_24h(c: Consumo, rel: Relogio) -> None:
     assert cfg["pendencias"] == []
 
 
-def test_cancelar_e_protecao(c: Consumo, rel: Relogio) -> None:
+def test_cancelar_e_protecao(c: Consumption, rel: Relogio) -> None:
     p = c.definir_protecao(False)["pendencia"]
     c.cancelar_pendencia(p["id"])
     rel.t += timedelta(days=2)
@@ -66,18 +66,18 @@ def test_cancelar_e_protecao(c: Consumo, rel: Relogio) -> None:
     assert "bsky.app" in c.para_dispositivo()["dominios"]["redes_sociais"]
 
 
-def test_whatsapp_isento(c: Consumo) -> None:
-    with pytest.raises(Invalido):
+def test_whatsapp_isento(c: Consumption) -> None:
+    with pytest.raises(Invalid):
         c.definir_app("com.whatsapp", "WhatsApp", "redes_sociais")
-    with pytest.raises(Invalido):
+    with pytest.raises(Invalid):
         c.incluir_dominio("redes_sociais", "web.whatsapp.com")
     assert "com.whatsapp" not in c.para_dispositivo()["apps"]
 
 
-def test_sincronizar_e_resumo(c: Consumo) -> None:
-    hora = [0.0] * 24
-    hora[23] = 40
-    corpo = {
+def test_sincronizar_e_resumo(c: Consumption) -> None:
+    hour = [0.0] * 24
+    hour[23] = 40
+    body = {
         "dispositivo": {"id": "cel", "nome": "Galaxy", "estado": {"vigia": True, "vpn": False}},
         "dias": [
             {
@@ -93,22 +93,22 @@ def test_sincronizar_e_resumo(c: Consumo) -> None:
                     {"pacote": "com.whatsapp", "categoria": "x", "minutos": 99},
                 ],
                 "outros_min": 20,
-                "por_hora": {"redes_sociais": hora},
+                "por_hora": {"redes_sociais": hour},
             }
         ],
         "eventos": [
             {"id": "e1", "quando": "2026-11-09T23:10:00", "tipo": "busca", "categoria": "adulto"}
         ],
     }
-    regras = c.sincronizar(corpo)
-    c.sincronizar(corpo)  # repetir não duplica
-    assert regras["protecao"] and "instagram.com" in regras["dominios"]["redes_sociais"]
+    rules = c.sincronizar(body)
+    c.sincronizar(body)  # repetir não duplica
+    assert rules["protecao"] and "instagram.com" in rules["dominios"]["redes_sociais"]
     r = c.resumo("2026-11-09", "2026-11-09")
     assert r["por_dia"]["2026-11-09"] == {"redes_sociais": 50, "outros": 20}
     assert [a["pacote"] for a in r["apps"]] == ["com.instagram.android"]
     assert r["eventos"] == {"busca:adulto": 1}
-    texto = montar_contexto(c, datetime(2026, 11, 3).date(), datetime(2026, 11, 9).date())
-    assert "23h: 40" in texto and "DESLIGADO: vpn" in texto
+    text = assemble_context(c, datetime(2026, 11, 3).date(), datetime(2026, 11, 9).date())
+    assert "23h: 40" in text and "DESLIGADO: vpn" in text
 
 
 def test_rotas(tmp_path: Path) -> None:

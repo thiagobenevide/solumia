@@ -12,15 +12,15 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from painel.nagger import Cobrador
+from painel.nagger import Nagger
 
 logger = logging.getLogger("painel.notifier")
 
 
-class Notificador:
+class Notifier:
     def __init__(
         self,
-        cobrador: Cobrador,
+        nagger: Nagger,
         tarefas: Callable[[], list[dict[str, Any]]],
         url: str,
         token: str = "",
@@ -28,69 +28,69 @@ class Notificador:
         extras: Callable[[], list[dict[str, Any]]] | None = None,
     ) -> None:
         """[extras]: alertas de outros módulos (`{nivel, texto, concurso?}`), ex. Concursos."""
-        self.cobrador = cobrador
+        self.cobrador = nagger
         self.tarefas = tarefas
         self.url = url
         self.token = token
         self._enviar = enviar or self._ntfy
         self.extras = extras
-        self._arquivo = cobrador.raiz / "enviados.json"
+        self._arquivo = nagger.raiz / "enviados.json"
 
-    def _ntfy(self, titulo: str, texto: str, prioridade: str) -> None:
+    def _ntfy(self, titulo: str, text: str, prioridade: str) -> None:
         # publicação em JSON na raiz do servidor: título e texto em UTF-8 sem passar por cabeçalho
-        partes = urlsplit(self.url)
-        corpo = {
-            "topic": partes.path.strip("/"),
+        parts = urlsplit(self.url)
+        body = {
+            "topic": parts.path.strip("/"),
             "title": titulo,
-            "message": texto,
+            "message": text,
             "priority": 4 if prioridade == "high" else 3,
             "tags": ["rotating_light" if prioridade == "high" else "bell"],
         }
-        cabecalhos = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json"}
         if self.token:
-            cabecalhos["Authorization"] = f"Bearer {self.token}"
-        pedido = urllib.request.Request(
-            f"{partes.scheme}://{partes.netloc}/",
-            data=json.dumps(corpo).encode(),
-            headers=cabecalhos,
+            headers["Authorization"] = f"Bearer {self.token}"
+        request = urllib.request.Request(
+            f"{parts.scheme}://{parts.netloc}/",
+            data=json.dumps(body).encode(),
+            headers=headers,
         )
-        with urllib.request.urlopen(pedido, timeout=10):
+        with urllib.request.urlopen(request, timeout=10):
             pass
 
-    def _enviados(self, dia: str) -> set[str]:
+    def _enviados(self, day: str) -> set[str]:
         if not self._arquivo.exists():
             return set()
-        dados: dict[str, list[str]] = json.loads(self._arquivo.read_text("utf-8"))
-        return set(dados.get(dia, []))
+        data: dict[str, list[str]] = json.loads(self._arquivo.read_text("utf-8"))
+        return set(data.get(day, []))
 
     def verificar(self) -> list[dict[str, str]]:
         """Envia os alertas de hoje ainda não enviados e devolve-os."""
         d = self.cobrador.disciplina(self.tarefas())
         ja = self._enviados(d["data"])
-        alertas = d["alertas"]
+        alerts = d["alertas"]
         if self.extras:
             try:
-                alertas = alertas + self.extras()
+                alerts = alerts + self.extras()
             except Exception:
                 logger.exception("Falha ao ler os alertas extras")
-        novos = [a for a in alertas if a["texto"] not in ja]
-        for a in novos:
+        new = [a for a in alerts if a["texto"] not in ja]
+        for a in new:
             critico = a["nivel"] == "critico"
             if a.get("concurso"):
-                titulo = "Concursos: prazo" if critico else "Concursos"
+                title = "Concursos: prazo" if critico else "Concursos"
             else:
-                titulo = "Cobrador: entrega em risco" if critico else "Cobrador"
-            self._enviar(titulo, a["texto"], "high" if critico else "default")
+                title = "Cobrador: entrega em risco" if critico else "Cobrador"
+            self._enviar(title, a["texto"], "high" if critico else "default")
             ja.add(a["texto"])
-        if novos:
+        if new:
             # só o dia atual fica no arquivo: os alertas de ontem não voltam a valer
             Path(self._arquivo).write_text(json.dumps({d["data"]: sorted(ja)}, ensure_ascii=False))
-        return novos
+        return new
 
-    async def rodar(self, intervalo_s: float) -> None:
+    async def rodar(self, interval_s: float) -> None:
         while True:
             try:
                 await asyncio.to_thread(self.verificar)
             except Exception:
                 logger.exception("Falha ao enviar a cobrança")
-            await asyncio.sleep(intervalo_s)
+            await asyncio.sleep(interval_s)

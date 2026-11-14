@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
-from backend.auth.security import ler_geracao, validar_token
+from backend.auth.security import read_generation, validate_token
 from backend.core.config import Settings
 from backend.core.errors import openai_error
 from backend.core.worker_registry import WorkerRegistry
@@ -41,17 +41,17 @@ def require_client_api_key(request: Request, settings: SettingsDep) -> None:
             "invalid_api_key",
         )
     token = auth_header.removeprefix("Bearer ").strip()
-    payload = sessao_valida(token, settings)
+    payload = session_validates(token, settings)
     if payload is not None:
         request.state.usuario = payload["sub"]
         request.state.sessao = payload
         return
     # Compara com todas as chaves em tempo constante (sem `in`, que para no primeiro acerto).
-    escopo = None
-    for chave, esc in settings.client_api_key_escopos.items():
-        if token and hmac.compare_digest(token.encode(), chave.encode()):
-            escopo = esc
-    if escopo is not None and _escopo_permite(escopo, request.url.path):
+    scope = None
+    for key, esc in settings.client_api_key_escopos.items():
+        if token and hmac.compare_digest(token.encode(), key.encode()):
+            scope = esc
+    if scope is not None and _scope_allows(scope, request.url.path):
         request.state.usuario = "api-key"
         request.state.sessao = None
         return
@@ -59,7 +59,7 @@ def require_client_api_key(request: Request, settings: SettingsDep) -> None:
 
 
 # Rotas de cada escopo de chave (`escopo:chave` em GATEWAY_CLIENT_API_KEYS).
-ESCOPOS: dict[str, tuple[str, ...]] = {
+SCOPES: dict[str, tuple[str, ...]] = {
     "relogio": (
         "/api/saude/",
         "/api/painel/disciplina",
@@ -71,34 +71,34 @@ ESCOPOS: dict[str, tuple[str, ...]] = {
 }
 
 
-def _escopo_permite(escopo: str, caminho: str) -> bool:
-    if not escopo:
+def _scope_allows(scope: str, caminho: str) -> bool:
+    if not scope:
         return True  # chave sem prefixo: acesso completo (como antes)
-    return any(caminho.startswith(p) for p in ESCOPOS.get(escopo, ()))
+    return any(caminho.startswith(p) for p in SCOPES.get(scope, ()))
 
 
-def sessao_valida(token: str, settings: Settings) -> dict[str, object] | None:
+def session_validates(token: str, settings: Settings) -> dict[str, object] | None:
     """Payload do token de sessão do login: assinatura e validade ok, sem escopo (o de mídia não
     abre a API) e de geração não revogada por "sair de todos os aparelhos"."""
-    payload = validar_token(token, settings.jwt_secret_key.get_secret_value()) if token else None
+    payload = validate_token(token, settings.jwt_secret_key.get_secret_value()) if token else None
     if payload is None or payload.get("esc"):
         return None
-    geracao = payload.get("ger", 0)
-    if not isinstance(geracao, int) or geracao < ler_geracao(settings.sessoes_geracao_arquivo):
+    generation = payload.get("ger", 0)
+    if not isinstance(generation, int) or generation < read_generation(settings.sessoes_geracao_arquivo):
         return None
     return payload
 
 
-def exigir_totp_recente(request: Request, settings: SettingsDep) -> None:
+def require_totp_recent(request: Request, settings: SettingsDep) -> None:
     """Para rotas que executam comandos no PC (módulo Código): além do token, um código do
     Authenticator digitado nas últimas `codigo_totp_horas` (claim `totp` do token de sessão)."""
-    sessao = getattr(request.state, "sessao", None)
-    if not isinstance(sessao, dict):
+    session = getattr(request.state, "sessao", None)
+    if not isinstance(session, dict):
         raise openai_error(403, "O Código só abre com o login do app.", "totp_required")
-    totp = sessao.get("totp")
-    confirmado = request.app.state.totp_confirmacoes.get(str(sessao.get("jti")), 0.0)
-    ultimo = max(totp if isinstance(totp, int) else 0, confirmado)
-    if time.time() - ultimo > settings.codigo_totp_horas * 3600:
+    totp = session.get("totp")
+    confirmed = request.app.state.totp_confirmacoes.get(str(session.get("jti")), 0.0)
+    last = max(totp if isinstance(totp, int) else 0, confirmed)
+    if time.time() - last > settings.codigo_totp_horas * 3600:
         raise openai_error(
             403, "Digite o código do Authenticator para usar o Código.", "totp_required"
         )

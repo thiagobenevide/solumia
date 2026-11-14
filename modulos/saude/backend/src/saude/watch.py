@@ -16,9 +16,9 @@ from pathlib import Path
 from statistics import mean
 from typing import IO, Any
 
-from saude.workouts import Invalido, _gravar, _ler
+from saude.workouts import Invalid, _write, _read
 
-CAMPOS_NUMERICOS = {
+FIELDS_NUMERIC = {
     # atividade
     "passos",
     "distancia_km",
@@ -50,21 +50,21 @@ CAMPOS_NUMERICOS = {
     "gordura_pct",
     "massa_magra_kg",
 }
-CAMPOS_TEXTO = {"sono_inicio", "sono_fim"}  # "HH:MM" local
-CAMPOS = CAMPOS_NUMERICOS | CAMPOS_TEXTO | {"exercicios"}
-SO_DA_EXPORTACAO = {"estresse", "sono_pontuacao"}  # o Health Connect não recebe
+FIELDS_TEXT = {"sono_inicio", "sono_fim"}  # "HH:MM" local
+FIELDS = FIELDS_NUMERIC | FIELDS_TEXT | {"exercicios"}
+SO_DA_EXPORT = {"estresse", "sono_pontuacao"}  # o Health Connect não recebe
 
-METAS = {"passos": 8000, "sono_min": 420, "minutos_ativos": 30, "agua_ml": 2000}
+GOALS = {"passos": 8000, "sono_min": 420, "minutos_ativos": 30, "agua_ml": 2000}
 
 
-def _dia(valor: str) -> str:
+def _day(valor: str) -> str:
     try:
         return date.fromisoformat(valor).isoformat()
     except (TypeError, ValueError) as e:
-        raise Invalido(f"Data inválida: {valor}") from e
+        raise Invalid(f"Data inválida: {valor}") from e
 
 
-def pontuar_sono(d: dict[str, Any]) -> int | None:
+def score_sleep(d: dict[str, Any]) -> int | None:
     """Nota 0–100 da noite pelos estágios, nos moldes da do Samsung Health (que não vai ao Health
     Connect): duração (meta 8 h), eficiência (tempo acordado na cama), sono profundo (~20%) e REM
     (~22%). Sem estágios, só as partes que existem entram, reescaladas para 100."""
@@ -72,35 +72,35 @@ def pontuar_sono(d: dict[str, Any]) -> int | None:
     if not isinstance(dormido, int | float) or dormido < 60:
         return None
 
-    def faixa(v: float, ruim: float, bom: float) -> float:
-        return max(0.0, min(1.0, (v - ruim) / (bom - ruim)))
+    def faixa(v: float, bad: float, bom: float) -> float:
+        return max(0.0, min(1.0, (v - bad) / (bom - bad)))
 
-    partes = [(40, faixa(dormido, 240, 480))]  # 4 h = 0, 8 h = cheio
+    parts = [(40, faixa(dormido, 240, 480))]  # 4 h = 0, 8 h = cheio
     acordado = d.get("sono_acordado_min")
     if isinstance(acordado, int | float):
-        partes.append((20, faixa(dormido / (dormido + acordado), 0.75, 0.95)))
+        parts.append((20, faixa(dormido / (dormido + acordado), 0.75, 0.95)))
     profundo, rem = d.get("sono_profundo_min"), d.get("sono_rem_min")
     if isinstance(profundo, int | float) and isinstance(rem, int | float) and profundo + rem > 0:
-        partes.append((20, faixa(profundo / dormido, 0.05, 0.18)))
-        partes.append((20, faixa(rem / dormido, 0.08, 0.20)))
-    peso = sum(p for p, _ in partes)
-    return round(sum(p * v for p, v in partes) * 100 / peso)
+        parts.append((20, faixa(profundo / dormido, 0.05, 0.18)))
+        parts.append((20, faixa(rem / dormido, 0.08, 0.20)))
+    weight = sum(p for p, _ in parts)
+    return round(sum(p * v for p, v in parts) * 100 / weight)
 
 
-def _limpar(dados: dict[str, Any]) -> dict[str, Any]:
-    saida: dict[str, Any] = {}
+def _clean(dados: dict[str, Any]) -> dict[str, Any]:
+    output: dict[str, Any] = {}
     for k, v in dados.items():
-        if k not in CAMPOS or v is None:
+        if k not in FIELDS or v is None:
             continue
-        if k in CAMPOS_NUMERICOS:
+        if k in FIELDS_NUMERIC:
             try:
-                saida[k] = round(float(v), 2)
+                output[k] = round(float(v), 2)
             except (TypeError, ValueError) as e:
-                raise Invalido(f"{k}: número inválido") from e
-        elif k in CAMPOS_TEXTO:
-            saida[k] = str(v)[:5]
+                raise Invalid(f"{k}: número inválido") from e
+        elif k in FIELDS_TEXT:
+            output[k] = str(v)[:5]
         elif isinstance(v, list):
-            saida[k] = [
+            output[k] = [
                 {
                     c: e[c]
                     for c in ("tipo", "inicio", "minutos", "calorias", "distancia_km")
@@ -109,12 +109,12 @@ def _limpar(dados: dict[str, Any]) -> dict[str, Any]:
                 for e in v
                 if isinstance(e, dict)
             ][:30]
-    return saida
+    return output
 
 
-class Relogio:
-    def __init__(self, raiz: str | Path) -> None:
-        self.raiz = Path(raiz).expanduser()
+class Clock:
+    def __init__(self, root: str | Path) -> None:
+        self.raiz = Path(root).expanduser()
         self.raiz.mkdir(parents=True, exist_ok=True)
         self._trava = threading.RLock()
         self._dias = self.raiz / "dias.json"
@@ -122,15 +122,15 @@ class Relogio:
         self._estado = self.raiz / "estado.json"
 
     def dias(self, de: str, ate: str) -> list[dict[str, Any]]:
-        d1, d2 = _dia(de), _dia(ate)
+        d1, d2 = _day(de), _day(ate)
         with self._trava:
-            todos: dict[str, Any] = _ler(self._dias, {})
-        saida = [{"data": k, **todos[k]} for k in sorted(todos) if d1 <= k <= d2]
-        for d in saida:  # sem a nota do Samsung (só vem na exportação), calcula a nossa
-            if "sono_pontuacao" not in d and (nota := pontuar_sono(d)) is not None:
-                d["sono_pontuacao"] = nota
+            everything: dict[str, Any] = _read(self._dias, {})
+        output = [{"data": k, **everything[k]} for k in sorted(everything) if d1 <= k <= d2]
+        for d in output:  # sem a nota do Samsung (só vem na exportação), calcula a nossa
+            if "sono_pontuacao" not in d and (note := score_sleep(d)) is not None:
+                d["sono_pontuacao"] = note
                 d["sono_pontuacao_estimada"] = True
-        return saida
+        return output
 
     def atualizar(
         self, dias: list[dict[str, Any]], sobrescrever: bool = True, origem: str = ""
@@ -138,64 +138,64 @@ class Relogio:
         """Grava os dias; com [sobrescrever]=False só preenche campos vazios (menos os exclusivos
         da exportação, que sempre entram)."""
         with self._trava:
-            todos: dict[str, Any] = _ler(self._dias, {})
+            everything: dict[str, Any] = _read(self._dias, {})
             n = 0
             for d in dias:
-                chave = _dia(d.get("data", ""))
-                novos = _limpar(d)
-                if not novos:
+                key = _day(d.get("data", ""))
+                new = _clean(d)
+                if not new:
                     continue
-                atual = todos.setdefault(chave, {})
-                for k, v in novos.items():
-                    if sobrescrever or k in SO_DA_EXPORTACAO or k not in atual:
-                        atual[k] = v
+                current = everything.setdefault(key, {})
+                for k, v in new.items():
+                    if sobrescrever or k in SO_DA_EXPORT or k not in current:
+                        current[k] = v
                 n += 1
-            _gravar(self._dias, todos)
+            _write(self._dias, everything)
             if origem:
-                estado = _ler(self._estado, {})
-                estado[origem] = datetime.now(UTC).isoformat(timespec="seconds")
-                _gravar(self._estado, estado)
+                state = _read(self._estado, {})
+                state[origem] = datetime.now(UTC).isoformat(timespec="seconds")
+                _write(self._estado, state)
             return n
 
     def estado(self) -> dict[str, Any]:
         """Última sincronização de cada origem (`health_connect`, `exportacao`)."""
         with self._trava:
-            return dict(_ler(self._estado, {}))
+            return dict(_read(self._estado, {}))
 
     def resumo(self, de: str, ate: str) -> dict[str, Any]:
         """Média de cada métrica nos dias que a têm e quantos dias bateram cada meta."""
-        dias = self.dias(de, ate)
+        days = self.dias(de, ate)
         medias: dict[str, float] = {}
-        for k in CAMPOS_NUMERICOS:
-            valores = [d[k] for d in dias if isinstance(d.get(k), int | float)]
-            if valores:
-                medias[k] = round(mean(valores), 1)
-        metas = {
+        for k in FIELDS_NUMERIC:
+            values = [d[k] for d in days if isinstance(d.get(k), int | float)]
+            if values:
+                medias[k] = round(mean(values), 1)
+        goals = {
             k: {
                 "meta": m,
-                "batidos": sum(1 for d in dias if d.get(k, 0) >= m),
-                "dias": sum(1 for d in dias if k in d),
+                "batidos": sum(1 for d in days if d.get(k, 0) >= m),
+                "dias": sum(1 for d in days if k in d),
             }
-            for k, m in METAS.items()
+            for k, m in GOALS.items()
         }
         return {
-            "de": _dia(de),
-            "ate": _dia(ate),
-            "dias": len(dias),
+            "de": _day(de),
+            "ate": _day(ate),
+            "dias": len(days),
             "medias": medias,
-            "metas": metas,
+            "metas": goals,
         }
 
     # --- análises da LLM local ---
 
     def analises(self) -> list[dict[str, Any]]:
         with self._trava:
-            return list(_ler(self._analises, []))
+            return list(_read(self._analises, []))
 
     def guardar_analise(self, analise: dict[str, Any]) -> dict[str, Any]:
         with self._trava:
-            lista = [analise, *_ler(self._analises, [])][:20]
-            _gravar(self._analises, lista)
+            items = [analise, *_read(self._analises, [])][:20]
+            _write(self._analises, items)
         return analise
 
     # --- exportação do Samsung Health ---
@@ -203,13 +203,13 @@ class Relogio:
     def importar_samsung(self, arquivo: IO[bytes]) -> dict[str, Any]:
         try:
             with zipfile.ZipFile(arquivo) as z:
-                dias, lidos = ler_exportacao(z)
+                days, read = read_export(z)
         except zipfile.BadZipFile as e:
-            raise Invalido("Envie o .zip da exportação do Samsung Health") from e
-        if not lidos:
-            raise Invalido("Nenhum CSV do Samsung Health reconhecido no zip")
-        n = self.atualizar(dias, sobrescrever=False, origem="exportacao")
-        return {"dias": n, "arquivos": lidos}
+            raise Invalid("Envie o .zip da exportação do Samsung Health") from e
+        if not read:
+            raise Invalid("Nenhum CSV do Samsung Health reconhecido no zip")
+        n = self.atualizar(days, sobrescrever=False, origem="exportacao")
+        return {"dias": n, "arquivos": read}
 
 
 # ---------------------------------------------------------------- CSVs da exportação
@@ -218,13 +218,13 @@ class Relogio:
 # prefixo do tipo (`com.samsung.health.heart_rate.heart_rate`); usamos só o fim do nome. Os horários
 # estão em UTC, com o fuso na coluna `time_offset` ("UTC-0300").
 
-ESTAGIOS = {
+STAGES = {
     "40001": "sono_acordado_min",
     "40002": "sono_leve_min",
     "40003": "sono_profundo_min",
     "40004": "sono_rem_min",
 }
-EXERCICIOS = {
+EXERCISES = {
     "1001": "caminhada",
     "1002": "corrida",
     "11007": "bicicleta",
@@ -237,108 +237,108 @@ EXERCICIOS = {
 }
 
 
-def _linhas(z: zipfile.ZipFile, nome: str) -> list[dict[str, str]]:
-    texto = z.read(nome).decode("utf-8-sig", "replace")
-    partes = texto.split("\n", 1)
-    if len(partes) < 2:
+def _lines(z: zipfile.ZipFile, nome: str) -> list[dict[str, str]]:
+    text = z.read(nome).decode("utf-8-sig", "replace")
+    parts = text.split("\n", 1)
+    if len(parts) < 2:
         return []
-    leitor = csv.reader(io.StringIO(partes[1]))
+    leitor = csv.reader(io.StringIO(parts[1]))
     cabecalho = [c.rsplit(".", 1)[-1].strip() for c in next(leitor, [])]
-    return [dict(zip(cabecalho, linha, strict=False)) for linha in leitor if linha]
+    return [dict(zip(cabecalho, line, strict=False)) for line in leitor if line]
 
 
-def _fuso(texto: str) -> timezone:
-    t = (texto or "").replace("UTC", "").strip()
+def _timezone(text: str) -> timezone:
+    t = (text or "").replace("UTC", "").strip()
     if len(t) == 5 and t[0] in "+-" and t[1:].isdigit():
-        minutos = int(t[1:3]) * 60 + int(t[3:])
-        return timezone(timedelta(minutes=minutos if t[0] == "+" else -minutos))
+        minutes = int(t[1:3]) * 60 + int(t[3:])
+        return timezone(timedelta(minutes=minutes if t[0] == "+" else -minutes))
     return timezone(timedelta(hours=-3))
 
 
-def _hora(linha: dict[str, str], coluna: str) -> datetime | None:
-    valor = (linha.get(coluna) or "").strip()
-    if not valor:
+def _hour(line: dict[str, str], coluna: str) -> datetime | None:
+    value = (line.get(coluna) or "").strip()
+    if not value:
         return None
     try:
-        if valor.isdigit():
-            utc = datetime.fromtimestamp(int(valor) / 1000, UTC)
+        if value.isdigit():
+            utc = datetime.fromtimestamp(int(value) / 1000, UTC)
         else:
-            utc = datetime.fromisoformat(valor.replace(" ", "T")[:19]).replace(tzinfo=UTC)
+            utc = datetime.fromisoformat(value.replace(" ", "T")[:19]).replace(tzinfo=UTC)
     except ValueError:
         return None
-    return utc.astimezone(_fuso(linha.get("time_offset", "")))
+    return utc.astimezone(_timezone(line.get("time_offset", "")))
 
 
-def _num(linha: dict[str, str], coluna: str) -> float | None:
+def _num(line: dict[str, str], coluna: str) -> float | None:
     try:
-        v = float(linha.get(coluna) or "")
+        v = float(line.get(coluna) or "")
     except ValueError:
         return None
     return v if v == v else None  # NaN
 
 
-def ler_exportacao(z: zipfile.ZipFile) -> tuple[list[dict[str, Any]], list[str]]:
+def read_export(z: zipfile.ZipFile) -> tuple[list[dict[str, Any]], list[str]]:
     """Dias montados a partir dos CSVs reconhecidos e os tipos lidos."""
-    dias: dict[str, dict[str, Any]] = defaultdict(dict)
-    listas: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
-    lidos: list[str] = []
+    days: dict[str, dict[str, Any]] = defaultdict(dict)
+    lists: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    read: list[str] = []
 
     def tipo(nome: str) -> str:
         base = nome.rsplit("/", 1)[-1].removesuffix(".csv")
-        partes = base.split(".")
-        return ".".join(partes[:-1]) if partes[-1].isdigit() else base
+        parts = base.split(".")
+        return ".".join(parts[:-1]) if parts[-1].isdigit() else base
 
     leitores = {
-        "tracker.pedometer_day_summary": _passos,
-        "sleep": _sono,
-        "sleep_stage": _estagios,
+        "tracker.pedometer_day_summary": _steps,
+        "sleep": _sleep,
+        "sleep_stage": _stages,
         "tracker.heart_rate": _fc,
-        "stress": _estresse,
-        "weight": _peso,
+        "stress": _stress,
+        "weight": _weight,
         "tracker.oxygen_saturation": _spo2,
-        "exercise": _exercicio,
-        "water_intake": _agua,
-        "floors_climbed": _andares,
+        "exercise": _exercise,
+        "water_intake": _water,
+        "floors_climbed": _floors,
     }
     for nome in z.namelist():
         if not nome.endswith(".csv"):
             continue
         t = tipo(nome)
-        for chave, leitor in leitores.items():
-            if t.endswith("." + chave):
-                leitor(_linhas(z, nome), dias, listas)
-                lidos.append(chave)
+        for key, leitor in leitores.items():
+            if t.endswith("." + key):
+                leitor(_lines(z, nome), days, lists)
+                read.append(key)
                 break
 
-    for d, metricas in listas.items():
-        for k, valores in metricas.items():
-            if not valores:
+    for d, metricas in lists.items():
+        for k, values in metricas.items():
+            if not values:
                 continue
             if k == "fc_min":
-                dias[d][k] = min(valores)
+                days[d][k] = min(values)
             elif k == "fc_max":
-                dias[d][k] = max(valores)
+                days[d][k] = max(values)
             else:
-                dias[d][k] = round(mean(valores), 1)
-    for v in dias.values():
+                days[d][k] = round(mean(values), 1)
+    for v in days.values():
         v.pop("_maior_sono", None)
-    return [{"data": d, **v} for d, v in sorted(dias.items())], sorted(set(lidos))
+    return [{"data": d, **v} for d, v in sorted(days.items())], sorted(set(read))
 
 
-Dias = dict[str, dict[str, Any]]
-Listas = dict[str, dict[str, list[float]]]
+Days = dict[str, dict[str, Any]]
+Lists = dict[str, dict[str, list[float]]]
 
 
-def _passos(linhas: list[dict[str, str]], dias: Dias, _: Listas) -> None:
-    for x in linhas:
-        dia = _num(x, "day_time")
-        passos = _num(x, "step_count")
-        if dia is None or passos is None:
+def _steps(lines: list[dict[str, str]], dias: Days, _: Lists) -> None:
+    for x in lines:
+        day = _num(x, "day_time")
+        steps = _num(x, "step_count")
+        if day is None or steps is None:
             continue
-        d = datetime.fromtimestamp(dia / 1000, UTC).date().isoformat()
-        if passos <= dias[d].get("passos", -1):
+        d = datetime.fromtimestamp(day / 1000, UTC).date().isoformat()
+        if steps <= dias[d].get("passos", -1):
             continue  # um registro por aparelho; fica o maior (o combinado)
-        dias[d]["passos"] = int(passos)
+        dias[d]["passos"] = int(steps)
         if (m := _num(x, "distance")) is not None:
             dias[d]["distancia_km"] = round(m / 1000, 2)
         if (c := _num(x, "calorie")) is not None:
@@ -347,103 +347,103 @@ def _passos(linhas: list[dict[str, str]], dias: Dias, _: Listas) -> None:
             dias[d]["minutos_ativos"] = round(a / 60000)
 
 
-def _sono(linhas: list[dict[str, str]], dias: Dias, _: Listas) -> None:
-    for x in linhas:
-        ini, fim = _hora(x, "start_time"), _hora(x, "end_time")
-        if not ini or not fim or fim <= ini:
+def _sleep(lines: list[dict[str, str]], dias: Days, _: Lists) -> None:
+    for x in lines:
+        start, end = _hour(x, "start_time"), _hour(x, "end_time")
+        if not start or not end or end <= start:
             continue
-        d = dias[fim.date().isoformat()]
-        minutos = round((fim - ini).total_seconds() / 60)
-        d["sono_min"] = d.get("sono_min", 0) + minutos
-        if minutos > d.get("_maior_sono", 0):  # horários da noite principal, não do cochilo
+        d = dias[end.date().isoformat()]
+        minutes = round((end - start).total_seconds() / 60)
+        d["sono_min"] = d.get("sono_min", 0) + minutes
+        if minutes > d.get("_maior_sono", 0):  # horários da noite principal, não do cochilo
             d.update(
-                _maior_sono=minutos,
-                sono_inicio=ini.strftime("%H:%M"),
-                sono_fim=fim.strftime("%H:%M"),
+                _maior_sono=minutes,
+                sono_inicio=start.strftime("%H:%M"),
+                sono_fim=end.strftime("%H:%M"),
             )
             if (p := _num(x, "sleep_score")) is not None and p > 0:
                 d["sono_pontuacao"] = p
 
 
-def _estagios(linhas: list[dict[str, str]], dias: Dias, _: Listas) -> None:
-    for x in linhas:
-        ini, fim = _hora(x, "start_time"), _hora(x, "end_time")
-        campo = ESTAGIOS.get((x.get("stage") or "").strip())
-        if not ini or not fim or not campo:
+def _stages(lines: list[dict[str, str]], dias: Days, _: Lists) -> None:
+    for x in lines:
+        start, end = _hour(x, "start_time"), _hour(x, "end_time")
+        field = STAGES.get((x.get("stage") or "").strip())
+        if not start or not end or not field:
             continue
-        d = dias[fim.date().isoformat()]
-        d[campo] = d.get(campo, 0) + round((fim - ini).total_seconds() / 60)
+        d = dias[end.date().isoformat()]
+        d[field] = d.get(field, 0) + round((end - start).total_seconds() / 60)
 
 
-def _media_do_dia(coluna: str, campo: str):  # noqa: ANN202
-    def ler(linhas: list[dict[str, str]], _: Dias, listas: Listas) -> None:
-        for x in linhas:
-            ini, v = _hora(x, "start_time"), _num(x, coluna)
-            if ini and v is not None and v > 0:
-                listas[ini.date().isoformat()][campo].append(v)
+def _media_of_day(coluna: str, field: str):  # noqa: ANN202
+    def ler(lines: list[dict[str, str]], _: Days, lists: Lists) -> None:
+        for x in lines:
+            start, v = _hour(x, "start_time"), _num(x, coluna)
+            if start and v is not None and v > 0:
+                lists[start.date().isoformat()][field].append(v)
 
     return ler
 
 
-_estresse = _media_do_dia("score", "estresse")
-_spo2 = _media_do_dia("spo2", "spo2")
+_stress = _media_of_day("score", "estresse")
+_spo2 = _media_of_day("spo2", "spo2")
 
 
-def _fc(linhas: list[dict[str, str]], dias: Dias, listas: Listas) -> None:
-    for x in linhas:
-        ini, v = _hora(x, "start_time"), _num(x, "heart_rate")
-        if not ini or v is None or v <= 0:
+def _fc(lines: list[dict[str, str]], dias: Days, lists: Lists) -> None:
+    for x in lines:
+        start, v = _hour(x, "start_time"), _num(x, "heart_rate")
+        if not start or v is None or v <= 0:
             continue
-        lista = listas[ini.date().isoformat()]
-        lista["fc_media"].append(v)
-        lista["fc_min"].append(_num(x, "min") or v)
-        lista["fc_max"].append(_num(x, "max") or v)
+        items = lists[start.date().isoformat()]
+        items["fc_media"].append(v)
+        items["fc_min"].append(_num(x, "min") or v)
+        items["fc_max"].append(_num(x, "max") or v)
 
 
-def _peso(linhas: list[dict[str, str]], dias: Dias, _: Listas) -> None:
-    for x in sorted(linhas, key=lambda x: x.get("start_time", "")):
-        ini = _hora(x, "start_time")
-        if not ini:
+def _weight(lines: list[dict[str, str]], dias: Days, _: Lists) -> None:
+    for x in sorted(lines, key=lambda x: x.get("start_time", "")):
+        start = _hour(x, "start_time")
+        if not start:
             continue
-        d = dias[ini.date().isoformat()]
-        for coluna, campo in (
+        d = dias[start.date().isoformat()]
+        for coluna, field in (
             ("weight", "peso_kg"),
             ("body_fat", "gordura_pct"),
             ("fat_free_mass", "massa_magra_kg"),
         ):
             if (v := _num(x, coluna)) is not None and v > 0:
-                d[campo] = round(v, 1)
+                d[field] = round(v, 1)
 
 
-def _exercicio(linhas: list[dict[str, str]], dias: Dias, _: Listas) -> None:
-    for x in linhas:
-        ini = _hora(x, "start_time")
-        duracao = _num(x, "duration")
-        if not ini or not duracao:
+def _exercise(lines: list[dict[str, str]], dias: Days, _: Lists) -> None:
+    for x in lines:
+        start = _hour(x, "start_time")
+        duration = _num(x, "duration")
+        if not start or not duration:
             continue
-        codigo = (x.get("exercise_type") or "").strip()
+        code = (x.get("exercise_type") or "").strip()
         e: dict[str, Any] = {
-            "tipo": EXERCICIOS.get(codigo, f"exercício {codigo}" if codigo else "exercício"),
-            "inicio": ini.strftime("%H:%M"),
-            "minutos": round(duracao / 60000),
+            "tipo": EXERCISES.get(code, f"exercício {code}" if code else "exercício"),
+            "inicio": start.strftime("%H:%M"),
+            "minutos": round(duration / 60000),
         }
         if (c := _num(x, "calorie")) is not None:
             e["calorias"] = round(c)
         if (m := _num(x, "distance")) is not None and m > 0:
             e["distancia_km"] = round(m / 1000, 2)
-        dias[ini.date().isoformat()].setdefault("exercicios", []).append(e)
+        dias[start.date().isoformat()].setdefault("exercicios", []).append(e)
 
 
-def _soma_do_dia(coluna: str, campo: str):  # noqa: ANN202
-    def ler(linhas: list[dict[str, str]], dias: Dias, _: Listas) -> None:
-        for x in linhas:
-            ini, v = _hora(x, "start_time"), _num(x, coluna)
-            if ini and v is not None and v > 0:
-                d = dias[ini.date().isoformat()]
-                d[campo] = round(d.get(campo, 0) + v, 1)
+def _sum_of_day(coluna: str, field: str):  # noqa: ANN202
+    def ler(lines: list[dict[str, str]], dias: Days, _: Lists) -> None:
+        for x in lines:
+            start, v = _hour(x, "start_time"), _num(x, coluna)
+            if start and v is not None and v > 0:
+                d = dias[start.date().isoformat()]
+                d[field] = round(d.get(field, 0) + v, 1)
 
     return ler
 
 
-_agua = _soma_do_dia("amount", "agua_ml")
-_andares = _soma_do_dia("floor", "andares")
+_water = _sum_of_day("amount", "agua_ml")
+_floors = _sum_of_day("floor", "andares")

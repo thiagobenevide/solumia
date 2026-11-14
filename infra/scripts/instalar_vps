@@ -95,12 +95,12 @@ fi
 if [ -n "$senha" ]; then
     [ "${#senha}" -ge 12 ] || falha "ADMIN_SENHA precisa de ao menos 12 caracteres."
     hash_senha="$(SENHA="$senha" no_gateway -e SENHA gateway python -c \
-        'import os; from backend.auth.security import gerar_hash_senha as g; print(g(os.environ["SENHA"]))')"
+        'import os; from backend.auth.security import generate_hash_password as g; print(g(os.environ["SENHA"]))')"
 fi
 totp="$(valor GATEWAY_ADMIN_TOTP_SEGREDO)"
 totp_novo=0
 if [ -z "$totp" ]; then
-    totp="$(no_gateway gateway python -c 'from backend.auth.security import gerar_segredo_totp as g; print(g())')"
+    totp="$(no_gateway gateway python -c 'from backend.auth.security import generate_secret_totp as g; print(g())')"
     totp_novo=1
 fi
 usuario="$(valor GATEWAY_ADMIN_USUARIO admin)"

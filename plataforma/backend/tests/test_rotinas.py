@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from rotinas.api import LLMIndisponivel
+from rotinas.api import LLMUnavailable
 
 
 @pytest.fixture
@@ -24,16 +24,16 @@ def test_kanban_e_cronometro(api: TestClient) -> None:
     a = api.post("/api/rotinas/tarefas", json={"titulo": "A", "prioridade": "alta"}).json()
     b = api.post("/api/rotinas/tarefas", json={"titulo": "B"}).json()
     assert (a["coluna"], a["ordem"], b["ordem"]) == ("pendente", 0, 1)
-    invalida = {"titulo": "C", "prioridade": "x"}
-    assert api.post("/api/rotinas/tarefas", json=invalida).status_code == 422
+    invalid = {"titulo": "C", "prioridade": "x"}
+    assert api.post("/api/rotinas/tarefas", json=invalid).status_code == 422
 
     # iniciar leva para execução; iniciar outra pausa a primeira
     a = api.post(f"/api/rotinas/tarefas/{a['id']}/iniciar").json()
     assert a["coluna"] == "execucao" and a["rodando_desde"]
     api.post(f"/api/rotinas/tarefas/{b['id']}/iniciar")
     assert api.get("/api/rotinas/resumo").json()["rodando"] == b["id"]
-    lista = {t["id"]: t for t in api.get("/api/rotinas/tarefas").json()}
-    assert lista[a["id"]]["rodando_desde"] is None and lista[b["id"]]["ordem"] == 0
+    items = {t["id"]: t for t in api.get("/api/rotinas/tarefas").json()}
+    assert items[a["id"]]["rodando_desde"] is None and items[b["id"]]["ordem"] == 0
 
     # reordenar dentro da coluna e concluir (para o cronômetro)
     b = api.post(f"/api/rotinas/tarefas/{b['id']}/mover", json={"coluna": "execucao", "ordem": 0})
@@ -68,15 +68,15 @@ def test_perguntar_usa_quadro(api: TestClient) -> None:
         json={"pergunta": "o que faço?", "historico": [{"papel": "usuario", "texto": "oi"}]},
     )
     assert r.json() == {"resposta": "Faça o relatório."}
-    sistema, historico, pergunta = recebidas[0]
-    assert "Relatório mensal" in sistema["content"]
-    assert historico == {"role": "user", "content": "oi"}
-    assert pergunta["content"] == "o que faço?"
+    system, history, question = recebidas[0]
+    assert "Relatório mensal" in system["content"]
+    assert history == {"role": "user", "content": "oi"}
+    assert question["content"] == "o que faço?"
 
 
 def test_perguntar_sem_worker(api: TestClient) -> None:
     async def fora(_: list[dict[str, str]]) -> str:
-        raise LLMIndisponivel("sem worker")
+        raise LLMUnavailable("sem worker")
 
     assert api.post("/api/rotinas/perguntar", json={"pergunta": "?"}).status_code == 503
     api.app.state.rotinas_llm = fora  # type: ignore[attr-defined]

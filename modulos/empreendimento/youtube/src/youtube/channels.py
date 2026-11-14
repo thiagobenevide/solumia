@@ -1,7 +1,7 @@
 """Canais do YouTube sobre o cofre de notas: cada canal é uma pasta `RAIZ/<slug>/`
 com a nota do canal (`tipo: canal`) e as subpastas das coleções. Nada é guardado fora do Markdown.
 
-O cofre chega pronto da plataforma (`backend.notes.vault.Cofre`); aqui só se usam `na_pasta`,
+O cofre chega pronto da plataforma (`backend.notes.vault.Vault`); aqui só se usam `na_pasta`,
 `obter`, `criar`, `atualizar` e `excluir`, que levantam `KeyError` (não achou) e `ValueError`
 (conflito).
 """
@@ -11,18 +11,18 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from youtube.schema import COLECOES, MAPA, MODELO_CANAL, RAIZ, STATUS_CANAL, esquema
-from youtube.importer import importar
+from youtube.schema import COLLECTIONS, MAP, MODEL_CHANNEL, ROOT, STATUS_CHANNEL, schema
+from youtube.importer import run_import
 
 SLUG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,40}$")
 LINK = re.compile(r"^\s*\[\[([^\[\]|#]+)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]\s*$")
 
 
-class NaoEncontrado(KeyError):
+class NotFound(KeyError):
     pass
 
 
-class Invalido(ValueError):
+class Invalid(ValueError):
     pass
 
 
@@ -30,52 +30,52 @@ def _link(titulo: str) -> str:
     return titulo if LINK.match(titulo) else f"[[{titulo.strip()}]]"
 
 
-def _sem_link(valor: Any) -> str:
+def _without_link(valor: Any) -> str:
     m = LINK.match(str(valor))
     return m.group(1).strip() if m else str(valor)
 
 
-def _numero(props: dict[str, Any]) -> int | None:
-    for nome in ("numero", "video"):
+def _number(props: dict[str, Any]) -> int | None:
+    for name in ("numero", "video"):
         try:
-            return int(props[nome])
+            return int(props[name])
         except (KeyError, TypeError, ValueError):
             continue
     return None
 
 
-def _colecao(colecao: str) -> dict[str, Any]:
-    if colecao not in COLECOES:
-        raise NaoEncontrado(f"Coleção desconhecida: {colecao}")
-    return COLECOES[colecao]
+def _collection(collection: str) -> dict[str, Any]:
+    if collection not in COLLECTIONS:
+        raise NotFound(f"Coleção desconhecida: {collection}")
+    return COLLECTIONS[collection]
 
 
 def _props(c: dict[str, Any], recebidas: dict[str, Any]) -> dict[str, Any]:
     """Valida os campos da coleção; valor vazio vira None (apagar o campo)."""
-    saida: dict[str, Any] = {}
-    campos = {x["nome"]: x for x in c["campos"]}
-    for nome, valor in recebidas.items():
-        campo = campos.get(nome)
-        if campo is None:
-            raise Invalido(f"Campo desconhecido em {c['nome']}: {nome}")
-        if valor is None or str(valor).strip() == "":
-            saida[nome] = None
-        elif campo["tipo"] == "numero":
+    output: dict[str, Any] = {}
+    fields = {x["nome"]: x for x in c["campos"]}
+    for name, value in recebidas.items():
+        field = fields.get(name)
+        if field is None:
+            raise Invalid(f"Campo desconhecido em {c['nome']}: {name}")
+        if value is None or str(value).strip() == "":
+            output[name] = None
+        elif field["tipo"] == "numero":
             try:
-                saida[nome] = int(valor)
+                output[name] = int(value)
             except (TypeError, ValueError) as e:
-                raise Invalido(f"{campo['rotulo']} precisa ser um número") from e
-        elif campo["tipo"] == "opcoes" and valor not in campo["opcoes"]:
-            raise Invalido(f"{campo['rotulo']} inválido: {valor}")
-        elif campo["tipo"] == "link":
-            saida[nome] = _link(str(valor))
+                raise Invalid(f"{field['rotulo']} precisa ser um número") from e
+        elif field["tipo"] == "opcoes" and value not in field["opcoes"]:
+            raise Invalid(f"{field['rotulo']} inválido: {value}")
+        elif field["tipo"] == "link":
+            output[name] = _link(str(value))
         else:
-            saida[nome] = valor
-    return saida
+            output[name] = value
+    return output
 
 
-def _mesclar(atuais: dict[str, Any], novas: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in (atuais | novas).items() if v is not None}
+def _merge(current: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in (current | new).items() if v is not None}
 
 
 class Youtube:
@@ -87,30 +87,30 @@ class Youtube:
 
     def _pasta(self, slug: str) -> str:
         if not SLUG.match(slug):
-            raise Invalido(
+            raise Invalid(
                 f"Identificador de canal inválido: {slug!r} (use minúsculas, números e -)"
             )
-        return f"{RAIZ}/{slug}"
+        return f"{ROOT}/{slug}"
 
-    def _canal_nota(self, slug: str, notas: list[dict] | None = None) -> dict[str, Any]:
-        pasta = self._pasta(slug)
-        for n in notas if notas is not None else self.cofre.na_pasta(pasta):
-            if n["tipo"] == "canal" and n["pasta"] == pasta:
+    def _canal_nota(self, slug: str, notes: list[dict] | None = None) -> dict[str, Any]:
+        folder = self._pasta(slug)
+        for n in notes if notes is not None else self.cofre.na_pasta(folder):
+            if n["tipo"] == "canal" and n["pasta"] == folder:
                 return n
-        raise NaoEncontrado(f"Canal não encontrado: {slug}")
+        raise NotFound(f"Canal não encontrado: {slug}")
 
-    def _contagens(self, slug: str, notas: list[dict]) -> dict[str, Any]:
+    def _contagens(self, slug: str, notes: list[dict]) -> dict[str, Any]:
         """Gerência do canal: total e status de cada coleção."""
-        saida = {}
-        for k, c in COLECOES.items():
-            pasta = f"{RAIZ}/{slug}/{c['pasta']}"
-            doc = [n for n in notas if n["tipo"] == c["tipo"] and n["pasta"].startswith(pasta)]
+        output = {}
+        for k, c in COLLECTIONS.items():
+            folder = f"{ROOT}/{slug}/{c['pasta']}"
+            doc = [n for n in notes if n["tipo"] == c["tipo"] and n["pasta"].startswith(folder)]
             status = Counter(n["status"] or "sem status" for n in doc)
-            saida[k] = {"total": len(doc), "status": dict(status.most_common())}
-        return saida
+            output[k] = {"total": len(doc), "status": dict(status.most_common())}
+        return output
 
-    def _canal(self, n: dict[str, Any], notas: list[dict]) -> dict[str, Any]:
-        slug = n["pasta"].removeprefix(f"{RAIZ}/")
+    def _canal(self, n: dict[str, Any], notes: list[dict]) -> dict[str, Any]:
+        slug = n["pasta"].removeprefix(f"{ROOT}/")
         return {
             "slug": slug,
             "id": n["id"],
@@ -119,65 +119,65 @@ class Youtube:
             "status": n["status"],
             "tags": n["tags"],
             "atualizada": n["atualizada"],
-            "colecoes": self._contagens(slug, notas),
+            "colecoes": self._contagens(slug, notes),
         }
 
     def canais(self) -> list[dict[str, Any]]:
-        notas = self.cofre.na_pasta(RAIZ)
-        canais = [
+        notes = self.cofre.na_pasta(ROOT)
+        channels = [
             n
-            for n in notas
-            if n["tipo"] == "canal" and n["pasta"].count("/") == RAIZ.count("/") + 1
+            for n in notes
+            if n["tipo"] == "canal" and n["pasta"].count("/") == ROOT.count("/") + 1
         ]
-        return sorted((self._canal(n, notas) for n in canais), key=lambda c: c["titulo"])
+        return sorted((self._canal(n, notes) for n in channels), key=lambda c: c["titulo"])
 
     def canal(self, slug: str) -> dict[str, Any]:
-        notas = self.cofre.na_pasta(self._pasta(slug))
-        n = self._canal_nota(slug, notas)
-        return self.cofre.obter(n["id"]) | self._canal(n, notas)
+        notes = self.cofre.na_pasta(self._pasta(slug))
+        n = self._canal_nota(slug, notes)
+        return self.cofre.obter(n["id"]) | self._canal(n, notes)
 
     def criar_canal(self, dados: dict[str, Any]) -> dict[str, Any]:
         slug = dados["slug"]
-        pasta = self._pasta(slug)
-        if any(n["tipo"] == "canal" for n in self.cofre.na_pasta(pasta)):
-            raise Invalido(f"O canal {slug!r} já existe")
+        folder = self._pasta(slug)
+        if any(n["tipo"] == "canal" for n in self.cofre.na_pasta(folder)):
+            raise Invalid(f"O canal {slug!r} já existe")
         status = dados.get("status") or "ideia"
-        if status not in STATUS_CANAL:
-            raise Invalido(f"Status inválido: {status}")
-        nome = (dados.get("nome") or "").strip()
+        if status not in STATUS_CHANNEL:
+            raise Invalid(f"Status inválido: {status}")
+        name = (dados.get("nome") or "").strip()
         self.cofre.criar(
             {
                 "titulo": dados["titulo"],
                 "tipo": "canal",
-                "pasta": pasta,
+                "pasta": folder,
                 "tags": ["empreendimento/youtube/canais", *dados.get("tags", [])],
-                "aliases": [nome] if nome else [],
-                "propriedades": {"mapa": MAPA, "status": status},
-                "corpo": dados.get("corpo") or f"# {dados['titulo']}\n\n{MODELO_CANAL}",
+                "aliases": [name] if name else [],
+                "propriedades": {"mapa": MAP, "status": status},
+                "corpo": dados.get("corpo") or f"# {dados['titulo']}\n\n{MODEL_CHANNEL}",
             }
         )
         return self.canal(slug)
 
     def editar_canal(self, slug: str, dados: dict[str, Any]) -> dict[str, Any]:
-        atual = self.cofre.obter(self._canal_nota(slug)["id"])
-        edicao: dict[str, Any] = {
+        current = self.cofre.obter(self._canal_nota(slug)["id"])
+        edit: dict[str, Any] = {
             k: dados[k] for k in ("titulo", "tags", "corpo") if dados.get(k) is not None
         }
         if dados.get("nome") is not None:
-            nome = dados["nome"].strip()
-            edicao["aliases"] = [nome, *atual["aliases"][1:]] if nome else atual["aliases"][1:]
+            name = dados["nome"].strip()
+            edit["aliases"] = [name, *current["aliases"][1:]] if name else current["aliases"][1:]
         if dados.get("status") is not None:
-            if dados["status"] not in STATUS_CANAL:
-                raise Invalido(f"Status inválido: {dados['status']}")
-            edicao["propriedades"] = atual["propriedades"] | {"status": dados["status"]}
-        self.cofre.atualizar(atual["id"], edicao)
+            if dados["status"] not in STATUS_CHANNEL:
+                raise Invalid(f"Status inválido: {dados['status']}")
+            edit["propriedades"] = current["propriedades"] | {"status": dados["status"]}
+        self.cofre.atualizar(current["id"], edit)
         return self.canal(slug)
 
     def excluir_canal(self, slug: str) -> None:
-        notas = self.cofre.na_pasta(self._pasta(slug))
-        n = self._canal_nota(slug, notas)
-        if len(notas) > 1:
-            raise Invalido(f"O canal ainda tem {len(notas) - 1} notas; exclua-as antes")
+        notes = self.cofre.na_pasta(self._pasta(slug))
+        n = self._canal_nota(slug, notes)
+        if len(notes) > 1:
+            raise Invalid(f"O canal ainda tem {len(notes) - 1} notas; exclua-as antes")
         self.cofre.excluir(n["id"])
 
     # ---------- coleções (temas, histórias, roteiros, planos, métodos) ----------
@@ -188,112 +188,112 @@ class Youtube:
             "id": n["id"],
             "titulo": n["titulo"],
             "status": n["status"],
-            "numero": _numero(p),
+            "numero": _number(p),
             "fio": p.get("fio"),
             "formato": p.get("formato"),
             "evidencia": p.get("evidencia"),
             "tags": n["tags"],
             "atualizada": n["atualizada"],
             "ligacoes": {
-                x["nome"]: _sem_link(p[x["nome"]])
+                x["nome"]: _without_link(p[x["nome"]])
                 for x in c["campos"]
                 if x["tipo"] == "link" and p.get(x["nome"])
             },
         }
 
     def itens(
-        self, slug: str, colecao: str, q: str = "", status: str | None = None
+        self, slug: str, collection: str, q: str = "", status: str | None = None
     ) -> list[dict[str, Any]]:
-        c = _colecao(colecao)
-        notas = self.cofre.na_pasta(self._pasta(slug))
-        self._canal_nota(slug, notas)
-        pasta = f"{RAIZ}/{slug}/{c['pasta']}"
-        termo = q.strip().casefold()
-        saida = [
+        c = _collection(collection)
+        notes = self.cofre.na_pasta(self._pasta(slug))
+        self._canal_nota(slug, notes)
+        folder = f"{ROOT}/{slug}/{c['pasta']}"
+        term = q.strip().casefold()
+        output = [
             self._item(n, c)
-            for n in notas
+            for n in notes
             if n["tipo"] == c["tipo"]
-            and n["pasta"].startswith(pasta)
-            and (not termo or termo in n["titulo"].casefold())
+            and n["pasta"].startswith(folder)
+            and (not term or term in n["titulo"].casefold())
             and (not status or (n["status"] or "sem status") == status)
         ]
-        return sorted(saida, key=lambda i: (i["numero"] is None, i["numero"] or 0, i["titulo"]))
+        return sorted(output, key=lambda i: (i["numero"] is None, i["numero"] or 0, i["titulo"]))
 
-    def item(self, slug: str, colecao: str, id_: str) -> dict[str, Any]:
-        c = _colecao(colecao)
+    def item(self, slug: str, collection: str, id_: str) -> dict[str, Any]:
+        c = _collection(collection)
         n = self.cofre.obter(id_)
         if n["tipo"] != c["tipo"] or not n["pasta"].startswith(f"{self._pasta(slug)}/"):
-            raise NaoEncontrado(f"{c['item']} não encontrado neste canal")
-        return n | {"colecao": colecao, "ligacoes": self._item(n, c)["ligacoes"]}
+            raise NotFound(f"{c['item']} não encontrado neste canal")
+        return n | {"colecao": collection, "ligacoes": self._item(n, c)["ligacoes"]}
 
     def _titulo(self, c: dict[str, Any], titulo: str) -> str:
         titulo = titulo.strip()
         return titulo if titulo.startswith(c["item"]) else f"{c['item']} — {titulo}"
 
-    def criar(self, slug: str, colecao: str, dados: dict[str, Any]) -> dict[str, Any]:
-        c = _colecao(colecao)
-        canal = self._canal_nota(slug)
-        props = _mesclar(
-            {"canal": _link(canal["titulo"])}, _props(c, dados.get("propriedades", {}))
+    def criar(self, slug: str, collection: str, dados: dict[str, Any]) -> dict[str, Any]:
+        c = _collection(collection)
+        channel = self._canal_nota(slug)
+        props = _merge(
+            {"canal": _link(channel["titulo"])}, _props(c, dados.get("propriedades", {}))
         )
         n = self.cofre.criar(
             {
                 "titulo": self._titulo(c, dados["titulo"]),
                 "tipo": c["tipo"],
-                "pasta": f"{RAIZ}/{slug}/{c['pasta']}",
+                "pasta": f"{ROOT}/{slug}/{c['pasta']}",
                 "tags": [c["tag"], *(t for t in dados.get("tags", []) if t != c["tag"])],
                 "propriedades": props,
                 "corpo": dados.get("corpo") or c["modelo"],
             }
         )
-        return self.item(slug, colecao, n["id"])
+        return self.item(slug, collection, n["id"])
 
-    def editar(self, slug: str, colecao: str, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
-        c = _colecao(colecao)
-        atual = self.item(slug, colecao, id_)
-        edicao: dict[str, Any] = {
+    def editar(self, slug: str, collection: str, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
+        c = _collection(collection)
+        current = self.item(slug, collection, id_)
+        edit: dict[str, Any] = {
             k: dados[k] for k in ("tags", "corpo") if dados.get(k) is not None
         }
         if dados.get("titulo"):
-            edicao["titulo"] = self._titulo(c, dados["titulo"])
+            edit["titulo"] = self._titulo(c, dados["titulo"])
         if dados.get("propriedades") is not None:
-            edicao["propriedades"] = _mesclar(
-                atual["propriedades"], _props(c, dados["propriedades"])
+            edit["propriedades"] = _merge(
+                current["propriedades"], _props(c, dados["propriedades"])
             )
-        self.cofre.atualizar(id_, edicao)
-        return self.item(slug, colecao, id_)
+        self.cofre.atualizar(id_, edit)
+        return self.item(slug, collection, id_)
 
-    def excluir(self, slug: str, colecao: str, id_: str) -> None:
-        self.item(slug, colecao, id_)
+    def excluir(self, slug: str, collection: str, id_: str) -> None:
+        self.item(slug, collection, id_)
         self.cofre.excluir(id_)
 
-    def derivar(self, slug: str, tema_id: str, colecao: str) -> dict[str, Any]:
+    def derivar(self, slug: str, tema_id: str, collection: str) -> dict[str, Any]:
         """Cria o roteiro ou a história de um tema, com o mesmo nome, e liga os dois."""
-        if colecao not in ("roteiros", "historias"):
-            raise Invalido("Só se derivam roteiros e histórias de um tema")
-        campo = "roteiro" if colecao == "roteiros" else "historia"
+        if collection not in ("roteiros", "historias"):
+            raise Invalid("Só se derivam roteiros e histórias de um tema")
+        field = "roteiro" if collection == "roteiros" else "historia"
         tema = self.item(slug, "temas", tema_id)
-        if any(s["tipo"] == campo and s["id"] for s in tema["saidas"]):
-            raise Invalido(f"O tema já tem {COLECOES[colecao]['item'].lower()}")
+        if any(s["tipo"] == field and s["id"] for s in tema["saidas"]):
+            raise Invalid(f"O tema já tem {COLLECTIONS[collection]['item'].lower()}")
         p = tema["propriedades"]
-        resto = re.sub(r"^Tema\b\s*", "", tema["titulo"])
+        rest = re.sub(r"^Tema\b\s*", "", tema["titulo"])
         props: dict[str, Any] = {"tema": tema["titulo"], "status": "rascunho"}
-        if colecao == "roteiros":
-            props |= {"video": _numero(p), "fio": p.get("fio"), "plano": p.get("plano")}
+        if collection == "roteiros":
+            props |= {"video": _number(p), "fio": p.get("fio"), "plano": p.get("plano")}
         elif p.get("roteiro"):
             props["roteiro"] = p["roteiro"]
-        novo = self.criar(
+        new = self.criar(
             slug,
-            colecao,
-            {"titulo": f"{COLECOES[colecao]['item']} {resto}", "propriedades": props},
+            collection,
+            {"titulo": f"{COLLECTIONS[collection]['item']} {rest}", "propriedades": props},
         )
-        self.editar(slug, "temas", tema_id, {"propriedades": {campo: novo["titulo"]}})
-        return novo
+        self.editar(slug, "temas", tema_id, {"propriedades": {field: new["titulo"]}})
+        return new
 
     # ---------- esquema e importação ----------
 
     def esquema(self) -> dict[str, Any]:
-        return esquema()
+        return schema()
 
-    def importar(self, substituir: bool = False) -> dict[str, Any]:
-        return importar(self.vault, self.cofre.raiz, substituir)
+    def importar(self, replace: bool = False) -> dict[str, Any]:
+        return run_import(self.vault, self.cofre.raiz, replace)

@@ -44,10 +44,10 @@ async def test_recusa_troca_com_modelo_processando() -> None:
 
 
 async def test_carrega_pelo_roteador() -> None:
-    chamadas: list[str] = []
-    p = _provider([_m("b"), _m("a", "loaded")], registro=chamadas)
+    calls: list[str] = []
+    p = _provider([_m("b"), _m("a", "loaded")], registro=calls)
     assert await p.carregar("b") == {"modelo": "b"}
-    assert "POST /models/load" in chamadas
+    assert "POST /models/load" in calls
 
 
 async def test_modelo_desconhecido() -> None:
@@ -58,5 +58,5 @@ async def test_modelo_desconhecido() -> None:
 async def test_chat_sem_modelo_usa_o_carregado() -> None:
     p = _provider([_m("b"), _m("a", "loaded")])
     r: Callable[..., Any] = p.chat_completion
-    resposta = await r({"messages": []})
-    assert '"model":"a"' in resposta["modelo"].replace(" ", "")
+    answer = await r({"messages": []})
+    assert '"model":"a"' in answer["modelo"].replace(" ", "")

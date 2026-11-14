@@ -29,8 +29,8 @@ def test_criar_salvar_e_listar(api: TestClient) -> None:
     r = api.put(f"{url}/elementos", json={"versao": 1, "elementos": [TRACO]})
     assert r.status_code == 200 and r.json()["versao"] == 2
 
-    [resumo] = api.get("/api/design/quadros").json()
-    assert resumo["total"] == 1 and "elementos" not in resumo
+    [summary] = api.get("/api/design/quadros").json()
+    assert summary["total"] == 1 and "elementos" not in summary
     assert api.get(f"/api/design/quadros/{q['id']}").json()["elementos"] == [TRACO]
 
 
@@ -55,10 +55,10 @@ def test_valida_elementos_e_fundo(api: TestClient) -> None:
 
 def test_editar_duplicar_e_excluir(api: TestClient) -> None:
     q = api.post("/api/design/quadros", json={"titulo": "Esquema"}).json()
-    novo = api.patch(f"/api/design/quadros/{q['id']}", json={"titulo": "Novo"}).json()
-    assert novo["titulo"] == "Novo"
-    copia = api.post(f"/api/design/quadros/{q['id']}/duplicar").json()
-    assert copia["titulo"] == "Novo (cópia)" and copia["id"] != q["id"]
+    new = api.patch(f"/api/design/quadros/{q['id']}", json={"titulo": "Novo"}).json()
+    assert new["titulo"] == "Novo"
+    copy = api.post(f"/api/design/quadros/{q['id']}/duplicar").json()
+    assert copy["titulo"] == "Novo (cópia)" and copy["id"] != q["id"]
     assert api.delete(f"/api/design/quadros/{q['id']}").status_code == 204
     assert api.get(f"/api/design/quadros/{q['id']}").status_code == 404
     assert api.get("/api/design/quadros/../../etc").status_code == 404

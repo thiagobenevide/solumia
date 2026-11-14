@@ -85,7 +85,7 @@ def api(app: Any) -> TestClient:
 
 
 def test_valores_em_notacao_spice() -> None:
-    casos = {
+    cases = {
         "10k": "10k",
         "100n": "100n",
         "4u7": "4.7u",
@@ -102,25 +102,25 @@ def test_valores_em_notacao_spice() -> None:
         "1kHz": "1k",
         "2,2u": "2.2u",
     }
-    assert {t: spice.valor_spice(t) for t in casos} == casos
-    assert spice.valor_spice("NTC 10k") is None
-    assert spice.numero("4.7u") == pytest.approx(4.7e-6)
-    assert spice.numero("1Meg") == 1e6
+    assert {t: spice.value_spice(t) for t in cases} == cases
+    assert spice.value_spice("NTC 10k") is None
+    assert spice.number("4.7u") == pytest.approx(4.7e-6)
+    assert spice.number("1Meg") == 1e6
 
 
 def test_divisor_resistivo_vira_netlist_com_gnd_no_zero() -> None:
-    g = spice.gerar(DIVISOR, rede=REDES_DIVISOR)
-    linhas = g["texto"].splitlines()
-    assert "V1 VIN 0 DC 5" in linhas
-    assert "R1 VIN VOUT 10k" in linhas
-    assert "R2 VOUT 0 10k" in linhas
-    assert linhas[-2:] == [".op", ".end"]
+    g = spice.generate(DIVISOR, rede=REDES_DIVISOR)
+    lines = g["texto"].splitlines()
+    assert "V1 VIN 0 DC 5" in lines
+    assert "R1 VIN VOUT 10k" in lines
+    assert "R2 VOUT 0 10k" in lines
+    assert lines[-2:] == [".op", ".end"]
     assert g["fontes"] == ["V1"] and g["ignorados"] == []
     assert g["nos"] == {"vin": "VIN", "vout": "VOUT"}
 
 
 def test_rc_transiente_ac_e_componente_sem_modelo() -> None:
-    projeto = {
+    project = {
         "componentes": [
             _c("fonte_tensao", "V1", "PULSE(0 5V 0 1n 1n 2.5ms 5ms)"),
             _c("resistor", "R1", "1k"),
@@ -139,43 +139,43 @@ def test_rc_transiente_ac_e_componente_sem_modelo() -> None:
         ],
         "soltos": [],
     }
-    g = spice.gerar(projeto, analise="tran", parametros={"passo": "1u", "fim": "5m"}, rede=redes)
-    linhas = g["texto"].splitlines()
-    assert "V1 N_1 0 PULSE(0 5 0 1n 1n 2.5m 5m)" in linhas
-    assert "C1 VOUT 0 100n" in linhas
-    assert "D1 P5V 0 LED_VERDE" in linhas
-    assert any(lin.startswith(".model LED_VERDE D(") for lin in linhas)
-    assert "VALIM_P5V P5V 0 DC 5" in linhas
-    assert ".tran 1u 5m" in linhas
+    g = spice.generate(project, analise="tran", parametros={"passo": "1u", "fim": "5m"}, rede=redes)
+    lines = g["texto"].splitlines()
+    assert "V1 N_1 0 PULSE(0 5 0 1n 1n 2.5m 5m)" in lines
+    assert "C1 VOUT 0 100n" in lines
+    assert "D1 P5V 0 LED_VERDE" in lines
+    assert any(lin.startswith(".model LED_VERDE D(") for lin in lines)
+    assert "VALIM_P5V P5V 0 DC 5" in lines
+    assert ".tran 1u 5m" in lines
     assert [i["ref"] for i in g["ignorados"]] == ["U1"]
     assert g["eixo"] == {"nome": "tempo", "unidade": "s"}
 
-    ac = spice.gerar(
-        projeto, analise="ac", parametros={"pontos": 10, "inicio": "10", "fim": "100k"}, rede=redes
+    ac = spice.generate(
+        project, analise="ac", parametros={"pontos": 10, "inicio": "10", "fim": "100k"}, rede=redes
     )
     assert ".ac dec 10 10 100k" in ac["texto"]
     assert "PULSE(0 5 0 1n 1n 2.5m 5m) AC 1" in ac["texto"]
-    dc = spice.gerar(
-        projeto,
+    dc = spice.generate(
+        project,
         analise="dc",
         rede=redes,
         parametros={"fonte": "V1", "inicio": "0", "fim": "5", "passo": "0.1"},
     )
     assert ".dc V1 0 5 0.1" in dc["texto"] and dc["eixo"] == {"nome": "V1", "unidade": "V"}
     with pytest.raises(ValueError, match="Fonte"):
-        spice.gerar(projeto, analise="dc", parametros={"fonte": "V9"}, rede=redes)
+        spice.generate(project, analise="dc", parametros={"fonte": "V9"}, rede=redes)
 
 
 def test_le_raw_ascii_do_ngspice() -> None:
-    nos = {"vin": "VIN", "vout": "VOUT"}
-    op = spice.resultado("op", spice.ler_raw(RAW_OP), nos)
+    nodes = {"vin": "VIN", "vout": "VOUT"}
+    op = spice.result("op", spice.read_raw(RAW_OP), nodes)
     assert op == {
         "analise": "op",
         "tensoes": {"VIN": 5.0, "VOUT": 2.5},
         "correntes": {"V1": -2.5e-4, "R1": 2.5e-4},
     }
     eixo = {"nome": "frequência", "unidade": "Hz"}
-    ac = spice.resultado("ac", spice.ler_raw(RAW_AC), nos, eixo)
+    ac = spice.result("ac", spice.read_raw(RAW_AC), nodes, eixo)
     assert ac["eixo"] == {**eixo, "valores": [10.0, 1000.0]}
     assert ac["series"]["v(VOUT)"] == pytest.approx([1.0, 0.5**0.5])
     assert ac["fases"]["v(VOUT)"] == pytest.approx([0.0, -45.0])
@@ -210,7 +210,7 @@ def test_sem_worker_nem_ngspice_responde_503(api: TestClient) -> None:
 
 @pytest.mark.skipif(not NGSPICE, reason="ngspice não instalado")
 def test_divisor_no_ngspice_de_verdade() -> None:
-    g = spice.gerar(DIVISOR, rede=REDES_DIVISOR)
+    g = spice.generate(DIVISOR, rede=REDES_DIVISOR)
     r = asyncio.run(run_ngspice(g["texto"], 30))
-    res = spice.resultado("op", spice.ler_raw(base64.b64decode(r["raw_b64"])), g["nos"])
+    res = spice.result("op", spice.read_raw(base64.b64decode(r["raw_b64"])), g["nos"])
     assert res["tensoes"]["VOUT"] == pytest.approx(2.5)

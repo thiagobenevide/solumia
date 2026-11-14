@@ -12,87 +12,87 @@ from pydantic import BaseModel, Field
 
 from saude import analysis
 from saude.api_wellbeing import MentalDep
-from saude.watch import Relogio
-from saude.workouts import Invalido, Treinos
+from saude.watch import Clock
+from saude.workouts import Invalid, Workouts
 
 router = APIRouter(prefix="/relogio")
 
 
-def get_relogio(request: Request) -> Relogio:
-    estado = request.app.state
-    if getattr(estado, "relogio", None) is None:
-        treinos: Treinos = estado.treinos
-        estado.relogio = Relogio(treinos.raiz / "relogio")
-    relogio: Relogio = estado.relogio
-    return relogio
+def get_clock(request: Request) -> Clock:
+    state = request.app.state
+    if getattr(state, "relogio", None) is None:
+        workouts: Workouts = state.treinos
+        state.relogio = Clock(workouts.raiz / "relogio")
+    clock: Clock = state.relogio
+    return clock
 
 
-RelogioDep = Annotated[Relogio, Depends(get_relogio)]
+ClockDep = Annotated[Clock, Depends(get_clock)]
 
 
-def _periodo(de: str, ate: str) -> tuple[str, str]:
+def _period(de: str, ate: str) -> tuple[str, str]:
     try:
         return date.fromisoformat(de).isoformat(), date.fromisoformat(ate).isoformat()
     except ValueError as e:
         raise HTTPException(422, "Datas no formato AAAA-MM-DD") from e
 
 
-class Dias(BaseModel):
+class Days(BaseModel):
     dias: list[dict[str, Any]] = Field(max_length=800)
 
 
-class PedidoAnalise(BaseModel):
+class RequestAnalysis(BaseModel):
     dias: int = Field(30, ge=3, le=365)
     pergunta: str = Field("", max_length=2000)
 
 
 @router.get("/dias")
-def dias(relogio: RelogioDep, de: str, ate: str) -> Any:
-    return relogio.dias(*_periodo(de, ate))
+def days(relogio: ClockDep, de: str, ate: str) -> Any:
+    return relogio.dias(*_period(de, ate))
 
 
 @router.put("/dias")
-def enviar_dias(corpo: Dias, relogio: RelogioDep) -> Any:
+def send_days(corpo: Days, relogio: ClockDep) -> Any:
     """Dias somados pelo app a partir do Health Connect; substituem os valores guardados."""
     try:
         return {"dias": relogio.atualizar(corpo.dias, origem="health_connect")}
-    except Invalido as e:
+    except Invalid as e:
         raise HTTPException(422, str(e)) from e
 
 
 @router.get("/resumo")
-def resumo(relogio: RelogioDep, de: str, ate: str) -> Any:
-    return relogio.resumo(*_periodo(de, ate))
+def summary(relogio: ClockDep, de: str, ate: str) -> Any:
+    return relogio.resumo(*_period(de, ate))
 
 
 @router.get("/estado")
-def estado(relogio: RelogioDep) -> Any:
+def state(relogio: ClockDep) -> Any:
     return relogio.estado()
 
 
 @router.post("/importar")
-def importar(relogio: RelogioDep, arquivo: Annotated[UploadFile, File()]) -> Any:
+def run_import(relogio: ClockDep, arquivo: Annotated[UploadFile, File()]) -> Any:
     """Zip de Samsung Health › Configurações › Baixar dados pessoais."""
     try:
         return relogio.importar_samsung(arquivo.file)
-    except Invalido as e:
+    except Invalid as e:
         raise HTTPException(422, str(e)) from e
 
 
 @router.get("/analises")
-def analises(relogio: RelogioDep) -> Any:
+def analyses(relogio: ClockDep) -> Any:
     return relogio.analises()
 
 
 @router.post("/analises")
-async def analisar(
-    pedido: PedidoAnalise, request: Request, relogio: RelogioDep, mental: MentalDep
+async def analyze(
+    pedido: RequestAnalysis, request: Request, relogio: ClockDep, mental: MentalDep
 ) -> Any:
     llm = getattr(request.app.state, "saude_llm", None)
     if llm is None:
         raise HTTPException(503, "LLM local indisponível")
     try:
-        return await analysis.analisar(
+        return await analysis.analyze(
             llm,
             relogio,
             mental,

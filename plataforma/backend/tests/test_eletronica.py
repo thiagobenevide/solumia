@@ -6,8 +6,8 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from eletronica.library import POR_ID, SIMBOLOS, G
-from eletronica.netlist import bom, netlist, posicao_pino
+from eletronica.library import POR_ID, SYMBOLS, G
+from eletronica.netlist import bom, netlist, position_pin
 
 FOLHAS = [{"id": "f1", "nome": "Folha 1"}, {"id": "f2", "nome": "Fonte"}]
 
@@ -40,17 +40,17 @@ def api(tmp_path: Path) -> TestClient:
 
 
 def test_pinos_da_biblioteca_ficam_na_grade() -> None:
-    for s in SIMBOLOS:
+    for s in SYMBOLS:
         assert s["pinos"], s["id"]
         for p in s["pinos"]:
             assert p["x"] % G == 0 and p["y"] % G == 0, (s["id"], p)
 
 
 def test_posicao_pino_gira_no_sentido_horario_e_espelha() -> None:
-    pino = {"x": -3 * G, "y": 0}
+    pin = {"x": -3 * G, "y": 0}
     c = {"x": 100, "y": 200, "rot": 90}
-    assert posicao_pino(c, pino) == (100, 200 - 3 * G)
-    assert posicao_pino({**c, "rot": 0, "espelho": True}, pino) == (100 + 3 * G, 200)
+    assert position_pin(c, pin) == (100, 200 - 3 * G)
+    assert position_pin({**c, "rot": 0, "espelho": True}, pin) == (100 + 3 * G, 200)
 
 
 def test_divisor_de_tensao_com_rotulo_entre_folhas() -> None:
@@ -106,8 +106,8 @@ def test_bom_agrupa_por_valor_e_ignora_alimentacao() -> None:
             _comp("g", "gnd", "#PWR1", 0, 0),
         ]
     }
-    linhas = bom(p)
-    assert [(linha["refs"], linha["valor"]) for linha in linhas] == [
+    lines = bom(p)
+    assert [(line["refs"], line["valor"]) for line in lines] == [
         (["R2", "R10"], "10k"),
         (["R3"], "1k"),
     ]
@@ -119,29 +119,29 @@ def test_criar_salvar_conflito_e_bom(api: TestClient) -> None:
     assert p["versao"] == 1 and p["folhas"][0]["id"] == "f1"
 
     url = f"/api/eletronica/projetos/{p['id']}"
-    corpo = {"versao": 1, "folhas": FOLHAS[:1], "componentes": [_comp("a", "resistor", "R1", 0, 0)]}
-    r = api.put(f"{url}/esquematico", json=corpo)
+    body = {"versao": 1, "folhas": FOLHAS[:1], "componentes": [_comp("a", "resistor", "R1", 0, 0)]}
+    r = api.put(f"{url}/esquematico", json=body)
     assert r.status_code == 200 and r.json()["versao"] == 2 and r.json()["total"] == 1
 
-    r = api.put(f"{url}/esquematico", json=corpo)
+    r = api.put(f"{url}/esquematico", json=body)
     assert r.status_code == 409 and r.json()["projeto"]["versao"] == 2
 
     assert api.get(f"{url}/bom").json()[0]["refs"] == ["R1"]
     assert "R1" in api.get(f"{url}/bom.csv").text
-    [resumo] = api.get("/api/eletronica/projetos").json()
-    assert "componentes" not in resumo
+    [summary] = api.get("/api/eletronica/projetos").json()
+    assert "componentes" not in summary
 
 
 def test_rejeita_simbolo_desconhecido_e_folha_inexistente(api: TestClient) -> None:
     p = api.post("/api/eletronica/projetos", json={}).json()
     url = f"/api/eletronica/projetos/{p['id']}/esquematico"
-    ruim = {**_comp("a", "resistor", "R1", 0, 0), "simbolo": "flux_capacitor"}
+    bad = {**_comp("a", "resistor", "R1", 0, 0), "simbolo": "flux_capacitor"}
     assert (
-        api.put(url, json={"versao": 1, "folhas": FOLHAS, "componentes": [ruim]}).status_code == 422
+        api.put(url, json={"versao": 1, "folhas": FOLHAS, "componentes": [bad]}).status_code == 422
     )
-    fora = {**_comp("a", "resistor", "R1", 0, 0), "folha": "f9"}
+    outside = {**_comp("a", "resistor", "R1", 0, 0), "folha": "f9"}
     assert (
-        api.put(url, json={"versao": 1, "folhas": FOLHAS, "componentes": [fora]}).status_code == 422
+        api.put(url, json={"versao": 1, "folhas": FOLHAS, "componentes": [outside]}).status_code == 422
     )
 
 
@@ -185,9 +185,9 @@ KICAD = r"""(kicad_symbol_lib
 
 
 def test_kicad_converte_eixos_unidades_extends_e_arco() -> None:
-    from eletronica.kicad import ler_biblioteca
+    from eletronica.kicad import read_collection
 
-    s = {x["id"]: x for x in ler_biblioteca(KICAD, "Teste")}
+    s = {x["id"]: x for x in read_collection(KICAD, "Teste")}
     r = s["Teste:R"]
     assert [(p["n"], p["x"], p["y"], p["dir"], p["comp"]) for p in r["pinos"]] == [
         ("1", 0, -3810, "b", 1270),
@@ -198,8 +198,8 @@ def test_kicad_converte_eixos_unidades_extends_e_arco() -> None:
     assert r["campos"]["ref"] == [2032, 0] and r["pinos"][0]["nome"] == ""
     us = s["Teste:R_US"]
     assert us["valor"] == "R_US" and us["descricao"] == "Resistor US" and len(us["pinos"]) == 2
-    arco = s["Teste:L"]["desenho"][0]
-    assert arco["r"] == 635 and arco["var"] == pytest.approx(179.46, abs=0.5)
+    arc = s["Teste:L"]["desenho"][0]
+    assert arc["r"] == 635 and arc["var"] == pytest.approx(179.46, abs=0.5)
     # Três unidades; o estilo De Morgan (_1_2) não entra.
     assert [x for x in s if x.startswith("Teste:LM358")] == [f"Teste:LM358:{u}" for u in (1, 2, 3)]
     a = s["Teste:LM358:1"]
@@ -211,11 +211,11 @@ def test_kicad_converte_eixos_unidades_extends_e_arco() -> None:
 
 
 def test_kicad_rejeita_o_que_nao_e_biblioteca() -> None:
-    from eletronica.kicad import ArquivoInvalido, ler_biblioteca
+    from eletronica.kicad import FileInvalid, read_collection
 
-    for ruim in ["(kicad_pcb (version 1))", "(kicad_symbol_lib (symbol", "texto solto"]:
-        with pytest.raises(ArquivoInvalido):
-            ler_biblioteca(ruim, "X")
+    for bad in ["(kicad_pcb (version 1))", "(kicad_symbol_lib (symbol", "texto solto"]:
+        with pytest.raises(FileInvalid):
+            read_collection(bad, "X")
 
 
 def test_importar_buscar_usar_no_projeto_e_remover(api: TestClient) -> None:
@@ -226,8 +226,8 @@ def test_importar_buscar_usar_no_projeto_e_remover(api: TestClient) -> None:
     assert r.status_code == 201 and r.json()["total"] == 7
     assert [b["nome"] for b in api.get("/api/eletronica/bibliotecas").json()] == ["Teste"]
 
-    achados = api.get("/api/eletronica/biblioteca/busca", params={"q": "resistor"}).json()
-    assert [s["id"] for s in achados] == ["Teste:R", "Teste:R_US"]
+    found = api.get("/api/eletronica/biblioteca/busca", params={"q": "resistor"}).json()
+    assert [s["id"] for s in found] == ["Teste:R", "Teste:R_US"]
     assert api.get("/api/eletronica/biblioteca/busca", params={"q": "op-amp"}).json()
     ids = {"ids": ["Teste:L", "resistor", "Teste:nada"]}
     assert [s["id"] for s in api.post("/api/eletronica/biblioteca/simbolos", json=ids).json()] == [
@@ -244,8 +244,8 @@ def test_importar_buscar_usar_no_projeto_e_remover(api: TestClient) -> None:
     ]
     r = api.put(f"{url}/esquematico", json={"versao": 1, "folhas": FOLHAS, "componentes": comps})
     assert r.status_code == 200 and r.json()["total"] == 2
-    [linha] = api.get(f"{url}/bom").json()
-    assert linha["refs"] == ["U1"] and linha["descricao"] == "LM358"
+    [line] = api.get(f"{url}/bom").json()
+    assert line["refs"] == ["U1"] and line["descricao"] == "LM358"
 
     assert api.delete("/api/eletronica/bibliotecas/Teste").status_code == 204
     assert api.get("/api/eletronica/bibliotecas").json() == []
@@ -259,20 +259,20 @@ def test_baixar_do_kicad_usa_a_versao_configurada(
 
     from eletronica import api as rotas
 
-    pedidos: list[str] = []
+    requests: list[str] = []
 
     async def falso(self: httpx.AsyncClient, url: str, **_: object) -> httpx.Response:
-        pedidos.append(url)
+        requests.append(url)
         if url.endswith("/Device.kicad_sym"):
             return httpx.Response(200, text=KICAD)
         return httpx.Response(404, text="Not Found")
 
     monkeypatch.setattr(rotas.httpx.AsyncClient, "get", falso)
     r = api.post("/api/eletronica/bibliotecas/kicad", json={"nomes": ["Device", "Nada", "../x"]})
-    device, nada, ruim = r.json()
+    device, nada, bad = r.json()
     assert device["total"] == 7 and device["origem"] == "kicad 9.0.9"
-    assert "HTTP 404" in nada["erro"] and "inválido" in ruim["erro"]
-    assert pedidos[0].endswith("/-/raw/9.0.9/Device.kicad_sym") and len(pedidos) == 2
+    assert "HTTP 404" in nada["erro"] and "inválido" in bad["erro"]
+    assert requests[0].endswith("/-/raw/9.0.9/Device.kicad_sym") and len(requests) == 2
     assert "Device" in api.get("/api/eletronica/bibliotecas/kicad").json()["sugeridas"]
 
 
@@ -298,7 +298,7 @@ def test_sondas_acham_a_rede_e_validam(api: TestClient) -> None:
     q = api.post("/api/eletronica/projetos", json={}).json()
     url = f"/api/eletronica/projetos/{q['id']}/esquematico"
     assert api.put(url, json={"versao": 1, **p}).status_code == 200
-    ruim = {**p, "sondas": [{"id": "x", "folha": "f1", "tipo": "w", "x": 0, "y": 0}]}
-    assert api.put(url, json={"versao": 2, **ruim}).status_code == 422
+    bad = {**p, "sondas": [{"id": "x", "folha": "f1", "tipo": "w", "x": 0, "y": 0}]}
+    assert api.put(url, json={"versao": 2, **bad}).status_code == 422
     sondas = api.get(f"/api/eletronica/projetos/{q['id']}/netlist").json()["sondas"]
     assert [s["id"] for s in sondas] == ["s1", "s2", "s3", "s4"]

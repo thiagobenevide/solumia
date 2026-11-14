@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from painel.api import LLMIndisponivel
-from painel.nagger import Cobrador
+from painel.api import LLMUnavailable
+from painel.nagger import Nagger
 
 HOJE = "2026-10-28"
 
@@ -56,19 +56,19 @@ def test_agenda_sugerida_e_contestacao(api: TestClient) -> None:
     r = api.put(f"/api/painel/agenda/{HOJE}", json={"blocos": [baixa]}).json()
     assert "tirou" in r["contestacoes"][0] and len(r["alteracoes"]) == 2
 
-    bloco = api.post(f"/api/painel/agenda/{HOJE}/blocos/{baixa['id']}/feito").json()
-    assert bloco["feito"] is True
-    invalido = {"blocos": [{"titulo": "x", "inicio": "10:00", "fim": "09:00"}]}
-    assert api.put(f"/api/painel/agenda/{HOJE}", json=invalido).status_code == 422
+    block = api.post(f"/api/painel/agenda/{HOJE}/blocos/{baixa['id']}/feito").json()
+    assert block["feito"] is True
+    invalid = {"blocos": [{"titulo": "x", "inicio": "10:00", "fim": "09:00"}]}
+    assert api.put(f"/api/painel/agenda/{HOJE}", json=invalid).status_code == 422
 
 
 def test_metas_e_disciplina(tmp_path: Path) -> None:
-    c = Cobrador(tmp_path)
-    leitura = c.criar_meta(
+    c = Nagger(tmp_path)
+    reading = c.criar_meta(
         {"titulo": "Ler", "frequencia": "diaria", "alvo": 2, "unidade": "capítulo"}
     )
-    c.registrar_acao(leitura["id"])
-    tarefas = [
+    c.registrar_acao(reading["id"])
+    tasks = [
         {
             "id": "t1",
             "titulo": "Relatório",
@@ -77,20 +77,20 @@ def test_metas_e_disciplina(tmp_path: Path) -> None:
             "coluna": "pendente",
         }
     ]
-    c.sugerir(c.agora().date().isoformat(), tarefas)
+    c.sugerir(c.agora().date().isoformat(), tasks)
 
-    noite = c.agora().replace(hour=19, minute=0)
-    d = c.disciplina(tarefas, noite)
+    night = c.agora().replace(hour=19, minute=0)
+    d = c.disciplina(tasks, night)
     assert d["blocos"] == {"total": 1, "vencidos": 1, "feitos": 0}
     assert d["metas"] == {"total": 1, "no_ritmo": 0}
     assert d["indice"] == 0 and d["dentro"] is False
-    textos = " ".join(a["texto"] for a in d["alertas"])
-    assert "Relatório" in textos and "Ler" in textos
-    assert "Relatório" in c.contexto(tarefas)
+    texts = " ".join(a["texto"] for a in d["alertas"])
+    assert "Relatório" in texts and "Ler" in texts
+    assert "Relatório" in c.contexto(tasks)
 
 
 def test_meta_semanal_ritmo(tmp_path: Path) -> None:
-    c = Cobrador(tmp_path)
+    c = Nagger(tmp_path)
     m = c.criar_meta({"titulo": "Treino", "frequencia": "semanal", "alvo": 7})
     quarta = datetime(2026, 10, 28).date()
     assert c.metas(quarta)[0]["esperado"] == 3.0
@@ -98,10 +98,10 @@ def test_meta_semanal_ritmo(tmp_path: Path) -> None:
 
 
 def test_conversa_nota_pesquisa_e_chat(app, api: TestClient) -> None:  # type: ignore[no-untyped-def]
-    vistos: list[list[dict[str, str]]] = []
+    seen: list[list[dict[str, str]]] = []
 
     async def falso(mensagens: list[dict[str, str]]) -> str:
-        vistos.append(mensagens)
+        seen.append(mensagens)
         return "ok"
 
     app.state.painel_llms = {"local": falso}
@@ -114,16 +114,16 @@ def test_conversa_nota_pesquisa_e_chat(app, api: TestClient) -> None:  # type: i
         "/api/painel/conversar", json={"mensagem": "pesquise na base fornecedor de áudio"}
     ).json()
     assert r["acao"] == "pesquisa" and len(r["notas"]) == 1
-    assert "Loja X" in vistos[-1][0]["content"]
+    assert "Loja X" in seen[-1][0]["content"]
 
     r = api.post("/api/painel/conversar", json={"mensagem": "o que faço agora?"}).json()
     assert (
         r == {"resposta": "ok", "acao": None, "executadas": []}
-        and "Cobrador" in vistos[-1][0]["content"]
+        and "Cobrador" in seen[-1][0]["content"]
     )
 
     api.post("/api/painel/conversar", json={"mensagem": "o que é isso?", "imagem": "QUJD"})
-    assert vistos[-1][-1]["content"][1] == {
+    assert seen[-1][-1]["content"][1] == {
         "type": "image_url",
         "image_url": {"url": "data:image/jpeg;base64,QUJD"},
     }
@@ -134,7 +134,7 @@ def test_conversa_nota_pesquisa_e_chat(app, api: TestClient) -> None:  # type: i
     )
 
     async def fora(_: list[dict[str, str]]) -> str:
-        raise LLMIndisponivel("sem worker")
+        raise LLMUnavailable("sem worker")
 
     app.state.painel_llms = {"local": fora}
     assert api.post("/api/painel/conversar", json={"mensagem": "oi"}).status_code == 503
@@ -143,7 +143,7 @@ def test_conversa_nota_pesquisa_e_chat(app, api: TestClient) -> None:  # type: i
 
 def test_agente_executa_acoes(app, api: TestClient) -> None:  # type: ignore[no-untyped-def]
     meta = api.post("/api/painel/metas", json={"titulo": "Ler", "alvo": 2}).json()
-    resposta = (
+    answer = (
         "Feito. Encaixei o relatório.\n```acoes\n"
         '[{"tipo": "criar_tarefa", "titulo": "Relatório", "prioridade": "alta"},'
         ' {"tipo": "adicionar_bloco", "titulo": "Relatório", "inicio": "09:00", "fim": "09:50",'
@@ -153,7 +153,7 @@ def test_agente_executa_acoes(app, api: TestClient) -> None:  # type: ignore[no-
     )
 
     async def falso(_: list[dict[str, str]]) -> str:
-        return resposta
+        return answer
 
     app.state.painel_llms = {"local": falso}
     r = api.post("/api/painel/conversar", json={"mensagem": "encaixa o relatório às 9"}).json()
@@ -163,7 +163,7 @@ def test_agente_executa_acoes(app, api: TestClient) -> None:  # type: ignore[no-
     assert api.get("/api/painel/metas").json()[0]["feito"] == 1 and meta["id"]
 
     # mover a prioridade para o fim do dia: executa, mas volta contestado
-    movida = resposta.split("```acoes")[0] + (
+    movida = answer.split("```acoes")[0] + (
         '```acoes\n[{"tipo": "mover_bloco", "titulo": "Relatório", "inicio": "17:00",'
         ' "fim": "17:50"}]\n```'
     )
@@ -177,10 +177,10 @@ def test_agente_executa_acoes(app, api: TestClient) -> None:  # type: ignore[no-
 
 
 def test_agente_comanda_o_pc(app, api: TestClient) -> None:  # type: ignore[no-untyped-def]
-    pedidos: list[dict[str, Any]] = []
+    requests: list[dict[str, Any]] = []
 
     async def pc(pedido: dict[str, Any]) -> dict[str, Any]:
-        pedidos.append(pedido)
+        requests.append(pedido)
         return {"ok": True, "detalhe": "Abri"}
 
     async def falso(_: list[dict[str, str]]) -> str:
@@ -195,22 +195,22 @@ def test_agente_comanda_o_pc(app, api: TestClient) -> None:  # type: ignore[no-u
     msg = "abre o Brave e pesquisa notícias do Flamengo"
     r = api.post("/api/painel/conversar", json={"mensagem": msg}).json()
     assert r["acao"] == "agente" and r["executadas"][0]["ok"]
-    assert pedidos == [{"consulta": "Flamengo", "onde": "google", "acao": "pesquisar"}]
+    assert requests == [{"consulta": "Flamengo", "onde": "google", "acao": "pesquisar"}]
 
     assert api.post("/api/painel/pc", json={"acao": "desligar"}).json()["detalhe"] == "Abri"
-    assert pedidos[-1] == {"acao": "desligar", "minutos": 0}
+    assert requests[-1] == {"acao": "desligar", "minutos": 0}
     assert api.post("/api/painel/pc", json={"acao": "rm -rf"}).status_code == 422
 
 
 def test_agente_consulta_e_desempenho(app, api: TestClient) -> None:  # type: ignore[no-untyped-def]
     t = api.post("/api/rotinas/tarefas", json={"titulo": "Relatório", "prazo": "2020-01-01"})
     api.post("/api/notas", json={"titulo": "Clientes", "corpo": "Ana paga em dia."})
-    vistos: list[str] = []
+    seen: list[str] = []
 
     async def falso(msgs: list[dict[str, str]]) -> str:
-        pergunta = msgs[-1]["content"]
-        vistos.append(msgs[0]["content"] + pergunta)
-        if "[Resultados" not in pergunta:
+        question = msgs[-1]["content"]
+        seen.append(msgs[0]["content"] + question)
+        if "[Resultados" not in question:
             return (
                 'Vou ver.\n```acoes\n[{"tipo": "pesquisar_notas", "consulta": "clientes"},'
                 ' {"tipo": "analisar_desempenho", "dias": 7}]\n```'
@@ -231,7 +231,7 @@ def test_agente_consulta_e_desempenho(app, api: TestClient) -> None:  # type: ig
         "criar_nota",
     ]
     assert all(e["ok"] for e in r["executadas"])
-    assert "Ana paga em dia" in vistos[1] and "Desempenho de" in vistos[1]
+    assert "Ana paga em dia" in seen[1] and "Desempenho de" in seen[1]
     assert api.get("/api/rotinas/tarefas").json()[0]["coluna"] == "concluida" and t.json()["id"]
 
     d = api.get("/api/painel/desempenho", params={"dias": 7}).json()
@@ -239,18 +239,18 @@ def test_agente_consulta_e_desempenho(app, api: TestClient) -> None:  # type: ig
 
     r = api.post("/api/painel/conversar", json={"mensagem": "como está meu desempenho?"}).json()
     assert r["desempenho"]["tarefas"]["concluidas"] == 1
-    assert "Como analisar o desempenho" in vistos[-1]
+    assert "Como analisar o desempenho" in seen[-1]
 
     # em fluxo: o aviso de andamento sai antes da resposta final
-    linhas = api.post("/api/painel/conversar/fluxo", json={"mensagem": "e os clientes?"}).text
-    eventos = [json.loads(x) for x in linhas.splitlines() if x.strip()]
-    assert [e["evento"] for e in eventos] == ["aviso", "aviso", "fim"]
-    assert eventos[0]["texto"] == "Vou procurar nas suas notas."
-    assert eventos[-1]["resposta"] == "Ana paga em dia."
+    lines = api.post("/api/painel/conversar/fluxo", json={"mensagem": "e os clientes?"}).text
+    events = [json.loads(x) for x in lines.splitlines() if x.strip()]
+    assert [e["evento"] for e in events] == ["aviso", "aviso", "fim"]
+    assert events[0]["texto"] == "Vou procurar nas suas notas."
+    assert events[-1]["resposta"] == "Ana paga em dia."
 
 
 def test_voz_transcreve_e_fala(app, api: TestClient) -> None:  # type: ignore[no-untyped-def]
-    from painel.api import Voz
+    from painel.api import Voice
 
     async def transcrever(audio: bytes, mime: str, idioma: str) -> str:
         return f"anote {audio.decode()}"
@@ -258,17 +258,17 @@ def test_voz_transcreve_e_fala(app, api: TestClient) -> None:  # type: ignore[no
     async def falar(texto: str) -> bytes:
         return b"RIFF" + texto.encode()
 
-    app.state.painel_voz = Voz(transcrever, falar)
+    app.state.painel_voz = Voice(transcrever, falar)
     r = api.post("/api/painel/voz", files={"audio": ("a.wav", b"comprar cabo", "audio/wav")})
     assert r.json()["transcricao"] == "anote comprar cabo" and r.json()["acao"] == "nota"
     so = api.post("/api/painel/transcrever", files={"audio": ("a.wav", b"x", "audio/wav")})
     assert so.json() == {"texto": "anote x"}
-    fluxo = api.post("/api/painel/voz/fluxo", files={"audio": ("a.wav", b"pao", "audio/wav")})
-    eventos = [json.loads(x) for x in fluxo.text.splitlines() if x.strip()]
-    assert eventos[0] == {"evento": "transcricao", "texto": "anote pao"}
-    assert eventos[-1]["evento"] == "fim" and eventos[-1]["acao"] == "nota"
-    fala = api.post("/api/painel/falar", json={"texto": "oi"})
-    assert fala.headers["content-type"] == "audio/wav" and fala.content == b"RIFFoi"
+    flow = api.post("/api/painel/voz/fluxo", files={"audio": ("a.wav", b"pao", "audio/wav")})
+    events = [json.loads(x) for x in flow.text.splitlines() if x.strip()]
+    assert events[0] == {"evento": "transcricao", "texto": "anote pao"}
+    assert events[-1]["evento"] == "fim" and events[-1]["acao"] == "nota"
+    speech = api.post("/api/painel/falar", json={"texto": "oi"})
+    assert speech.headers["content-type"] == "audio/wav" and speech.content == b"RIFFoi"
 
 
 def test_dashboard_mede_os_pedidos(app, api: TestClient) -> None:  # type: ignore[no-untyped-def]
@@ -281,17 +281,17 @@ def test_dashboard_mede_os_pedidos(app, api: TestClient) -> None:  # type: ignor
     assert d["provedores"]["claude"]["tokens_saida"] == 7
     assert d["recentes"][0]["provedor"] == "claude" and d["workers"] == []
     # o arquivo persiste: um novo medidor relê os pedidos
-    from painel.meter import Medidor
+    from painel.meter import Meter
 
-    assert Medidor(m.raiz).resumo()["provedores"]["local"]["pedidos"] == 2
+    assert Meter(m.raiz).resumo()["provedores"]["local"]["pedidos"] == 2
 
 
 def test_notificador_envia_cada_alerta_uma_vez(tmp_path: Path) -> None:
-    from painel.notifier import Notificador
+    from painel.notifier import Notifier
 
     enviados: list[tuple[str, str, str]] = []
-    c = Cobrador(tmp_path)
-    tarefas = [
+    c = Nagger(tmp_path)
+    tasks = [
         {
             "id": "t",
             "titulo": "Imposto",
@@ -300,7 +300,7 @@ def test_notificador_envia_cada_alerta_uma_vez(tmp_path: Path) -> None:
             "coluna": "pendente",
         }
     ]
-    n = Notificador(c, lambda: tarefas, "https://ntfy.sh/x", enviar=lambda *a: enviados.append(a))
+    n = Notifier(c, lambda: tasks, "https://ntfy.sh/x", enviar=lambda *a: enviados.append(a))
     assert n.verificar() and any("Imposto" in e[1] and e[2] == "high" for e in enviados)
     total = len(enviados)
     assert n.verificar() == [] and len(enviados) == total
@@ -317,10 +317,10 @@ def test_agente_cria_nos_outros_modulos(tmp_path: Path) -> None:
     )
     app = create_app(settings=s)
     api = TestClient(app, headers=AUTH_HEADERS)
-    vistos: list[list[dict[str, Any]]] = []
+    seen: list[list[dict[str, Any]]] = []
 
     async def falso(mensagens: list[dict[str, Any]]) -> str:
-        vistos.append(mensagens)
+        seen.append(mensagens)
         if "fluxogramas" in mensagens[0]["content"]:  # o pedido do fluxo, feito pela ação
             return (
                 '{"titulo": "Compra", "nos": [{"id": "a", "tipo": "inicio", "texto": "Início"},'
@@ -342,14 +342,14 @@ def test_agente_cria_nos_outros_modulos(tmp_path: Path) -> None:
     assert [e["ok"] for e in r["executadas"]] == [True] * 5, r["executadas"]
     assert r["resposta"] == "Pronto."
     # sistema estável (sem a hora) e a hora só na mensagem do usuário, para o cache do prompt
-    sistema, pergunta = vistos[0][0]["content"], vistos[0][-1]["content"]
-    assert "criar_caderno" in sistema and "agora" not in sistema.split("# Retrato do dia")[1]
-    assert pergunta.startswith("[Hoje ") and pergunta.endswith("crie um caderno e o resto")
+    system, question = seen[0][0]["content"], seen[0][-1]["content"]
+    assert "criar_caderno" in system and "agora" not in system.split("# Retrato do dia")[1]
+    assert question.startswith("[Hoje ") and question.endswith("crie um caderno e o resto")
 
     assert [c["titulo"] for c in app.state.cadernos_design.listar()] == ["Diário"]
-    fluxo = app.state.quadros_design.listar()[0]
-    elementos = app.state.quadros_design.obter(fluxo["id"])["elementos"]
-    assert {e["tipo"] for e in elementos} == {"no", "ligacao"}
+    flow = app.state.quadros_design.listar()[0]
+    elements = app.state.quadros_design.obter(flow["id"])["elementos"]
+    assert {e["tipo"] for e in elements} == {"no", "ligacao"}
     assert app.state.estudos.listar_projetos()[0]["secoes"] == ["Macro"]
     assert app.state.estudos.listar_leituras()[0]["titulo"] == "O Capital"
     assert any(m["titulo"] == "Ler 20 páginas" for m in app.state.cobrador.metas())

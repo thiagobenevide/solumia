@@ -23,13 +23,13 @@ def test_caderno_separado_dos_quadros_e_guarda_o_papel(api: TestClient) -> None:
     assert api.get("/api/design/quadros").json() == []
 
     url = f"/api/design/cadernos/{c['id']}"
-    paginas = [{"id": "p0", "nome": "Folha 1", "papel": PAPEL}]
-    assert api.patch(url, json={"paginas": paginas}).status_code == 200
+    pages = [{"id": "p0", "nome": "Folha 1", "papel": PAPEL}]
+    assert api.patch(url, json={"paginas": pages}).status_code == 200
     r = api.put(f"{url}/elementos", json={"versao": 1, "elementos": [{**TRACO, "pagina": "p0"}]})
     assert r.status_code == 200 and r.json()["versao"] == 2
 
-    [resumo] = api.get("/api/design/cadernos").json()
-    assert resumo["total"] == 1 and resumo["paginas"][0]["papel"] == PAPEL
+    [summary] = api.get("/api/design/cadernos").json()
+    assert summary["total"] == 1 and summary["paginas"][0]["papel"] == PAPEL
     assert api.put(f"{url}/elementos", json={"versao": 1, "elementos": []}).status_code == 409
     assert api.post(f"{url}/duplicar").status_code == 201
     assert api.delete(url).status_code == 204

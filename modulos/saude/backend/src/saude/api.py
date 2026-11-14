@@ -13,20 +13,20 @@ from saude.api_consumption import router as consumo_router
 from saude.api_watch import router as relogio_router
 from saude.api_sessions import router as sessoes_router
 from saude.catalog import AREAS
-from saude.workouts import Invalido, NaoEncontrado, Treinos
+from saude.workouts import Invalid, NotFound, Workouts
 
 router = APIRouter(tags=["saude"])
 
 
-def get_treinos(request: Request) -> Treinos:
-    treinos: Treinos = request.app.state.treinos
-    return treinos
+def get_workouts(request: Request) -> Workouts:
+    workouts: Workouts = request.app.state.treinos
+    return workouts
 
 
-TreinosDep = Annotated[Treinos, Depends(get_treinos)]
+WorkoutsDep = Annotated[Workouts, Depends(get_workouts)]
 
 
-class ExercicioEntrada(BaseModel):
+class ExerciseInput(BaseModel):
     nome: str = Field(min_length=1, max_length=120)
     area: str = Field(min_length=1, max_length=60)
     grupo: str = Field("", max_length=60)
@@ -37,7 +37,7 @@ class ExercicioEntrada(BaseModel):
     instrucoes: str = Field("", max_length=4000)
 
 
-class ExercicioEdicao(BaseModel):
+class ExerciseEdit(BaseModel):
     nome: str | None = Field(None, min_length=1, max_length=120)
     area: str | None = Field(None, min_length=1, max_length=60)
     grupo: str | None = Field(None, max_length=60)
@@ -48,7 +48,7 @@ class ExercicioEdicao(BaseModel):
     instrucoes: str | None = Field(None, max_length=4000)
 
 
-class ItemEntrada(BaseModel):
+class ItemInput(BaseModel):
     data: str
     exercicio_id: str
     series: int | None = Field(None, ge=1, le=50)
@@ -57,7 +57,7 @@ class ItemEntrada(BaseModel):
     observacao: str | None = Field(None, max_length=2000)
 
 
-class ItemEdicao(BaseModel):
+class ItemEdit(BaseModel):
     data: str | None = None
     ordem: int | None = Field(None, ge=0)
     series: int | None = Field(None, ge=1, le=50)
@@ -67,113 +67,113 @@ class ItemEdicao(BaseModel):
     feito: bool | None = None
 
 
-class Copia(BaseModel):
+class Copy(BaseModel):
     de: str
     ate: str
     destino: str
 
 
-def _erro(e: Exception) -> HTTPException:
-    if isinstance(e, NaoEncontrado):
+def _error(e: Exception) -> HTTPException:
+    if isinstance(e, NotFound):
         return HTTPException(404, "Não encontrado")
     return HTTPException(422, str(e))
 
 
 @router.get("/exercicios")
-def listar_exercicios(treinos: TreinosDep) -> Any:
+def list_exercises(treinos: WorkoutsDep) -> Any:
     return {"areas": AREAS, "exercicios": treinos.listar_exercicios()}
 
 
 @router.post("/exercicios", status_code=201)
-def criar_exercicio(treinos: TreinosDep, corpo: ExercicioEntrada) -> Any:
+def create_exercise(treinos: WorkoutsDep, corpo: ExerciseInput) -> Any:
     return treinos.criar_exercicio(corpo.model_dump())
 
 
 @router.patch("/exercicios/{id_}")
-def editar_exercicio(treinos: TreinosDep, id_: str, corpo: ExercicioEdicao) -> Any:
+def edit_exercise(treinos: WorkoutsDep, id_: str, corpo: ExerciseEdit) -> Any:
     try:
         return treinos.editar_exercicio(id_, corpo.model_dump(exclude_unset=True))
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.delete("/exercicios/{id_}", status_code=204)
-def excluir_exercicio(treinos: TreinosDep, id_: str) -> None:
+def delete_exercise(treinos: WorkoutsDep, id_: str) -> None:
     try:
         treinos.excluir_exercicio(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.get("/exercicios/{id_}/imagem")
-def imagem(treinos: TreinosDep, id_: str, n: int = 0) -> FileResponse:
+def image(treinos: WorkoutsDep, id_: str, n: int = 0) -> FileResponse:
     try:
-        caminho = treinos.imagem(id_, n)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
-    return FileResponse(caminho, headers={"Cache-Control": "max-age=86400"})
+        path = treinos.imagem(id_, n)
+    except NotFound as e:
+        raise _error(e) from e
+    return FileResponse(path, headers={"Cache-Control": "max-age=86400"})
 
 
 @router.post("/exercicios/{id_}/imagem")
-async def enviar_imagem(
-    treinos: TreinosDep, id_: str, arquivo: Annotated[UploadFile, File()]
+async def send_image(
+    treinos: WorkoutsDep, id_: str, arquivo: Annotated[UploadFile, File()]
 ) -> Any:
     try:
         # o app manda multipart sem tipo (octet-stream): vale a extensão do nome
-        tipo = arquivo.content_type or ""
-        if not tipo.startswith("image/"):
-            tipo = mimetypes.guess_type(arquivo.filename or "")[0] or ""
-        return treinos.salvar_imagem(id_, tipo, await arquivo.read())
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+        kind = arquivo.content_type or ""
+        if not kind.startswith("image/"):
+            kind = mimetypes.guess_type(arquivo.filename or "")[0] or ""
+        return treinos.salvar_imagem(id_, kind, await arquivo.read())
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.delete("/exercicios/{id_}/imagem")
-def remover_imagem(treinos: TreinosDep, id_: str) -> Any:
+def remove_image(treinos: WorkoutsDep, id_: str) -> Any:
     try:
         return treinos.remover_imagem(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.get("/agenda")
-def agenda(treinos: TreinosDep, de: str, ate: str) -> Any:
+def agenda(treinos: WorkoutsDep, de: str, ate: str) -> Any:
     try:
         return treinos.agenda(de, ate)
-    except Invalido as e:
-        raise _erro(e) from e
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.post("/agenda", status_code=201)
-def marcar(treinos: TreinosDep, corpo: ItemEntrada) -> Any:
+def mark(treinos: WorkoutsDep, corpo: ItemInput) -> Any:
     try:
         return treinos.marcar(corpo.model_dump())
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.patch("/agenda/{id_}")
-def editar_item(treinos: TreinosDep, id_: str, corpo: ItemEdicao) -> Any:
+def edit_item(treinos: WorkoutsDep, id_: str, corpo: ItemEdit) -> Any:
     try:
         return treinos.editar_item(id_, corpo.model_dump(exclude_unset=True))
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.delete("/agenda/{id_}", status_code=204)
-def desmarcar(treinos: TreinosDep, id_: str) -> None:
+def unmark(treinos: WorkoutsDep, id_: str) -> None:
     try:
         treinos.desmarcar(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.post("/agenda/copiar", status_code=201)
-def copiar(treinos: TreinosDep, corpo: Copia) -> Any:
+def copy(treinos: WorkoutsDep, corpo: Copy) -> Any:
     try:
         return treinos.copiar(corpo.de, corpo.ate, corpo.destino)
-    except Invalido as e:
-        raise _erro(e) from e
+    except Invalid as e:
+        raise _error(e) from e
 
 
 router.include_router(bem_estar_router)

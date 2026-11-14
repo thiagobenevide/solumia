@@ -11,13 +11,13 @@ from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from saude.workouts import Invalido, NaoEncontrado, Treinos, _data, _gravar, _ler
+from saude.workouts import Invalid, NotFound, Workouts, _data, _write, _read
 
-DESCANSO_PADRAO = 60
-HISTORICO = 200  # sessões guardadas
-FC_PASSO_S = 5  # uma amostra de frequência (o pico) a cada 5 s basta
-FC_MAX_AMOSTRAS = 5000
-CAMPOS_FECHAMENTO = ("esforco", "notas", "frequencia")
+REST_DEFAULT = 60
+HISTORY = 200  # sessões guardadas
+FC_STEP_S = 5  # uma amostra de frequência (o pico) a cada 5 s basta
+FC_MAX_SAMPLES = 5000
+FIELDS_CLOSING = ("esforco", "notas", "frequencia")
 
 
 def _iso(t: datetime) -> str:
@@ -28,36 +28,36 @@ def _dt(valor: str) -> datetime:
     return datetime.fromisoformat(valor.replace("Z", "+00:00"))
 
 
-def meta(repeticoes: str) -> dict[str, int | None]:
+def meta(repetitions: str) -> dict[str, int | None]:
     """Metas da repetição: "8-12" → mín 8, máx 12; "10 cada lado" → 10; "20 s" ou "2 min" →
     exercício por tempo."""
-    texto = repeticoes.lower()
-    if m := re.search(r"(\d+)\s*(s\b|seg|min)", texto):
+    text = repetitions.lower()
+    if m := re.search(r"(\d+)\s*(s\b|seg|min)", text):
         n = int(m.group(1))
         return {"tempo_s": n * 60 if m.group(2) == "min" else n, "min": None, "max": None}
-    numeros = [int(n) for n in re.findall(r"\d+", texto)[:2]]
-    if not numeros:
+    numbers = [int(n) for n in re.findall(r"\d+", text)[:2]]
+    if not numbers:
         return {"tempo_s": None, "min": None, "max": None}
-    return {"tempo_s": None, "min": numeros[0], "max": numeros[-1]}
+    return {"tempo_s": None, "min": numbers[0], "max": numbers[-1]}
 
 
-def _passo_carga(carga: float) -> float:
-    return 2.5 if carga >= 20 else 1.0
+def _step_load(load: float) -> float:
+    return 2.5 if load >= 20 else 1.0
 
 
-def sugestao(planejado: dict[str, Any], anteriores: list[dict[str, Any]]) -> dict[str, Any] | None:
+def suggestion(planejado: dict[str, Any], previous: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Progressão dupla a partir das últimas vezes do exercício (mais recente primeiro): bateu o
     máximo de repetições em todas as séries → sobe a carga (ou as repetições, sem carga); ficou
     abaixo do mínimo duas vezes seguidas → tira 10% da carga; abaixo uma vez → mantém."""
-    if not anteriores:
+    if not previous:
         return None
     m = meta(planejado["repeticoes"])
-    ultima = anteriores[0]["series"]
-    carga = next((s["carga_kg"] for s in reversed(ultima) if s.get("carga_kg") is not None), None)
+    last = previous[0]["series"]
+    load = next((s["carga_kg"] for s in reversed(last) if s.get("carga_kg") is not None), None)
     if m["tempo_s"]:
-        tempos = [s.get("tempo_s") or 0 for s in ultima]
-        if len(ultima) >= planejado["series"] and min(tempos) >= m["tempo_s"]:
-            return {"carga_kg": carga, "tempo_s": m["tempo_s"] + 10,
+        times = [s.get("tempo_s") or 0 for s in last]
+        if len(last) >= planejado["series"] and min(times) >= m["tempo_s"]:
+            return {"carga_kg": load, "tempo_s": m["tempo_s"] + 10,
                     "motivo": "Completou o tempo em todas as séries: tente +10 s."}
         return None
     if m["max"] is None:
@@ -66,63 +66,63 @@ def sugestao(planejado: dict[str, Any], anteriores: list[dict[str, Any]]) -> dic
     def abaixo(series: list[dict[str, Any]]) -> bool:
         return any((s.get("repeticoes") or 0) < (m["min"] or 0) for s in series)
 
-    reps = [s.get("repeticoes") or 0 for s in ultima]
-    if len(ultima) >= planejado["series"] and min(reps) >= m["max"]:
-        if carga is None:
+    reps = [s.get("repeticoes") or 0 for s in last]
+    if len(last) >= planejado["series"] and min(reps) >= m["max"]:
+        if load is None:
             return {"carga_kg": None, "repeticoes": m["max"] + 2,
                     "motivo": f"Fez {m['max']}+ em todas as séries: suba as repetições "
                               "ou ponha carga."}
-        nova = round(carga + _passo_carga(carga), 1)
-        return {"carga_kg": nova, "repeticoes": m["min"],
-                "motivo": f"Fez {m['max']}+ em todas as séries com {carga:g} kg: suba a carga."}
-    if abaixo(ultima):
-        if carga is not None and len(anteriores) > 1 and abaixo(anteriores[1]["series"]):
-            nova = round(carga * 0.9 * 2) / 2
-            return {"carga_kg": nova, "repeticoes": m["min"],
+        new = round(load + _step_load(load), 1)
+        return {"carga_kg": new, "repeticoes": m["min"],
+                "motivo": f"Fez {m['max']}+ em todas as séries com {load:g} kg: suba a carga."}
+    if abaixo(last):
+        if load is not None and len(previous) > 1 and abaixo(previous[1]["series"]):
+            new = round(load * 0.9 * 2) / 2
+            return {"carga_kg": new, "repeticoes": m["min"],
                     "motivo": "Ficou abaixo do mínimo duas vezes seguidas: reduza a carga."}
-        return {"carga_kg": carga, "repeticoes": m["min"],
+        return {"carga_kg": load, "repeticoes": m["min"],
                 "motivo": "Na última ficou abaixo do mínimo: mantenha a carga."}
-    return {"carga_kg": carga, "repeticoes": max(reps) + 1 if reps else m["min"],
+    return {"carga_kg": load, "repeticoes": max(reps) + 1 if reps else m["min"],
             "motivo": "Mantenha a carga e busque uma repetição a mais."}
 
 
-def _fechamento(s: dict[str, Any], dados: dict[str, Any]) -> None:
+def _closing(s: dict[str, Any], dados: dict[str, Any]) -> None:
     """Esforço, notas e frequência; a frequência medida ao vivo no relógio não é trocada pela do
     Health Connect."""
     for k, v in dados.items():
-        if k not in CAMPOS_FECHAMENTO:
+        if k not in FIELDS_CLOSING:
             continue
         if k == "frequencia" and (s.get("frequencia") or {}).get("origem") == "relogio":
             continue
         s[k] = v
 
 
-def _fc_das_series(s: dict[str, Any]) -> None:
+def _fc_of_series(s: dict[str, Any]) -> None:
     """Pico de frequência de cada série (do início da série até ela ser marcada)."""
-    amostras = s.get("fc_amostras") or []
-    if not amostras:
+    samples = s.get("fc_amostras") or []
+    if not samples:
         return
     for e in s["exercicios"]:
         for x in e["series"]:
-            fim = int(_dt(x["feita_em"]).timestamp())
-            ini = fim - (x.get("duracao_s") or 60)
-            picos = [b for t, b in amostras if ini <= t <= fim + FC_PASSO_S]
+            end = int(_dt(x["feita_em"]).timestamp())
+            start = end - (x.get("duracao_s") or 60)
+            picos = [b for t, b in samples if start <= t <= end + FC_STEP_S]
             if picos:
                 x["fc_max"] = max(picos)
 
 
-class Sessoes:
-    def __init__(self, treinos: Treinos, agora: Callable[[], datetime] | None = None) -> None:
-        self.treinos = treinos
+class Sessions:
+    def __init__(self, workouts: Workouts, agora: Callable[[], datetime] | None = None) -> None:
+        self.treinos = workouts
         self._agora = agora or (lambda: datetime.now(UTC))
-        self._arq = treinos.raiz / "sessoes.json"
+        self._arq = workouts.raiz / "sessoes.json"
 
     def _todas(self) -> list[dict[str, Any]]:
-        lista: list[dict[str, Any]] = _ler(self._arq, [])
-        return lista
+        items: list[dict[str, Any]] = _read(self._arq, [])
+        return items
 
-    def _salvar(self, lista: list[dict[str, Any]]) -> None:
-        _gravar(self._arq, lista[-HISTORICO:])
+    def _salvar(self, items: list[dict[str, Any]]) -> None:
+        _write(self._arq, items[-HISTORY:])
 
     def _resposta(self, s: dict[str, Any]) -> dict[str, Any]:
         return {**s, "agora": _iso(self._agora())}
@@ -136,78 +136,78 @@ class Sessoes:
 
     def ativa(self) -> dict[str, Any] | None:
         with self.treinos._trava:
-            lista = self._todas()
-            for s in reversed(lista):
+            items = self._todas()
+            for s in reversed(items):
                 if s["estado"] == "andamento":
                     if self._normalizar(s):
-                        self._salvar(lista)
+                        self._salvar(items)
                     return self._resposta(s)
         return None
 
     def sessao(self, id_: str) -> dict[str, Any]:
         with self.treinos._trava:
-            lista = self._todas()
-            s = self._achar(lista, id_)
+            items = self._todas()
+            s = self._achar(items, id_)
             if self._normalizar(s):
-                self._salvar(lista)
+                self._salvar(items)
             return self._resposta(s)
 
     @staticmethod
-    def _achar(lista: list[dict[str, Any]], id_: str) -> dict[str, Any]:
-        for s in lista:
+    def _achar(items: list[dict[str, Any]], id_: str) -> dict[str, Any]:
+        for s in items:
             if s["id"] == id_:
                 return s
-        raise NaoEncontrado(id_)
+        raise NotFound(id_)
 
-    def _anteriores(self, lista: list[dict[str, Any]], exercicio_id: str) -> list[dict[str, Any]]:
+    def _anteriores(self, items: list[dict[str, Any]], exercise_id: str) -> list[dict[str, Any]]:
         """Últimas 2 vezes (mais recente primeiro) em que o exercício teve séries feitas."""
-        achados = []
-        for s in reversed(lista):
+        found = []
+        for s in reversed(items):
             if s["estado"] != "concluida":
                 continue
             for e in s["exercicios"]:
-                if e["exercicio_id"] == exercicio_id and e["series"]:
-                    achados.append({"data": s["data"], "series": e["series"]})
+                if e["exercicio_id"] == exercise_id and e["series"]:
+                    found.append({"data": s["data"], "series": e["series"]})
                     break
-            if len(achados) == 2:
+            if len(found) == 2:
                 break
-        return achados
+        return found
 
     # --- início e fim ---
 
-    def iniciar(self, dia: str, descanso_s: int = DESCANSO_PADRAO) -> dict[str, Any]:
+    def iniciar(self, day: str, rest_s: int = REST_DEFAULT) -> dict[str, Any]:
         """Monta a sessão com os exercícios ainda não feitos do dia. Se já houver uma em andamento,
         devolve ela (só uma por vez)."""
-        dia = _data(dia)
-        if (atual := self.ativa()) is not None:
-            return atual
-        itens = [i for i in self.treinos.agenda(dia, dia) if not i["feito"]]
-        if not itens:
-            raise Invalido("Nenhum exercício pendente neste dia")
+        day = _data(day)
+        if (current := self.ativa()) is not None:
+            return current
+        items = [i for i in self.treinos.agenda(day, day) if not i["feito"]]
+        if not items:
+            raise Invalid("Nenhum exercício pendente neste dia")
         with self.treinos._trava:
             lista = self._todas()
-            exercicios = []
-            for i in itens:
+            exercises = []
+            for i in items:
                 try:
                     ex = self.treinos.exercicio(i["exercicio_id"])
-                except NaoEncontrado:
+                except NotFound:
                     continue
                 planejado = {k: i[k] for k in ("series", "repeticoes", "carga_kg")}
-                anteriores = self._anteriores(lista, ex["id"])
-                exercicios.append({
+                previous = self._anteriores(lista, ex["id"])
+                exercises.append({
                     "item_id": i["id"], "exercicio_id": ex["id"], "nome": ex["nome"],
                     "instrucoes": ex.get("instrucoes", ""),
                     "equipamento": ex.get("equipamento", ""),
                     "planejado": planejado, "meta": meta(i["repeticoes"]),
-                    "anterior": anteriores[0] if anteriores else None,
-                    "sugestao": sugestao(planejado, anteriores),
+                    "anterior": previous[0] if previous else None,
+                    "sugestao": suggestion(planejado, previous),
                     "series": [], "pulado": False,
                 })
-            agora = _iso(self._agora())
+            now = _iso(self._agora())
             s = {
-                "id": uuid.uuid4().hex[:12], "data": dia, "inicio": agora, "fim": None,
-                "estado": "andamento", "descanso_s": descanso_s, "exercicios": exercicios,
-                "controle": {"fase": "exercicio", "indice": 0, "inicio_serie": agora,
+                "id": uuid.uuid4().hex[:12], "data": day, "inicio": now, "fim": None,
+                "estado": "andamento", "descanso_s": rest_s, "exercicios": exercises,
+                "controle": {"fase": "exercicio", "indice": 0, "inicio_serie": now,
                              "descanso_ate": None, "descanso_restante_s": None,
                              "pausado": False, "pausado_em": None, "pausa_total_s": 0},
                 "esforco": None, "notas": "", "frequencia": None, "resumo": None,
@@ -219,16 +219,16 @@ class Sessoes:
     def concluir(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
         """Fecha a sessão, marca na agenda os exercícios com alguma série e guarda o resumo."""
         with self.treinos._trava:
-            lista = self._todas()
-            s = self._achar(lista, id_)
+            items = self._todas()
+            s = self._achar(items, id_)
             if s["estado"] == "andamento":
                 c = s["controle"]
                 if c["pausado"]:
                     self._continuar(s)
-                agora = self._agora()
-                s.update(estado="concluida", fim=_iso(agora))
+                now = self._agora()
+                s.update(estado="concluida", fim=_iso(now))
                 c.update(fase="concluida", descanso_ate=None)
-                total = (agora - _dt(s["inicio"])).total_seconds()
+                total = (now - _dt(s["inicio"])).total_seconds()
                 series = [x for e in s["exercicios"] for x in e["series"]]
                 s["resumo"] = {
                     "duracao_min": round(total / 60, 1),
@@ -239,58 +239,58 @@ class Sessoes:
                     "volume_kg": round(sum((x.get("repeticoes") or 0) * (x.get("carga_kg") or 0)
                                            for x in series), 1),
                 }
-                feitos = [e["item_id"] for e in s["exercicios"] if e["series"]]
+                done = [e["item_id"] for e in s["exercicios"] if e["series"]]
             else:
-                feitos = []
-            _fechamento(s, dados)
-            _fc_das_series(s)
-            self._salvar(lista)
-        for item_id in feitos:
-            with suppress(NaoEncontrado):
+                done = []
+            _closing(s, dados)
+            _fc_of_series(s)
+            self._salvar(items)
+        for item_id in done:
+            with suppress(NotFound):
                 self.treinos.editar_item(item_id, {"feito": True})
         return self._resposta(s)
 
     def excluir(self, id_: str) -> None:
         with self.treinos._trava:
-            lista = self._todas()
-            s = self._achar(lista, id_)
-            lista.remove(s)
-            self._salvar(lista)
+            items = self._todas()
+            s = self._achar(items, id_)
+            items.remove(s)
+            self._salvar(items)
 
     def editar(self, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
         """Notas, esforço (1–10) e a frequência cardíaca do relógio, também depois de concluída."""
         with self.treinos._trava:
-            lista = self._todas()
-            s = self._achar(lista, id_)
-            _fechamento(s, dados)
-            self._salvar(lista)
+            items = self._todas()
+            s = self._achar(items, id_)
+            _closing(s, dados)
+            self._salvar(items)
             return self._resposta(s)
 
     # --- frequência cardíaca ao vivo (relógio) ---
 
-    def registrar_fc(self, id_: str, amostras: list[dict[str, Any]]) -> dict[str, Any]:
+    def registrar_fc(self, id_: str, samples: list[dict[str, Any]]) -> dict[str, Any]:
         """Amostras do sensor do relógio (`em` ISO UTC, `bpm`), enviadas em lotes. Guarda o pico de
         cada 5 s dentro da sessão, a última como `fc_atual` (o celular mostra ao vivo) e recalcula
         `frequencia`, que passa a valer no lugar da lida depois pelo Health Connect."""
         with self.treinos._trava:
-            lista = self._todas()
-            s = self._achar(lista, id_)
+            items = self._todas()
+            s = self._achar(items, id_)
             serie: list[list[int]] = s.setdefault("fc_amostras", [])
-            inicio = int(_dt(s["inicio"]).timestamp())
-            fim = int(_dt(s["fim"]).timestamp()) if s.get("fim") else None
-            for a in sorted(amostras, key=lambda a: a["em"]):
+            start = int(_dt(s["inicio"]).timestamp())
+            end = int(_dt(s["fim"]).timestamp()) if s.get("fim") else None
+            for a in sorted(samples, key=lambda a: a["em"]):
                 t, bpm = int(_dt(a["em"]).timestamp()), round(float(a["bpm"]))
-                if not 25 <= bpm <= 240 or t < inicio or (fim is not None and t > fim):
+                if not 25 <= bpm <= 240 or t < start or (end is not None and t > end):
                     continue
                 # uma por janela de 5 s, com o pico dela (não perde o máximo da série)
-                janela = t - t % FC_PASSO_S
-                if serie and serie[-1][0] == janela:
+                window = t - t % FC_STEP_S
+                if serie and serie[-1][0] == window:
                     serie[-1][1] = max(serie[-1][1], bpm)
-                elif not serie or janela > serie[-1][0]:
-                    serie.append([janela, bpm])
+                elif not serie or window > serie[-1][0]:
+                    serie.append([window, bpm])
                 if not s.get("fc_atual") or a["em"] >= s["fc_atual"]["em"]:
                     s["fc_atual"] = {"bpm": bpm, "em": a["em"]}
-            del serie[:-FC_MAX_AMOSTRAS]
+            del serie[:-FC_MAX_SAMPLES]
             if serie:
                 bpms = [b for _, b in serie]
                 s["frequencia"] = {
@@ -298,10 +298,10 @@ class Sessoes:
                     "minima": min(bpms), "amostras": len(bpms), "origem": "relogio",
                 }
             if s["estado"] == "concluida":
-                _fc_das_series(s)
+                _fc_of_series(s)
             elif s["estado"] == "andamento":
                 self._normalizar(s)
-            self._salvar(lista)
+            self._salvar(items)
             # o relógio usa a fase e o descanso para vibrar com a tela apagada
             e = self._atual(s)
             return {"estado": s["estado"], "frequencia": s.get("frequencia"),
@@ -312,12 +312,12 @@ class Sessoes:
 
     # --- comandos (celular e relógio) ---
 
-    def comando(self, id_: str, acao: str, dados: dict[str, Any]) -> dict[str, Any]:
+    def comando(self, id_: str, action: str, dados: dict[str, Any]) -> dict[str, Any]:
         with self.treinos._trava:
-            lista = self._todas()
-            s = self._achar(lista, id_)
+            items = self._todas()
+            s = self._achar(items, id_)
             if s["estado"] != "andamento":
-                raise Invalido("A sessão já terminou")
+                raise Invalid("A sessão já terminou")
             self._normalizar(s)
             fazer = {
                 "concluir_serie": self._concluir_serie, "pausar": self._pausar,
@@ -325,20 +325,20 @@ class Sessoes:
                 "somar_descanso": self._somar_descanso, "ir_para": self._ir_para,
                 "pular_exercicio": self._pular_exercicio, "desfazer_serie": self._desfazer_serie,
                 "editar_serie": self._editar_serie, "descanso_padrao": self._descanso_padrao,
-            }.get(acao)
+            }.get(action)
             if fazer is None:
-                raise Invalido(f"Comando desconhecido: {acao}")
+                raise Invalid(f"Comando desconhecido: {action}")
             fazer(s, **dados)
-            self._salvar(lista)
+            self._salvar(items)
             return self._resposta(s)
 
     def _normalizar(self, s: dict[str, Any]) -> bool:
         """Descanso vencido vira a próxima série (começando quando o descanso acabou)."""
         c = s["controle"]
         if c["fase"] == "descanso" and not c["pausado"] and c["descanso_ate"]:
-            fim = _dt(c["descanso_ate"])
-            if self._agora() >= fim:
-                c.update(fase="exercicio", inicio_serie=_iso(fim), descanso_ate=None)
+            end = _dt(c["descanso_ate"])
+            if self._agora() >= end:
+                c.update(fase="exercicio", inicio_serie=_iso(end), descanso_ate=None)
                 return True
         return False
 
@@ -355,39 +355,39 @@ class Sessoes:
                 return k
         return n
 
-    def _descansar(self, s: dict[str, Any], segundos: int) -> None:
+    def _descansar(self, s: dict[str, Any], seconds: int) -> None:
         c = s["controle"]
         if c["indice"] >= len(s["exercicios"]):
             c.update(fase="fim", descanso_ate=None)
             return
         c["fase"] = "descanso"
         if c["pausado"]:
-            c["descanso_restante_s"] = segundos
+            c["descanso_restante_s"] = seconds
         else:
-            c["descanso_ate"] = _iso(self._agora() + timedelta(seconds=segundos))
+            c["descanso_ate"] = _iso(self._agora() + timedelta(seconds=seconds))
 
-    def _concluir_serie(self, s: dict[str, Any], repeticoes: int | None = None,
-                        carga_kg: float | None = None, tempo_s: int | None = None,
+    def _concluir_serie(self, s: dict[str, Any], repetitions: int | None = None,
+                        load_kg: float | None = None, time_s: int | None = None,
                         **_: Any) -> None:
         e = self._atual(s)
         if e is None:
-            raise Invalido("Não há exercício em andamento")
+            raise Invalid("Não há exercício em andamento")
         c = s["controle"]
-        agora = self._agora()
+        now = self._agora()
         sug = e["sugestao"] or {}
         m = e["meta"]
-        if tempo_s is None and m["tempo_s"]:
-            tempo_s = m["tempo_s"]
-        if repeticoes is None and not m["tempo_s"]:
-            repeticoes = m["max"]
-        if carga_kg is None:
-            carga_kg = sug.get("carga_kg", e["planejado"]["carga_kg"]) if not e["series"] \
+        if time_s is None and m["tempo_s"]:
+            time_s = m["tempo_s"]
+        if repetitions is None and not m["tempo_s"]:
+            repetitions = m["max"]
+        if load_kg is None:
+            load_kg = sug.get("carga_kg", e["planejado"]["carga_kg"]) if not e["series"] \
                 else e["series"][-1].get("carga_kg")
-        duracao = None
+        duration = None
         if c["inicio_serie"] and not c["pausado"]:
-            duracao = int((agora - _dt(c["inicio_serie"])).total_seconds())
-        e["series"].append({"repeticoes": repeticoes, "carga_kg": carga_kg, "tempo_s": tempo_s,
-                            "duracao_s": duracao, "feita_em": _iso(agora)})
+            duration = int((now - _dt(c["inicio_serie"])).total_seconds())
+        e["series"].append({"repeticoes": repetitions, "carga_kg": load_kg, "tempo_s": time_s,
+                            "duracao_s": duration, "feita_em": _iso(now)})
         if len(e["series"]) >= e["planejado"]["series"]:
             c["indice"] = self._proximo_indice(s, c["indice"])
         self._descansar(s, s["descanso_s"])
@@ -396,25 +396,25 @@ class Sessoes:
         c = s["controle"]
         if c["pausado"]:
             return
-        agora = self._agora()
-        c.update(pausado=True, pausado_em=_iso(agora))
+        now = self._agora()
+        c.update(pausado=True, pausado_em=_iso(now))
         if c["fase"] == "descanso" and c["descanso_ate"]:
-            c["descanso_restante_s"] = max(0, int((_dt(c["descanso_ate"]) - agora).total_seconds()))
+            c["descanso_restante_s"] = max(0, int((_dt(c["descanso_ate"]) - now).total_seconds()))
             c["descanso_ate"] = None
 
     def _continuar(self, s: dict[str, Any], **_: Any) -> None:
         c = s["controle"]
         if not c["pausado"]:
             return
-        agora = self._agora()
-        pausa = int((agora - _dt(c["pausado_em"])).total_seconds())
-        c.update(pausado=False, pausado_em=None, pausa_total_s=c["pausa_total_s"] + pausa)
+        now = self._agora()
+        pause = int((now - _dt(c["pausado_em"])).total_seconds())
+        c.update(pausado=False, pausado_em=None, pausa_total_s=c["pausa_total_s"] + pause)
         if c["fase"] == "descanso":
             restante = c["descanso_restante_s"] or 0
-            c.update(descanso_ate=_iso(agora + timedelta(seconds=restante)),
+            c.update(descanso_ate=_iso(now + timedelta(seconds=restante)),
                      descanso_restante_s=None)
         elif c["inicio_serie"]:
-            c["inicio_serie"] = _iso(_dt(c["inicio_serie"]) + timedelta(seconds=pausa))
+            c["inicio_serie"] = _iso(_dt(c["inicio_serie"]) + timedelta(seconds=pause))
 
     def _pular_descanso(self, s: dict[str, Any], **_: Any) -> None:
         c = s["controle"]
@@ -422,19 +422,19 @@ class Sessoes:
             c.update(fase="exercicio", descanso_ate=None, descanso_restante_s=None,
                      inicio_serie=_iso(self._agora()))
 
-    def _somar_descanso(self, s: dict[str, Any], segundos: int = 30, **_: Any) -> None:
+    def _somar_descanso(self, s: dict[str, Any], seconds: int = 30, **_: Any) -> None:
         c = s["controle"]
         if c["fase"] != "descanso":
             return
         if c["pausado"]:
-            c["descanso_restante_s"] = max(0, (c["descanso_restante_s"] or 0) + int(segundos))
+            c["descanso_restante_s"] = max(0, (c["descanso_restante_s"] or 0) + int(seconds))
         else:
-            fim = max(_dt(c["descanso_ate"]) + timedelta(seconds=int(segundos)), self._agora())
-            c["descanso_ate"] = _iso(fim)
+            end = max(_dt(c["descanso_ate"]) + timedelta(seconds=int(seconds)), self._agora())
+            c["descanso_ate"] = _iso(end)
 
     def _ir_para(self, s: dict[str, Any], indice: int = 0, **_: Any) -> None:
         if not 0 <= indice < len(s["exercicios"]):
-            raise Invalido("Exercício fora da sessão")
+            raise Invalid("Exercício fora da sessão")
         s["exercicios"][indice]["pulado"] = False
         s["controle"].update(indice=indice, fase="exercicio", descanso_ate=None,
                              descanso_restante_s=None, inicio_serie=_iso(self._agora()))
@@ -454,22 +454,22 @@ class Sessoes:
     def _desfazer_serie(self, s: dict[str, Any], **_: Any) -> None:
         """Tira a última série feita (do exercício atual ou, sem ela, da mais recente)."""
         c = s["controle"]
-        candidatos = [(k, e) for k, e in enumerate(s["exercicios"]) if e["series"]]
-        if not candidatos:
+        candidates = [(k, e) for k, e in enumerate(s["exercicios"]) if e["series"]]
+        if not candidates:
             return
-        k, e = max(candidatos, key=lambda ke: ke[1]["series"][-1]["feita_em"])
+        k, e = max(candidates, key=lambda ke: ke[1]["series"][-1]["feita_em"])
         e["series"].pop()
         c.update(indice=k, fase="exercicio", descanso_ate=None, descanso_restante_s=None,
                  inicio_serie=_iso(self._agora()))
 
-    def _editar_serie(self, s: dict[str, Any], exercicio: int = 0, serie: int = 0,
-                      **campos: Any) -> None:
+    def _editar_serie(self, s: dict[str, Any], exercise: int = 0, serie: int = 0,
+                      **fields: Any) -> None:
         try:
-            alvo = s["exercicios"][exercicio]["series"][serie]
+            target = s["exercicios"][exercise]["series"][serie]
         except IndexError as e:
-            raise Invalido("Série não encontrada") from e
-        alvo.update({k: v for k, v in campos.items() if k in ("repeticoes", "carga_kg", "tempo_s")})
+            raise Invalid("Série não encontrada") from e
+        target.update({k: v for k, v in fields.items() if k in ("repeticoes", "carga_kg", "tempo_s")})
 
-    def _descanso_padrao(self, s: dict[str, Any], segundos: int = DESCANSO_PADRAO,
+    def _descanso_padrao(self, s: dict[str, Any], seconds: int = REST_DEFAULT,
                          **_: Any) -> None:
-        s["descanso_s"] = max(10, min(600, int(segundos)))
+        s["descanso_s"] = max(10, min(600, int(seconds)))

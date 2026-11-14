@@ -82,12 +82,12 @@ class WorkerRegistry:
 
     def descrever(self) -> list[dict[str, Any]]:
         """Workers conectados, para o dashboard: modelos, último sinal e uso da máquina."""
-        agora = time.monotonic()
+        now = time.monotonic()
         return [
             {
                 "id": w.worker_id,
                 "modelos": w.available_models,
-                "visto_ha_s": round(agora - w.last_seen, 1),
+                "visto_ha_s": round(now - w.last_seen, 1),
                 "conectado_em": w.conectado_em,
                 "recursos": w.recursos,
             }
@@ -105,21 +105,21 @@ class WorkerRegistry:
 
     def em_uso(self) -> list[dict[str, Any]]:
         """Quem está usando o LLM agora (módulo, tarefa, modelo, há quantos segundos)."""
-        agora = time.monotonic()
+        now = time.monotonic()
         return [
             {
                 "origem": u["origem"],
                 "tarefa": u["tarefa"],
                 "modelo": u["modelo"],
-                "ha_s": round(agora - u["inicio"], 1),
+                "ha_s": round(now - u["inicio"], 1),
             }
             for u in self._em_uso.values()
         ]
 
-    def atualizar_modelos(self, worker_id: str, modelos: list[str]) -> None:
+    def atualizar_modelos(self, worker_id: str, models: list[str]) -> None:
         worker = self._workers.get(worker_id)
         if worker is not None:
-            worker.available_models = modelos
+            worker.available_models = models
 
     def all_models(self) -> list[str]:
         models: set[str] = set()
@@ -146,40 +146,40 @@ class WorkerRegistry:
         loop = asyncio.get_running_loop()
         future: asyncio.Future[dict[str, Any]] = loop.create_future()
         self._pending[request_id] = (worker.worker_id, future)
-        inicio = time.monotonic()
+        start = time.monotonic()
         if origem:
             self._em_uso[request_id] = {
                 "origem": origem,
                 "tarefa": payload.get("task") or "chat",
                 "modelo": payload.get("model") or payload.get("modelo") or "",
-                "inicio": inicio,
+                "inicio": start,
             }
-        erro: str | None = None
-        resposta: dict[str, Any] = {}
+        error: str | None = None
+        answer: dict[str, Any] = {}
         try:
             message = ChatRequest(request_id=request_id, payload=payload)
             await worker.websocket.send_json(message.model_dump())
             async with asyncio.timeout(timeout_seconds):
-                resposta = await future
-                return resposta
+                answer = await future
+                return answer
         except BaseException as e:
-            erro = f"{type(e).__name__}: {e}"
+            error = f"{type(e).__name__}: {e}"
             raise
         finally:
             self._pending.pop(request_id, None)
             self._em_uso.pop(request_id, None)
             if self.ao_medir is not None:
-                uso = resposta.get("usage") or {}
+                usage = answer.get("usage") or {}
                 self.ao_medir(
                     {
                         "provedor": "local",
                         "worker": worker.worker_id,
                         "tarefa": payload.get("task") or "chat",
-                        "modelo": resposta.get("model") or payload.get("model") or "",
-                        "ms": round(1000 * (time.monotonic() - inicio)),
-                        "erro": erro,
-                        "tokens_entrada": uso.get("prompt_tokens"),
-                        "tokens_saida": uso.get("completion_tokens"),
+                        "modelo": answer.get("model") or payload.get("model") or "",
+                        "ms": round(1000 * (time.monotonic() - start)),
+                        "erro": error,
+                        "tokens_entrada": usage.get("prompt_tokens"),
+                        "tokens_saida": usage.get("completion_tokens"),
                     }
                 )
 

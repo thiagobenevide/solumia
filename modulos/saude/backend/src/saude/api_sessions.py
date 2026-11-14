@@ -6,51 +6,51 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from saude.sessions import DESCANSO_PADRAO, Sessoes
-from saude.workouts import Invalido, NaoEncontrado
+from saude.sessions import REST_DEFAULT, Sessions
+from saude.workouts import Invalid, NotFound
 
 router = APIRouter(prefix="/sessoes")
 
 
-def get_sessoes(request: Request) -> Sessoes:
-    estado = request.app.state
-    if getattr(estado, "sessoes", None) is None or estado.sessoes.treinos is not estado.treinos:
-        estado.sessoes = Sessoes(estado.treinos)
-    sessoes: Sessoes = estado.sessoes
-    return sessoes
+def get_sessions(request: Request) -> Sessions:
+    state = request.app.state
+    if getattr(state, "sessoes", None) is None or state.sessoes.treinos is not state.treinos:
+        state.sessoes = Sessions(state.treinos)
+    sessions: Sessions = state.sessoes
+    return sessions
 
 
-SessoesDep = Annotated[Sessoes, Depends(get_sessoes)]
+SessionsDep = Annotated[Sessions, Depends(get_sessions)]
 
 
-class Inicio(BaseModel):
+class Start(BaseModel):
     data: str
-    descanso_s: int = Field(DESCANSO_PADRAO, ge=10, le=600)
+    descanso_s: int = Field(REST_DEFAULT, ge=10, le=600)
 
 
-class Frequencia(BaseModel):
+class Frequency(BaseModel):
     media: float | None = None
     maxima: float | None = None
     minima: float | None = None
     amostras: int = 0
 
 
-class AmostraFc(BaseModel):
+class SampleFc(BaseModel):
     em: str = Field(pattern=r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d")
     bpm: float = Field(ge=0, le=300)
 
 
-class LoteFc(BaseModel):
-    amostras: list[AmostraFc] = Field(max_length=2000)
+class BatchFc(BaseModel):
+    amostras: list[SampleFc] = Field(max_length=2000)
 
 
-class Fechamento(BaseModel):
+class Closing(BaseModel):
     esforco: int | None = Field(None, ge=1, le=10)
     notas: str | None = Field(None, max_length=4000)
-    frequencia: Frequencia | None = None
+    frequencia: Frequency | None = None
 
 
-class Comando(BaseModel):
+class Command(BaseModel):
     acao: Literal[
         "concluir_serie", "pausar", "continuar", "pular_descanso", "somar_descanso", "ir_para",
         "pular_exercicio", "desfazer_serie", "editar_serie", "descanso_padrao",
@@ -64,79 +64,79 @@ class Comando(BaseModel):
     serie: int | None = Field(None, ge=0)
 
 
-def _erro(e: Exception) -> HTTPException:
-    if isinstance(e, NaoEncontrado):
+def _error(e: Exception) -> HTTPException:
+    if isinstance(e, NotFound):
         return HTTPException(404, "Não encontrado")
     return HTTPException(422, str(e))
 
 
 @router.get("")
-def listar(sessoes: SessoesDep, de: str, ate: str) -> Any:
+def list_all(sessoes: SessionsDep, de: str, ate: str) -> Any:
     try:
         return sessoes.listar(de, ate)
-    except Invalido as e:
-        raise _erro(e) from e
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.get("/ativa")
-def ativa(sessoes: SessoesDep) -> Any:
+def active(sessoes: SessionsDep) -> Any:
     return sessoes.ativa()
 
 
 @router.post("", status_code=201)
-def iniciar(sessoes: SessoesDep, corpo: Inicio) -> Any:
+def start(sessoes: SessionsDep, corpo: Start) -> Any:
     try:
         return sessoes.iniciar(corpo.data, corpo.descanso_s)
-    except Invalido as e:
-        raise _erro(e) from e
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.get("/{id_}")
-def sessao(sessoes: SessoesDep, id_: str) -> Any:
+def session(sessoes: SessionsDep, id_: str) -> Any:
     try:
         return sessoes.sessao(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.post("/{id_}/comando")
-def comando(sessoes: SessoesDep, id_: str, corpo: Comando) -> Any:
-    dados = corpo.model_dump(exclude_none=True)
-    acao = dados.pop("acao")
+def command(sessoes: SessionsDep, id_: str, corpo: Command) -> Any:
+    data = corpo.model_dump(exclude_none=True)
+    action = data.pop("acao")
     try:
-        return sessoes.comando(id_, acao, dados)
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+        return sessoes.comando(id_, action, data)
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.post("/{id_}/fc")
-def registrar_fc(sessoes: SessoesDep, id_: str, corpo: LoteFc) -> Any:
+def register_fc(sessoes: SessionsDep, id_: str, corpo: BatchFc) -> Any:
     """Frequência cardíaca ao vivo do relógio (lotes de alguns segundos)."""
     try:
         return sessoes.registrar_fc(id_, [a.model_dump() for a in corpo.amostras])
-    except (NaoEncontrado, ValueError) as e:
-        raise _erro(e) from e
+    except (NotFound, ValueError) as e:
+        raise _error(e) from e
 
 
 @router.post("/{id_}/concluir")
-def concluir(sessoes: SessoesDep, id_: str, corpo: Fechamento) -> Any:
+def finish(sessoes: SessionsDep, id_: str, corpo: Closing) -> Any:
     try:
         return sessoes.concluir(id_, corpo.model_dump(exclude_unset=True))
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.patch("/{id_}")
-def editar(sessoes: SessoesDep, id_: str, corpo: Fechamento) -> Any:
+def edit(sessoes: SessionsDep, id_: str, corpo: Closing) -> Any:
     try:
         return sessoes.editar(id_, corpo.model_dump(exclude_unset=True))
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.delete("/{id_}", status_code=204)
-def excluir(sessoes: SessoesDep, id_: str) -> None:
+def delete(sessoes: SessionsDep, id_: str) -> None:
     try:
         sessoes.excluir(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e

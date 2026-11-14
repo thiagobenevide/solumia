@@ -8,13 +8,13 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from rotinas.board import NaoEncontrada, Quadro
+from rotinas.board import NotFound, Frame
 
 router = APIRouter(tags=["rotinas"])
 
 ChatLLM = Callable[[list[dict[str, str]]], Awaitable[str]]
 
-SISTEMA = (
+SYSTEM = (
     "Você é o assistente de rotinas do usuário. Responda em português, curto e direto. "
     "Use o quadro Kanban abaixo para responder sobre tarefas, prioridades, prazos e tempo "
     "gasto; se a pergunta for geral, responda normalmente. Não invente tarefas que não "
@@ -22,13 +22,13 @@ SISTEMA = (
 )
 
 
-class LLMIndisponivel(Exception):
+class LLMUnavailable(Exception):
     pass
 
 
-def get_quadro(request: Request) -> Quadro:
-    quadro: Quadro = request.app.state.quadro
-    return quadro
+def get_frame(request: Request) -> Frame:
+    frame: Frame = request.app.state.quadro
+    return frame
 
 
 def get_llm(request: Request) -> ChatLLM:
@@ -36,11 +36,11 @@ def get_llm(request: Request) -> ChatLLM:
     return llm
 
 
-QuadroDep = Annotated[Quadro, Depends(get_quadro)]
+FrameDep = Annotated[Frame, Depends(get_frame)]
 LLMDep = Annotated[ChatLLM, Depends(get_llm)]
 
 
-class TarefaEntrada(BaseModel):
+class TaskInput(BaseModel):
     titulo: str = Field(min_length=1, max_length=200)
     descricao: str = Field("", max_length=8000)
     prioridade: str = "media"
@@ -49,7 +49,7 @@ class TarefaEntrada(BaseModel):
     coluna: str = "pendente"
 
 
-class TarefaEdicao(BaseModel):
+class TaskEdit(BaseModel):
     titulo: str | None = Field(None, min_length=1, max_length=200)
     descricao: str | None = Field(None, max_length=8000)
     prioridade: str | None = None
@@ -57,88 +57,88 @@ class TarefaEdicao(BaseModel):
     prazo: str | None = None
 
 
-class Movimento(BaseModel):
+class Motion(BaseModel):
     coluna: str
     ordem: int | None = Field(None, ge=0)
 
 
-class Mensagem(BaseModel):
+class Message(BaseModel):
     papel: str = Field(pattern="^(usuario|assistente)$")
     texto: str = Field(max_length=8000)
 
 
-class Pergunta(BaseModel):
+class Question(BaseModel):
     pergunta: str = Field(min_length=1, max_length=4000)
-    historico: list[Mensagem] = Field([], max_length=20)
+    historico: list[Message] = Field([], max_length=20)
 
 
-def _erro(e: Exception) -> HTTPException:
-    if isinstance(e, NaoEncontrada):
+def _error(e: Exception) -> HTTPException:
+    if isinstance(e, NotFound):
         return HTTPException(404, "Tarefa não encontrada")
     return HTTPException(422, str(e))
 
 
 @router.get("/tarefas")
-def listar(quadro: QuadroDep) -> Any:
+def list_all(quadro: FrameDep) -> Any:
     return quadro.listar()
 
 
 @router.get("/resumo")
-def resumo(quadro: QuadroDep) -> Any:
+def summary(quadro: FrameDep) -> Any:
     return quadro.resumo()
 
 
 @router.post("/tarefas", status_code=201)
-def criar(entrada: TarefaEntrada, quadro: QuadroDep) -> Any:
+def create(entrada: TaskInput, quadro: FrameDep) -> Any:
     try:
         return quadro.criar(entrada.model_dump())
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.patch("/tarefas/{id_}")
-def atualizar(id_: str, edicao: TarefaEdicao, quadro: QuadroDep) -> Any:
+def update(id_: str, edicao: TaskEdit, quadro: FrameDep) -> Any:
     try:
         return quadro.atualizar(id_, edicao.model_dump(exclude_unset=True))
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.post("/tarefas/{id_}/mover")
-def mover(id_: str, mov: Movimento, quadro: QuadroDep) -> Any:
+def move(id_: str, mov: Motion, quadro: FrameDep) -> Any:
     try:
         return quadro.mover(id_, mov.coluna, mov.ordem)
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.post("/tarefas/{id_}/{acao}")
-def cronometro(id_: str, acao: str, quadro: QuadroDep) -> Any:
-    acoes = {"iniciar": quadro.iniciar, "pausar": quadro.pausar, "zerar": quadro.zerar}
-    if acao not in acoes:
+def stopwatch(id_: str, acao: str, quadro: FrameDep) -> Any:
+    actions = {"iniciar": quadro.iniciar, "pausar": quadro.pausar, "zerar": quadro.zerar}
+    if acao not in actions:
         raise HTTPException(404, "Ação desconhecida")
     try:
-        return acoes[acao](id_)
+        return actions[acao](id_)
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.delete("/tarefas/{id_}", status_code=204)
-def excluir(id_: str, quadro: QuadroDep) -> Response:
+def delete(id_: str, quadro: FrameDep) -> Response:
     try:
         quadro.excluir(id_)
-    except NaoEncontrada as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
     return Response(status_code=204)
 
 
 @router.post("/perguntar")
-async def perguntar(p: Pergunta, quadro: QuadroDep, llm: LLMDep) -> Any:
-    papeis = {"usuario": "user", "assistente": "assistant"}
-    mensagens = [{"role": "system", "content": SISTEMA + quadro.contexto()}]
-    mensagens += [{"role": papeis[m.papel], "content": m.texto} for m in p.historico]
-    mensagens.append({"role": "user", "content": p.pergunta})
+async def ask(p: Question, quadro: FrameDep, llm: LLMDep) -> Any:
+    roles = {"usuario": "user", "assistente": "assistant"}
+    messages = [{"role": "system", "content": SYSTEM + quadro.contexto()}]
+    messages += [{"role": roles[m.papel], "content": m.texto} for m in p.historico]
+    messages.append({"role": "user", "content": p.pergunta})
     try:
-        return {"resposta": await llm(mensagens)}
-    except LLMIndisponivel as e:
+        return {"resposta": await llm(messages)}
+    except LLMUnavailable as e:
         raise HTTPException(503, str(e)) from e

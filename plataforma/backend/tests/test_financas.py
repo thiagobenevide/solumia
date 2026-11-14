@@ -42,40 +42,40 @@ def test_colecao_desconhecida_e_validacao(api: TestClient) -> None:
 
 
 def test_importa_ofx_com_regra_e_sem_duplicar(api: TestClient) -> None:
-    conta = api.post("/api/financas/contas", json={"nome": "Banco", "saldo_inicial": 100}).json()
-    mercado = _cat(api, "Restaurantes")
+    account = api.post("/api/financas/contas", json={"nome": "Banco", "saldo_inicial": 100}).json()
+    market = _cat(api, "Restaurantes")
     api.post(
         "/api/financas/regras",
-        json={"padrao": "ifood", "categoria_id": mercado, "contraparte": "iFood"},
+        json={"padrao": "ifood", "categoria_id": market, "contraparte": "iFood"},
     )
     r = api.post(
-        "/api/financas/importar", data={"conta_id": conta["id"]}, files={"arquivo": ("e.ofx", OFX)}
+        "/api/financas/importar", data={"conta_id": account["id"]}, files={"arquivo": ("e.ofx", OFX)}
     )
     assert r.json()["importadas"] == 3
     r = api.post(
-        "/api/financas/importar", data={"conta_id": conta["id"]}, files={"arquivo": ("e.ofx", OFX)}
+        "/api/financas/importar", data={"conta_id": account["id"]}, files={"arquivo": ("e.ofx", OFX)}
     )
     assert r.json() == {"lidas": 3, "importadas": 0, "duplicadas": 3, "sem_categoria": 0}
 
     ts = api.get("/api/financas/transacoes", params={"q": "ifood"}).json()
-    assert ts[0]["categoria_id"] == mercado and ts[0]["contraparte"] == "iFood"
+    assert ts[0]["categoria_id"] == market and ts[0]["contraparte"] == "iFood"
     pix = api.get("/api/financas/transacoes", params={"q": "maria"}).json()[0]
     assert pix["contraparte"] == "Maria Silva"
 
     # categoriza em lote criando regra
     salario = _cat(api, "Salário")
     sem = api.get("/api/financas/transacoes", params={"sem_categoria": True}).json()
-    alvo = [t["id"] for t in sem if "SALARIO" in t["descricao"]]
+    target = [t["id"] for t in sem if "SALARIO" in t["descricao"]]
     r = api.post(
         "/api/financas/transacoes/lote",
-        json={"ids": alvo, "dados": {"categoria_id": salario}, "regra": "salario"},
+        json={"ids": target, "dados": {"categoria_id": salario}, "regra": "salario"},
     )
     assert r.json() == {"alteradas": 1}
 
     res = api.get("/api/financas/resumo", params={"mes": "2026-10"}).json()
     assert res["receitas"] == 5000 and res["despesas"] == 200.5
     assert res["indicadores"]["taxa_poupanca"] == pytest.approx(96.0, abs=0.1)
-    assert next(c for c in res["contas"] if c["id"] == conta["id"])["saldo"] == pytest.approx(
+    assert next(c for c in res["contas"] if c["id"] == account["id"])["saldo"] == pytest.approx(
         4899.5
     )
     top = api.get("/api/financas/contrapartes").json()
@@ -100,37 +100,37 @@ def test_fatura_do_cartao(api: TestClient) -> None:
     )
     assert r.json()["importadas"] == 2
     f = api.get(f"/api/financas/faturas/{cartao['id']}").json()
-    meses = {x["mes"]: x for x in f["faturas"]}
-    assert meses["2026-10"]["total"] == 25.9 and meses["2026-10"]["vencimento"] == "2026-10-22"
-    assert meses["2026-11"]["total"] == 300
+    months = {x["mes"]: x for x in f["faturas"]}
+    assert months["2026-10"]["total"] == 25.9 and months["2026-10"]["vencimento"] == "2026-10-22"
+    assert months["2026-11"]["total"] == 300
     assert f["usado"] == 325.9 and f["disponivel"] == 1674.1
     loja = api.get("/api/financas/transacoes", params={"q": "loja"}).json()[0]
     assert loja["parcela"] == "1/3" and loja["valor"] == -300
 
 
 def test_programacao_projeta_e_lanca(api: TestClient) -> None:
-    hoje = date.today()
+    today = date.today()
     p = api.post(
         "/api/financas/programacoes",
         json={
             "descricao": "Aluguel",
             "valor": -1500,
-            "inicio": hoje.replace(day=1).isoformat(),
+            "inicio": today.replace(day=1).isoformat(),
         },
     ).json()
-    itens = api.get("/api/financas/projecao", params={"dias": 70}).json()["itens"]
-    assert len(itens) >= 2 and all(i["programacao_id"] == p["id"] for i in itens)
-    r = api.post(f"/api/financas/programacoes/{p['id']}/lancar", json={"data": itens[0]["data"]})
+    items = api.get("/api/financas/projecao", params={"dias": 70}).json()["itens"]
+    assert len(items) >= 2 and all(i["programacao_id"] == p["id"] for i in items)
+    r = api.post(f"/api/financas/programacoes/{p['id']}/lancar", json={"data": items[0]["data"]})
     assert r.status_code == 201
-    depois = api.get("/api/financas/projecao", params={"dias": 70}).json()["itens"]
-    assert itens[0]["data"] not in {i["data"] for i in depois}
+    after = api.get("/api/financas/projecao", params={"dias": 70}).json()["itens"]
+    assert items[0]["data"] not in {i["data"] for i in after}
 
 
 def test_meta_com_aportes(api: TestClient) -> None:
-    reserva = _cat(api, "Reserva de emergência")
+    reserve = _cat(api, "Reserva de emergência")
     api.post(
         "/api/financas/transacoes",
-        json={"data": "2026-01-10", "descricao": "Aporte", "valor": -1000, "categoria_id": reserva},
+        json={"data": "2026-01-10", "descricao": "Aporte", "valor": -1000, "categoria_id": reserve},
     )
     api.post(
         "/api/financas/metas",
@@ -138,7 +138,7 @@ def test_meta_com_aportes(api: TestClient) -> None:
             "nome": "Reserva",
             "valor_alvo": 10000,
             "valor_inicial": 500,
-            "categoria_id": reserva,
+            "categoria_id": reserve,
         },
     )
     m = api.get("/api/financas/metas/progresso").json()[0]
@@ -224,26 +224,26 @@ def test_analise_de_empresa_e_carteira(api: TestClient) -> None:
 def test_questionario_editavel(api: TestClient) -> None:
     q = api.get("/api/financas/questionario").json()
     assert {p["alvo"] for p in q} == {"empresa", "setor"}
-    novo = api.put(
+    new = api.put(
         "/api/financas/questionario", json=[*q, {"texto": "Paga dividendos há 10 anos?", "peso": 2}]
     ).json()
-    assert len(novo) == len(q) + 1 and novo[-1]["alvo"] == "empresa"
+    assert len(new) == len(q) + 1 and new[-1]["alvo"] == "empresa"
 
 
 def test_excluir_conta_limpa_referencias(api: TestClient) -> None:
-    conta = api.post("/api/financas/contas", json={"nome": "X"}).json()
+    account = api.post("/api/financas/contas", json={"nome": "X"}).json()
     t = api.post(
         "/api/financas/transacoes",
-        json={"data": "2026-01-01", "descricao": "a", "valor": 1, "conta_id": conta["id"]},
+        json={"data": "2026-01-01", "descricao": "a", "valor": 1, "conta_id": account["id"]},
     ).json()
-    assert api.delete(f"/api/financas/contas/{conta['id']}").status_code == 204
+    assert api.delete(f"/api/financas/contas/{account['id']}").status_code == 204
     assert api.get(f"/api/financas/transacoes/{t['id']}").json()["conta_id"] == ""
 
 
 def test_excluir_em_lote(api: TestClient) -> None:
-    conta = api.post("/api/financas/contas", json={"nome": "Banco"}).json()
+    account = api.post("/api/financas/contas", json={"nome": "Banco"}).json()
     api.post(
-        "/api/financas/importar", data={"conta_id": conta["id"]}, files={"arquivo": ("e.ofx", OFX)}
+        "/api/financas/importar", data={"conta_id": account["id"]}, files={"arquivo": ("e.ofx", OFX)}
     )
     ids = [t["id"] for t in api.get("/api/financas/transacoes").json()]
     assert ids
@@ -256,8 +256,8 @@ def test_excluir_em_lote(api: TestClient) -> None:
 def test_trilha_de_estudos(api: TestClient) -> None:
     t = api.get("/api/financas/estudo").json()
     assert t["objetivo"]["id"] == "investidor" and t["progresso"]["total"] > 0
-    livro = next(x for x in t["livros"] if x["id"] == "investidor_inteligente")
-    assert livro["tenho"] and livro["capitulos"][0]["n"] == "1"
+    book = next(x for x in t["livros"] if x["id"] == "investidor_inteligente")
+    assert book["tenho"] and book["capitulos"][0]["n"] == "1"
     # capítulo lido aparece na etapa que pede esse capítulo
     api.patch(
         "/api/financas/estudo/itens",
@@ -265,12 +265,12 @@ def test_trilha_de_estudos(api: TestClient) -> None:
     )
     t = api.put("/api/financas/estudo/objetivo", json={"objetivo": "renda"}).json()
     assert t["objetivo"]["id"] == "renda"
-    etapa = t["niveis"][0]["etapas"][0]
-    assert etapa["leituras"][0]["lidos"] == 1
+    stage = t["niveis"][0]["etapas"][0]
+    assert stage["leituras"][0]["lidos"] == 1
     assert (
         api.put("/api/financas/estudo/livros/fisher/tenho", json={"tenho": True}).status_code == 200
     )
-    novo = api.post("/api/financas/estudo/livros", json={"titulo": "Meu livro"}).json()
+    new = api.post("/api/financas/estudo/livros", json={"titulo": "Meu livro"}).json()
     t = api.get("/api/financas/estudo").json()
-    tenho = {x["id"] for x in t["livros"] if x["tenho"]}
-    assert {"fisher", novo["id"]} <= tenho
+    have = {x["id"] for x in t["livros"] if x["tenho"]}
+    assert {"fisher", new["id"]} <= have

@@ -16,46 +16,46 @@ from typing import Any
 
 import yaml
 
-from youtube.schema import RAIZ
+from youtube.schema import ROOT
 
-ORDEM = ("id", "tipo", "tags", "aliases")
-RENOMEAR = {"criado": "criada", "atualizado": "atualizada"}
+ORDER = ("id", "tipo", "tags", "aliases")
+RENAME = {"criado": "criada", "atualizado": "atualizada"}
 
 
-def _texto(v: Any) -> Any:
+def _text(v: Any) -> Any:
     if isinstance(v, datetime | date):
         return v.isoformat()
     if isinstance(v, dict):
-        return {str(k): _texto(x) for k, x in v.items()}
+        return {str(k): _text(x) for k, x in v.items()}
     if isinstance(v, list):
-        return [_texto(x) for x in v]
+        return [_text(x) for x in v]
     return v
 
 
-def _separar(texto: str) -> tuple[dict[str, Any] | None, str]:
-    if not texto.startswith("---\n"):
-        return None, texto
-    fim = texto.find("\n---", 3)
-    if fim == -1:
-        return None, texto
+def _separate(text: str) -> tuple[dict[str, Any] | None, str]:
+    if not text.startswith("---\n"):
+        return None, text
+    end = text.find("\n---", 3)
+    if end == -1:
+        return None, text
     try:
-        meta = yaml.safe_load(texto[4:fim])
+        meta = yaml.safe_load(text[4:end])
     except yaml.YAMLError:
-        return None, texto
+        return None, text
     return (
-        (_texto(meta), texto[fim + 4 :].lstrip("\n")) if isinstance(meta, dict) else (None, texto)
+        (_text(meta), text[end + 4 :].lstrip("\n")) if isinstance(meta, dict) else (None, text)
     )
 
 
-def normalizar(texto: str, ids: set[str]) -> str:
+def normalize(text: str, ids: set[str]) -> str:
     """Frontmatter no padrão do cofre; registra o id usado em `ids`."""
-    meta, corpo = _separar(texto)
+    meta, body = _separate(text)
     if meta is None:
-        return texto
-    for antigo, novo in RENOMEAR.items():
-        if antigo in meta:
-            valor = meta.pop(antigo)
-            meta.setdefault(novo, str(valor))
+        return text
+    for old, new in RENAME.items():
+        if old in meta:
+            value = meta.pop(old)
+            meta.setdefault(new, str(value))
     if meta.get("id") is not None:
         base = str(meta["id"])
         id_, n = base, 2
@@ -63,34 +63,34 @@ def normalizar(texto: str, ids: set[str]) -> str:
             id_, n = f"{base}-{n}", n + 1
         meta["id"] = id_
         ids.add(id_)
-    fim = {k: meta.pop(k) for k in ("criada", "atualizada") if k in meta}
-    meta = {k: meta.pop(k) for k in ORDEM if k in meta} | meta | fim
-    cabeca = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False, default_flow_style=None)
-    return f"---\n{cabeca}---\n\n{corpo.rstrip()}\n"
+    end = {k: meta.pop(k) for k in ("criada", "atualizada") if k in meta}
+    meta = {k: meta.pop(k) for k in ORDER if k in meta} | meta | end
+    head = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False, default_flow_style=None)
+    return f"---\n{head}---\n\n{body.rstrip()}\n"
 
 
-def importar(vault: Path, destino: Path, substituir: bool = False) -> dict[str, Any]:
-    origem = Path(vault).expanduser() / RAIZ
-    if not origem.is_dir():
-        raise ValueError(f"Pasta dos canais não encontrada no vault: {origem}")
-    destino = Path(destino).expanduser()
+def run_import(vault: Path, destination: Path, replace: bool = False) -> dict[str, Any]:
+    origin = Path(vault).expanduser() / ROOT
+    if not origin.is_dir():
+        raise ValueError(f"Pasta dos canais não encontrada no vault: {origin}")
+    destination = Path(destination).expanduser()
     ids: set[str] = set()
     importadas = puladas = 0
-    for arq in sorted(origem.rglob("*.md")):
-        rel = arq.relative_to(origem)
+    for file in sorted(origin.rglob("*.md")):
+        rel = file.relative_to(origin)
         if any(p.startswith(".") for p in rel.parts):
             continue
-        alvo = destino / RAIZ / rel
-        if alvo.exists() and not substituir:
-            meta, _ = _separar(alvo.read_text("utf-8"))
+        target = destination / ROOT / rel
+        if target.exists() and not replace:
+            meta, _ = _separate(target.read_text("utf-8"))
             if meta and meta.get("id") is not None:
                 ids.add(str(meta["id"]))
             puladas += 1
             continue
-        alvo.parent.mkdir(parents=True, exist_ok=True)
-        alvo.write_text(normalizar(arq.read_text("utf-8"), ids), "utf-8")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(normalize(file.read_text("utf-8"), ids), "utf-8")
         importadas += 1
-    return {"importadas": importadas, "puladas": puladas, "origem": str(origem)}
+    return {"importadas": importadas, "puladas": puladas, "origem": str(origin)}
 
 
 def main() -> None:
@@ -99,7 +99,7 @@ def main() -> None:
     ap.add_argument("--destino", default=os.environ.get("GATEWAY_NOTAS_DIR", "~/agent-data/notas"))
     ap.add_argument("--substituir", action="store_true", help="regrava as notas que já existem")
     a = ap.parse_args()
-    print(importar(Path(a.vault), Path(a.destino), a.substituir))
+    print(run_import(Path(a.vault), Path(a.destino), a.substituir))
 
 
 if __name__ == "__main__":

@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from saude.sessions import Sessoes, meta, sugestao
-from saude.workouts import Invalido, Treinos
+from saude.sessions import Sessions, meta, suggestion
+from saude.workouts import Invalid, Workouts
 
 
 class Relogio:
@@ -23,12 +23,12 @@ class Relogio:
 
 
 @pytest.fixture
-def base(tmp_path: Path) -> tuple[Treinos, Sessoes, Relogio]:
-    t = Treinos(tmp_path, baixar_imagens=False)
+def base(tmp_path: Path) -> tuple[Workouts, Sessions, Relogio]:
+    t = Workouts(tmp_path, baixar_imagens=False)
     r = Relogio()
     t.marcar({"data": "2026-11-10", "exercicio_id": "flexao", "series": 2, "repeticoes": "8-12"})
     t.marcar({"data": "2026-11-10", "exercicio_id": "supino-barra", "series": 1, "carga_kg": 40})
-    return t, Sessoes(t, r), r
+    return t, Sessions(t, r), r
 
 
 def test_meta() -> None:
@@ -38,16 +38,16 @@ def test_meta() -> None:
 
 
 def test_sugestao_progressao() -> None:
-    plano = {"series": 2, "repeticoes": "8-10", "carga_kg": 40}
+    plan = {"series": 2, "repeticoes": "8-10", "carga_kg": 40}
     bateu = [{"series": [{"repeticoes": 10, "carga_kg": 40}] * 2}]
-    assert sugestao(plano, bateu)["carga_kg"] == 42.5
-    falhou = [{"series": [{"repeticoes": 6, "carga_kg": 40}] * 2}]
-    assert sugestao(plano, falhou)["carga_kg"] == 40
-    assert sugestao(plano, falhou * 2)["carga_kg"] == 36
-    assert sugestao(plano, []) is None
+    assert suggestion(plan, bateu)["carga_kg"] == 42.5
+    failed = [{"series": [{"repeticoes": 6, "carga_kg": 40}] * 2}]
+    assert suggestion(plan, failed)["carga_kg"] == 40
+    assert suggestion(plan, failed * 2)["carga_kg"] == 36
+    assert suggestion(plan, []) is None
 
 
-def test_fluxo_com_descanso_pausa_e_conclusao(base: tuple[Treinos, Sessoes, Relogio]) -> None:
+def test_fluxo_com_descanso_pausa_e_conclusao(base: tuple[Workouts, Sessions, Relogio]) -> None:
     t, ss, r = base
     s = ss.iniciar("2026-11-10")
     assert ss.iniciar("2026-11-10")["id"] == s["id"]  # só uma em andamento
@@ -66,20 +66,20 @@ def test_fluxo_com_descanso_pausa_e_conclusao(base: tuple[Treinos, Sessoes, Relo
     ss.comando(s["id"], "pular_descanso", {})
     c = ss.comando(s["id"], "concluir_serie", {})["controle"]
     assert c["fase"] == "fim"
-    fim = ss.concluir(s["id"], {"esforco": 8})
-    assert fim["resumo"]["series_feitas"] == 3 and fim["resumo"]["volume_kg"] == 400
+    end = ss.concluir(s["id"], {"esforco": 8})
+    assert end["resumo"]["series_feitas"] == 3 and end["resumo"]["volume_kg"] == 400
     assert all(i["feito"] for i in t.agenda("2026-11-10", "2026-11-10"))
-    with pytest.raises(Invalido):
+    with pytest.raises(Invalid):
         ss.comando(s["id"], "pausar", {})
 
     # próxima vez: anterior e sugestão vêm da sessão concluída
     t.marcar({"data": "2026-11-12", "exercicio_id": "supino-barra", "series": 1, "carga_kg": 40})
-    nova = ss.iniciar("2026-11-12")
-    e = nova["exercicios"][0]
+    new = ss.iniciar("2026-11-12")
+    e = new["exercicios"][0]
     assert e["anterior"]["data"] == "2026-11-10" and e["sugestao"]["carga_kg"] == 42.5
 
 
-def test_desfazer_e_pular(base: tuple[Treinos, Sessoes, Relogio]) -> None:
+def test_desfazer_e_pular(base: tuple[Workouts, Sessions, Relogio]) -> None:
     _, ss, _ = base
     s = ss.iniciar("2026-11-10")
     ss.comando(s["id"], "concluir_serie", {"repeticoes": 9})
@@ -109,18 +109,18 @@ def test_rotas(tmp_path: Path) -> None:
     assert len(api.get("/api/saude/sessoes?de=2026-11-01&ate=2026-11-30").json()) == 1
 
 
-def test_frequencia_ao_vivo(base: tuple[Treinos, Sessoes, Relogio]) -> None:
+def test_frequencia_ao_vivo(base: tuple[Workouts, Sessions, Relogio]) -> None:
     _, ss, r = base
     s = ss.iniciar("2026-11-10")
-    lote = [{"em": f"2026-11-10T18:00:{n:02d}Z", "bpm": 100 + n} for n in range(0, 30, 2)]
-    lote.append({"em": "2026-11-10T17:59:00Z", "bpm": 90})  # antes da sessão: fora
-    x = ss.registrar_fc(s["id"], lote)
+    batch = [{"em": f"2026-11-10T18:00:{n:02d}Z", "bpm": 100 + n} for n in range(0, 30, 2)]
+    batch.append({"em": "2026-11-10T17:59:00Z", "bpm": 90})  # antes da sessão: fora
+    x = ss.registrar_fc(s["id"], batch)
     assert x["fc_atual"] == {"bpm": 128, "em": "2026-11-10T18:00:28Z"}
     assert x["frequencia"]["origem"] == "relogio" and x["frequencia"]["amostras"] == 6
     assert x["atual"] == "Flexão de braço 1/2" and x["controle"]["fase"] == "exercicio"
     assert ss.registrar_fc(s["id"], [])["estado"] == "andamento"  # lote vazio = sinal de vida
     r.andar(40)
     ss.comando(s["id"], "concluir_serie", {"repeticoes": 10})
-    fim = ss.concluir(s["id"], {"frequencia": {"media": 70, "maxima": 80}})
-    assert fim["frequencia"]["origem"] == "relogio"  # Health Connect não sobrescreve
-    assert fim["exercicios"][0]["series"][0]["fc_max"] == 128
+    end = ss.concluir(s["id"], {"frequencia": {"media": 70, "maxima": 80}})
+    assert end["frequencia"]["origem"] == "relogio"  # Health Connect não sobrescreve
+    assert end["exercicios"][0]["series"][0]["fc_max"] == 128

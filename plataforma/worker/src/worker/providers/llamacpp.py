@@ -86,8 +86,8 @@ class LlamaCppProvider(Provider):
     async def estado(self) -> dict[str, Any]:
         """Modelos disponíveis, os carregados na GPU e os que estão processando agora."""
         await self._garantir()
-        modelos = await self._modelos()
-        carregados = [m["id"] for m in modelos if m["status"]["value"] == "loaded"]
+        models = await self._modelos()
+        carregados = [m["id"] for m in models if m["status"]["value"] == "loaded"]
         ocupados = []
         for id_ in carregados:
             try:
@@ -97,7 +97,7 @@ class LlamaCppProvider(Provider):
             except (httpx.HTTPError, ValueError, AttributeError):
                 pass
         return {
-            "modelos": sorted(m["id"] for m in modelos),
+            "modelos": sorted(m["id"] for m in models),
             "carregados": carregados,
             "ocupados": ocupados,
         }
@@ -139,8 +139,8 @@ class LlamaCppProvider(Provider):
                     m for m in ids if "embed" not in m.lower() and m not in ("adaptadores", "voz")
                 ]
 
-            padrao = (chat(est["carregados"]) or chat(est["modelos"]) or [""])[0]
-            payload = {**payload, "model": padrao}
+            default = (chat(est["carregados"]) or chat(est["modelos"]) or [""])[0]
+            payload = {**payload, "model": default}
         # Espera uma troca em curso terminar antes de começar.
         async with self._trava:
             self._ativos += 1

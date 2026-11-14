@@ -5,17 +5,17 @@ Europeu (Cambridge), arredondadas para cima: são estimativas para marcar o ritm
 from datetime import date, timedelta
 from typing import Any
 
-NIVEIS = ["A1", "A2", "B1", "B2", "C1", "C2"]
+LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"]
 
 # horas acumuladas para concluir cada nível (partindo do zero)
-HORAS = {"A1": 100, "A2": 200, "B1": 400, "B2": 600, "C1": 800, "C2": 1100}
+HOURS = {"A1": 100, "A2": 200, "B1": 400, "B2": 600, "C1": 800, "C2": 1100}
 
-IDIOMAS = {"en": "Inglês", "fr": "Francês", "es": "Espanhol", "pt": "Português"}
+LANGUAGES = {"en": "Inglês", "fr": "Francês", "es": "Espanhol", "pt": "Português"}
 
 # habilidade do bloco principal em cada dia da semana (0 = segunda)
-FOCO_DO_DIA = ["gramatica", "escuta", "leitura", "fala", "escrita", "imersao", "revisao"]
+FOCUS_DO_DAY = ["gramatica", "escuta", "leitura", "fala", "escrita", "imersao", "revisao"]
 
-ROTULOS = {
+LABELS = {
     "gramatica": "Gramática",
     "escuta": "Escuta",
     "leitura": "Leitura",
@@ -28,7 +28,7 @@ ROTULOS = {
 }
 
 # temas de vocabulário/gramática por nível; um por semana, em ciclo
-TEMAS = {
+THEMES = {
     "A1": [
         "apresentações e cumprimentos",
         "números, horas e datas",
@@ -103,7 +103,7 @@ TEMAS = {
     ],
 }
 
-ATIVIDADES = {
+ACTIVITIES = {
     "gramatica": {
         "A": "Estude o tópico da semana com exemplos e faça 15 frases próprias.",
         "B": "Revise o tópico da semana e reescreva um parágrafo aplicando a estrutura.",
@@ -142,106 +142,106 @@ ATIVIDADES = {
 }
 
 
-def nivel_de_horas(horas: float) -> str:
+def level_of_hours(horas: float) -> str:
     """Nível em curso para as horas acumuladas (o primeiro ainda não concluído)."""
-    for n in NIVEIS:
-        if horas < HORAS[n]:
+    for n in LEVELS:
+        if horas < HOURS[n]:
             return n
     return "C2"
 
 
-def _faixa(nivel: str) -> str:
+def _band(nivel: str) -> str:
     return nivel[0]
 
 
-def _blocos(minutos: int, foco: str, nivel: str, tema: str, idioma: str) -> list[dict[str, Any]]:
+def _blocks(minutos: int, focus: str, nivel: str, tema: str, language: str) -> list[dict[str, Any]]:
     """Divide o dia: flashcards (~15%), bloco principal (~50%), vocabulário do tema (resto)."""
-    faixa = _faixa(nivel)
+    band = _band(nivel)
     cartoes = max(5, round(minutos * 0.15))
-    principal = max(10, round(minutos * 0.5))
-    vocab = max(0, minutos - cartoes - principal)
-    blocos = [
+    main = max(10, round(minutos * 0.5))
+    vocab = max(0, minutos - cartoes - main)
+    blocks = [
         {
             "habilidade": "flashcards",
-            "titulo": ROTULOS["flashcards"],
+            "titulo": LABELS["flashcards"],
             "minutos": cartoes,
-            "descricao": f"Revise o baralho de {idioma} (Anki) e inclua as palavras novas.",
+            "descricao": f"Revise o baralho de {language} (Anki) e inclua as palavras novas.",
         },
         {
-            "habilidade": foco,
-            "titulo": ROTULOS[foco],
-            "minutos": principal,
-            "descricao": f"{ATIVIDADES[foco][faixa]} Tema: {tema}.",
+            "habilidade": focus,
+            "titulo": LABELS[focus],
+            "minutos": main,
+            "descricao": f"{ACTIVITIES[focus][band]} Tema: {tema}.",
         },
     ]
     if vocab:
-        blocos.append(
+        blocks.append(
             {
                 "habilidade": "vocabulario",
-                "titulo": ROTULOS["vocabulario"],
+                "titulo": LABELS["vocabulario"],
                 "minutos": vocab,
                 "descricao": f'Liste 10 palavras/expressões de "{tema}" com frases de exemplo.',
             }
         )
-    return blocos
+    return blocks
 
 
-def horas_estudadas(trilha: dict[str, Any]) -> float:
+def hours_studied(track: dict[str, Any]) -> float:
     base = (
-        HORAS[NIVEIS[NIVEIS.index(trilha["nivel_inicial"]) - 1]]
-        if trilha["nivel_inicial"] != "A1"
+        HOURS[LEVELS[LEVELS.index(track["nivel_inicial"]) - 1]]
+        if track["nivel_inicial"] != "A1"
         else 0
     )
-    return base + sum(trilha.get("sessoes", {}).values()) / 60
+    return base + sum(track.get("sessoes", {}).values()) / 60
 
 
-def cronograma(trilha: dict[str, Any], de: date, ate: date) -> list[dict[str, Any]]:
+def schedule(track: dict[str, Any], de: date, ate: date) -> list[dict[str, Any]]:
     """Dias de estudo no período, com os blocos de cada um e se a sessão foi registrada."""
-    inicio = date.fromisoformat(trilha["inicio"])
-    sessoes: dict[str, int] = trilha.get("sessoes", {})
-    nivel = nivel_de_horas(horas_estudadas(trilha))
-    temas = TEMAS[nivel]
-    nome = IDIOMAS.get(trilha["idioma"], trilha["idioma"])
-    dias = []
-    d = max(de, inicio)
+    start = date.fromisoformat(track["inicio"])
+    sessions: dict[str, int] = track.get("sessoes", {})
+    level = level_of_hours(hours_studied(track))
+    themes = THEMES[level]
+    name = LANGUAGES.get(track["idioma"], track["idioma"])
+    days = []
+    d = max(de, start)
     while d <= ate:
-        if d.isoweekday() in trilha["dias_semana"]:
-            semana = (d - inicio).days // 7
-            tema = temas[semana % len(temas)]
-            dias.append(
+        if d.isoweekday() in track["dias_semana"]:
+            week = (d - start).days // 7
+            tema = themes[week % len(themes)]
+            days.append(
                 {
                     "data": d.isoformat(),
-                    "nivel": nivel,
+                    "nivel": level,
                     "tema": tema,
-                    "minutos": trilha["minutos_por_dia"],
-                    "blocos": _blocos(
-                        trilha["minutos_por_dia"], FOCO_DO_DIA[d.weekday()], nivel, tema, nome
+                    "minutos": track["minutos_por_dia"],
+                    "blocos": _blocks(
+                        track["minutos_por_dia"], FOCUS_DO_DAY[d.weekday()], level, tema, name
                     ),
-                    "feito_minutos": sessoes.get(d.isoformat(), 0),
+                    "feito_minutos": sessions.get(d.isoformat(), 0),
                 }
             )
         d += timedelta(days=1)
-    return dias
+    return days
 
 
-def marcos(trilha: dict[str, Any], hoje: date) -> list[dict[str, Any]]:
+def milestones(track: dict[str, Any], hoje: date) -> list[dict[str, Any]]:
     """Para cada nível até o alvo: horas que faltam e a data estimada no ritmo da trilha."""
-    horas = horas_estudadas(trilha)
-    por_semana = trilha["minutos_por_dia"] * len(trilha["dias_semana"]) / 60
-    alvo = NIVEIS.index(trilha["nivel_alvo"])
-    lista = []
-    for n in NIVEIS[: alvo + 1]:
-        faltam = max(0.0, HORAS[n] - horas)
-        semanas = faltam / por_semana if por_semana else None
-        lista.append(
+    hours = hours_studied(track)
+    by_week = track["minutos_por_dia"] * len(track["dias_semana"]) / 60
+    target = LEVELS.index(track["nivel_alvo"])
+    items = []
+    for n in LEVELS[: target + 1]:
+        missing = max(0.0, HOURS[n] - hours)
+        semanas = missing / by_week if by_week else None
+        items.append(
             {
                 "nivel": n,
-                "horas_total": HORAS[n],
-                "horas_faltando": round(faltam, 1),
-                "concluido": faltam == 0,
+                "horas_total": HOURS[n],
+                "horas_faltando": round(missing, 1),
+                "concluido": missing == 0,
                 "previsao": (hoje + timedelta(weeks=semanas)).isoformat()
                 if semanas is not None
                 else None,
             }
         )
-    return lista
+    return items

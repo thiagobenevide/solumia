@@ -229,14 +229,14 @@ class Settings(BaseSettings):
     def client_api_key_escopos(self) -> dict[str, str]:
         """Chave → escopo. `relogio:<chave>` só abre as rotas do relógio; sem prefixo = tudo
         (escopo vazio, como as chaves antigas)."""
-        escopos: dict[str, str] = {}
+        scopes: dict[str, str] = {}
         for item in self.client_api_keys.get_secret_value().split(","):
             item = item.strip()
             if not item:
                 continue
-            escopo, _, chave = item.partition(":") if ":" in item else ("", "", item)
-            escopos[chave.strip()] = escopo.strip()
-        return escopos
+            scope, _, key = item.partition(":") if ":" in item else ("", "", item)
+            scopes[key.strip()] = scope.strip()
+        return scopes
 
     @property
     def worker_api_key_list(self) -> list[str]:

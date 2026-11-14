@@ -10,11 +10,11 @@ pelo assunto (procure no sumário da sua edição)."""
 from typing import Any
 from urllib.parse import quote_plus
 
-from financas.warehouse import Armazem, Invalido
+from financas.warehouse import Warehouse, Invalid
 
-PROJETO = "Trilha de Finanças"
+PROJECT = "Trilha de Finanças"
 
-OBJETIVOS = [
+GOALS = [
     {
         "id": "investidor",
         "nome": "Investidor de longo prazo",
@@ -45,7 +45,7 @@ OBJETIVOS = [
     },
 ]
 
-NIVEIS = {
+LEVELS = {
     1: ("Fundamentos", "Investir × especular, juros compostos, risco e inflação."),
     2: ("Contabilidade para investidor", "Ler DRE, balanço e fluxo de caixa sem se perder."),
     3: ("Análise de empresas", "Indicadores, qualidade do lucro e vantagem competitiva."),
@@ -59,13 +59,13 @@ NIVEIS = {
 # ---------- livros ----------
 
 
-def _caps(*itens: tuple[str, str, str, str]) -> list[dict[str, str]]:
-    return [{"n": n, "titulo": t, "prioridade": p, "porque": q} for n, t, p, q in itens]
+def _caps(*items: tuple[str, str, str, str]) -> list[dict[str, str]]:
+    return [{"n": n, "titulo": t, "prioridade": p, "porque": q} for n, t, p, q in items]
 
 
 ESS, IMP, OPC = "essencial", "importante", "opcional"
 
-LIVROS: dict[str, dict[str, Any]] = {
+BOOKS: dict[str, dict[str, Any]] = {
     "investidor_inteligente": {
         "titulo": "O Investidor Inteligente",
         "autor": "Benjamin Graham (comentários de Jason Zweig)",
@@ -588,7 +588,7 @@ LIVROS: dict[str, dict[str, Any]] = {
 # ---------- artigos científicos ----------
 
 # autores, título, revista, nível da trilha, por que ler
-ARTIGOS: dict[str, tuple[str, str, str, int, str]] = {
+ARTICLES: dict[str, tuple[str, str, str, int, str]] = {
     "markowitz1952": (
         "Markowitz (1952)",
         "Portfolio Selection",
@@ -735,7 +735,7 @@ ARTIGOS: dict[str, tuple[str, str, str, int, str]] = {
 
 # ---------- relatórios para praticar ----------
 
-RELATORIOS: dict[str, dict[str, Any]] = {
+REPORTS: dict[str, dict[str, Any]] = {
     "dfp": {
         "nome": "DFP: demonstrações financeiras anuais",
         "emissor": "Empresa → CVM",
@@ -881,7 +881,7 @@ RELATORIOS: dict[str, dict[str, Any]] = {
 
 # ---------- trilha ----------
 
-ETAPAS: list[dict[str, Any]] = [
+STAGES: list[dict[str, Any]] = [
     {
         "id": "n1_investir",
         "nivel": 1,
@@ -1061,7 +1061,7 @@ ETAPAS: list[dict[str, Any]] = [
     },
 ]
 
-ESQUEMA_GUIA = {
+SCHEMA_GUIDE = {
     "type": "object",
     "properties": {
         "sobre": {"type": "string"},
@@ -1086,7 +1086,7 @@ ESQUEMA_GUIA = {
     "required": ["sobre", "como_ler", "niveis", "ordem", "capitulos"],
 }
 
-SISTEMA_GUIA = """Você monta guias de leitura não linear de livros de finanças e investimentos para
+SYSTEM_GUIDE = """Você monta guias de leitura não linear de livros de finanças e investimentos para
 um investidor brasileiro pessoa física que estuda sozinho. Português do Brasil, frases curtas.
 Diga quais capítulos ler, em que ordem e por quê; marque cada um como essencial, importante ou
 opcional. Numere capítulos só se tiver certeza do sumário; senão use o assunto do capítulo como
@@ -1096,62 +1096,62 @@ capítulo aos níveis da trilha: 1 fundamentos, 2 contabilidade, 3 análise de e
 'relacionados', cite outros livros do catálogo que complementam."""
 
 
-def _busca_artigo(titulo: str) -> str:
+def _search_article(titulo: str) -> str:
     return "https://scholar.google.com/scholar?q=" + quote_plus(titulo)
 
 
-def _livro(id_: str, dados: dict[str, Any], extra: dict[str, Any] | None) -> dict[str, Any]:
+def _book(id_: str, dados: dict[str, Any], extra: dict[str, Any] | None) -> dict[str, Any]:
     """Livro do catálogo (ou acrescentado) com o que a pessoa marcou e o guia do Claude, se houver:
     o guia do Claude completa, mas não troca, o guia escrito aqui."""
-    guia = (extra or {}).get("guia") or {}
-    livro = {
+    guide = (extra or {}).get("guia") or {}
+    book = {
         "id": id_,
         "titulo": dados["titulo"],
         "autor": dados.get("autor", ""),
         "ano": dados.get("ano", ""),
         "tenho": dados.get("tenho", False),
-        "niveis": dados.get("niveis") or guia.get("niveis") or [],
-        "sobre": dados.get("sobre") or guia.get("sobre", ""),
-        "como_ler": dados.get("como_ler") or guia.get("como_ler", ""),
-        "ordem": dados.get("ordem") or guia.get("ordem") or [],
-        "capitulos": [dict(c) for c in dados.get("capitulos") or guia.get("capitulos") or []],
-        "relacionados": guia.get("relacionados", []),
-        "guia_claude": bool(guia),
+        "niveis": dados.get("niveis") or guide.get("niveis") or [],
+        "sobre": dados.get("sobre") or guide.get("sobre", ""),
+        "como_ler": dados.get("como_ler") or guide.get("como_ler", ""),
+        "ordem": dados.get("ordem") or guide.get("ordem") or [],
+        "capitulos": [dict(c) for c in dados.get("capitulos") or guide.get("capitulos") or []],
+        "relacionados": guide.get("relacionados", []),
+        "guia_claude": bool(guide),
         "registro_id": (extra or {}).get("id"),
-        "catalogo": id_ in LIVROS,
+        "catalogo": id_ in BOOKS,
     }
     if (extra or {}).get("tenho") in ("sim", "nao"):
-        livro["tenho"] = extra["tenho"] == "sim"  # type: ignore[index]
-    return livro
+        book["tenho"] = extra["tenho"] == "sim"  # type: ignore[index]
+    return book
 
 
-def livros(arm: Armazem) -> dict[str, dict[str, Any]]:
-    registros = arm.todos("estudo_livros")
-    por_catalogo = {r["catalogo"]: r for r in registros if r["catalogo"]}
-    saida = {k: _livro(k, v, por_catalogo.get(k)) for k, v in LIVROS.items()}
-    for r in registros:
+def books(arm: Warehouse) -> dict[str, dict[str, Any]]:
+    records = arm.todos("estudo_livros")
+    by_catalog = {r["catalogo"]: r for r in records if r["catalogo"]}
+    output = {k: _book(k, v, by_catalog.get(k)) for k, v in BOOKS.items()}
+    for r in records:
         if not r["catalogo"]:
-            saida[r["id"]] = _livro(r["id"], r, r)
-    return saida
+            output[r["id"]] = _book(r["id"], r, r)
+    return output
 
 
-def montar(arm: Armazem, objetivo: str = "") -> dict[str, Any]:
+def assemble(arm: Warehouse, goal: str = "") -> dict[str, Any]:
     """A trilha inteira com o progresso: objetivo, níveis com etapas (cada leitura com os
     capítulos certos do livro), livros, artigos e relatórios."""
-    progresso = {p["item"]: p for p in arm.todos("estudo_progresso")}
-    objetivo = objetivo or (progresso.get("objetivo") or {}).get("nota") or "investidor"
-    obj = next((o for o in OBJETIVOS if o["id"] == objetivo), OBJETIVOS[0])
-    biblioteca = livros(arm)
+    progress = {p["item"]: p for p in arm.todos("estudo_progresso")}
+    goal = goal or (progress.get("objetivo") or {}).get("nota") or "investidor"
+    obj = next((o for o in GOALS if o["id"] == goal), GOALS[0])
+    collection = books(arm)
 
     def estado(item: str) -> dict[str, Any]:
-        p = progresso.get(item) or {}
+        p = progress.get(item) or {}
         return {
             "status": p.get("status") or "pendente",
             "nota": p.get("nota", ""),
             "leitura_id": p.get("leitura_id", ""),
         }
 
-    artigos = {
+    articles = {
         k: {
             "id": k,
             "autores": a,
@@ -1159,102 +1159,102 @@ def montar(arm: Armazem, objetivo: str = "") -> dict[str, Any]:
             "revista": r,
             "nivel": n,
             "porque": q,
-            "url": _busca_artigo(t),
+            "url": _search_article(t),
             **estado(f"artigo:{k}"),
         }
-        for k, (a, t, r, n, q) in ARTIGOS.items()
+        for k, (a, t, r, n, q) in ARTICLES.items()
     }
-    relatorios = {k: {"id": k, **v, **estado(f"relatorio:{k}")} for k, v in RELATORIOS.items()}
-    for k, livro in biblioteca.items():
-        livro.update(estado(f"livro:{k}"))
-        for c in livro["capitulos"]:
+    reports = {k: {"id": k, **v, **estado(f"relatorio:{k}")} for k, v in REPORTS.items()}
+    for k, book in collection.items():
+        book.update(estado(f"livro:{k}"))
+        for c in book["capitulos"]:
             c["status"] = estado(f"cap:{k}:{c['n']}")["status"]
 
-    niveis = []
-    feitas = total = 0
+    levels = []
+    done = total = 0
     for n in obj["niveis"]:
-        titulo, resumo = NIVEIS[n]
-        etapas = []
-        for e in (x for x in ETAPAS if x["nivel"] == n):
-            leituras = []
-            for livro_id, caps in e["leituras"]:
-                livro = biblioteca[livro_id]
-                escolhidos = [c for c in livro["capitulos"] if c["n"] in caps] if caps else []
-                lidos = sum(c["status"] == "feito" for c in escolhidos)
-                leituras.append(
+        title, summary = LEVELS[n]
+        stages = []
+        for e in (x for x in STAGES if x["nivel"] == n):
+            readings = []
+            for book_id, caps in e["leituras"]:
+                book = collection[book_id]
+                chosen = [c for c in book["capitulos"] if c["n"] in caps] if caps else []
+                read = sum(c["status"] == "feito" for c in chosen)
+                readings.append(
                     {
-                        "livro": livro_id,
-                        "titulo": livro["titulo"],
-                        "autor": livro["autor"],
-                        "tenho": livro["tenho"],
-                        "capitulos": escolhidos,
+                        "livro": book_id,
+                        "titulo": book["titulo"],
+                        "autor": book["autor"],
+                        "tenho": book["tenho"],
+                        "capitulos": chosen,
                         "inteiro": not caps,
-                        "lidos": lidos,
+                        "lidos": read,
                     }
                 )
             st = estado(f"etapa:{e['id']}")
             total += 1
-            feitas += st["status"] == "feito"
-            etapas.append(
+            done += st["status"] == "feito"
+            stages.append(
                 {
                     **{
                         k: v for k, v in e.items() if k not in ("leituras", "artigos", "relatorios")
                     },
                     **st,
-                    "leituras": leituras,
-                    "artigos": [artigos[a] for a in e["artigos"]],
-                    "relatorios": [relatorios[r] for r in e["relatorios"]],
+                    "leituras": readings,
+                    "artigos": [articles[a] for a in e["artigos"]],
+                    "relatorios": [reports[r] for r in e["relatorios"]],
                 }
             )
-        niveis.append({"nivel": n, "titulo": titulo, "resumo": resumo, "etapas": etapas})
+        levels.append({"nivel": n, "titulo": title, "resumo": summary, "etapas": stages})
     return {
         "objetivo": obj,
-        "objetivos": [{k: o[k] for k in ("id", "nome", "descricao")} for o in OBJETIVOS],
-        "progresso": {"feitas": feitas, "total": total},
-        "niveis": niveis,
-        "livros": sorted(biblioteca.values(), key=lambda x: (not x["tenho"], x["titulo"])),
-        "artigos": sorted(artigos.values(), key=lambda x: (x["nivel"], x["autores"])),
-        "relatorios": sorted(relatorios.values(), key=lambda x: x["nivel"]),
-        "projeto": PROJETO,
+        "objetivos": [{k: o[k] for k in ("id", "nome", "descricao")} for o in GOALS],
+        "progresso": {"feitas": done, "total": total},
+        "niveis": levels,
+        "livros": sorted(collection.values(), key=lambda x: (not x["tenho"], x["titulo"])),
+        "artigos": sorted(articles.values(), key=lambda x: (x["nivel"], x["autores"])),
+        "relatorios": sorted(reports.values(), key=lambda x: x["nivel"]),
+        "projeto": PROJECT,
     }
 
 
-def marcar(arm: Armazem, item: str, dados: dict[str, Any]) -> dict[str, Any]:
+def mark(arm: Warehouse, item: str, dados: dict[str, Any]) -> dict[str, Any]:
     """Grava o status (pendente, lendo, feito), a nota ou a leitura ligada de um item da trilha:
     `etapa:<id>`, `livro:<id>`, `cap:<livro>:<n>`, `artigo:<id>`, `relatorio:<id>` ou
     `objetivo` (a nota guarda o id do objetivo)."""
     if not item or len(item) > 200:
-        raise Invalido("Item inválido.")
-    campos = {k: dados[k] for k in ("status", "nota", "leitura_id") if k in dados}
-    atual = next((p for p in arm.todos("estudo_progresso") if p["item"] == item), None)
-    if atual:
-        return arm.editar("estudo_progresso", atual["id"], campos)
-    return arm.criar("estudo_progresso", {"item": item, **campos})
+        raise Invalid("Item inválido.")
+    fields = {k: dados[k] for k in ("status", "nota", "leitura_id") if k in dados}
+    current = next((p for p in arm.todos("estudo_progresso") if p["item"] == item), None)
+    if current:
+        return arm.editar("estudo_progresso", current["id"], fields)
+    return arm.criar("estudo_progresso", {"item": item, **fields})
 
 
-def tenho(arm: Armazem, livro_id: str, valor: bool) -> dict[str, Any]:
+def have(arm: Warehouse, book_id: str, valor: bool) -> dict[str, Any]:
     """Marca se a pessoa tem o livro (do catálogo ou acrescentado)."""
-    registro = next(
-        (r for r in arm.todos("estudo_livros") if livro_id in (r["id"], r["catalogo"])), None
+    record = next(
+        (r for r in arm.todos("estudo_livros") if book_id in (r["id"], r["catalogo"])), None
     )
-    if registro:
-        return arm.editar("estudo_livros", registro["id"], {"tenho": "sim" if valor else "nao"})
-    if livro_id not in LIVROS:
-        raise Invalido("Livro não encontrado.")
+    if record:
+        return arm.editar("estudo_livros", record["id"], {"tenho": "sim" if valor else "nao"})
+    if book_id not in BOOKS:
+        raise Invalid("Livro não encontrado.")
     return arm.criar(
         "estudo_livros",
         {
-            "titulo": LIVROS[livro_id]["titulo"],
-            "catalogo": livro_id,
+            "titulo": BOOKS[book_id]["titulo"],
+            "catalogo": book_id,
             "tenho": "sim" if valor else "nao",
         },
     )
 
 
-def prompt_guia(livro: dict[str, Any]) -> str:
-    catalogo = "\n".join(f"- {v['titulo']} ({v.get('autor', '')})" for v in LIVROS.values())
+def prompt_guide(book: dict[str, Any]) -> str:
+    catalog = "\n".join(f"- {v['titulo']} ({v.get('autor', '')})" for v in BOOKS.values())
     return (
-        f"Livro: {livro['titulo']}\nAutor: {livro.get('autor') or 'não informado'}\n\n"
+        f"Livro: {book['titulo']}\nAutor: {book.get('autor') or 'não informado'}\n\n"
         "Monte o guia de leitura não linear deste livro para a trilha de finanças. Livros do "
-        f"catálogo para 'relacionados':\n{catalogo}"
+        f"catálogo para 'relacionados':\n{catalog}"
     )

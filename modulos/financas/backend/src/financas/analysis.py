@@ -7,11 +7,11 @@ operações."""
 from collections import defaultdict
 from typing import Any
 
-from financas.warehouse import Armazem, Invalido
-from financas.patterns import APTA, OBSERVAR
+from financas.warehouse import Warehouse, Invalid
+from financas.patterns import FIT, WATCH
 
 # contas aceitas em cada ano de `demonstrativos`
-CONTAS = [
+ACCOUNTS = [
     # DRE
     "receita_liquida",
     "custo",
@@ -49,30 +49,30 @@ DRE_VERTICAL = [
 ]
 
 
-def _div(a: float | None, b: float | None, escala: float = 1) -> float | None:
+def _div(a: float | None, b: float | None, scale: float = 1) -> float | None:
     if a is None or not b:
         return None
-    return round(a / b * escala, 2)
+    return round(a / b * scale, 2)
 
 
-def limpar_demonstrativos(lista: list[Any]) -> list[dict[str, Any]]:
-    anos = {}
-    for d in lista:
+def clean_statements(items: list[Any]) -> list[dict[str, Any]]:
+    years = {}
+    for d in items:
         if not isinstance(d, dict) or "ano" not in d:
-            raise Invalido("Cada demonstrativo precisa do ano")
+            raise Invalid("Cada demonstrativo precisa do ano")
         try:
-            ano = int(d["ano"])
-            linha: dict[str, Any] = {"ano": ano}
-            for c in CONTAS:
+            year = int(d["ano"])
+            line: dict[str, Any] = {"ano": year}
+            for c in ACCOUNTS:
                 v = d.get(c)
-                linha[c] = None if v in (None, "") else float(v)
+                line[c] = None if v in (None, "") else float(v)
         except (TypeError, ValueError) as e:
-            raise Invalido(f"Valor inválido no ano {d.get('ano')}") from e
-        anos[ano] = linha
-    return [anos[a] for a in sorted(anos)]
+            raise Invalid(f"Valor inválido no ano {d.get('ano')}") from e
+        years[year] = line
+    return [years[a] for a in sorted(years)]
 
 
-def _completar(d: dict[str, Any]) -> dict[str, Any]:
+def _complete(d: dict[str, Any]) -> dict[str, Any]:
     """Deriva o que faltar (lucro bruto, EBIT) quando dá para calcular."""
     d = dict(d)
     if d["lucro_bruto"] is None and d["receita_liquida"] is not None and d["custo"] is not None:
@@ -86,17 +86,17 @@ def _completar(d: dict[str, Any]) -> dict[str, Any]:
     return d
 
 
-def indicadores_ano(
-    d: dict[str, Any], ant: dict[str, Any] | None, empresa: dict[str, Any]
+def indicators_year(
+    d: dict[str, Any], ant: dict[str, Any] | None, company: dict[str, Any]
 ) -> dict[str, Any]:
-    d = _completar(d)
+    d = _complete(d)
     rec, ll, pl = d["receita_liquida"], d["lucro_liquido"], d["patrimonio_liquido"]
     ebitda = d["ebit"] + abs(d["depreciacao"] or 0) if d["ebit"] is not None else None
     div_liq = d["divida_bruta"] - (d["caixa"] or 0) if d["divida_bruta"] is not None else None
     fcl = d["fco"] - abs(d["capex"] or 0) if d["fco"] is not None else None
     nopat = d["ebit"] * 0.66 if d["ebit"] is not None else None
     capital = (pl or 0) + (div_liq or 0)
-    acoes = d["acoes"] or empresa["acoes"] or None
+    actions = d["acoes"] or company["acoes"] or None
     i: dict[str, Any] = {
         "ano": d["ano"],
         "ebitda": ebitda,
@@ -115,23 +115,23 @@ def indicadores_ano(
         "divida_liquida_pl": _div(div_liq, pl),
         "payout": _div(d["dividendos"], ll, 100),
         "conversao_caixa": _div(d["fco"], ll, 100),
-        "lpa": _div(ll, acoes),
-        "vpa": _div(pl, acoes),
+        "lpa": _div(ll, actions),
+        "vpa": _div(pl, actions),
         "cresc_receita": None,
         "cresc_lucro": None,
     }
     # Banco e seguradora (plano da CVM sem ativo/passivo circulante): EBITDA, margem bruta, ROIC
     # e dívida/EBITDA não têm sentido; o que vale é ROE, P/L, P/VP e dividendos.
-    setor = str(empresa.get("setor") or "").lower()
+    sector = str(company.get("setor") or "").lower()
     i["financeira"] = d["ativo_circulante"] is None and any(
-        s in setor for s in ("banco", "intermedia", "segurad", "arrendamento")
+        s in sector for s in ("banco", "intermedia", "segurad", "arrendamento")
     )
     if i["financeira"] and rec is not None:
         for k in ("ebitda", "fcl", "margem_bruta", "margem_ebit", "margem_ebitda", "roic"):
             i[k] = None
         i["divida_liquida_ebitda"] = i["giro_ativo"] = None
     if ant:
-        a = _completar(ant)
+        a = _complete(ant)
         if a["receita_liquida"]:
             i["cresc_receita"] = _div(
                 (rec or 0) - a["receita_liquida"], abs(a["receita_liquida"]), 100
@@ -141,18 +141,18 @@ def indicadores_ano(
     return i
 
 
-def _cagr(primeiro: float | None, ultimo: float | None, anos: int) -> float | None:
-    if not primeiro or not ultimo or primeiro <= 0 or ultimo <= 0 or anos <= 0:
+def _cagr(primeiro: float | None, last: float | None, years: int) -> float | None:
+    if not primeiro or not last or primeiro <= 0 or last <= 0 or years <= 0:
         return None
-    return round(((ultimo / primeiro) ** (1 / anos) - 1) * 100, 2)
+    return round(((last / primeiro) ** (1 / years) - 1) * 100, 2)
 
 
 def valuation(
-    empresa: dict[str, Any], ult: dict[str, Any] | None, ind: dict[str, Any] | None
+    company: dict[str, Any], ult: dict[str, Any] | None, ind: dict[str, Any] | None
 ) -> dict[str, Any]:
-    preco = empresa["cotacao"] or None
-    acoes = (ult or {}).get("acoes") or empresa["acoes"] or None
-    mcap = preco * acoes if preco and acoes else None
+    preco = company["cotacao"] or None
+    actions = (ult or {}).get("acoes") or company["acoes"] or None
+    mcap = preco * actions if preco and actions else None
     ev = mcap + (ind["divida_liquida"] or 0) if mcap is not None and ind else None
     v: dict[str, Any] = {
         "cotacao": preco,
@@ -171,38 +171,38 @@ def valuation(
     v["preco_graham"] = (
         round((22.5 * lpa * vpa) ** 0.5, 2) if lpa and vpa and lpa > 0 and vpa > 0 else None
     )
-    dpa = _div((ult or {}).get("dividendos"), acoes)
+    dpa = _div((ult or {}).get("dividendos"), actions)
     v["preco_bazin"] = round(dpa / 0.06, 2) if dpa else None
-    v["preco_teto"] = empresa["preco_teto"] or None
+    v["preco_teto"] = company["preco_teto"] or None
     v["margem_seguranca"] = _div(
-        (empresa["preco_teto"] - preco) if empresa["preco_teto"] and preco else None,
-        empresa["preco_teto"],
+        (company["preco_teto"] - preco) if company["preco_teto"] and preco else None,
+        company["preco_teto"],
         100,
     )
     return v
 
 
-def resumo_ficha(dem: list[dict[str, Any]], preco: float | None, setor: str = "") -> dict[str, Any]:
+def summary_card(dem: list[dict[str, Any]], preco: float | None, sector: str = "") -> dict[str, Any]:
     """Indicadores por ano, valuation e crescimento da ficha do Mercado (sem empresa cadastrada:
     só os demonstrativos da CVM e a cotação do dia)."""
-    dem = limpar_demonstrativos(dem)
+    dem = clean_statements(dem)
     if not dem:
         return {"indicadores": [], "valuation": {}, "cagr_receita": None, "cagr_lucro": None}
     serie = [
-        indicadores_ano(d, dem[i - 1] if i else None, {"acoes": 0, "setor": setor})
+        indicators_year(d, dem[i - 1] if i else None, {"acoes": 0, "setor": sector})
         for i, d in enumerate(dem)
     ]
     val = valuation({"cotacao": preco or 0, "acoes": 0, "preco_teto": 0}, dem[-1], serie[-1])
-    anos = len(dem) - 1
+    years = len(dem) - 1
     return {
         "indicadores": serie,
         "valuation": val,
-        "cagr_receita": _cagr(dem[0]["receita_liquida"], dem[-1]["receita_liquida"], anos),
-        "cagr_lucro": _cagr(dem[0]["lucro_liquido"], dem[-1]["lucro_liquido"], anos),
+        "cagr_receita": _cagr(dem[0]["receita_liquida"], dem[-1]["receita_liquida"], years),
+        "cagr_lucro": _cagr(dem[0]["lucro_liquido"], dem[-1]["lucro_liquido"], years),
     }
 
 
-def checagens(serie: list[dict[str, Any]], val: dict[str, Any]) -> list[dict[str, Any]]:
+def run_checks(serie: list[dict[str, Any]], val: dict[str, Any]) -> list[dict[str, Any]]:
     """Regras objetivas de qualidade e preço; `ok` None quando faltam dados."""
     ult = serie[-1] if serie else {}
     ult5 = serie[-5:]
@@ -210,8 +210,8 @@ def checagens(serie: list[dict[str, Any]], val: dict[str, Any]) -> list[dict[str
     def regra(nome: str, ok: bool | None, valor: Any = None) -> dict[str, Any]:
         return {"nome": nome, "ok": ok, "valor": valor}
 
-    def todos(campo: str, cond: Any) -> bool | None:
-        vals = [s[campo] for s in ult5 if s[campo] is not None]
+    def todos(field: str, cond: Any) -> bool | None:
+        vals = [s[field] for s in ult5 if s[field] is not None]
         return all(cond(v) for v in vals) if len(vals) >= 2 else None
 
     roe, ml, dle, lc = (
@@ -251,106 +251,106 @@ def checagens(serie: list[dict[str, Any]], val: dict[str, Any]) -> list[dict[str
     ]
 
 
-def nota_questionario(
-    perguntas: list[dict[str, Any]], respostas: dict[str, Any], alvo: str
+def note_questionnaire(
+    perguntas: list[dict[str, Any]], respostas: dict[str, Any], target: str
 ) -> dict[str, Any]:
-    validas = [p for p in perguntas if p["alvo"] == alvo]
-    pontos = total = 0.0
-    blocos: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
+    valid = [p for p in perguntas if p["alvo"] == target]
+    points = total = 0.0
+    blocks: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
     respondidas = 0
-    for p in validas:
+    for p in valid:
         r = respostas.get(p["id"])
         if r is None:
             continue
-        nota = min(max(float(r), 0), 5)
+        note = min(max(float(r), 0), 5)
         respondidas += 1
-        pontos += nota * p["peso"]
+        points += note * p["peso"]
         total += 5 * p["peso"]
-        blocos[p["bloco"]][0] += nota * p["peso"]
-        blocos[p["bloco"]][1] += 5 * p["peso"]
+        blocks[p["bloco"]][0] += note * p["peso"]
+        blocks[p["bloco"]][1] += 5 * p["peso"]
     return {
-        "nota": round(100 * pontos / total, 1) if total else None,
+        "nota": round(100 * points / total, 1) if total else None,
         "respondidas": respondidas,
-        "total": len(validas),
-        "blocos": {b: round(100 * v[0] / v[1], 1) if v[1] else None for b, v in blocos.items()},
+        "total": len(valid),
+        "blocos": {b: round(100 * v[0] / v[1], 1) if v[1] else None for b, v in blocks.items()},
     }
 
 
-def veredito(nota: float | None) -> str:
-    if nota is None:
+def verdict(note: float | None) -> str:
+    if note is None:
         return "sem dados"
-    return "apta para aporte" if nota >= APTA else ("observar" if nota >= OBSERVAR else "evitar")
+    return "apta para aporte" if note >= FIT else ("observar" if note >= WATCH else "evitar")
 
 
-def analisar(arm: Armazem, empresa: dict[str, Any]) -> dict[str, Any]:
-    dem = limpar_demonstrativos(empresa["demonstrativos"])
-    serie = [indicadores_ano(d, dem[i - 1] if i else None, empresa) for i, d in enumerate(dem)]
+def analyze(arm: Warehouse, company: dict[str, Any]) -> dict[str, Any]:
+    dem = clean_statements(company["demonstrativos"])
+    serie = [indicators_year(d, dem[i - 1] if i else None, company) for i, d in enumerate(dem)]
     ult_d = dem[-1] if dem else None
     ult_i = serie[-1] if serie else None
-    val = valuation(empresa, ult_d, ult_i)
-    checks = checagens(serie, val)
+    val = valuation(company, ult_d, ult_i)
+    checks = run_checks(serie, val)
     avaliadas = [c for c in checks if c["ok"] is not None]
-    nota_auto = (
+    note_auto = (
         round(100 * sum(1 for c in avaliadas if c["ok"]) / len(avaliadas), 1) if avaliadas else None
     )
 
     perguntas = arm.questionario()
-    quest = nota_questionario(perguntas, empresa["respostas"], "empresa")
-    setor = next(
-        (s for s in arm.todos("setores") if s["nome"].lower() == empresa["setor"].lower()), None
+    quest = note_questionnaire(perguntas, company["respostas"], "empresa")
+    sector = next(
+        (s for s in arm.todos("setores") if s["nome"].lower() == company["setor"].lower()), None
     )
-    quest_setor = nota_questionario(perguntas, setor["respostas"], "setor") if setor else None
+    quest_sector = note_questionnaire(perguntas, sector["respostas"], "setor") if sector else None
 
     # pesos: questionário da empresa 50%, indicadores 30%, setor 20% (redistribui o que faltar)
-    partes = [
+    parts = [
         (quest["nota"], 0.5),
-        (nota_auto, 0.3),
-        (quest_setor["nota"] if quest_setor else None, 0.2),
+        (note_auto, 0.3),
+        (quest_sector["nota"] if quest_sector else None, 0.2),
     ]
-    peso = sum(p for n, p in partes if n is not None)
-    final = round(sum(n * p for n, p in partes if n is not None) / peso, 1) if peso else None
+    weight = sum(p for n, p in parts if n is not None)
+    final = round(sum(n * p for n, p in parts if n is not None) / weight, 1) if weight else None
 
     vertical = [
         {
             "ano": d["ano"],
-            **{c: _div(_completar(d)[c], d["receita_liquida"], 100) for c in DRE_VERTICAL},
+            **{c: _div(_complete(d)[c], d["receita_liquida"], 100) for c in DRE_VERTICAL},
         }
         for d in dem
     ]
-    anos = len(dem) - 1
+    years = len(dem) - 1
     return {
-        "empresa": empresa,
-        "contas": CONTAS,
+        "empresa": company,
+        "contas": ACCOUNTS,
         "demonstrativos": dem,
         "indicadores": serie,
         "vertical": vertical,
         "valuation": val,
-        "cagr_receita": _cagr(dem[0]["receita_liquida"], dem[-1]["receita_liquida"], anos)
+        "cagr_receita": _cagr(dem[0]["receita_liquida"], dem[-1]["receita_liquida"], years)
         if dem
         else None,
-        "cagr_lucro": _cagr(dem[0]["lucro_liquido"], dem[-1]["lucro_liquido"], anos)
+        "cagr_lucro": _cagr(dem[0]["lucro_liquido"], dem[-1]["lucro_liquido"], years)
         if dem
         else None,
         "checagens": checks,
-        "nota_indicadores": nota_auto,
+        "nota_indicadores": note_auto,
         "questionario": quest,
-        "setor": {"id": setor["id"], "nome": setor["nome"], **(quest_setor or {})}
-        if setor
+        "setor": {"id": sector["id"], "nome": sector["nome"], **(quest_sector or {})}
+        if sector
         else None,
         "nota_final": final,
-        "veredito": veredito(final),
+        "veredito": verdict(final),
     }
 
 
-def ranking(arm: Armazem) -> list[dict[str, Any]]:
-    saida = []
+def ranking(arm: Warehouse) -> list[dict[str, Any]]:
+    output = []
     for e in arm.todos("empresas"):
         try:
-            a = analisar(arm, e)
-        except Invalido:
+            a = analyze(arm, e)
+        except Invalid:
             continue
         ult = a["indicadores"][-1] if a["indicadores"] else {}
-        saida.append(
+        output.append(
             {
                 "id": e["id"],
                 "ticker": e["ticker"],
@@ -368,22 +368,22 @@ def ranking(arm: Armazem) -> list[dict[str, Any]]:
                 "margem_seguranca": a["valuation"]["margem_seguranca"],
             }
         )
-    saida.sort(key=lambda r: -(r["nota_final"] or -1))
-    return saida
+    output.sort(key=lambda r: -(r["nota_final"] or -1))
+    return output
 
 
-def setor_analise(arm: Armazem, setor: dict[str, Any]) -> dict[str, Any]:
-    q = nota_questionario(arm.questionario(), setor["respostas"], "setor")
-    empresas = [r for r in ranking(arm) if r["setor"].lower() == setor["nome"].lower()]
+def sector_analysis(arm: Warehouse, sector: dict[str, Any]) -> dict[str, Any]:
+    q = note_questionnaire(arm.questionario(), sector["respostas"], "setor")
+    empresas = [r for r in ranking(arm) if r["setor"].lower() == sector["nome"].lower()]
     return {
-        "setor": setor,
+        "setor": sector,
         "questionario": q,
-        "veredito": veredito(q["nota"]),
+        "veredito": verdict(q["nota"]),
         "empresas": empresas,
     }
 
 
-def carteira(arm: Armazem) -> dict[str, Any]:
+def portfolio(arm: Warehouse) -> dict[str, Any]:
     cotacoes = {e["ticker"]: e for e in arm.todos("empresas")}
     pos: dict[str, dict[str, float]] = defaultdict(
         lambda: {
@@ -412,13 +412,13 @@ def carteira(arm: Armazem) -> dict[str, Any]:
     for pr in arm.todos("proventos"):
         pos[pr["ticker"].upper()]["proventos"] += pr["valor"]
 
-    itens = []
+    items = []
     for ticker, p in pos.items():
         e = cotacoes.get(ticker)
         preco = e["cotacao"] if e and e["cotacao"] else None
         medio = p["custo"] / p["quantidade"] if p["quantidade"] > 0 else None
-        atual = preco * p["quantidade"] if preco is not None else p["custo"]
-        itens.append(
+        current = preco * p["quantidade"] if preco is not None else p["custo"]
+        items.append(
             {
                 "ticker": ticker,
                 "empresa_id": e["id"] if e else None,
@@ -427,40 +427,40 @@ def carteira(arm: Armazem) -> dict[str, Any]:
                 "preco_medio": round(medio, 4) if medio else None,
                 "cotacao": preco,
                 "custo": round(p["custo"], 2),
-                "valor_atual": round(atual, 2),
-                "resultado_aberto": round(atual - p["custo"], 2),
-                "rentabilidade": _div(atual - p["custo"], p["custo"], 100),
+                "valor_atual": round(current, 2),
+                "resultado_aberto": round(current - p["custo"], 2),
+                "rentabilidade": _div(current - p["custo"], p["custo"], 100),
                 "realizado": round(p["realizado"], 2),
                 "proventos": round(p["proventos"], 2),
                 "yield_on_cost": _div(p["proventos"], p["aportado"], 100),
             }
         )
-    total = sum(i["valor_atual"] for i in itens if i["quantidade"] > 0)
-    por_setor: dict[str, float] = defaultdict(float)
-    for i in itens:
+    total = sum(i["valor_atual"] for i in items if i["quantidade"] > 0)
+    by_sector: dict[str, float] = defaultdict(float)
+    for i in items:
         i["peso"] = _div(i["valor_atual"], total, 100) if i["quantidade"] > 0 else 0.0
         if i["quantidade"] > 0:
-            por_setor[i["setor"] or "Sem setor"] += i["valor_atual"]
-    itens.sort(key=lambda i: -i["valor_atual"])
-    custo = sum(i["custo"] for i in itens if i["quantidade"] > 0)
-    proventos_mes: dict[str, float] = defaultdict(float)
+            by_sector[i["setor"] or "Sem setor"] += i["valor_atual"]
+    items.sort(key=lambda i: -i["valor_atual"])
+    cost = sum(i["custo"] for i in items if i["quantidade"] > 0)
+    dividends_month: dict[str, float] = defaultdict(float)
     for pr in arm.todos("proventos"):
-        proventos_mes[(pr["data"] or "")[:7]] += pr["valor"]
+        dividends_month[(pr["data"] or "")[:7]] += pr["valor"]
     return {
-        "posicoes": itens,
+        "posicoes": items,
         "por_setor": [
             {"setor": s, "valor": round(v, 2), "pct": _div(v, total, 100)}
-            for s, v in sorted(por_setor.items(), key=lambda kv: -kv[1])
+            for s, v in sorted(by_sector.items(), key=lambda kv: -kv[1])
         ],
         "proventos_mes": [
-            {"mes": m, "valor": round(v, 2)} for m, v in sorted(proventos_mes.items())
+            {"mes": m, "valor": round(v, 2)} for m, v in sorted(dividends_month.items())
         ],
         "totais": {
             "valor_atual": round(total, 2),
-            "custo": round(custo, 2),
-            "resultado_aberto": round(total - custo, 2),
-            "rentabilidade": _div(total - custo, custo, 100),
-            "realizado": round(sum(i["realizado"] for i in itens), 2),
-            "proventos": round(sum(i["proventos"] for i in itens), 2),
+            "custo": round(cost, 2),
+            "resultado_aberto": round(total - cost, 2),
+            "rentabilidade": _div(total - cost, cost, 100),
+            "realizado": round(sum(i["realizado"] for i in items), 2),
+            "proventos": round(sum(i["proventos"] for i in items), 2),
         },
     }

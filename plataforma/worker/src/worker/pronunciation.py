@@ -20,7 +20,7 @@ _XTTS_PYTHON = Path(__file__).resolve().parents[2] / "xtts" / ".venv" / "bin" / 
 ESPEAK = {"en": "en-us", "es": "es", "fr": "fr-fr", "pt": "pt-br"}
 
 
-def ipa(lista: list[str], idioma: str) -> list[str]:
+def ipa(items: list[str], language: str) -> list[str]:
     """IPA de cada palavra, sem marcas de tônica."""
     import espeakng_loader
     from phonemizer import phonemize
@@ -28,18 +28,18 @@ def ipa(lista: list[str], idioma: str) -> list[str]:
 
     EspeakWrapper.set_library(espeakng_loader.get_library_path())
     EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
-    saida = phonemize(
-        lista,
-        language=ESPEAK.get(idioma, "en-us"),
+    output = phonemize(
+        items,
+        language=ESPEAK.get(language, "en-us"),
         backend="espeak",
         strip=True,
         with_stress=False,
         njobs=1,
     )
-    return [str(s).replace(" ", "") for s in saida]
+    return [str(s).replace(" ", "") for s in output]
 
 
-class Pronuncia:
+class Pronunciation:
     def __init__(self, python: str = "") -> None:
         self._python = Path(python).expanduser() if python else _XTTS_PYTHON
         self._proc: subprocess.Popen[str] | None = None
@@ -51,45 +51,45 @@ class Pronuncia:
             return self._proc
         if self._falhou or not self._python.is_file():
             return None
-        proc = subprocess.Popen(
+        process = subprocess.Popen(
             [str(self._python), str(_DIR / "servidor.py")],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
         )
-        assert proc.stdout is not None
-        if '"pronto"' not in proc.stdout.readline():
-            proc.kill()
+        assert process.stdout is not None
+        if '"pronto"' not in process.stdout.readline():
+            process.kill()
             self._falhou = True
             logger.warning("Modelo de pronúncia não subiu; leitura avaliada só por palavras")
             return None
-        self._proc = proc
-        return proc
+        self._proc = process
+        return process
 
-    def avaliar(self, audio_16k: Any, referencia: str, idioma: str) -> list[dict[str, Any]] | None:
+    def avaliar(self, audio_16k: Any, reference: str, language: str) -> list[dict[str, Any]] | None:
         """Acerto de cada palavra da [referencia] (na ordem de `palavras`), ou None sem o modelo."""
         import numpy as np
 
-        lista = [p for p, _, _ in split_words(referencia)]
-        if not lista:
+        items = [p for p, _, _ in split_words(reference)]
+        if not items:
             return []
         try:
-            esperado = ipa(lista, idioma)
+            expected = ipa(items, language)
         except Exception as e:  # espeak ausente
             logger.warning("Sem IPA de referência (%s)", e)
             return None
         with self._trava, tempfile.TemporaryDirectory() as tmp:
-            proc = self._processo()
-            if proc is None:
+            process = self._processo()
+            if process is None:
                 return None
-            assert proc.stdin is not None and proc.stdout is not None
-            caminho = Path(tmp) / "audio.npy"
-            np.save(caminho, np.asarray(audio_16k, dtype=np.float32))
-            proc.stdin.write(json.dumps({"audio": str(caminho), "ipa": esperado}) + "\n")
-            proc.stdin.flush()
-            resposta = json.loads(proc.stdout.readline() or '{"erro": "processo encerrado"}')
-        if "erro" in resposta:
-            logger.warning("Pronúncia falhou: %s", resposta["erro"])
+            assert process.stdin is not None and process.stdout is not None
+            path = Path(tmp) / "audio.npy"
+            np.save(path, np.asarray(audio_16k, dtype=np.float32))
+            process.stdin.write(json.dumps({"audio": str(path), "ipa": expected}) + "\n")
+            process.stdin.flush()
+            answer = json.loads(process.stdout.readline() or '{"erro": "processo encerrado"}')
+        if "erro" in answer:
+            logger.warning("Pronúncia falhou: %s", answer["erro"])
             return None
-        return [{"indice": k, **p} for k, p in enumerate(resposta["palavras"])]
+        return [{"indice": k, **p} for k, p in enumerate(answer["palavras"])]

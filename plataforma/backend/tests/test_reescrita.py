@@ -4,7 +4,7 @@ import pytest
 from conftest import AUTH_HEADERS, CLIENT_API_KEY
 from fastapi.testclient import TestClient
 
-from backend.files.rewrite import Reescrita
+from backend.files.rewrite import Rewrite
 from backend.core.config import Settings
 from backend.main import create_app
 from shared.claude_code import InvalidRewriteRequest, build_rewrite_prompt
@@ -16,14 +16,14 @@ def api(tmp_path: Path) -> TestClient:
         client_api_keys=CLIENT_API_KEY, arquivos_dir=str(tmp_path), notas_dir=str(tmp_path)
     )
     app = create_app(settings=s)
-    pedidos: list[dict] = []
+    requests: list[dict] = []
 
     async def executar(pedido: dict) -> dict:
-        pedidos.append(pedido)
+        requests.append(pedido)
         return {"texto": "Realizou-se o teste.", "mudancas": [], "observacoes": ""}
 
-    app.state.reescrita = Reescrita(executar, lambda: None)
-    app.state.pedidos = pedidos
+    app.state.reescrita = Rewrite(executar, lambda: None)
+    app.state.pedidos = requests
     return TestClient(app, headers=AUTH_HEADERS)
 
 
@@ -67,50 +67,50 @@ def test_traducao_por_pagina_alinha_frases_e_usa_cache(tmp_path: Path) -> None:
         client_api_keys=CLIENT_API_KEY, arquivos_dir=str(tmp_path), notas_dir=str(tmp_path)
     )
     app = create_app(settings=s)
-    pedidos: list[dict] = []
+    requests: list[dict] = []
 
     async def executar_json(pedido: dict) -> dict:
-        pedidos.append(pedido)
+        requests.append(pedido)
         # fora de ordem e sem a 2ª: o alinhamento é pelo número, a que falta vem vazia
         return {"traducoes": [{"n": 3, "pt": "Fim."}, {"n": 1, "pt": "Olá, mundo."}]}
 
     async def executar(pedido: dict) -> dict:
         return {}
 
-    app.state.reescrita = Reescrita(executar, lambda: None, executar_json)
+    app.state.reescrita = Rewrite(executar, lambda: None, executar_json)
     api = TestClient(app, headers=AUTH_HEADERS)
     meta = api.post("/api/arquivos", files={"arquivo": ("a.csv", b"a;b\n")}).json()
-    corpo = {
+    body = {
         "paginas": [
             {"pagina": 0, "segmentos": ["Hello, world.", "Second one."]},
             {"pagina": 1, "segmentos": ["End."]},
         ]
     }
-    r = api.post(f"/api/arquivos/{meta['id']}/traducao", json=corpo).json()
+    r = api.post(f"/api/arquivos/{meta['id']}/traducao", json=body).json()
     assert r["0"]["traducoes"] == ["Olá, mundo.", ""]
     assert r["1"]["traducoes"] == ["Fim."]
-    assert "[1] Hello, world." in pedidos[0]["prompt"]
-    api.post(f"/api/arquivos/{meta['id']}/traducao", json=corpo)
-    assert len(pedidos) == 1  # mesmas frases: veio do cache
+    assert "[1] Hello, world." in requests[0]["prompt"]
+    api.post(f"/api/arquivos/{meta['id']}/traducao", json=body)
+    assert len(requests) == 1  # mesmas frases: veio do cache
     assert api.get(f"/api/arquivos/{meta['id']}/traducao").json()["1"]["segmentos"] == ["End."]
 
 
 def test_traduzir_trecho_vai_pela_llm_local_mesmo_sem_claude(api: TestClient) -> None:
-    locais: list[dict] = []
+    local_names: list[dict] = []
 
     async def local(pedido: dict) -> dict:
-        locais.append(pedido)
+        local_names.append(pedido)
         return {"texto": "O método funciona.", "mudancas": [], "observacoes": ""}
 
-    api.app.state.reescrita = Reescrita(  # type: ignore[attr-defined]
+    api.app.state.reescrita = Rewrite(  # type: ignore[attr-defined]
         api.app.state.reescrita.executar,  # type: ignore[attr-defined]
         lambda: "sem worker",
         traducao_json=local,
     )
-    corpo = {"trecho": "The method works.", "objetivo": "traduzir"}
-    r = api.post("/api/arquivos/reescrever", json=corpo)
+    body = {"trecho": "The method works.", "objetivo": "traduzir"}
+    r = api.post("/api/arquivos/reescrever", json=body)
     assert r.status_code == 200 and r.json()["texto"] == "O método funciona."
-    assert "<trecho>" in locais[0]["prompt"] and locais[0]["esquema"]["required"][0] == "texto"
+    assert "<trecho>" in local_names[0]["prompt"] and local_names[0]["esquema"]["required"][0] == "texto"
     assert not api.app.state.pedidos  # type: ignore[attr-defined]
-    corpo["objetivo"] = "formal"
-    assert api.post("/api/arquivos/reescrever", json=corpo).status_code == 503
+    body["objetivo"] = "formal"
+    assert api.post("/api/arquivos/reescrever", json=body).status_code == 503

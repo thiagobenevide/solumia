@@ -19,11 +19,11 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from saude.workouts import Invalido, NaoEncontrado, _gravar, _ler
+from saude.workouts import Invalid, NotFound, _write, _read
 
-ESPERA = timedelta(hours=24)
-MODOS = ("livre", "limite", "bloqueado")
-CATEGORIAS = {
+WAIT = timedelta(hours=24)
+MODES = ("livre", "limite", "bloqueado")
+CATEGORIES = {
     "redes_sociais": "Redes sociais",
     "videos": "Vídeos",
     "compras": "Compras",
@@ -32,12 +32,12 @@ CATEGORIAS = {
     "adulto": "Conteúdo adulto",
     "vpn": "VPN e contorno",
 }
-APPS_ISENTOS = ("com.whatsapp", "com.whatsapp.w4b")
-DOMINIOS_ISENTOS = ("whatsapp.com", "whatsapp.net", "wa.me")
+APPS_EXEMPT = ("com.whatsapp", "com.whatsapp.w4b")
+DOMAINS_EXEMPT = ("whatsapp.com", "whatsapp.net", "wa.me")
 # DNS de família da Cloudflare: além da nossa lista, já barra conteúdo adulto e malware
-DNS_PADRAO = "1.1.1.3"
+DNS_DEFAULT = "1.1.1.3"
 
-APPS_PADRAO: dict[str, tuple[str, str]] = {
+APPS_DEFAULT: dict[str, tuple[str, str]] = {
     "com.instagram.android": ("Instagram", "redes_sociais"),
     "com.instagram.barcelona": ("Threads", "redes_sociais"),
     "com.facebook.katana": ("Facebook", "redes_sociais"),
@@ -77,7 +77,7 @@ APPS_PADRAO: dict[str, tuple[str, str]] = {
     "com.cloudflare.onedotonedotonedotone": ("1.1.1.1 WARP", "vpn"),
 }
 
-DOMINIOS_PADRAO: dict[str, list[str]] = {
+DOMAINS_DEFAULT: dict[str, list[str]] = {
     "redes_sociais": [
         "instagram.com",
         "cdninstagram.com",
@@ -171,7 +171,7 @@ DOMINIOS_PADRAO: dict[str, list[str]] = {
 }
 
 # o aparelho compara as buscas com estas palavras e guarda só a categoria, nunca o texto
-PALAVRAS_PADRAO: dict[str, list[str]] = {
+WORDS_DEFAULT: dict[str, list[str]] = {
     "adulto": [
         "porn",
         "porno",
@@ -204,10 +204,10 @@ PALAVRAS_PADRAO: dict[str, list[str]] = {
     "videos": ["youtube", "vídeo", "video engraçado", "shorts", "reels"],
 }
 
-NOITE = {"inicio": "22:00", "fim": "07:00"}
-REGRAS_PADRAO: dict[str, dict[str, Any]] = {
-    "redes_sociais": {"modo": "limite", "limite_min": 30, "horarios": [NOITE]},
-    "videos": {"modo": "limite", "limite_min": 30, "horarios": [NOITE]},
+NIGHT = {"inicio": "22:00", "fim": "07:00"}
+RULES_DEFAULT: dict[str, dict[str, Any]] = {
+    "redes_sociais": {"modo": "limite", "limite_min": 30, "horarios": [NIGHT]},
+    "videos": {"modo": "limite", "limite_min": 30, "horarios": [NIGHT]},
     "compras": {"modo": "limite", "limite_min": 15, "horarios": []},
     "noticias": {"modo": "limite", "limite_min": 15, "horarios": []},
     "navegadores": {"modo": "livre", "limite_min": 0, "horarios": []},
@@ -215,80 +215,80 @@ REGRAS_PADRAO: dict[str, dict[str, Any]] = {
     "vpn": {"modo": "bloqueado", "limite_min": 0, "horarios": []},
 }
 
-TIPOS_EVENTO = ("busca", "bloqueio", "violacao", "instalacao")
+KINDS_EVENT = ("busca", "bloqueio", "violacao", "instalacao")
 
 
-def _config_padrao() -> dict[str, Any]:
+def _config_default() -> dict[str, Any]:
     return {
         "regras": {
-            c: {**r, "horarios": [dict(h) for h in r["horarios"]]} for c, r in REGRAS_PADRAO.items()
+            c: {**r, "horarios": [dict(h) for h in r["horarios"]]} for c, r in RULES_DEFAULT.items()
         },
-        "apps": {p: {"nome": n, "categoria": c} for p, (n, c) in APPS_PADRAO.items()},
-        "dominios": {c: [] for c in CATEGORIAS},
+        "apps": {p: {"nome": n, "categoria": c} for p, (n, c) in APPS_DEFAULT.items()},
+        "dominios": {c: [] for c in CATEGORIES},
         "protecao": True,
-        "dns": DNS_PADRAO,
+        "dns": DNS_DEFAULT,
     }
 
 
-def _hora(valor: str) -> str:
+def _hour(valor: str) -> str:
     try:
         h, m = (int(x) for x in valor.split(":"))
     except ValueError as e:
-        raise Invalido(f"Horário inválido: {valor}") from e
+        raise Invalid(f"Horário inválido: {valor}") from e
     if not (0 <= h < 24 and 0 <= m < 60):
-        raise Invalido(f"Horário inválido: {valor}")
+        raise Invalid(f"Horário inválido: {valor}")
     return f"{h:02d}:{m:02d}"
 
 
-def _categoria(c: str) -> str:
-    if c not in CATEGORIAS:
-        raise Invalido(f"Categoria desconhecida: {c}")
+def _category(c: str) -> str:
+    if c not in CATEGORIES:
+        raise Invalid(f"Categoria desconhecida: {c}")
     return c
 
 
-def _dominio(d: str) -> str:
+def _domain(d: str) -> str:
     d = d.strip().lower().removeprefix("https://").removeprefix("http://").split("/")[0]
     d = d.removeprefix("www.").strip(".")
     if not d or "." not in d or " " in d:
-        raise Invalido(f"Domínio inválido: {d}")
-    if any(d == i or d.endswith("." + i) for i in DOMINIOS_ISENTOS):
-        raise Invalido("WhatsApp é isento: é o seu trabalho")
+        raise Invalid(f"Domínio inválido: {d}")
+    if any(d == i or d.endswith("." + i) for i in DOMAINS_EXEMPT):
+        raise Invalid("WhatsApp é isento: é o seu trabalho")
     return d
 
 
-def validar_regra(dados: dict[str, Any]) -> dict[str, Any]:
-    modo = dados.get("modo", "livre")
-    if modo not in MODOS:
-        raise Invalido("modo: livre, limite ou bloqueado")
-    limite = int(dados.get("limite_min") or 0)
-    if not 0 <= limite <= 1440:
-        raise Invalido("limite_min: de 0 a 1440")
-    if modo == "limite" and limite <= 0:
-        raise Invalido("Com limite, informe os minutos por dia")
+def validate_rule(dados: dict[str, Any]) -> dict[str, Any]:
+    mode = dados.get("modo", "livre")
+    if mode not in MODES:
+        raise Invalid("modo: livre, limite ou bloqueado")
+    limit = int(dados.get("limite_min") or 0)
+    if not 0 <= limit <= 1440:
+        raise Invalid("limite_min: de 0 a 1440")
+    if mode == "limite" and limit <= 0:
+        raise Invalid("Com limite, informe os minutos por dia")
     horarios = []
     for h in dados.get("horarios") or []:
-        par = {"inicio": _hora(h["inicio"]), "fim": _hora(h["fim"])}
-        if par["inicio"] == par["fim"]:
-            raise Invalido("Horário com início igual ao fim")
-        if par not in horarios:
-            horarios.append(par)
-    return {"modo": modo, "limite_min": limite, "horarios": horarios}
+        pair = {"inicio": _hour(h["inicio"]), "fim": _hour(h["fim"])}
+        if pair["inicio"] == pair["fim"]:
+            raise Invalid("Horário com início igual ao fim")
+        if pair not in horarios:
+            horarios.append(pair)
+    return {"modo": mode, "limite_min": limit, "horarios": horarios}
 
 
-def afrouxa(antiga: dict[str, Any], nova: dict[str, Any]) -> bool:
+def loosens(antiga: dict[str, Any], new: dict[str, Any]) -> bool:
     """A regra nova libera mais que a antiga? (então espera 24 h)"""
-    if MODOS.index(nova["modo"]) < MODOS.index(antiga["modo"]):
+    if MODES.index(new["modo"]) < MODES.index(antiga["modo"]):
         return True
-    if antiga["modo"] == nova["modo"] == "limite" and nova["limite_min"] > antiga["limite_min"]:
+    if antiga["modo"] == new["modo"] == "limite" and new["limite_min"] > antiga["limite_min"]:
         return True
-    if nova["modo"] == "bloqueado":
+    if new["modo"] == "bloqueado":
         return False
-    return any(h not in nova["horarios"] for h in antiga["horarios"])
+    return any(h not in new["horarios"] for h in antiga["horarios"])
 
 
-class Consumo:
-    def __init__(self, raiz: str | Path, agora: Callable[[], datetime] | None = None) -> None:
-        self.raiz = Path(raiz).expanduser()
+class Consumption:
+    def __init__(self, root: str | Path, agora: Callable[[], datetime] | None = None) -> None:
+        self.raiz = Path(root).expanduser()
         (self.raiz / "uso").mkdir(parents=True, exist_ok=True)
         self._agora = agora or (lambda: datetime.now(UTC))
         self._trava = threading.RLock()
@@ -301,26 +301,26 @@ class Consumo:
 
     def _ler_config(self) -> dict[str, Any]:
         """Config com as pendências vencidas já aplicadas."""
-        cfg = _ler(self._config, None) or _config_padrao()
-        pend = _ler(self._pendencias, [])
-        agora = self._agora().isoformat()
-        vencidas = [p for p in pend if p["libera_em"] <= agora]
+        cfg = _read(self._config, None) or _config_default()
+        pend = _read(self._pendencias, [])
+        now = self._agora().isoformat()
+        vencidas = [p for p in pend if p["libera_em"] <= now]
         if vencidas or not self._config.exists():
             for p in vencidas:
                 self._aplicar(cfg, p["tipo"], p["alvo"], p["valor"])
-            _gravar(self._config, cfg)
-            _gravar(self._pendencias, [p for p in pend if p["libera_em"] > agora])
+            _write(self._config, cfg)
+            _write(self._pendencias, [p for p in pend if p["libera_em"] > now])
         return cfg
 
     @staticmethod
-    def _aplicar(cfg: dict[str, Any], tipo: str, alvo: str, valor: Any) -> None:
+    def _aplicar(cfg: dict[str, Any], tipo: str, target: str, valor: Any) -> None:
         if tipo == "regra":
-            cfg["regras"][alvo] = valor
+            cfg["regras"][target] = valor
         elif tipo == "app":
             if valor is None:
-                cfg["apps"].pop(alvo, None)
+                cfg["apps"].pop(target, None)
             else:
-                cfg["apps"][alvo] = valor
+                cfg["apps"][target] = valor
         elif tipo == "dominio":
             cat, dom = valor["categoria"], valor["dominio"]
             if valor["acao"] == "incluir":
@@ -332,98 +332,98 @@ class Consumo:
             cfg["protecao"] = bool(valor)
 
     def _mudar(
-        self, tipo: str, alvo: str, valor: Any, frouxo: bool, descricao: str
+        self, tipo: str, target: str, valor: Any, frouxo: bool, description: str
     ) -> dict[str, Any]:
         """Aplica já (apertar) ou agenda para daqui a 24 h (afrouxar)."""
         with self._trava:
             cfg = self._ler_config()
             if not frouxo:
-                self._aplicar(cfg, tipo, alvo, valor)
-                _gravar(self._config, cfg)
+                self._aplicar(cfg, tipo, target, valor)
+                _write(self._config, cfg)
                 return {"aplicado": True, "pendencia": None}
-            agora = self._agora()
+            now = self._agora()
             pend = [
                 p
-                for p in _ler(self._pendencias, [])
-                if not (p["tipo"] == tipo and p["alvo"] == alvo)
+                for p in _read(self._pendencias, [])
+                if not (p["tipo"] == tipo and p["alvo"] == target)
             ]
-            nova = {
+            new = {
                 "id": uuid.uuid4().hex[:12],
                 "tipo": tipo,
-                "alvo": alvo,
+                "alvo": target,
                 "valor": valor,
-                "descricao": descricao,
-                "pedido_em": agora.isoformat(timespec="seconds"),
-                "libera_em": (agora + ESPERA).isoformat(timespec="seconds"),
+                "descricao": description,
+                "pedido_em": now.isoformat(timespec="seconds"),
+                "libera_em": (now + WAIT).isoformat(timespec="seconds"),
             }
-            _gravar(self._pendencias, [*pend, nova])
-            return {"aplicado": False, "pendencia": nova}
+            _write(self._pendencias, [*pend, new])
+            return {"aplicado": False, "pendencia": new}
 
     def config(self) -> dict[str, Any]:
         with self._trava:
             cfg = self._ler_config()
-            pend = _ler(self._pendencias, [])
+            pend = _read(self._pendencias, [])
         return {
             **cfg,
-            "categorias": CATEGORIAS,
-            "dominios_padrao": DOMINIOS_PADRAO,
-            "apps_isentos": list(APPS_ISENTOS),
+            "categorias": CATEGORIES,
+            "dominios_padrao": DOMAINS_DEFAULT,
+            "apps_isentos": list(APPS_EXEMPT),
             "pendencias": pend,
         }
 
     def definir_regra(self, categoria: str, dados: dict[str, Any]) -> dict[str, Any]:
-        cat = _categoria(categoria)
-        nova = validar_regra(dados)
+        cat = _category(categoria)
+        new = validate_rule(dados)
         with self._trava:
-            antiga = self._ler_config()["regras"][cat]
+            old = self._ler_config()["regras"][cat]
             return self._mudar(
-                "regra", cat, nova, afrouxa(antiga, nova), f"Afrouxar {CATEGORIAS[cat]}"
+                "regra", cat, new, loosens(old, new), f"Afrouxar {CATEGORIES[cat]}"
             )
 
-    def definir_app(self, pacote: str, nome: str, categoria: str) -> dict[str, Any]:
-        pacote = pacote.strip()
-        if not pacote or " " in pacote:
-            raise Invalido("Pacote inválido")
-        if pacote in APPS_ISENTOS:
-            raise Invalido("WhatsApp é isento: é o seu trabalho")
-        cat = _categoria(categoria)
+    def definir_app(self, package: str, nome: str, categoria: str) -> dict[str, Any]:
+        package = package.strip()
+        if not package or " " in package:
+            raise Invalid("Pacote inválido")
+        if package in APPS_EXEMPT:
+            raise Invalid("WhatsApp é isento: é o seu trabalho")
+        cat = _category(categoria)
         with self._trava:
-            atual = self._ler_config()["apps"].get(pacote)
-            valor = {"nome": nome.strip() or pacote, "categoria": cat}
+            current = self._ler_config()["apps"].get(package)
+            value = {"nome": nome.strip() or package, "categoria": cat}
             # trocar a categoria de um app já vigiado pode tirá-lo de um bloqueio
-            frouxo = atual is not None and atual["categoria"] != cat
-            return self._mudar("app", pacote, valor, frouxo, f"Mudar {valor['nome']} de categoria")
+            frouxo = current is not None and current["categoria"] != cat
+            return self._mudar("app", package, value, frouxo, f"Mudar {value['nome']} de categoria")
 
-    def remover_app(self, pacote: str) -> dict[str, Any]:
+    def remover_app(self, package: str) -> dict[str, Any]:
         with self._trava:
-            atual = self._ler_config()["apps"].get(pacote)
-            if atual is None:
-                raise NaoEncontrado(pacote)
-            return self._mudar("app", pacote, None, True, f"Deixar de vigiar {atual['nome']}")
+            current = self._ler_config()["apps"].get(package)
+            if current is None:
+                raise NotFound(package)
+            return self._mudar("app", package, None, True, f"Deixar de vigiar {current['nome']}")
 
-    def incluir_dominio(self, categoria: str, dominio: str) -> dict[str, Any]:
-        cat, dom = _categoria(categoria), _dominio(dominio)
-        valor = {"categoria": cat, "dominio": dom, "acao": "incluir"}
-        return self._mudar("dominio", f"{cat}:{dom}", valor, False, "")
+    def incluir_dominio(self, categoria: str, domain: str) -> dict[str, Any]:
+        cat, dom = _category(categoria), _domain(domain)
+        value = {"categoria": cat, "dominio": dom, "acao": "incluir"}
+        return self._mudar("dominio", f"{cat}:{dom}", value, False, "")
 
-    def remover_dominio(self, categoria: str, dominio: str) -> dict[str, Any]:
-        cat = _categoria(categoria)
+    def remover_dominio(self, categoria: str, domain: str) -> dict[str, Any]:
+        cat = _category(categoria)
         with self._trava:
-            if dominio not in self._ler_config()["dominios"][cat]:
-                raise NaoEncontrado(dominio)
-        valor = {"categoria": cat, "dominio": dominio, "acao": "remover"}
-        return self._mudar("dominio", f"{cat}:{dominio}", valor, True, f"Liberar {dominio}")
+            if domain not in self._ler_config()["dominios"][cat]:
+                raise NotFound(domain)
+        value = {"categoria": cat, "dominio": domain, "acao": "remover"}
+        return self._mudar("dominio", f"{cat}:{domain}", value, True, f"Liberar {domain}")
 
-    def definir_protecao(self, ativa: bool) -> dict[str, Any]:
-        return self._mudar("protecao", "protecao", ativa, not ativa, "Desligar a proteção")
+    def definir_protecao(self, active: bool) -> dict[str, Any]:
+        return self._mudar("protecao", "protecao", active, not active, "Desligar a proteção")
 
     def cancelar_pendencia(self, id_: str) -> None:
         with self._trava:
-            pend = _ler(self._pendencias, [])
+            pend = _read(self._pendencias, [])
             restantes = [p for p in pend if p["id"] != id_]
             if len(restantes) == len(pend):
-                raise NaoEncontrado(id_)
-            _gravar(self._pendencias, restantes)
+                raise NotFound(id_)
+            _write(self._pendencias, restantes)
 
     def para_dispositivo(self) -> dict[str, Any]:
         """Regras já montadas para o app Android aplicar sem precisar pensar."""
@@ -431,16 +431,16 @@ class Consumo:
             cfg = self._ler_config()
         return {
             "regras": cfg["regras"],
-            "apps": {p: a["categoria"] for p, a in cfg["apps"].items() if p not in APPS_ISENTOS},
+            "apps": {p: a["categoria"] for p, a in cfg["apps"].items() if p not in APPS_EXEMPT},
             "nomes": {p: a["nome"] for p, a in cfg["apps"].items()},
             "dominios": {
-                c: sorted({*DOMINIOS_PADRAO[c], *cfg["dominios"].get(c, [])}) for c in CATEGORIAS
+                c: sorted({*DOMAINS_DEFAULT[c], *cfg["dominios"].get(c, [])}) for c in CATEGORIES
             },
-            "palavras": PALAVRAS_PADRAO,
-            "apps_isentos": list(APPS_ISENTOS),
-            "dominios_isentos": list(DOMINIOS_ISENTOS),
+            "palavras": WORDS_DEFAULT,
+            "apps_isentos": list(APPS_EXEMPT),
+            "dominios_isentos": list(DOMAINS_EXEMPT),
             "protecao": cfg["protecao"],
-            "dns": cfg.get("dns") or DNS_PADRAO,
+            "dns": cfg.get("dns") or DNS_DEFAULT,
         }
 
     # --- sincronização dos aparelhos ---
@@ -448,20 +448,20 @@ class Consumo:
     def sincronizar(self, dados: dict[str, Any]) -> dict[str, Any]:
         disp = dados["dispositivo"]
         id_ = str(disp["id"])[:64]
-        agora = self._agora().isoformat(timespec="seconds")
+        now = self._agora().isoformat(timespec="seconds")
         with self._trava:
-            todos = _ler(self._dispositivos, {})
-            todos[id_] = {
+            everything = _read(self._dispositivos, {})
+            everything[id_] = {
                 "nome": str(disp.get("nome") or id_)[:80],
-                "visto_em": agora,
+                "visto_em": now,
                 "estado": {k: bool(v) for k, v in (disp.get("estado") or {}).items()},
             }
-            _gravar(self._dispositivos, todos)
-            for dia in dados.get("dias") or []:
-                d = date.fromisoformat(dia["data"]).isoformat()
-                arq = self.raiz / "uso" / f"{d}.json"
-                atual = _ler(arq, {"dispositivos": {}, "eventos": []})
-                atual["dispositivos"][id_] = {
+            _write(self._dispositivos, everything)
+            for day in dados.get("dias") or []:
+                d = date.fromisoformat(day["data"]).isoformat()
+                file = self.raiz / "uso" / f"{d}.json"
+                current = _read(file, {"dispositivos": {}, "eventos": []})
+                current["dispositivos"][id_] = {
                     "apps": [
                         {
                             "pacote": a["pacote"],
@@ -470,58 +470,58 @@ class Consumo:
                             "minutos": round(float(a.get("minutos") or 0), 1),
                             "aberturas": int(a.get("aberturas") or 0),
                         }
-                        for a in dia.get("apps") or []
-                        if a["pacote"] not in APPS_ISENTOS
+                        for a in day.get("apps") or []
+                        if a["pacote"] not in APPS_EXEMPT
                     ],
-                    "outros_min": round(float(dia.get("outros_min") or 0), 1),
+                    "outros_min": round(float(day.get("outros_min") or 0), 1),
                     "por_hora": {
                         c: [round(float(x), 1) for x in v][:24]
-                        for c, v in (dia.get("por_hora") or {}).items()
+                        for c, v in (day.get("por_hora") or {}).items()
                     },
                 }
-                _gravar(arq, atual)
+                _write(file, current)
             for e in dados.get("eventos") or []:
-                if e.get("tipo") not in TIPOS_EVENTO:
+                if e.get("tipo") not in KINDS_EVENT:
                     continue
-                quando = datetime.fromisoformat(e["quando"])
-                arq = self.raiz / "uso" / f"{quando.date().isoformat()}.json"
-                atual = _ler(arq, {"dispositivos": {}, "eventos": []})
-                if any(x["id"] == e["id"] for x in atual["eventos"]):
+                when = datetime.fromisoformat(e["quando"])
+                file = self.raiz / "uso" / f"{when.date().isoformat()}.json"
+                current = _read(file, {"dispositivos": {}, "eventos": []})
+                if any(x["id"] == e["id"] for x in current["eventos"]):
                     continue
-                atual["eventos"].append(
+                current["eventos"].append(
                     {
                         "id": str(e["id"])[:40],
-                        "quando": quando.isoformat(timespec="seconds"),
+                        "quando": when.isoformat(timespec="seconds"),
                         "tipo": e["tipo"],
                         "categoria": e.get("categoria") or "",
                         "pacote": e.get("pacote") or "",
                         "dispositivo": id_,
                     }
                 )
-                _gravar(arq, atual)
+                _write(file, current)
         return self.para_dispositivo()
 
     def dispositivos(self) -> list[dict[str, Any]]:
         with self._trava:
-            todos = _ler(self._dispositivos, {})
-        return [{"id": k, **v} for k, v in sorted(todos.items())]
+            everything = _read(self._dispositivos, {})
+        return [{"id": k, **v} for k, v in sorted(everything.items())]
 
     # --- resumo e análise ---
 
     def resumo(self, de: str, ate: str) -> dict[str, Any]:
         d1, d2 = date.fromisoformat(de), date.fromisoformat(ate)
         if d2 < d1 or (d2 - d1).days > 366:
-            raise Invalido("Período inválido")
-        por_dia: dict[str, dict[str, float]] = {}
+            raise Invalid("Período inválido")
+        by_day: dict[str, dict[str, float]] = {}
         apps: dict[str, dict[str, Any]] = {}
-        por_hora: dict[str, list[float]] = {}
-        eventos: dict[str, int] = {}
+        by_hour: dict[str, list[float]] = {}
+        events: dict[str, int] = {}
         d = d1
         while d <= d2:
-            dia = d.isoformat()
-            dados = _ler(self.raiz / "uso" / f"{dia}.json", {"dispositivos": {}, "eventos": []})
+            day = d.isoformat()
+            data = _read(self.raiz / "uso" / f"{day}.json", {"dispositivos": {}, "eventos": []})
             cats: dict[str, float] = {}
-            for u in dados["dispositivos"].values():
+            for u in data["dispositivos"].values():
                 for a in u["apps"]:
                     cats[a["categoria"]] = cats.get(a["categoria"], 0) + a["minutos"]
                     x = apps.setdefault(
@@ -537,34 +537,34 @@ class Consumo:
                     x["aberturas"] += a["aberturas"]
                 if u.get("outros_min"):
                     cats["outros"] = cats.get("outros", 0) + u["outros_min"]
-                for c, horas in u.get("por_hora", {}).items():
-                    soma = por_hora.setdefault(c, [0.0] * 24)
-                    for i, v in enumerate(horas):
-                        soma[i] += v
+                for c, hours in u.get("por_hora", {}).items():
+                    total = by_hour.setdefault(c, [0.0] * 24)
+                    for i, v in enumerate(hours):
+                        total[i] += v
             if cats:
-                por_dia[dia] = {c: round(v, 1) for c, v in cats.items()}
-            for e in dados["eventos"]:
-                chave = f"{e['tipo']}:{e['categoria']}" if e["categoria"] else e["tipo"]
-                eventos[chave] = eventos.get(chave, 0) + 1
+                by_day[day] = {c: round(v, 1) for c, v in cats.items()}
+            for e in data["eventos"]:
+                key = f"{e['tipo']}:{e['categoria']}" if e["categoria"] else e["tipo"]
+                events[key] = events.get(key, 0) + 1
             d += timedelta(days=1)
-        lista = sorted(
+        items = sorted(
             ({"pacote": p, **a, "minutos": round(a["minutos"], 1)} for p, a in apps.items()),
             key=lambda a: -a["minutos"],
         )
         return {
             "de": d1.isoformat(),
             "ate": d2.isoformat(),
-            "por_dia": por_dia,
-            "apps": lista,
-            "por_hora": {c: [round(v, 1) for v in h] for c, h in por_hora.items()},
-            "eventos": eventos,
+            "por_dia": by_day,
+            "apps": items,
+            "por_hora": {c: [round(v, 1) for v in h] for c, h in by_hour.items()},
+            "eventos": events,
         }
 
     def analises(self) -> list[dict[str, Any]]:
         with self._trava:
-            return list(_ler(self._analises, []))
+            return list(_read(self._analises, []))
 
     def guardar_analise(self, analise: dict[str, Any]) -> dict[str, Any]:
         with self._trava:
-            _gravar(self._analises, [analise, *_ler(self._analises, [])][:20])
+            _write(self._analises, [analise, *_read(self._analises, [])][:20])
         return analise

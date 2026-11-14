@@ -6,7 +6,7 @@ from conftest import AUTH_HEADERS, CLIENT_API_KEY
 from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
-from backend.core.llm_model import ModeloLLM
+from backend.core.llm_model import ModelLLM
 from backend.core.worker_registry import WorkerRegistry
 from backend.main import create_app
 
@@ -55,7 +55,7 @@ def test_troca_carrega_no_worker_e_salva(tmp_path: Path) -> None:
     r = client.put("/api/llm", json={"modelo": "b"}, headers=AUTH_HEADERS)
     assert r.status_code == 200
     assert r.json()["modelo"] == "b"
-    assert ModeloLLM(str(tmp_path / "llm.json")).atual == "b"
+    assert ModelLLM(str(tmp_path / "llm.json")).atual == "b"
 
 
 def test_troca_proibida_com_outro_modulo_usando(tmp_path: Path) -> None:
@@ -69,11 +69,11 @@ def test_troca_proibida_com_outro_modulo_usando(tmp_path: Path) -> None:
     }
     r = client.put("/api/llm", json={"modelo": "b"}, headers=AUTH_HEADERS)
     assert r.status_code == 409
-    erro = r.json()["error"]
-    assert erro["type"] == "llm_em_uso"
-    assert erro["em_uso"][0]["origem"] == "Rotinas"
-    assert "Rotinas" in erro["message"]
-    assert ModeloLLM(str(tmp_path / "llm.json"), "padrao").atual == "padrao"
+    error = r.json()["error"]
+    assert error["type"] == "llm_em_uso"
+    assert error["em_uso"][0]["origem"] == "Rotinas"
+    assert "Rotinas" in error["message"]
+    assert ModelLLM(str(tmp_path / "llm.json"), "padrao").atual == "padrao"
 
 
 def test_modelo_inexistente(tmp_path: Path) -> None:

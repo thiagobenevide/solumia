@@ -26,13 +26,13 @@ def _csv(tipo: str, cabecalho: str, *linhas: str) -> tuple[str, str]:
 def _zip(*arquivos: tuple[str, str]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
-        for nome, texto in arquivos:
-            z.writestr(nome, texto)
+        for name, text in arquivos:
+            z.writestr(name, text)
     return buf.getvalue()
 
 
 def test_health_connect_e_resumo(api: TestClient) -> None:
-    dias = [
+    days = [
         {"data": "2026-11-01", "passos": 9000, "sono_min": 450, "fc_repouso": 58, "x": 1},
         {
             "data": "2026-11-02",
@@ -41,33 +41,33 @@ def test_health_connect_e_resumo(api: TestClient) -> None:
             "exercicios": [{"tipo": "WALKING", "minutos": 40, "lixo": 1}],
         },
     ]
-    assert api.put("/api/saude/relogio/dias", json={"dias": dias}).json() == {"dias": 2}
-    lista = api.get("/api/saude/relogio/dias?de=2026-11-01&ate=2026-11-30").json()
+    assert api.put("/api/saude/relogio/dias", json={"dias": days}).json() == {"dias": 2}
+    items = api.get("/api/saude/relogio/dias?de=2026-11-01&ate=2026-11-30").json()
     # sem a nota da exportação: estimada só pela duração (7h30 → 88; 5h30 → 38)
-    assert lista[0]["sono_pontuacao"] == 88 and lista[0]["sono_pontuacao_estimada"] is True
-    assert lista[1]["sono_pontuacao"] == 38
-    assert "x" not in lista[0] and lista[1]["exercicios"] == [{"tipo": "WALKING", "minutos": 40}]
+    assert items[0]["sono_pontuacao"] == 88 and items[0]["sono_pontuacao_estimada"] is True
+    assert items[1]["sono_pontuacao"] == 38
+    assert "x" not in items[0] and items[1]["exercicios"] == [{"tipo": "WALKING", "minutos": 40}]
     r = api.get("/api/saude/relogio/resumo?de=2026-11-01&ate=2026-11-30").json()
     assert r["medias"]["passos"] == 6500
     assert r["metas"]["passos"] == {"meta": 8000, "batidos": 1, "dias": 2}
     assert "health_connect" in api.get("/api/saude/relogio/estado").json()
-    ruim = api.put("/api/saude/relogio/dias", json={"dias": [{"data": "ontem", "passos": 1}]})
-    assert ruim.status_code == 422
+    bad = api.put("/api/saude/relogio/dias", json={"dias": [{"data": "ontem", "passos": 1}]})
+    assert bad.status_code == 422
 
 
 def test_pontuacao_do_sono_pelos_estagios() -> None:
-    from saude.watch import pontuar_sono
+    from saude.watch import score_sleep
 
     otima = {"sono_min": 480, "sono_acordado_min": 20, "sono_profundo_min": 96, "sono_rem_min": 106}
-    assert pontuar_sono(otima) == 100
-    ruim = {"sono_min": 300, "sono_acordado_min": 100, "sono_profundo_min": 15, "sono_rem_min": 24}
-    assert pontuar_sono(ruim) == 10
-    assert pontuar_sono({"sono_min": 30}) is None and pontuar_sono({}) is None
+    assert score_sleep(otima) == 100
+    bad = {"sono_min": 300, "sono_acordado_min": 100, "sono_profundo_min": 15, "sono_rem_min": 24}
+    assert score_sleep(bad) == 10
+    assert score_sleep({"sono_min": 30}) is None and score_sleep({}) is None
 
 
 def test_importa_exportacao_do_samsung(api: TestClient) -> None:
     api.put("/api/saude/relogio/dias", json={"dias": [{"data": "2026-11-02", "passos": 7777}]})
-    conteudo = _zip(
+    content = _zip(
         _csv(
             "com.samsung.shealth.tracker.pedometer_day_summary",
             "day_time,step_count,distance,calorie,active_time,",
@@ -111,10 +111,10 @@ def test_importa_exportacao_do_samsung(api: TestClient) -> None:
         ),
         ("leiame.txt", "nada"),
     )
-    r = api.post("/api/saude/relogio/importar", files={"arquivo": ("export.zip", conteudo)})
+    r = api.post("/api/saude/relogio/importar", files={"arquivo": ("export.zip", content)})
     assert r.status_code == 200, r.text
     assert r.json()["dias"] == 2
-    d, novo = api.get("/api/saude/relogio/dias?de=2025-11-01&ate=2026-11-30").json()
+    d, new = api.get("/api/saude/relogio/dias?de=2025-11-01&ate=2026-11-30").json()
     assert d["data"] == "2025-11-02" and d["passos"] == 5000 and d["distancia_km"] == 3.8
     assert d["minutos_ativos"] == 60
     assert d["sono_min"] == 480 and d["sono_inicio"] == "23:00" and d["sono_fim"] == "06:30"
@@ -130,14 +130,14 @@ def test_importa_exportacao_do_samsung(api: TestClient) -> None:
             "distancia_km": 2.5,
         }
     ]
-    assert novo["passos"] == 7777  # a exportação não sobrescreve o que o celular enviou
-    ruim = api.post("/api/saude/relogio/importar", files={"arquivo": ("a.zip", b"nao e zip")})
-    assert ruim.status_code == 422
+    assert new["passos"] == 7777  # a exportação não sobrescreve o que o celular enviou
+    bad = api.post("/api/saude/relogio/importar", files={"arquivo": ("a.zip", b"nao e zip")})
+    assert bad.status_code == 422
 
 
 def test_analise_pela_llm_local(api: TestClient) -> None:
-    hoje = date.today()
-    ontem = (hoje - timedelta(days=1)).isoformat()
+    today = date.today()
+    ontem = (today - timedelta(days=1)).isoformat()
     api.put(
         "/api/saude/relogio/dias", json={"dias": [{"data": ontem, "sono_min": 300, "passos": 2000}]}
     )
@@ -154,8 +154,8 @@ def test_analise_pela_llm_local(api: TestClient) -> None:
     r = api.post("/api/saude/relogio/analises", json={"dias": 7, "pergunta": "Durmo bem?"})
     assert r.status_code == 200, r.text
     assert r.json()["texto"].startswith("## Resumo")
-    usuario = recebido[0][1]["content"]
-    assert f"{ontem}: relógio: sono 5h00, nota sono 25, passos 2000" in usuario
-    assert "humor 2, ansiedade 8" in usuario and "Gastos por dia" in usuario
-    assert usuario.endswith("Pergunta do usuário: Durmo bem?")
+    user = recebido[0][1]["content"]
+    assert f"{ontem}: relógio: sono 5h00, nota sono 25, passos 2000" in user
+    assert "humor 2, ansiedade 8" in user and "Gastos por dia" in user
+    assert user.endswith("Pergunta do usuário: Durmo bem?")
     assert len(api.get("/api/saude/relogio/analises").json()) == 1

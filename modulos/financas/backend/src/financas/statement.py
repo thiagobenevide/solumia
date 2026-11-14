@@ -10,42 +10,42 @@ import unicodedata
 from datetime import date, datetime
 from typing import Any
 
-from financas.warehouse import Armazem, Invalido
+from financas.warehouse import Warehouse, Invalid
 
 
-def normalizar(texto: str) -> str:
-    sem_acento = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode()
-    return re.sub(r"\s+", " ", sem_acento.lower()).strip()
+def normalize(text: str) -> str:
+    without_accent = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return re.sub(r"\s+", " ", without_accent.lower()).strip()
 
 
 # prefixos de extrato que não fazem parte do nome de quem recebeu/enviou
-_PREFIXOS = re.compile(
+_PREFIXES = re.compile(
     r"(?:(?:pix|ted|doc|boleto|transf\w*|transferencia|pagamento|pagto|pag|pg|compra|debito|credito|cartao|"
     r"enviad[oa]|recebid[oa]|qrcode|qr code|no|em conta|automatico|de|para|a|o)\b|[-*:/])\s*",
 )
-_RUIDO = re.compile(
+_NOISE = re.compile(
     r"\b\d{2}/\d{2}(/\d{2,4})?\b|\b\d{2}:\d{2}\b|\b\d{6,}\b|\bparc(ela)? ?\d+/\d+\b"
 )
 
 
-def contraparte(descricao: str) -> str:
+def counterpart(description: str) -> str:
     """Melhor palpite de quem recebeu ou enviou o dinheiro (ex.: 'PIX ENVIADO Maria' → 'Maria')."""
-    texto = _RUIDO.sub(" ", descricao)
-    texto = re.sub(r"\s+", " ", texto).strip(" -*/")
-    while (m := _PREFIXOS.match(normalizar(texto))) and m.end():
-        texto = texto[m.end() :]
-    texto = texto.strip(" -*/")
-    return texto.title() if texto.isupper() or texto.islower() else texto
+    text = _NOISE.sub(" ", description)
+    text = re.sub(r"\s+", " ", text).strip(" -*/")
+    while (m := _PREFIXES.match(normalize(text))) and m.end():
+        text = text[m.end() :]
+    text = text.strip(" -*/")
+    return text.title() if text.isupper() or text.islower() else text
 
 
-def numero_br(valor: str) -> float:
+def number_br(valor: str) -> float:
     v = valor.strip().replace("R$", "").replace(" ", "")
-    negativo = v.endswith("-") or (v.startswith("(") and v.endswith(")"))
-    v = v.strip("()-+") if negativo else v
+    negative = v.endswith("-") or (v.startswith("(") and v.endswith(")"))
+    v = v.strip("()-+") if negative else v
     if "," in v:
         v = v.replace(".", "").replace(",", ".")
     n = float(v)
-    return -n if negativo else n
+    return -n if negative else n
 
 
 def _data(valor: str) -> str:
@@ -55,33 +55,33 @@ def _data(valor: str) -> str:
             return datetime.strptime(v, fmt).date().isoformat()
         except ValueError:
             continue
-    raise Invalido(f"Data inválida no arquivo: {valor}")
+    raise Invalid(f"Data inválida no arquivo: {valor}")
 
 
-def ler_ofx(texto: str) -> list[dict[str, Any]]:
-    itens = []
-    for bloco in re.findall(
-        r"<STMTTRN>(.*?)(?:</STMTTRN>|(?=<STMTTRN>)|(?=</BANKTRANLIST>))", texto, re.S | re.I
+def read_ofx(text: str) -> list[dict[str, Any]]:
+    items = []
+    for block in re.findall(
+        r"<STMTTRN>(.*?)(?:</STMTTRN>|(?=<STMTTRN>)|(?=</BANKTRANLIST>))", text, re.S | re.I
     ):
 
-        def campo(nome: str, b: str = bloco) -> str:
+        def campo(nome: str, b: str = block) -> str:
             m = re.search(rf"<{nome}>([^<\r\n]*)", b, re.I)
             return m.group(1).strip() if m else ""
 
         data = campo("DTPOSTED")[:8]
-        valor = campo("TRNAMT").replace(",", ".")
-        if not data or not valor:
+        value = campo("TRNAMT").replace(",", ".")
+        if not data or not value:
             continue
-        descricao = campo("MEMO") or campo("NAME") or campo("TRNTYPE")
-        itens.append(
+        description = campo("MEMO") or campo("NAME") or campo("TRNTYPE")
+        items.append(
             {
                 "data": date(int(data[:4]), int(data[4:6]), int(data[6:8])).isoformat(),
-                "descricao": descricao,
-                "valor": float(valor),
+                "descricao": description,
+                "valor": float(value),
                 "ref": campo("FITID"),
             }
         )
-    return itens
+    return items
 
 
 # Cabeçalhos dos extratos dos bancos (já normalizados: minúsculas, sem acento). Exemplos:
@@ -89,7 +89,7 @@ def ler_ofx(texto: str) -> list[dict[str, Any]]:
 # Inter "Data Lançamento;Histórico;Descrição;Valor;Saldo"; BB "Data;Lançamento;Detalhes;
 # N° documento;Valor;Tipo Lançamento"; Mercado Pago "RELEASE_DATE;TRANSACTION_TYPE;REFERENCE_ID;
 # TRANSACTION_NET_AMOUNT;PARTIAL_BALANCE"; Itaú (XLS) "data;lançamento;ag./origem;valor (R$)".
-_COLUNAS = {
+_COLUMNS = {
     "data": (
         "data",
         "date",
@@ -134,21 +134,21 @@ _COLUNAS = {
 }
 
 # linhas de saldo e totais que alguns bancos põem no meio do extrato
-_NAO_LANCAMENTO = re.compile(r"^(s ?a ?l ?d ?o|saldo|total|resumo)\b")
+_NAO_ENTRY = re.compile(r"^(s ?a ?l ?d ?o|saldo|total|resumo)\b")
 
 
-def _indices(cab: list[str]) -> dict[str, int]:
+def _indexes(header: list[str]) -> dict[str, int]:
     idx: dict[str, int] = {}
-    for chave, nomes in _COLUNAS.items():
-        for i, c in enumerate(cab):
-            if chave == "complemento" and i == idx.get("descricao"):
+    for key, names in _COLUMNS.items():
+        for i, c in enumerate(header):
+            if key == "complemento" and i == idx.get("descricao"):
                 continue
-            if c in nomes or any(c.startswith(n) for n in nomes if len(n) > 4):
-                idx.setdefault(chave, i)
+            if c in names or any(c.startswith(n) for n in names if len(n) > 4):
+                idx.setdefault(key, i)
     return idx
 
 
-def _completo(idx: dict[str, int]) -> bool:
+def _complete(idx: dict[str, int]) -> bool:
     return (
         "data" in idx
         and "descricao" in idx
@@ -156,88 +156,88 @@ def _completo(idx: dict[str, int]) -> bool:
     )
 
 
-def ler_csv(texto: str, fatura: bool = False) -> list[dict[str, Any]]:
+def read_csv(text: str, fatura: bool = False) -> list[dict[str, Any]]:
     """CSV com cabeçalho; aceita `;` ou `,`, número 1.234,56 e data dd/mm/aaaa. Em [fatura] (cartão)
     os valores positivos são gastos e viram negativos."""
-    amostra = texto[:2000]
-    delim = ";" if amostra.count(";") >= amostra.count(",") / 2 and ";" in amostra else ","
-    linhas = list(csv.reader(io.StringIO(texto), delimiter=delim))
+    sample = text[:2000]
+    delim = ";" if sample.count(";") >= sample.count(",") / 2 and ";" in sample else ","
+    lines = list(csv.reader(io.StringIO(text), delimiter=delim))
     # Inter e Mercado Pago põem conta, período e saldo antes do cabeçalho: procura a linha que tem
     # data, descrição e valor nas primeiras 40.
-    inicio, idx = next(
+    start, idx = next(
         (
             (i, ix)
-            for i, linha in enumerate(linhas[:40])
-            if _completo(ix := _indices([normalizar(c) for c in linha]))
+            for i, line in enumerate(lines[:40])
+            if _complete(ix := _indexes([normalize(c) for c in line]))
         ),
         (-1, {}),
     )
-    if inicio < 0:
-        raise Invalido("CSV sem colunas reconhecidas (precisa de data, descrição e valor)")
-    itens = []
-    for linha in linhas[inicio + 1 :]:
-        if len(linha) <= max(idx.values()) or not linha[idx["data"]].strip():
+    if start < 0:
+        raise Invalid("CSV sem colunas reconhecidas (precisa de data, descrição e valor)")
+    items = []
+    for line in lines[start + 1 :]:
+        if len(line) <= max(idx.values()) or not line[idx["data"]].strip():
             continue
-        descricao = linha[idx["descricao"]].strip()
+        description = line[idx["descricao"]].strip()
         if (
             "complemento" in idx
-            and (extra := linha[idx["complemento"]].strip())
-            and extra != descricao
+            and (extra := line[idx["complemento"]].strip())
+            and extra != description
         ):
-            descricao = f"{descricao} - {extra}" if descricao else extra
-        if not descricao or _NAO_LANCAMENTO.match(normalizar(descricao)):
+            description = f"{description} - {extra}" if description else extra
+        if not description or _NAO_ENTRY.match(normalize(description)):
             continue
         try:
-            _data(linha[idx["data"]])
-        except Invalido:
+            _data(line[idx["data"]])
+        except Invalid:
             continue  # rodapé, subtotal ou linha de texto
         try:
             if "valor" in idx:
-                valor = numero_br(linha[idx["valor"]])
+                value = number_br(line[idx["valor"]])
             else:
-                cred = linha[idx["credito"]].strip()
-                deb = linha[idx["debito"]].strip()
-                valor = (numero_br(cred) if cred else 0) - (abs(numero_br(deb)) if deb else 0)
+                cred = line[idx["credito"]].strip()
+                deb = line[idx["debito"]].strip()
+                value = (number_br(cred) if cred else 0) - (abs(number_br(deb)) if deb else 0)
         except ValueError:
             continue
         if (
             "sinal" in idx
-            and valor > 0
-            and normalizar(linha[idx["sinal"]]) in ("saida", "debito", "d")
+            and value > 0
+            and normalize(line[idx["sinal"]]) in ("saida", "debito", "d")
         ):
-            valor = -valor
-        itens.append(
+            value = -value
+        items.append(
             {
-                "data": _data(linha[idx["data"]]),
-                "descricao": descricao,
-                "valor": -valor if fatura else valor,
+                "data": _data(line[idx["data"]]),
+                "descricao": description,
+                "valor": -value if fatura else value,
                 "ref": "",
             }
         )
-    return itens
+    return items
 
 
-def planilha_para_csv(nome: str, conteudo: bytes) -> str:
+def spreadsheet_to_csv(nome: str, content: bytes) -> str:
     """XLSX/XLS (Itaú, Mercado Pago, Inter exportam assim) → texto CSV com `;` para o [ler_csv]."""
-    linhas: list[list[Any]] = []
+    lines: list[list[Any]] = []
     if nome.lower().endswith(".xls"):
         import xlrd
 
-        livro = xlrd.open_workbook(file_contents=conteudo)
-        folha = livro.sheet_by_index(0)
-        for r in range(folha.nrows):
-            linha = []
-            for c in folha.row(r):
+        book = xlrd.open_workbook(file_contents=content)
+        sheet = book.sheet_by_index(0)
+        for r in range(sheet.nrows):
+            line = []
+            for c in sheet.row(r):
                 if c.ctype == xlrd.XL_CELL_DATE:
-                    linha.append(xlrd.xldate_as_datetime(c.value, livro.datemode).date())
+                    line.append(xlrd.xldate_as_datetime(c.value, book.datemode).date())
                 else:
-                    linha.append(c.value)
-            linhas.append(linha)
+                    line.append(c.value)
+            lines.append(line)
     else:
         from openpyxl import load_workbook
 
-        folha = load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True).worksheets[0]
-        linhas = [list(r) for r in folha.iter_rows(values_only=True)]
+        sheet = load_workbook(io.BytesIO(content), read_only=True, data_only=True).worksheets[0]
+        lines = [list(r) for r in sheet.iter_rows(values_only=True)]
 
     def celula(v: Any) -> str:
         if v is None:
@@ -250,30 +250,30 @@ def planilha_para_csv(nome: str, conteudo: bytes) -> str:
             return f"{v:.2f}"
         return str(v).replace(";", ",").replace("\n", " ")
 
-    return "\n".join(";".join(celula(v) for v in linha) for linha in linhas)
+    return "\n".join(";".join(celula(v) for v in line) for line in lines)
 
 
-def texto_do_pdf(conteudo: bytes) -> str:
+def text_of_pdf(content: bytes) -> str:
     """Texto de um extrato em PDF (pdftotext, do poppler), mantendo as colunas alinhadas."""
     import subprocess
     import tempfile
 
     with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
-        f.write(conteudo)
+        f.write(content)
         f.flush()
         try:
             r = subprocess.run(
                 ["pdftotext", "-layout", f.name, "-"], capture_output=True, timeout=60, check=True
             )
         except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            raise Invalido(f"Não consegui ler o PDF ({e.__class__.__name__}).") from e
-    texto = r.stdout.decode("utf-8", "ignore")
-    if not texto.strip():
-        raise Invalido("O PDF não tem texto (é imagem escaneada).")
-    return texto
+            raise Invalid(f"Não consegui ler o PDF ({e.__class__.__name__}).") from e
+    text = r.stdout.decode("utf-8", "ignore")
+    if not text.strip():
+        raise Invalid("O PDF não tem texto (é imagem escaneada).")
+    return text
 
 
-_FORMAS = [
+_SHAPES = [
     ("pix", r"\bpix\b"),
     ("boleto", r"\bboleto|\bpagamento de titulo|\bpag(amento|to)? tit"),
     ("ted", r"\bted\b|\btransf(erencia)? eletronica"),
@@ -288,37 +288,37 @@ _FORMAS = [
 ]
 
 
-def forma_pagamento(descricao: str, conta_tipo: str = "") -> str:
+def shape_payment(description: str, account_kind: str = "") -> str:
     """Como o dinheiro entrou ou saiu, pelo texto do lançamento. O extrato de um banco digital
     mistura cartão, Pix e depósito mesmo na conta do cartão: o texto vale primeiro e só o que não
     diz nada vira `credito` no cartão."""
-    d = normalizar(descricao)
-    forma = next((forma for forma, padrao in _FORMAS if re.search(padrao, d)), "")
-    return forma or ("credito" if conta_tipo == "cartao" else "")
+    d = normalize(description)
+    shape = next((shape for shape, default in _SHAPES if re.search(default, d)), "")
+    return shape or ("credito" if account_kind == "cartao" else "")
 
 
-def _decodificar(conteudo: bytes) -> str:
+def _decode(content: bytes) -> str:
     for cod in ("utf-8-sig", "cp1252", "latin-1"):
         try:
-            return conteudo.decode(cod)
+            return content.decode(cod)
         except UnicodeDecodeError:
             continue
-    return conteudo.decode("utf-8", "ignore")
+    return content.decode("utf-8", "ignore")
 
 
-def regra_para(arm: Armazem, descricao: str) -> dict[str, Any] | None:
-    alvo = normalizar(descricao)
+def rule_for(arm: Warehouse, description: str) -> dict[str, Any] | None:
+    target = normalize(description)
     for r in sorted(arm.todos("regras"), key=lambda r: -r["prioridade"]):
-        padrao = normalizar(r["padrao"])
-        if padrao and padrao in alvo:
+        default = normalize(r["padrao"])
+        if default and default in target:
             return r
     return None
 
 
-def categorizar(arm: Armazem, t: dict[str, Any], historico: dict[str, str] | None = None) -> bool:
+def categorize(arm: Warehouse, t: dict[str, Any], historico: dict[str, str] | None = None) -> bool:
     """Preenche categoria e contraparte de [t] se estiverem vazias. Devolve se mudou algo."""
     mudou = False
-    r = regra_para(arm, t["descricao"])
+    r = rule_for(arm, t["descricao"])
     if r:
         if not t["categoria_id"] and r["categoria_id"]:
             t["categoria_id"] = r["categoria_id"]
@@ -327,79 +327,79 @@ def categorizar(arm: Armazem, t: dict[str, Any], historico: dict[str, str] | Non
             t["contraparte"] = r["contraparte"]
             mudou = True
     if not t["categoria_id"] and historico:
-        cat = historico.get(normalizar(t["descricao"]))
+        cat = historico.get(normalize(t["descricao"]))
         if cat:
             t["categoria_id"] = cat
             mudou = True
     if not t["contraparte"]:
-        t["contraparte"] = contraparte(t["descricao"])
+        t["contraparte"] = counterpart(t["descricao"])
         mudou = mudou or bool(t["contraparte"])
     return mudou
 
 
-def _historico(arm: Armazem) -> dict[str, str]:
+def _history(arm: Warehouse) -> dict[str, str]:
     return {
-        normalizar(t["descricao"]): t["categoria_id"]
+        normalize(t["descricao"]): t["categoria_id"]
         for t in arm.todos("transacoes")
         if t["categoria_id"]
     }
 
 
-class PrecisaIA(Invalido):
+class NeedsAi(Invalid):
     """Formato que o código não lê (PDF, planilha ou CSV sem colunas conhecidas): o texto vai para a
     IA extrair os lançamentos."""
 
-    def __init__(self, texto: str, motivo: str) -> None:
+    def __init__(self, text: str, motivo: str) -> None:
         super().__init__(motivo)
-        self.texto = texto
+        self.texto = text
 
 
-def ler_arquivo(nome: str, conteudo: bytes, conta_tipo: str) -> list[dict[str, Any]]:
+def read_file(nome: str, content: bytes, account_kind: str) -> list[dict[str, Any]]:
     """Lançamentos do arquivo pelo formato; [PrecisaIA] quando só a IA consegue ler."""
     baixo = nome.lower()
     if baixo.endswith(".pdf"):
-        raise PrecisaIA(texto_do_pdf(conteudo), "PDF: a IA vai ler os lançamentos")
+        raise NeedsAi(text_of_pdf(content), "PDF: a IA vai ler os lançamentos")
     if baixo.endswith((".xlsx", ".xls")):
-        texto = planilha_para_csv(nome, conteudo)
+        text = spreadsheet_to_csv(nome, content)
     else:
-        texto = _decodificar(conteudo)
-        if baixo.endswith((".ofx", ".qfx")) or "<OFX>" in texto[:4000].upper():
-            return ler_ofx(texto)
+        text = _decode(content)
+        if baixo.endswith((".ofx", ".qfx")) or "<OFX>" in text[:4000].upper():
+            return read_ofx(text)
         if not baixo.endswith((".csv", ".txt")):
-            raise Invalido("Formato não suportado: envie OFX, CSV, XLS/XLSX ou PDF")
+            raise Invalid("Formato não suportado: envie OFX, CSV, XLS/XLSX ou PDF")
     try:
-        itens = ler_csv(texto)
-    except Invalido as e:
-        raise PrecisaIA(texto, f"{e}: a IA vai ler os lançamentos") from e
+        items = read_csv(text)
+    except Invalid as e:
+        raise NeedsAi(text, f"{e}: a IA vai ler os lançamentos") from e
     # Fatura traz os gastos positivos; extrato completo (Pix, depósito, cartão) já vem com sinal,
     # mesmo quando a conta escolhida é o cartão. Só inverte se a maioria for positiva.
-    if conta_tipo == "cartao" and sum(i["valor"] > 0 for i in itens) > len(itens) / 2:
-        for i in itens:
+    if account_kind == "cartao" and sum(i["valor"] > 0 for i in items) > len(items) / 2:
+        for i in items:
             i["valor"] = -i["valor"]
-    return itens
+    return items
 
 
-def importar(arm: Armazem, nome: str, conteudo: bytes, conta_id: str) -> dict[str, Any]:
-    conta = arm.obter("contas", conta_id)
-    return gravar_lancamentos(arm, ler_arquivo(nome, conteudo, conta["tipo"]), conta_id)
+def run_import(arm: Warehouse, nome: str, content: bytes, account_id: str) -> dict[str, Any]:
+    account = arm.obter("contas", account_id)
+    return write_entries(arm, read_file(nome, content, account["tipo"]), account_id)
 
 
-def gravar_lancamentos(arm: Armazem, itens: list[dict[str, Any]], conta_id: str) -> dict[str, Any]:
+def write_entries(arm: Warehouse, items: list[dict[str, Any]], account_id: str) -> dict[str, Any]:
     """Grava os lançamentos lidos sem duplicar (mesmo hash), com parcela, forma de pagamento,
     categoria e contraparte."""
-    conta = arm.obter("contas", conta_id)
+    account = arm.obter("contas", account_id)
     with arm.trava:
         existentes = {t["hash"] for t in arm.todos("transacoes") if t["hash"]}
-        historico = _historico(arm)
-        vistos: dict[str, int] = {}
-        novas = []
-        for it in itens:
-            desc = normalizar(it["descricao"])
-            chave = f"{conta_id}|{it['data']}|{it['valor']:.2f}|{desc}|{it['ref']}"
-            vistos[chave] = (
-                vistos.get(chave, 0) + 1
+        history = _history(arm)
+        seen: dict[str, int] = {}
+        new = []
+        for it in items:
+            desc = normalize(it["descricao"])
+            key = f"{account_id}|{it['data']}|{it['valor']:.2f}|{desc}|{it['ref']}"
+            seen[key] = (
+                seen.get(key, 0) + 1
             )  # mesmas compras no mesmo dia continuam distintas
-            h = hashlib.sha1(f"{chave}|{vistos[chave]}".encode()).hexdigest()[:16]
+            h = hashlib.sha1(f"{key}|{seen[key]}".encode()).hexdigest()[:16]
             if h in existentes:
                 continue
             m = re.search(r"\b(\d{1,2})/(\d{1,2})\b\s*$", it["descricao"]) or re.search(
@@ -411,39 +411,39 @@ def gravar_lancamentos(arm: Armazem, itens: list[dict[str, Any]], conta_id: str)
                     "data": it["data"],
                     "descricao": it["descricao"],
                     "valor": it["valor"],
-                    "conta_id": conta_id,
+                    "conta_id": account_id,
                     "hash": h,
                     "parcela": f"{m.group(1)}/{m.group(2)}"
                     if m and int(m.group(1)) <= int(m.group(2))
                     else "",
-                    "forma_pagamento": forma_pagamento(it["descricao"], conta["tipo"]),
+                    "forma_pagamento": shape_payment(it["descricao"], account["tipo"]),
                 },
                 gravar=False,
             )
-            categorizar(arm, t, historico)
-            novas.append(t)
+            categorize(arm, t, history)
+            new.append(t)
         arm.salvar("transacoes")
     return {
-        "ids": [t["id"] for t in novas],
-        "lidas": len(itens),
-        "importadas": len(novas),
-        "duplicadas": len(itens) - len(novas),
-        "sem_categoria": sum(1 for t in novas if not t["categoria_id"]),
+        "ids": [t["id"] for t in new],
+        "lidas": len(items),
+        "importadas": len(new),
+        "duplicadas": len(items) - len(new),
+        "sem_categoria": sum(1 for t in new if not t["categoria_id"]),
     }
 
 
-def aplicar_regras(arm: Armazem) -> int:
+def apply_rules(arm: Warehouse) -> int:
     with arm.trava:
-        historico = _historico(arm)
-        contas = {c["id"]: c["tipo"] for c in arm.todos("contas")}
+        history = _history(arm)
+        accounts = {c["id"]: c["tipo"] for c in arm.todos("contas")}
         n = 0
         for t in arm.todos("transacoes"):
             # `credito` no cartão pode ter vindo da regra antiga (tudo do cartão era crédito)
             if not t.get("forma_pagamento") or t["forma_pagamento"] == "credito":
-                t["forma_pagamento"] = forma_pagamento(
-                    t["descricao"], contas.get(t["conta_id"], "")
+                t["forma_pagamento"] = shape_payment(
+                    t["descricao"], accounts.get(t["conta_id"], "")
                 ) or t.get("forma_pagamento", "")
-            if not t["categoria_id"] and categorizar(arm, t, historico):
+            if not t["categoria_id"] and categorize(arm, t, history):
                 n += 1
         arm.salvar("transacoes")
         return n
@@ -451,15 +451,15 @@ def aplicar_regras(arm: Armazem) -> int:
 
 # Sentido pelo texto, para os lançamentos sem arquivo original (importados antes de guardar a
 # cópia).
-_ENTRADA = re.compile(
+_INPUT = re.compile(
     r"\brecebid|\bdeposito|\bsalario|\brendimento|\bresgate|\bestorno|\breembolso"
 )
-_SAIDA = re.compile(
+_OUTPUT = re.compile(
     r"\benviad|\bcompra (no |com )?(cartao de )?debito|\bsaque|\bpagamento (de |efetuad)|\baplicac"
 )
 
 
-def corrigir(arm: Armazem, originais: dict[str, list[tuple[str, bytes]]]) -> dict[str, int]:
+def fix(arm: Warehouse, originais: dict[str, list[tuple[str, bytes]]]) -> dict[str, int]:
     """Conserta o que a importação antiga gravou errado na conta do cartão: ela invertia o sinal de
     tudo (Pix recebido virava gasto) e marcava tudo como `credito`. O sinal certo vem dos arquivos
     originais ([originais] por conta, relidos com a regra nova); sem original, do texto. O hash é
@@ -467,37 +467,37 @@ def corrigir(arm: Armazem, originais: dict[str, list[tuple[str, bytes]]]) -> dic
     sinais = 0
     with arm.trava:
         cartoes = [c for c in arm.todos("contas") if c["tipo"] == "cartao"]
-        for conta in cartoes:
+        for account in cartoes:
             certos: dict[tuple[str, str, float], float] = {}
-            for nome, conteudo in originais.get(conta["id"], []):
+            for name, content in originais.get(account["id"], []):
                 try:
-                    itens = ler_arquivo(nome, conteudo, "cartao")
-                except Invalido:
+                    items = read_file(name, content, "cartao")
+                except Invalid:
                     continue  # PDF e layout estranho (lidos pela IA, sem inversão) ficam como estão
-                for it in itens:
-                    chave = (it["data"], normalizar(it["descricao"]), round(abs(it["valor"]), 2))
-                    certos[chave] = it["valor"]
-            vistos: dict[str, int] = {}
+                for it in items:
+                    key = (it["data"], normalize(it["descricao"]), round(abs(it["valor"]), 2))
+                    certos[key] = it["valor"]
+            seen: dict[str, int] = {}
             for t in arm.todos("transacoes"):
-                if t["conta_id"] != conta["id"] or not t["valor"]:
+                if t["conta_id"] != account["id"] or not t["valor"]:
                     continue
-                desc = normalizar(t["descricao"])
-                certo = certos.get((t["data"], desc, round(abs(t["valor"]), 2)))
-                if certo is None:
-                    entrada = _ENTRADA.search(desc) and t["valor"] < 0
-                    if entrada or (_SAIDA.search(desc) and t["valor"] > 0):
-                        certo = -t["valor"]
-                if certo is None or (certo > 0) == (t["valor"] > 0):
+                desc = normalize(t["descricao"])
+                right = certos.get((t["data"], desc, round(abs(t["valor"]), 2)))
+                if right is None:
+                    entry = _INPUT.search(desc) and t["valor"] < 0
+                    if entry or (_OUTPUT.search(desc) and t["valor"] > 0):
+                        right = -t["valor"]
+                if right is None or (right > 0) == (t["valor"] > 0):
                     continue
-                t["valor"] = certo
-                chave = f"{conta['id']}|{t['data']}|{certo:.2f}|{desc}|"
-                vistos[chave] = vistos.get(chave, 0) + 1
-                t["hash"] = hashlib.sha1(f"{chave}|{vistos[chave]}".encode()).hexdigest()[:16]
+                t["valor"] = right
+                key = f"{account['id']}|{t['data']}|{right:.2f}|{desc}|"
+                seen[key] = seen.get(key, 0) + 1
+                t["hash"] = hashlib.sha1(f"{key}|{seen[key]}".encode()).hexdigest()[:16]
                 sinais += 1
         arm.salvar("transacoes")
-    formas = sum(
+    shapes = sum(
         1 for t in arm.todos("transacoes") if t.get("forma_pagamento") == "credito"
     )
-    categorizadas = aplicar_regras(arm)
-    formas -= sum(1 for t in arm.todos("transacoes") if t.get("forma_pagamento") == "credito")
-    return {"sinais": sinais, "formas": formas, "categorizadas": categorizadas}
+    categorizadas = apply_rules(arm)
+    shapes -= sum(1 for t in arm.todos("transacoes") if t.get("forma_pagamento") == "credito")
+    return {"sinais": sinais, "formas": shapes, "categorizadas": categorizadas}

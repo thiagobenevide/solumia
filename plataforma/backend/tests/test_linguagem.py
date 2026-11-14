@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from estudos.language import Linguagem, extrair_json, nota_de, revisar
+from estudos.language import Language, extract_json, note_of, review
 from shared.speech_text import align_word_times, compare_reading, split_words
 
 
@@ -22,11 +22,11 @@ def test_palavras_guardam_a_posicao() -> None:
 
 
 def test_align_word_times_interpola_o_que_o_whisper_nao_ouviu() -> None:
-    ditas = [
+    spoken = [
         {"palavra": "The", "inicio": 0.0, "fim": 0.2},
         {"palavra": "works.", "inicio": 0.8, "fim": 1.2},
     ]
-    t = align_word_times("The method works", ditas, 1.5)
+    t = align_word_times("The method works", spoken, 1.5)
     assert [(x["inicio"], x["fim"]) for x in t] == [(0, 3), (4, 10), (11, 16)]
     assert t[1]["t0"] == pytest.approx(0.2) and t[1]["t1"] == pytest.approx(0.8)
     # sem nada reconhecido: tempo proporcional ao tamanho
@@ -35,15 +35,15 @@ def test_align_word_times_interpola_o_que_o_whisper_nao_ouviu() -> None:
 
 
 def test_compare_reading() -> None:
-    ditas = [
+    spoken = [
         {"palavra": "The", "inicio": 0.0, "fim": 0.3, "prob": 0.9},
         {"palavra": "metod", "inicio": 0.4, "fim": 0.8, "prob": 0.4},
         {"palavra": "really", "inicio": 2.0, "fim": 2.4, "prob": 0.9},
         {"palavra": "works", "inicio": 2.5, "fim": 3.0, "prob": 0.9},
     ]
-    r = compare_reading("The method works well.", ditas)
-    estados = [p["estado"] for p in r["palavras"]]
-    assert estados == ["certa", "trocada", "certa", "omitida"]
+    r = compare_reading("The method works well.", spoken)
+    states = [p["estado"] for p in r["palavras"]]
+    assert states == ["certa", "trocada", "certa", "omitida"]
     assert r["palavras"][1]["dita"] == "metod"
     assert r["extras"] == ["really"]
     assert r["precisao"] == 50.0 and r["pausas"] == 1 and r["ppm"] == 80
@@ -51,17 +51,17 @@ def test_compare_reading() -> None:
 
 def test_fsrs_aumenta_intervalo_e_errar_volta_logo() -> None:
     t0 = datetime(2026, 1, 1, tzinfo=UTC)
-    c = revisar({}, 3, t0)
+    c = review({}, 3, t0)
     assert c["proxima"] == (t0 + timedelta(days=4)).isoformat(timespec="seconds")
-    c2 = revisar(c, 3, t0 + timedelta(days=4))
+    c2 = review(c, 3, t0 + timedelta(days=4))
     assert c2["estabilidade"] > c["estabilidade"] * 2
-    c3 = revisar(c2, 1, t0 + timedelta(days=20))
+    c3 = review(c2, 1, t0 + timedelta(days=20))
     assert c3["estabilidade"] < c2["estabilidade"] and c3["lapsos"] == 1
-    assert nota_de(40) == 1 and nota_de(95) == 4
+    assert note_of(40) == 1 and note_of(95) == 4
 
 
 def test_extrair_json_ignora_pensamento() -> None:
-    assert extrair_json('<think>{"x": 0}</think>Aqui: {"a": 1} fim') == {"a": 1}
+    assert extract_json('<think>{"x": 0}</think>Aqui: {"a": 1} fim') == {"a": 1}
 
 
 class _LLMFalsa:
@@ -144,7 +144,7 @@ def api(tmp_path: Path) -> tuple[TestClient, _LLMFalsa]:
     s = Settings(client_api_keys=CLIENT_API_KEY, estudos_dir=str(tmp_path), notas_dir=str(tmp_path))
     app = create_app(settings=s)
     llm = _LLMFalsa()
-    app.state.linguagem = Linguagem(
+    app.state.linguagem = Language(
         tmp_path, chat=llm, worker=_worker, somar_minutos=app.state.estudos.somar_minutos
     )
     return TestClient(app, headers=AUTH_HEADERS), llm
@@ -154,17 +154,17 @@ def test_fala_e_traducao_com_cache(api: tuple[TestClient, _LLMFalsa]) -> None:
     c, llm = api
     r = c.post("/api/estudos/linguagem/fala", json={"texto": "The  method", "idioma": "en"}).json()
     assert r["texto"] == "The method" and [p["inicio"] for p in r["palavras"]] == [0, 4]
-    corpo = {"termo": "method", "frase": "The method works.", "idioma": "en"}
-    assert c.post("/api/estudos/linguagem/traduzir", json=corpo).json()["traducao"] == "método"
-    c.post("/api/estudos/linguagem/traduzir", json=corpo)
+    body = {"termo": "method", "frase": "The method works.", "idioma": "en"}
+    assert c.post("/api/estudos/linguagem/traduzir", json=body).json()["traducao"] == "método"
+    c.post("/api/estudos/linguagem/traduzir", json=body)
     assert len(llm.pedidos) == 1
 
 
 def test_vocabulario_pratica_e_revisao(api: tuple[TestClient, _LLMFalsa]) -> None:
     c, _ = api
     base = "/api/estudos/linguagem/vocabulario"
-    novo = {"termo": "method", "idioma": "en", "contexto": "The method works.", "pagina": 2}
-    item = c.post(base, json=novo).json()
+    new = {"termo": "method", "idioma": "en", "contexto": "The method works.", "pagina": 2}
+    item = c.post(base, json=new).json()
     # gerado em segundo plano (o TestClient roda as BackgroundTasks antes de voltar)
     item = next(v for v in c.get(base).json() if v["id"] == item["id"])
     assert len(item["frases"]) == 1 and [e["tipo"] for e in item["exercicios"]] == [
@@ -172,7 +172,7 @@ def test_vocabulario_pratica_e_revisao(api: tuple[TestClient, _LLMFalsa]) -> Non
         "producao",
     ]
     # a mesma palavra de novo junta o contexto
-    mais = c.post(base, json={**novo, "termo": "Method", "contexto": "A new method."}).json()
+    mais = c.post(base, json={**new, "termo": "Method", "contexto": "A new method."}).json()
     assert mais["id"] == item["id"] and len(mais["contextos"]) == 2
     assert len(c.get(f"{base}?devidas=true&idioma=en").json()) == 1
     r = c.post(f"{base}/{item['id']}/responder", json={"indice": 0, "resposta": "Method"}).json()

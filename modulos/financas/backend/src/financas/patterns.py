@@ -1,7 +1,7 @@
 """Dados iniciais: categorias (com o grupo da regra 50/30/20) e o questionário de seleção de setores
 e empresas para aporte. O usuário edita os dois pelo app."""
 
-CATEGORIAS_BASE = [
+CATEGORIES_BASE = [
     {"nome": "Salário", "tipo": "receita", "cor": "#2e7d32"},
     {"nome": "Renda extra", "tipo": "receita", "cor": "#43a047"},
     {"nome": "Rendimentos", "tipo": "receita", "cor": "#66bb6a"},
@@ -23,7 +23,7 @@ CATEGORIAS_BASE = [
 ]
 
 # nota de 0 a 5 em cada pergunta; o peso multiplica a nota
-QUESTIONARIO_BASE = [
+QUESTIONNAIRE_BASE = [
     # setor
     {
         "id": "s1",
@@ -184,5 +184,5 @@ QUESTIONARIO_BASE = [
 ]
 
 # corte das notas finais (0 a 100)
-APTA = 70
-OBSERVAR = 50
+FIT = 70
+WATCH = 50

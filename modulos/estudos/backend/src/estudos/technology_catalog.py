@@ -8,7 +8,7 @@ O que é de cada pessoa (tem o livro, o que já leu) fica em `conhecimento.json`
 
 from typing import Any
 
-FRENTES = [
+FRONTS = [
     "Fundamentos",
     "Código",
     "Back-end",
@@ -21,7 +21,7 @@ FRENTES = [
 ]
 
 # `tenho`: padrão da estante (a pessoa troca no app).
-LIVROS: list[dict[str, Any]] = [
+BOOKS: list[dict[str, Any]] = [
     {"id": "codigo-limpo", "titulo": "Código Limpo", "original": "Clean Code",
      "autor": "Robert C. Martin", "edicao": "1ª ed. (2008)", "tipo": "livro", "tenho": True},
     {"id": "arquitetura-limpa", "titulo": "Arquitetura Limpa", "original": "Clean Architecture",
@@ -69,8 +69,8 @@ LIVROS: list[dict[str, Any]] = [
 ]
 
 
-def _l(livro: str, capitulos: str, foco: str) -> dict[str, str]:
-    return {"livro": livro, "capitulos": capitulos, "foco": foco}
+def _l(book: str, chapters: str, focus: str) -> dict[str, str]:
+    return {"livro": book, "capitulos": chapters, "foco": focus}
 
 
 _PP = "programador-pragmatico"
@@ -79,7 +79,7 @@ _CC = "codigo-limpo"
 _HP = "partes-dificeis"
 _FSA = "fundamentos-arquitetura"
 
-ETAPAS_ARQUITETO: list[dict[str, Any]] = [
+STAGES_ARCHITECT: list[dict[str, Any]] = [
     # --- Fase 1: o ofício ---
     {"id": "mentalidade", "fase": "1. O ofício", "titulo": "Mentalidade pragmática",
      "frentes": ["Fundamentos", "Carreira"],
@@ -381,7 +381,7 @@ ETAPAS_ARQUITETO: list[dict[str, Any]] = [
      "entregavel": "Radar de tecnologia na nota da etapa."},
 ]
 
-TRILHAS: list[dict[str, Any]] = [
+TRACKS: list[dict[str, Any]] = [
     {
         "id": "arquiteto-software",
         "area": "Tecnologia",
@@ -390,6 +390,6 @@ TRILHAS: list[dict[str, Any]] = [
             "Trilha principal da carreira: do código ao sistema, passando por back-end, front-end, "
             "dados, DevOps e IA. As frentes filtram a mesma sequência como trilhas por área."
         ),
-        "etapas": ETAPAS_ARQUITETO,
+        "etapas": STAGES_ARCHITECT,
     },
 ]

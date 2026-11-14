@@ -6,36 +6,36 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import uuid4
 
-from eletronica.spice import ler_raw, resultado
+from eletronica.spice import read_raw, result
 
 # netlist SPICE → {raw_b64, log, codigo} (ver `shared.ngspice.run_ngspice`).
 Executor = Callable[[str], Awaitable[dict[str, Any]]]
 # Mensagem de erro quando não há onde rodar o ngspice; None quando dá para simular.
-Disponivel = Callable[[], str | None]
+Available = Callable[[], str | None]
 
 
-class Indisponivel(Exception):
+class Unavailable(Exception):
     pass
 
 
-class Simulacoes:
+class Simulations:
     def __init__(
-        self, executar: Executor, disponivel: Disponivel = lambda: None, limite: int = 50
+        self, execute: Executor, available: Available = lambda: None, limite: int = 50
     ) -> None:
-        self.executar = executar
-        self.disponivel = disponivel
+        self.executar = execute
+        self.disponivel = available
         self.limite = limite
         self._tarefas: dict[str, dict[str, Any]] = {}
         self._internos: dict[str, dict[str, Any]] = {}  # netlist, nós e eixo de cada tarefa
 
-    def criar(self, projeto: str, analise: str, gerado: dict[str, Any]) -> dict[str, Any]:
+    def criar(self, project: str, analise: str, gerado: dict[str, Any]) -> dict[str, Any]:
         """Registra a tarefa; levanta Indisponivel sem worker nem ngspice local."""
-        if (motivo := self.disponivel()) is not None:
-            raise Indisponivel(motivo)
+        if (reason := self.disponivel()) is not None:
+            raise Unavailable(reason)
         id_ = uuid4().hex[:12]
         self._tarefas[id_] = {
             "id": id_,
-            "projeto": projeto,
+            "projeto": project,
             "analise": analise,
             "estado": "fila",
             "criada": time.time(),
@@ -59,11 +59,11 @@ class Simulacoes:
         try:
             r = await self.executar(g["texto"])
             t["log"] = "\n".join(str(r.get("log", "")).strip().splitlines()[-20:])
-            dados = base64.b64decode(str(r.get("raw_b64", "")))
-            if not dados:
+            data = base64.b64decode(str(r.get("raw_b64", "")))
+            if not data:
                 ultimas = t["log"].splitlines()[-8:]
                 raise RuntimeError("O ngspice falhou: " + (" | ".join(ultimas) or "sem saída"))
-            t["resultado"] = resultado(t["analise"], ler_raw(dados), g["nos"], g["eixo"])
+            t["resultado"] = result(t["analise"], read_raw(data), g["nos"], g["eixo"])
             t["estado"] = "pronto"
         except Exception as e:  # o erro vai para a tarefa, a tela mostra
             t["erro"] = str(e) or type(e).__name__

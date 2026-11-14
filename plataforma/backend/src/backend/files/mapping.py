@@ -29,98 +29,98 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Re
 from pydantic import BaseModel
 
 from backend.api.deps import require_client_api_key
-from backend.files.download_references import buscar_pdf_aberto
+from backend.files.download_references import fetch_pdf_open
 from backend.files.library import (
-    AnotacoesConflito,
-    ArquivoInvalido,
-    ArquivoNaoEncontrado,
-    Biblioteca,
+    AnnotationsConflict,
+    FileInvalid,
+    FileNotFound,
+    Collection,
 )
-from backend.files.rewrite import Reescrita
+from backend.files.rewrite import Rewrite
 
 logger = logging.getLogger("gateway.mapeamento")
 
-COR_DESTAQUE = 0x66FFD54F  # amarelo translúcido, como o marca-texto
-LIMITE_CATALOGO = 400  # caracteres da 1ª página de cada PDF para o Claude reconhecer a obra
-LIMITE_PDF = 160_000  # caracteres de um PDF por pedido (livro grande: só as páginas prováveis)
-LIMITE_PARTE = 30_000  # caracteres do documento por pedido de citações
-MODELO = "opus"  # mapeamento delicado: o modelo mais capaz do Claude Code
-BUSCAS_SIMULTANEAS = 3
-TAG_TAREFA = "download-referencia"
+COLOR_HIGHLIGHT = 0x66FFD54F  # amarelo translúcido, como o marca-texto
+LIMIT_CATALOG = 400  # caracteres da 1ª página de cada PDF para o Claude reconhecer a obra
+LIMIT_PDF = 160_000  # caracteres de um PDF por pedido (livro grande: só as páginas prováveis)
+LIMIT_PART = 30_000  # caracteres do documento por pedido de citações
+MODEL = "opus"  # mapeamento delicado: o modelo mais capaz do Claude Code
+SEARCHES_CONCURRENT = 3
+TAG_TASK = "download-referencia"
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 XHTML = "{http://www.w3.org/1999/xhtml}"
 
 
-def _agora() -> str:
+def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 # --- texto do documento e dos PDFs ---
 
 
-def texto_docx(conteudo: bytes) -> str:
+def text_docx(content: bytes) -> str:
     """Parágrafos do corpo (com os títulos marcados por `#`) e as notas de rodapé."""
     try:
-        zipado = zipfile.ZipFile(io.BytesIO(conteudo))
-        corpo = ET.fromstring(zipado.read("word/document.xml"))
+        zipado = zipfile.ZipFile(io.BytesIO(content))
+        body = ET.fromstring(zipado.read("word/document.xml"))
     except (zipfile.BadZipFile, KeyError, ET.ParseError) as e:
-        raise ArquivoInvalido("Não consegui ler o .docx (arquivo corrompido?).") from e
+        raise FileInvalid("Não consegui ler o .docx (arquivo corrompido?).") from e
 
-    def paragrafos(raiz: ET.Element) -> list[str]:
-        linhas = []
-        for p in raiz.iter(f"{W}p"):
-            partes = []
+    def paragrafos(root: ET.Element) -> list[str]:
+        lines = []
+        for p in root.iter(f"{W}p"):
+            parts = []
             for el in p.iter():
                 if el.tag == f"{W}t" and el.text:
-                    partes.append(el.text)
+                    parts.append(el.text)
                 elif el.tag == f"{W}tab":
-                    partes.append("\t")
+                    parts.append("\t")
                 elif el.tag in (f"{W}br", f"{W}cr"):
-                    partes.append("\n")
-            texto = "".join(partes).strip()
-            if not texto:
+                    parts.append("\n")
+            text = "".join(parts).strip()
+            if not text:
                 continue
-            estilo = p.find(f"{W}pPr/{W}pStyle")
-            nome = (estilo.get(f"{W}val") or "") if estilo is not None else ""
-            if re.match(r"(?i)(heading|t[ií]tulo|ttulo)\s*\d", nome):
-                texto = "# " + texto
-            linhas.append(texto)
-        return linhas
+            style = p.find(f"{W}pPr/{W}pStyle")
+            name = (style.get(f"{W}val") or "") if style is not None else ""
+            if re.match(r"(?i)(heading|t[ií]tulo|ttulo)\s*\d", name):
+                text = "# " + text
+            lines.append(text)
+        return lines
 
-    linhas = paragrafos(corpo)
+    lines = paragrafos(body)
     if "word/footnotes.xml" in zipado.namelist():
-        notas = paragrafos(ET.fromstring(zipado.read("word/footnotes.xml")))
-        if notas:
-            linhas += ["", "# NOTAS DE RODAPÉ", *notas]
-    return "\n".join(linhas)
+        notes = paragrafos(ET.fromstring(zipado.read("word/footnotes.xml")))
+        if notes:
+            lines += ["", "# NOTAS DE RODAPÉ", *notes]
+    return "\n".join(lines)
 
 
-def dividir_documento(texto: str, limite: int = LIMITE_PARTE) -> list[str]:
+def divide_document(text: str, limite: int = LIMIT_PART) -> list[str]:
     """Partes de até [limite] caracteres, cortadas de preferência num título (`#`); cada parte
     que começa no meio de uma seção leva o título dela, para a citação sair com a seção certa."""
-    partes: list[str] = []
-    atual: list[str] = []
-    tamanho, secao, secao_da_parte = 0, "", ""
-    for linha in texto.splitlines():
-        titulo = linha.startswith("# ")
-        if atual and tamanho + len(linha) > limite and (titulo or tamanho > limite * 0.6):
-            partes.append(("" if atual[0].startswith("# ") or not secao_da_parte
-                           else f"(continuação da seção: {secao_da_parte})\n") + "\n".join(atual))
-            atual, tamanho, secao_da_parte = [], 0, secao
-        if titulo:
-            secao = linha[2:].strip()
-            if not atual:
-                secao_da_parte = secao
-        atual.append(linha)
-        tamanho += len(linha) + 1
-    if atual:
-        partes.append(("" if atual[0].startswith("# ") or not secao_da_parte
-                       else f"(continuação da seção: {secao_da_parte})\n") + "\n".join(atual))
-    return [x for x in partes if x.strip()]
+    parts: list[str] = []
+    current: list[str] = []
+    size, secao, secao_of_part = 0, "", ""
+    for line in text.splitlines():
+        title = line.startswith("# ")
+        if current and size + len(line) > limite and (title or size > limite * 0.6):
+            parts.append(("" if current[0].startswith("# ") or not secao_of_part
+                           else f"(continuação da seção: {secao_of_part})\n") + "\n".join(current))
+            current, size, secao_of_part = [], 0, secao
+        if title:
+            secao = line[2:].strip()
+            if not current:
+                secao_of_part = secao
+        current.append(line)
+        size += len(line) + 1
+    if current:
+        parts.append(("" if current[0].startswith("# ") or not secao_of_part
+                       else f"(continuação da seção: {secao_of_part})\n") + "\n".join(current))
+    return [x for x in parts if x.strip()]
 
 
-def paginas_pdf(pdf: Path) -> list[str]:
+def pages_pdf(pdf: Path) -> list[str]:
     """Texto de cada página (pdftotext; páginas separadas por form feed)."""
     try:
         r = subprocess.run(
@@ -128,101 +128,101 @@ def paginas_pdf(pdf: Path) -> list[str]:
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return []
-    paginas = r.stdout.split("\f")
-    if paginas and not paginas[-1].strip():
-        paginas.pop()
-    return paginas
+    pages = r.stdout.split("\f")
+    if pages and not pages[-1].strip():
+        pages.pop()
+    return pages
 
 
-def palavras_pdf(pdf: Path, pagina: int) -> list[tuple[str, list[float], int]]:
+def words_pdf(pdf: Path, page: int) -> list[tuple[str, list[float], int]]:
     """Palavras da página (0-based) com a caixa em pontos PDF, origem no canto de cima (como o
     leitor do app) e o número da linha."""
     try:
         r = subprocess.run(
-            ["pdftotext", "-bbox-layout", "-f", str(pagina + 1), "-l", str(pagina + 1),
+            ["pdftotext", "-bbox-layout", "-f", str(page + 1), "-l", str(page + 1),
              str(pdf), "-"],
             capture_output=True, timeout=60, text=True,
         )
-        raiz = ET.fromstring(r.stdout)
+        root = ET.fromstring(r.stdout)
     except (FileNotFoundError, subprocess.TimeoutExpired, ET.ParseError):
         return []
-    palavras = []
-    for n, linha in enumerate(raiz.iter(f"{XHTML}line")):
-        for w in linha.iter(f"{XHTML}word"):
-            caixa = [float(w.get(k) or 0) for k in ("xMin", "yMin", "xMax", "yMax")]
-            palavras.append((w.text or "", caixa, n))
-    return palavras
+    words = []
+    for n, line in enumerate(root.iter(f"{XHTML}line")):
+        for w in line.iter(f"{XHTML}word"):
+            box = [float(w.get(k) or 0) for k in ("xMin", "yMin", "xMax", "yMax")]
+            words.append((w.text or "", box, n))
+    return words
 
 
-def _norma(texto: str) -> str:
-    sem_acento = unicodedata.normalize("NFKD", texto.lower()).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]", "", sem_acento)
+def _norm(text: str) -> str:
+    without_accent = unicodedata.normalize("NFKD", text.lower()).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]", "", without_accent)
 
 
-def _tokens(texto: str) -> list[str]:
-    texto = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", texto)  # hifenização de quebra de linha
-    return [t for t in (_norma(p) for p in texto.split()) if t]
+def _tokens(text: str) -> list[str]:
+    text = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", text)  # hifenização de quebra de linha
+    return [t for t in (_norm(p) for p in text.split()) if t]
 
 
-def localizar(
-    palavras: list[tuple[str, list[float], int]], trecho: str
+def locate(
+    words: list[tuple[str, list[float], int]], span: str
 ) -> tuple[list[list[float]], str, float]:
     """Acha [trecho] nas palavras da página (aproximado: o PDF quebra linhas, hifeniza e às vezes
     o trecho vem com pequenas diferenças). Devolve um retângulo por linha, o texto como está no PDF
     e a cobertura (0–1)."""
-    alvo = _tokens(trecho)
-    if not alvo or not palavras:
+    target = _tokens(span)
+    if not target or not words:
         return [], "", 0.0
     # junta palavra hifenizada no fim da linha com a primeira da linha seguinte
     toks: list[str] = []
-    origem: list[list[int]] = []
+    origin: list[list[int]] = []
     i = 0
-    while i < len(palavras):
-        texto, _, linha = palavras[i]
+    while i < len(words):
+        text, _, line = words[i]
         idx = [i]
         if (
-            texto.endswith("-") and i + 1 < len(palavras) and palavras[i + 1][2] != linha
+            text.endswith("-") and i + 1 < len(words) and words[i + 1][2] != line
         ):
-            texto = texto[:-1] + palavras[i + 1][0]
+            text = text[:-1] + words[i + 1][0]
             idx.append(i + 1)
             i += 1
-        t = _norma(texto)
+        t = _norm(text)
         if t:
             toks.append(t)
-            origem.append(idx)
+            origin.append(idx)
         i += 1
-    blocos = [
-        b for b in SequenceMatcher(None, toks, alvo, autojunk=False).get_matching_blocks()
+    blocks = [
+        b for b in SequenceMatcher(None, toks, target, autojunk=False).get_matching_blocks()
         if b.size
     ]
-    if not blocos:
+    if not blocks:
         return [], "", 0.0
-    maior = max(blocos, key=lambda b: b.size)
-    folga = max(8, len(alvo) // 3)
-    escolhidos = [
-        b for b in blocos
-        if maior.a - len(alvo) - folga <= b.a <= maior.a + len(alvo) + folga
+    largest = max(blocks, key=lambda b: b.size)
+    slack = max(8, len(target) // 3)
+    chosen = [
+        b for b in blocks
+        if largest.a - len(target) - slack <= b.a <= largest.a + len(target) + slack
     ]
-    cobertura = sum(b.size for b in escolhidos) / len(alvo)
-    inicio = min(b.a for b in escolhidos)
-    fim = max(b.a + b.size for b in escolhidos)
-    indices = [j for k in range(inicio, fim) for j in origem[k]]
-    por_linha: dict[int, list[float]] = {}
-    for j in indices:
-        _, c, linha = palavras[j]
-        r = por_linha.get(linha)
-        por_linha[linha] = (
+    coverage = sum(b.size for b in chosen) / len(target)
+    start = min(b.a for b in chosen)
+    end = max(b.a + b.size for b in chosen)
+    indexes = [j for k in range(start, end) for j in origin[k]]
+    by_line: dict[int, list[float]] = {}
+    for j in indexes:
+        _, c, line = words[j]
+        r = by_line.get(line)
+        by_line[line] = (
             list(c) if r is None
             else [min(r[0], c[0]), min(r[1], c[1]), max(r[2], c[2]), max(r[3], c[3])]
         )
-    retangulos = [[round(v, 2) for v in por_linha[k]] for k in sorted(por_linha)]
-    texto_pdf = " ".join(palavras[j][0] for j in indices)
-    return retangulos, texto_pdf, cobertura
+    retangulos = [[round(v, 2) for v in by_line[k]] for k in sorted(by_line)]
+    text_pdf = " ".join(words[j][0] for j in indexes)
+    return retangulos, text_pdf, coverage
 
 
 # --- Claude ---
 
-SISTEMA_REFERENCIAS = """Você analisa trabalhos acadêmicos brasileiros (pré-projeto de TCC, \
+SYSTEM_REFERENCES = """Você analisa trabalhos acadêmicos brasileiros (pré-projeto de TCC, \
 monografia, artigo) em ABNT para o mapeamento reverso das citações: lista as obras que o \
 documento cita, para o autor marcar os trechos nas obras originais.
 
@@ -238,7 +238,7 @@ al."). `titulo`: só o título da obra, como está no documento; "" se o documen
 autores e ano pelo início do texto); "" se nenhum for ela. Nunca ligue a uma obra parecida.
 - Não invente obras nem complete dados que o documento não traz."""
 
-ESQUEMA_REFERENCIAS = {
+SCHEMA_REFERENCES = {
     "type": "object",
     "properties": {
         "referencias": {
@@ -264,7 +264,7 @@ ESQUEMA_REFERENCIAS = {
     "additionalProperties": False,
 }
 
-SISTEMA_CITACOES = """Você faz o mapeamento reverso das citações de um trabalho acadêmico \
+SYSTEM_QUOTES = """Você faz o mapeamento reverso das citações de um trabalho acadêmico \
 brasileiro (ABNT): recebe a lista numerada das obras citadas e uma parte do texto, e lista cada \
 citação feita nessa parte.
 
@@ -282,7 +282,7 @@ que o texto mostra (ex.: "Introdução", "Resumo").
 - Uma mesma frase citando duas obras gera duas citações. Não invente citações; citação de obra \
 que não está na lista fica de fora."""
 
-ESQUEMA_CITACOES = {
+SCHEMA_QUOTES = {
     "type": "object",
     "properties": {
         "citacoes": {
@@ -306,7 +306,7 @@ ESQUEMA_CITACOES = {
     "additionalProperties": False,
 }
 
-SISTEMA_BUSCAR = """Você acha na internet o PDF gratuito e público de uma obra acadêmica citada \
+SYSTEM_FETCH = """Você acha na internet o PDF gratuito e público de uma obra acadêmica citada \
 num trabalho, para baixar. Use a busca na web e abra as páginas para conferir.
 
 Regras fixas:
@@ -319,7 +319,7 @@ sites piratas nem páginas que pedem login ou pagamento.
 - `titulo`, `doi` e `referencia_completa` (ABNT) da obra identificada; "" no que não achar.
 - Obra fechada, sem PDF público: `encontrado` = true e `urls_pdf` vazio."""
 
-ESQUEMA_BUSCAR = {
+SCHEMA_FETCH = {
     "type": "object",
     "properties": {
         "encontrado": {"type": "boolean"},
@@ -333,7 +333,7 @@ ESQUEMA_BUSCAR = {
     "additionalProperties": False,
 }
 
-SISTEMA_LOCALIZAR = """Você confere citações de um trabalho acadêmico nas obras originais, como o \
+SYSTEM_LOCATE = """Você confere citações de um trabalho acadêmico nas obras originais, como o \
 autor faria com o marca-texto: para cada citação, acha na obra o trecho que ela usa.
 
 Regras fixas:
@@ -347,7 +347,7 @@ enviadas, devolva `encontrado` = false, com o motivo em `observacao`.
 - `confianca`: "alta" quando o trecho é claramente o citado, "media" ou "baixa" quando é o mais \
 provável. Não invente texto que não está na obra."""
 
-ESQUEMA_LOCALIZAR = {
+SCHEMA_LOCATE = {
     "type": "object",
     "properties": {
         "trechos": {
@@ -372,21 +372,21 @@ ESQUEMA_LOCALIZAR = {
 }
 
 
-def prompt_referencias(documento: str, catalogo: list[dict[str, Any]]) -> str:
-    linhas = [
+def prompt_references(document: str, catalog: list[dict[str, Any]]) -> str:
+    lines = [
         f'- id "{c["id"]}" · arquivo: {c["titulo"]}'
         + (f" · ficha: {c['ficha']}" if c.get("ficha") else "")
         + f"\n  início: {c['inicio']}"
-        for c in catalogo
+        for c in catalog
     ]
     return (
-        "<catalogo_de_pdfs>\n" + ("\n".join(linhas) or "(biblioteca vazia)")
-        + "\n</catalogo_de_pdfs>\n\n<documento>\n" + documento + "\n</documento>\n\n"
+        "<catalogo_de_pdfs>\n" + ("\n".join(lines) or "(biblioteca vazia)")
+        + "\n</catalogo_de_pdfs>\n\n<documento>\n" + document + "\n</documento>\n\n"
         "Liste todas as obras citadas no documento, ligando ao catálogo."
     )
 
 
-def _lista_obras(refs: dict[int, dict[str, Any]]) -> str:
+def _list_works(refs: dict[int, dict[str, Any]]) -> str:
     return "\n".join(
         f"{n}. {r['autor_citacao']} ({r['ano']})"
         + (f" — {r['titulo']}" if r.get("titulo") else "")
@@ -395,58 +395,58 @@ def _lista_obras(refs: dict[int, dict[str, Any]]) -> str:
     )
 
 
-def prompt_citacoes(parte: str, refs: dict[int, dict[str, Any]], k: int, total: int) -> str:
+def prompt_quotes(part: str, refs: dict[int, dict[str, Any]], k: int, total: int) -> str:
     return (
-        f"<obras>\n{_lista_obras(refs)}\n</obras>\n\n"
-        f"<texto parte=\"{k} de {total}\">\n{parte}\n</texto>\n\n"
+        f"<obras>\n{_list_works(refs)}\n</obras>\n\n"
+        f"<texto parte=\"{k} de {total}\">\n{part}\n</texto>\n\n"
         "Liste todas as citações desta parte do texto."
     )
 
 
-def prompt_buscar(ref: dict[str, Any], cits: list[dict[str, Any]]) -> str:
-    frases = "\n".join(f"- {c['trecho_documento'][:400]}" for c in cits[:4])
+def prompt_fetch(ref: dict[str, Any], cits: list[dict[str, Any]]) -> str:
+    sentences = "\n".join(f"- {c['trecho_documento'][:400]}" for c in cits[:4])
     return (
         f"Referência como está no trabalho: {ref['referencia']}\n"
         f"Autor no texto: {ref['autor_citacao']} · ano: {ref['ano']}"
         + (f" · título: {ref['titulo']}" if ref.get("titulo") else "")
-        + (f"\n\nFrases do trabalho que citam a obra:\n{frases}" if frases else "")
+        + (f"\n\nFrases do trabalho que citam a obra:\n{sentences}" if sentences else "")
         + "\n\nAche o PDF público desta obra."
     )
 
 
-def _paginas_provaveis(paginas: list[str], citacoes: list[dict[str, Any]]) -> list[int]:
+def _pages_likely(pages: list[str], citacoes: list[dict[str, Any]]) -> list[int]:
     """Livro grande: as páginas com mais palavras em comum com as citações, até o limite."""
-    total = sum(len(p) for p in paginas)
-    if total <= LIMITE_PDF:
-        return list(range(len(paginas)))
-    alvo = set()
+    total = sum(len(p) for p in pages)
+    if total <= LIMIT_PDF:
+        return list(range(len(pages)))
+    target = set()
     for c in citacoes:
-        alvo |= {t for t in _tokens(c["citacao"] or c["trecho_documento"]) if len(t) > 4}
-    nota = sorted(
-        range(len(paginas)),
-        key=lambda i: -len(alvo & set(_tokens(paginas[i]))),
+        target |= {t for t in _tokens(c["citacao"] or c["trecho_documento"]) if len(t) > 4}
+    note = sorted(
+        range(len(pages)),
+        key=lambda i: -len(target & set(_tokens(pages[i]))),
     )
-    escolhidas, soma = [], 0
-    for i in nota:
-        if soma + len(paginas[i]) > LIMITE_PDF:
+    chosen, soma = [], 0
+    for i in note:
+        if soma + len(pages[i]) > LIMIT_PDF:
             continue
-        escolhidas.append(i)
-        soma += len(paginas[i])
-    return sorted(escolhidas)
+        chosen.append(i)
+        soma += len(pages[i])
+    return sorted(chosen)
 
 
-def prompt_localizar(ref: dict[str, Any], citacoes: list[dict[str, Any]], paginas: list[str],
-                     indices: list[int]) -> str:
+def prompt_locate(ref: dict[str, Any], citacoes: list[dict[str, Any]], pages: list[str],
+                     indexes: list[int]) -> str:
     cits = "\n\n".join(
         f"[{n}] tipo: {c['tipo']}" + (f" · página citada: {c['pagina']}" if c["pagina"] else "")
         + f"\nno trabalho: {c['trecho_documento']}"
         + (f"\ntexto citado: {c['citacao']}" if c["citacao"] else "")
         for n, c in enumerate(citacoes)
     )
-    obra = "\n\n".join(f"=== Página {i + 1} ===\n{paginas[i].strip()}" for i in indices)
+    work = "\n\n".join(f"=== Página {i + 1} ===\n{pages[i].strip()}" for i in indexes)
     return (
         f"Obra: {ref['referencia']}\n\n<citacoes>\n{cits}\n</citacoes>\n\n"
-        f"<obra>\n{obra}\n</obra>\n\nAche na obra o trecho de cada citação (`c` = número entre "
+        f"<obra>\n{work}\n</obra>\n\nAche na obra o trecho de cada citação (`c` = número entre "
         "colchetes)."
     )
 
@@ -454,20 +454,20 @@ def prompt_localizar(ref: dict[str, Any], citacoes: list[dict[str, Any]], pagina
 # --- processo ---
 
 
-def _tipo_citacao(c: dict[str, Any], texto: str) -> str:
+def _kind_quote(c: dict[str, Any], text: str) -> str:
     if c["tipo"] == "apud":
         return "Citação de citação (apud)"
     if c["tipo"] == "indireta":
         return "Indireta (paráfrase)"
-    return "Direta longa (mais de 3 linhas)" if len(texto) > 240 else "Direta curta (até 3 linhas)"
+    return "Direta longa (mais de 3 linhas)" if len(text) > 240 else "Direta curta (até 3 linhas)"
 
 
-def _id_destaque(projeto_id: str, c: dict[str, Any]) -> str:
-    chave = f"{c['trecho_documento']}|{c['citacao']}|{c['ref_texto']}"
-    return f"map-{projeto_id}-{hashlib.sha1(chave.encode()).hexdigest()[:12]}"
+def _id_highlight(project_id: str, c: dict[str, Any]) -> str:
+    key = f"{c['trecho_documento']}|{c['citacao']}|{c['ref_texto']}"
+    return f"map-{project_id}-{hashlib.sha1(key.encode()).hexdigest()[:12]}"
 
 
-class Mapeador:
+class Mapper:
     """Roda um mapeamento por projeto por vez, em segundo plano; o estado fica no projeto
     (`mapeamento`), para o app acompanhar."""
 
@@ -476,8 +476,8 @@ class Mapeador:
         self.rodando: dict[str, asyncio.Task[None]] = {}
 
     @property
-    def biblioteca(self) -> Biblioteca:
-        b: Biblioteca = self.app.state.biblioteca
+    def biblioteca(self) -> Collection:
+        b: Collection = self.app.state.biblioteca
         return b
 
     @property
@@ -485,51 +485,51 @@ class Mapeador:
         return self.app.state.estudos
 
     @property
-    def claude(self) -> Reescrita:
-        r: Reescrita = self.app.state.reescrita
+    def claude(self) -> Rewrite:
+        r: Rewrite = self.app.state.reescrita
         return r
 
-    def estado(self, projeto_id: str) -> dict[str, Any]:
-        projeto = self.estudos.projetos.obter(projeto_id)
-        m: dict[str, Any] = dict(projeto.get("mapeamento") or {})
-        if m.get("estado") == "rodando" and projeto_id not in self.rodando:
-            m = self._salvar(projeto_id, estado="erro", erro="Interrompido (servidor reiniciou).")
+    def estado(self, project_id: str) -> dict[str, Any]:
+        project = self.estudos.projetos.obter(project_id)
+        m: dict[str, Any] = dict(project.get("mapeamento") or {})
+        if m.get("estado") == "rodando" and project_id not in self.rodando:
+            m = self._salvar(project_id, estado="erro", erro="Interrompido (servidor reiniciou).")
         return m
 
-    def _salvar(self, projeto_id: str, **campos: Any) -> dict[str, Any]:
+    def _salvar(self, project_id: str, **fields: Any) -> dict[str, Any]:
         with self.estudos.projetos.trava:
-            projeto = self.estudos.projetos.obter(projeto_id)
-            m = {**(projeto.get("mapeamento") or {}), **campos}
-            self.estudos.projetos.editar(projeto_id, {"mapeamento": m})
+            project = self.estudos.projetos.obter(project_id)
+            m = {**(project.get("mapeamento") or {}), **fields}
+            self.estudos.projetos.editar(project_id, {"mapeamento": m})
         return m
 
-    def iniciar(self, projeto_id: str, documento_id: str) -> dict[str, Any]:
-        if projeto_id in self.rodando:
+    def iniciar(self, project_id: str, documento_id: str) -> dict[str, Any]:
+        if project_id in self.rodando:
             raise HTTPException(409, "O mapeamento deste projeto já está rodando.")
-        motivo = self.claude.disponivel()
-        if motivo or self.claude.executar_json is None:
-            raise HTTPException(503, motivo or "Claude indisponível neste servidor.")
+        reason = self.claude.disponivel()
+        if reason or self.claude.executar_json is None:
+            raise HTTPException(503, reason or "Claude indisponível neste servidor.")
         meta = self.biblioteca.obter(documento_id)
         m = self._salvar(
-            projeto_id,
+            project_id,
             documento_id=documento_id,
             documento_titulo=meta["titulo"],
             estado="rodando",
             etapa="Lendo o documento",
             erro=None,
-            iniciado=_agora(),
+            iniciado=_now(),
         )
-        tarefa = asyncio.create_task(self._rodar(projeto_id, documento_id))
-        self.rodando[projeto_id] = tarefa
-        tarefa.add_done_callback(lambda _t: self.rodando.pop(projeto_id, None))
+        task = asyncio.create_task(self._rodar(project_id, documento_id))
+        self.rodando[project_id] = task
+        task.add_done_callback(lambda _t: self.rodando.pop(project_id, None))
         return m
 
-    async def _claude(self, prompt: str, sistema: str, esquema: dict[str, Any],
-                      limite_s: float, ferramentas: str = "") -> dict[str, Any]:
+    async def _claude(self, prompt: str, system: str, schema: dict[str, Any],
+                      limit_s: float, ferramentas: str = "") -> dict[str, Any]:
         assert self.claude.executar_json is not None
         return await self.claude.executar_json({
-            "prompt": prompt, "sistema": sistema, "esquema": esquema,
-            "effort": "high", "limite_s": limite_s, "modelo": MODELO,
+            "prompt": prompt, "sistema": system, "esquema": schema,
+            "effort": "high", "limite_s": limit_s, "modelo": MODEL,
             "ferramentas": ferramentas,
         })
 
@@ -537,66 +537,66 @@ class Mapeador:
         meta = self.biblioteca.obter(documento_id)
         if meta.get("extensao") == "docx":
             original, _ext = self.biblioteca.caminho_original(documento_id)
-            return texto_docx(original.read_bytes())
+            return text_docx(original.read_bytes())
         pdf = self.biblioteca.caminho_pdf(documento_id)
-        return "\n\n".join(paginas_pdf(pdf)) if pdf else ""
+        return "\n\n".join(pages_pdf(pdf)) if pdf else ""
 
-    async def _rodar(self, projeto_id: str, documento_id: str) -> None:
+    async def _rodar(self, project_id: str, documento_id: str) -> None:
         try:
-            await self._mapear(projeto_id, documento_id)
+            await self._mapear(project_id, documento_id)
         except Exception as e:  # noqa: BLE001 — qualquer falha vira estado legível no app
-            logger.exception("mapeamento do projeto %s falhou", projeto_id)
-            self._salvar(projeto_id, estado="erro", erro=str(e) or type(e).__name__,
-                         concluido=_agora())
+            logger.exception("mapeamento do projeto %s falhou", project_id)
+            self._salvar(project_id, estado="erro", erro=str(e) or type(e).__name__,
+                         concluido=_now())
 
     def _catalogo(self, documento_id: str) -> list[dict[str, Any]]:
-        fichas = {
+        cards = {
             x["arquivo_id"]: x for x in self.estudos.leituras.ler() if x.get("arquivo_id")
         }
-        catalogo = []
+        catalog = []
         for meta in self.biblioteca.listar():
             if meta["id"] == documento_id or meta.get("status") != "pronto":
                 continue
             pdf = self.biblioteca.caminho_pdf(meta["id"])
             if pdf is None or meta.get("tipo") not in ("pdf", "documento"):
                 continue
-            paginas = paginas_pdf(pdf)
-            inicio = re.sub(r"\s+", " ", " ".join(paginas[:2]))[:LIMITE_CATALOGO]
-            f = fichas.get(meta["id"]) or {}
-            ficha = " · ".join(str(f.get(k)) for k in ("autor", "ano", "titulo") if f.get(k))
-            catalogo.append({
-                "id": meta["id"], "titulo": meta["titulo"], "ficha": ficha, "inicio": inicio,
+            pages = pages_pdf(pdf)
+            start = re.sub(r"\s+", " ", " ".join(pages[:2]))[:LIMIT_CATALOG]
+            f = cards.get(meta["id"]) or {}
+            card = " · ".join(str(f.get(k)) for k in ("autor", "ano", "titulo") if f.get(k))
+            catalog.append({
+                "id": meta["id"], "titulo": meta["titulo"], "ficha": card, "inicio": start,
             })
-        return catalogo
+        return catalog
 
-    async def _mapear(self, projeto_id: str, documento_id: str) -> None:
-        documento = await asyncio.to_thread(self._texto_documento, documento_id)
-        if not documento.strip():
+    async def _mapear(self, project_id: str, documento_id: str) -> None:
+        document = await asyncio.to_thread(self._texto_documento, documento_id)
+        if not document.strip():
             raise RuntimeError("O documento não tem texto selecionável (PDF escaneado?).")
-        self._salvar(projeto_id, etapa="Montando o catálogo dos PDFs da biblioteca")
-        catalogo = await asyncio.to_thread(self._catalogo, documento_id)
-        ids = {c["id"] for c in catalogo}
-        self._salvar(projeto_id, etapa="Lendo as referências do documento")
-        r = await self._claude(prompt_referencias(documento, catalogo), SISTEMA_REFERENCIAS,
-                               ESQUEMA_REFERENCIAS, 900)
+        self._salvar(project_id, etapa="Montando o catálogo dos PDFs da biblioteca")
+        catalog = await asyncio.to_thread(self._catalogo, documento_id)
+        ids = {c["id"] for c in catalog}
+        self._salvar(project_id, etapa="Lendo as referências do documento")
+        r = await self._claude(prompt_references(document, catalog), SYSTEM_REFERENCES,
+                               SCHEMA_REFERENCES, 900)
         refs = {int(x["n"]): x for x in r.get("referencias") or []}
         if not refs:
             raise RuntimeError("Nenhuma citação de obra encontrada no documento.")
 
-        partes = dividir_documento(documento)
-        citacoes: list[dict[str, Any]] = []
-        for k, parte in enumerate(partes, 1):
-            self._salvar(projeto_id, etapa=f"Lendo as citações do texto ({k}/{len(partes)})")
-            rc = await self._claude(prompt_citacoes(parte, refs, k, len(partes)),
-                                    SISTEMA_CITACOES, ESQUEMA_CITACOES, 900)
-            citacoes += [c for c in rc.get("citacoes") or [] if int(c.get("ref", -1)) in refs]
-        for c in citacoes:
+        parts = divide_document(document)
+        quotes: list[dict[str, Any]] = []
+        for k, part in enumerate(parts, 1):
+            self._salvar(project_id, etapa=f"Lendo as citações do texto ({k}/{len(parts)})")
+            rc = await self._claude(prompt_quotes(part, refs, k, len(parts)),
+                                    SYSTEM_QUOTES, SCHEMA_QUOTES, 900)
+            quotes += [c for c in rc.get("citacoes") or [] if int(c.get("ref", -1)) in refs]
+        for c in quotes:
             c["ref_texto"] = refs[int(c["ref"])]["referencia"]
         titulos = {m["id"]: m["titulo"] for m in self.biblioteca.listar()}
-        referencias = []
+        references = []
         for n, ref in sorted(refs.items()):
             aid = ref.get("arquivo_id") or ""
-            referencias.append({
+            references.append({
                 "n": n,
                 "referencia": ref["referencia"],
                 "autor_citacao": ref["autor_citacao"],
@@ -605,75 +605,75 @@ class Mapeador:
                 "fora_da_lista": bool(ref.get("fora_da_lista")),
                 "arquivo_id": aid if aid in ids else None,
                 "arquivo_titulo": titulos.get(aid) if aid in ids else None,
-                "citacoes": sum(int(c["ref"]) == n for c in citacoes),
+                "citacoes": sum(int(c["ref"]) == n for c in quotes),
                 "marcadas": 0,
                 "nao_localizadas": [],
             })
-        self._salvar(projeto_id, referencias=referencias, citacoes=len(citacoes))
-        await self._baixar_abertos(projeto_id, referencias, citacoes)
+        self._salvar(project_id, referencias=references, citacoes=len(quotes))
+        await self._baixar_abertos(project_id, references, quotes)
 
         marcadas = 0
-        for k, ref in enumerate(referencias):
+        for k, ref in enumerate(references):
             if not ref["arquivo_id"] or not ref["citacoes"]:
                 continue
             self._salvar(
-                projeto_id,
+                project_id,
                 etapa=f"Procurando as citações em {ref['autor_citacao']} {ref['ano']} "
-                f"({k + 1}/{len(referencias)})",
+                f"({k + 1}/{len(references)})",
             )
-            cits = [c for c in citacoes if int(c["ref"]) == ref["n"]]
+            cits = [c for c in quotes if int(c["ref"]) == ref["n"]]
             try:
-                await self._marcar_obra(projeto_id, ref, cits)
+                await self._marcar_obra(project_id, ref, cits)
             except Exception as e:  # noqa: BLE001 — uma obra com problema não para as outras
                 logger.exception("marcação em %s falhou", ref["arquivo_id"])
                 ref["nao_localizadas"].append(f"Falhou nesta obra ({e}); toque em Refazer.")
             marcadas += ref["marcadas"]
-            self._salvar(projeto_id, referencias=referencias, marcadas=marcadas)
+            self._salvar(project_id, referencias=references, marcadas=marcadas)
 
-        self._ficha_leituras(referencias)
-        pendentes = [x for x in referencias if not x["arquivo_id"]]
-        self._tarefas_download(projeto_id, referencias)
+        self._ficha_leituras(references)
+        pending = [x for x in references if not x["arquivo_id"]]
+        self._tarefas_download(project_id, references)
         self._salvar(
-            projeto_id,
+            project_id,
             estado="pronto",
             etapa="",
-            referencias=referencias,
-            citacoes=len(citacoes),
+            referencias=references,
+            citacoes=len(quotes),
             marcadas=marcadas,
-            pendentes=len(pendentes),
-            concluido=_agora(),
+            pendentes=len(pending),
+            concluido=_now(),
         )
 
-    async def _baixar_abertos(self, projeto_id: str, referencias: list[dict[str, Any]],
+    async def _baixar_abertos(self, project_id: str, referencias: list[dict[str, Any]],
                               citacoes: list[dict[str, Any]]) -> None:
         """Para cada referência: DOI e link do artigo (para a planilha citar com o link) e, se
         ainda não tem PDF, baixa sozinho o de acesso aberto (OpenAlex; sem ele, o Claude busca
         na web) para Arquivos (pasta "Referências"). As fechadas ficam como pendência."""
-        trava = asyncio.Semaphore(BUSCAS_SIMULTANEAS)
-        feitas = 0
+        lock = asyncio.Semaphore(SEARCHES_CONCURRENT)
+        done = 0
 
         async def uma(ref: dict[str, Any]) -> None:
-            nonlocal feitas
-            async with trava:
+            nonlocal done
+            async with lock:
                 try:
                     await self._buscar_obra(ref, [c for c in citacoes
                                                   if int(c["ref"]) == ref["n"]])
                 except Exception:  # noqa: BLE001 — falha numa obra não para o mapeamento
                     logger.exception("busca da referência %r falhou", ref.get("titulo"))
-                feitas += 1
-                self._salvar(projeto_id, referencias=referencias,
+                done += 1
+                self._salvar(project_id, referencias=referencias,
                              etapa=f"Buscando os artigos e os PDFs abertos "
-                             f"({feitas}/{len(referencias)})")
+                             f"({done}/{len(referencias)})")
 
-        self._salvar(projeto_id,
+        self._salvar(project_id,
                      etapa=f"Buscando os artigos e os PDFs abertos (0/{len(referencias)})")
         await asyncio.gather(*(uma(r) for r in referencias))
 
     async def _buscar_obra(self, ref: dict[str, Any], cits: list[dict[str, Any]]) -> None:
-        baixar = not ref["arquivo_id"]
-        achado = await buscar_pdf_aberto(ref, baixar=baixar)
-        if (baixar and achado["pdf"] is None) or not achado["link"]:
-            r = await self._claude(prompt_buscar(ref, cits), SISTEMA_BUSCAR, ESQUEMA_BUSCAR,
+        download = not ref["arquivo_id"]
+        found = await fetch_pdf_open(ref, baixar=download)
+        if (download and found["pdf"] is None) or not found["link"]:
+            r = await self._claude(prompt_fetch(ref, cits), SYSTEM_FETCH, SCHEMA_FETCH,
                                    420, ferramentas="WebSearch,WebFetch")
             if r.get("encontrado"):
                 if r.get("titulo") and not ref.get("titulo"):
@@ -681,49 +681,49 @@ class Mapeador:
                 if r.get("referencia_completa") and ref.get("fora_da_lista"):
                     ref["referencia_completa"] = r["referencia_completa"]
                 extra = f" {r['doi']}" if r.get("doi") else ""
-                novo = await buscar_pdf_aberto(
+                new = await fetch_pdf_open(
                     {**ref, "referencia": ref["referencia"] + extra},
-                    extras=r.get("urls_pdf") or [], baixar=baixar,
+                    extras=r.get("urls_pdf") or [], baixar=download,
                 )
-                achado = {k: achado[k] or novo[k] for k in achado}
-                if not achado["link"] and r.get("urls_pdf"):
-                    achado["link"] = r["urls_pdf"][0]
-        ref["doi"] = ref.get("doi") or achado["doi"]
-        ref["link"] = ref.get("link") or achado["link"] or achado["url_pdf"]
-        if achado["pdf"] is None:
+                found = {k: found[k] or new[k] for k in found}
+                if not found["link"] and r.get("urls_pdf"):
+                    found["link"] = r["urls_pdf"][0]
+        ref["doi"] = ref.get("doi") or found["doi"]
+        ref["link"] = ref.get("link") or found["link"] or found["url_pdf"]
+        if found["pdf"] is None:
             return
-        nome = re.sub(r'[\\/:*?"<>|\s]+', " ",
+        name = re.sub(r'[\\/:*?"<>|\s]+', " ",
                       f"{ref['autor_citacao']} {ref['ano']} - {ref['titulo']}").strip()[:150]
         try:
             meta = await asyncio.to_thread(
-                self.biblioteca.adicionar, f"{nome or 'referencia'}.pdf", achado["pdf"],
+                self.biblioteca.adicionar, f"{name or 'referencia'}.pdf", found["pdf"],
                 "Referências",
             )
-        except ArquivoInvalido:
+        except FileInvalid:
             return
         ref["arquivo_id"] = meta["id"]
         ref["arquivo_titulo"] = meta["titulo"]
         ref["baixado_auto"] = True
-        ref["url_pdf"] = achado["url_pdf"]
+        ref["url_pdf"] = found["url_pdf"]
 
-    async def _marcar_obra(self, projeto_id: str, ref: dict[str, Any],
+    async def _marcar_obra(self, project_id: str, ref: dict[str, Any],
                            cits: list[dict[str, Any]]) -> int:
         aid = ref["arquivo_id"]
         pdf = self.biblioteca.caminho_pdf(aid)
         if pdf is None:
             return 0
-        paginas = await asyncio.to_thread(paginas_pdf, pdf)
+        pages = await asyncio.to_thread(pages_pdf, pdf)
         existentes = {d["id"] for d in self.biblioteca.anotacoes(aid)["destaques"]}
-        a_fazer = [c for c in cits if _id_destaque(projeto_id, c) not in existentes]
+        a_fazer = [c for c in cits if _id_highlight(project_id, c) not in existentes]
         ref["marcadas"] = len(cits) - len(a_fazer)  # já marcadas num mapeamento anterior
-        if not a_fazer or not paginas:
-            if not paginas:
+        if not a_fazer or not pages:
+            if not pages:
                 ref["nao_localizadas"] = ["PDF sem texto (escaneado?): marque à mão."]
             return 0
-        indices = _paginas_provaveis(paginas, a_fazer)
-        r = await self._claude(prompt_localizar(ref, a_fazer, paginas, indices),
-                               SISTEMA_LOCALIZAR, ESQUEMA_LOCALIZAR, 600)
-        novos = []
+        indexes = _pages_likely(pages, a_fazer)
+        r = await self._claude(prompt_locate(ref, a_fazer, pages, indexes),
+                               SYSTEM_LOCATE, SCHEMA_LOCATE, 600)
+        new = []
         for t in r.get("trechos") or []:
             n = int(t.get("c", -1))
             if not 0 <= n < len(a_fazer):
@@ -734,42 +734,42 @@ class Mapeador:
                     f"{c['trecho_documento'][:160]} — {t.get('observacao') or 'não achado'}"
                 )
                 continue
-            pagina = max(0, min(len(paginas) - 1, int(t.get("pagina") or 1) - 1))
-            retangulos, texto_pdf, cobertura = [], "", 0.0
-            for p in dict.fromkeys([pagina, pagina + 1, pagina - 1]):
-                if not 0 <= p < len(paginas):
+            page = max(0, min(len(pages) - 1, int(t.get("pagina") or 1) - 1))
+            retangulos, text_pdf, coverage = [], "", 0.0
+            for p in dict.fromkeys([page, page + 1, page - 1]):
+                if not 0 <= p < len(pages):
                     continue
-                pal = await asyncio.to_thread(palavras_pdf, pdf, p)
-                rr, tt, cc = localizar(pal, t["trecho"])
-                if cc > cobertura:
-                    retangulos, texto_pdf, cobertura, pagina = rr, tt, cc, p
+                pal = await asyncio.to_thread(words_pdf, pdf, p)
+                rr, tt, cc = locate(pal, t["trecho"])
+                if cc > coverage:
+                    retangulos, text_pdf, coverage, page = rr, tt, cc, p
                 if cc >= 0.9:
                     break
-            achou = cobertura >= 0.6
-            comentario = (
+            found = coverage >= 0.6
+            comment = (
                 f"[pré-TCC · {c['secao'] or 'sem seção'}] {c['trecho_documento']}"
-                + ("" if achou else "\n(Marcação aproximada: confira o trecho nesta página.)")
+                + ("" if found else "\n(Marcação aproximada: confira o trecho nesta página.)")
             )
-            novos.append({
-                "id": _id_destaque(projeto_id, c),
-                "pagina": pagina,
-                "texto": texto_pdf if achou else t["trecho"].strip(),
-                "cor": COR_DESTAQUE,
-                "retangulos": retangulos if achou else [],
-                "comentario": comentario,
-                "criado": _agora(),
-                "projetos": [projeto_id],
+            new.append({
+                "id": _id_highlight(project_id, c),
+                "pagina": page,
+                "texto": text_pdf if found else t["trecho"].strip(),
+                "cor": COLOR_HIGHLIGHT,
+                "retangulos": retangulos if found else [],
+                "comentario": comment,
+                "criado": _now(),
+                "projetos": [project_id],
             })
-            c["_tipo_citacao"] = _tipo_citacao(c, t["trecho"])
+            c["_tipo_citacao"] = _kind_quote(c, t["trecho"])
             c["_confianca"] = t.get("confianca") or ""
-        if novos:
-            self._gravar_destaques(aid, novos)
-            por_id = {d["id"]: d for d in novos}
+        if new:
+            self._gravar_destaques(aid, new)
+            by_id = {d["id"]: d for d in new}
             for c in a_fazer:
-                d = por_id.get(_id_destaque(projeto_id, c))
+                d = by_id.get(_id_highlight(project_id, c))
                 if d is None:
                     continue
-                self.estudos.classificar(projeto_id, d["id"], {
+                self.estudos.classificar(project_id, d["id"], {
                     "secao": c["secao"],
                     "tipo_citacao": c["_tipo_citacao"],
                     "status_uso": "Usado",
@@ -779,20 +779,20 @@ class Mapeador:
                         f"Página citada: {c['pagina'] or '—'}."
                     ),
                 })
-        ref["marcadas"] += len(novos)
-        return len(novos)
+        ref["marcadas"] += len(new)
+        return len(new)
 
-    def _gravar_destaques(self, arquivo_id: str, novos: list[dict[str, Any]]) -> None:
+    def _gravar_destaques(self, file_id: str, new: list[dict[str, Any]]) -> None:
         for _ in range(5):
-            atuais = self.biblioteca.anotacoes(arquivo_id)
-            ids = {d["id"] for d in atuais["destaques"]}
-            dados = {**atuais, "destaques": [
-                *atuais["destaques"], *(d for d in novos if d["id"] not in ids)
+            current = self.biblioteca.anotacoes(file_id)
+            ids = {d["id"] for d in current["destaques"]}
+            data = {**current, "destaques": [
+                *current["destaques"], *(d for d in new if d["id"] not in ids)
             ]}
             try:
-                self.biblioteca.salvar_anotacoes(arquivo_id, atuais["versao"], dados)
+                self.biblioteca.salvar_anotacoes(file_id, current["versao"], data)
                 return
-            except AnotacoesConflito:
+            except AnnotationsConflict:
                 continue
         raise RuntimeError("Não consegui gravar as marcações (arquivo sendo editado).")
 
@@ -802,62 +802,62 @@ class Mapeador:
         planilha citarem certo e com o link do artigo."""
         from estudos.studies import AREAS
 
-        fichas = {
+        cards = {
             x["arquivo_id"]: x for x in self.estudos.leituras.ler() if x.get("arquivo_id")
         }
         for ref in referencias:
             if not ref["arquivo_id"]:
                 continue
-            referencia = ref.get("referencia_completa") or ref["referencia"]
-            ficha = fichas.get(ref["arquivo_id"])
-            if ficha is not None:
-                faltam = {
+            reference = ref.get("referencia_completa") or ref["referencia"]
+            card = cards.get(ref["arquivo_id"])
+            if card is not None:
+                missing = {
                     k: v for k, v in (("doi", ref.get("doi") or ""), ("url", ref.get("link") or ""),
-                                      ("referencia", referencia), ("ano", ref["ano"]))
-                    if v and not ficha.get(k)
+                                      ("referencia", reference), ("ano", ref["ano"]))
+                    if v and not card.get(k)
                 }
-                if faltam:
-                    self.estudos.editar_leitura(ficha["id"], faltam)
+                if missing:
+                    self.estudos.editar_leitura(card["id"], missing)
                 continue
-            fichas[ref["arquivo_id"]] = self.estudos.criar_leitura({
-                "titulo": ref["titulo"] or ref["arquivo_titulo"] or referencia[:200],
+            cards[ref["arquivo_id"]] = self.estudos.criar_leitura({
+                "titulo": ref["titulo"] or ref["arquivo_titulo"] or reference[:200],
                 "autor": ref["autor_citacao"],
                 "tipo": "artigo",
                 "area": AREAS[0],
                 "status": "lido",
                 "arquivo_id": ref["arquivo_id"],
                 "ano": ref["ano"],
-                "referencia": referencia,
+                "referencia": reference,
                 "doi": ref.get("doi") or "",
                 "url": ref.get("link") or "",
             })
 
-    def _tarefas_download(self, projeto_id: str, referencias: list[dict[str, Any]]) -> None:
+    def _tarefas_download(self, project_id: str, referencias: list[dict[str, Any]]) -> None:
         """Pendência de download no Quadro de Rotinas para cada referência sem PDF; a que já
         tem PDF é concluída."""
-        quadro = getattr(self.app.state, "quadro", None)
-        if quadro is None:
+        frame = getattr(self.app.state, "quadro", None)
+        if frame is None:
             return
-        projeto = self.estudos.projetos.obter(projeto_id)
-        tarefas = {t["titulo"]: t for t in quadro.listar() if TAG_TAREFA in (t.get("tags") or [])}
+        project = self.estudos.projetos.obter(project_id)
+        tasks = {t["titulo"]: t for t in frame.listar() if TAG_TASK in (t.get("tags") or [])}
         for ref in referencias:
-            titulo = f"Baixar PDF: {ref['autor_citacao']} ({ref['ano']}) — {ref['titulo']}"[:300]
-            t = tarefas.get(titulo)
+            title = f"Baixar PDF: {ref['autor_citacao']} ({ref['ano']}) — {ref['titulo']}"[:300]
+            t = tasks.get(title)
             if ref["arquivo_id"]:
                 if t and t.get("coluna") != "concluida":
-                    quadro.mover(t["id"], "concluida")
+                    frame.mover(t["id"], "concluida")
                 continue
             if t is None:
-                quadro.criar({
-                    "titulo": titulo,
+                frame.criar({
+                    "titulo": title,
                     "descricao": (
-                        f"Referência do projeto de leitura “{projeto.get('nome', '')}” sem PDF "
+                        f"Referência do projeto de leitura “{project.get('nome', '')}” sem PDF "
                         f"nos Arquivos ({ref['citacoes']} citação(ões) no documento).\n\n"
                         f"{ref['referencia']}\n\nBaixe o PDF, envie para Arquivos e toque em "
                         "“Refazer mapeamento” no projeto."
                     ),
                     "prioridade": "alta" if ref["citacoes"] else "media",
-                    "tags": [TAG_TAREFA, "estudos"],
+                    "tags": [TAG_TASK, "estudos"],
                 })
 
 
@@ -870,75 +870,75 @@ router = APIRouter(
 )
 
 
-def get_mapeador(request: Request) -> Mapeador:
-    m: Mapeador | None = getattr(request.app.state, "mapeador", None)
+def get_mapper(request: Request) -> Mapper:
+    m: Mapper | None = getattr(request.app.state, "mapeador", None)
     if m is None:
-        m = request.app.state.mapeador = Mapeador(request.app)
+        m = request.app.state.mapeador = Mapper(request.app)
     return m
 
 
-MapeadorDep = Annotated[Mapeador, Depends(get_mapeador)]
+MapperDep = Annotated[Mapper, Depends(get_mapper)]
 
 
-def _projeto(m: Mapeador, id_: str) -> dict[str, Any]:
-    from estudos.studies import NaoEncontrado
+def _project(m: Mapper, id_: str) -> dict[str, Any]:
+    from estudos.studies import NotFound
 
     try:
-        projeto: dict[str, Any] = m.estudos.projetos.obter(id_)
-    except NaoEncontrado as e:
+        project: dict[str, Any] = m.estudos.projetos.obter(id_)
+    except NotFound as e:
         raise HTTPException(404, "Projeto não encontrado") from e
-    return projeto
+    return project
 
 
 @router.get("/{id_}/mapeamento")
-def estado(id_: str, m: MapeadorDep) -> Any:
-    _projeto(m, id_)
+def state(id_: str, m: MapperDep) -> Any:
+    _project(m, id_)
     return m.estado(id_)
 
 
 @router.post("/{id_}/documento", status_code=202)
-async def anexar(
-    id_: str, m: MapeadorDep, tarefas: BackgroundTasks, arquivo: Annotated[UploadFile, File()]
+async def attach(
+    id_: str, m: MapperDep, tarefas: BackgroundTasks, arquivo: Annotated[UploadFile, File()]
 ) -> Any:
     """Guarda o documento nos Arquivos (pasta com o nome do projeto; um documento já anexado é
     substituído pela versão nova) e começa o mapeamento."""
-    projeto = _projeto(m, id_)
-    nome = arquivo.filename or "documento.docx"
-    if Path(nome).suffix.lower() not in (".docx", ".pdf"):
+    project = _project(m, id_)
+    name = arquivo.filename or "documento.docx"
+    if Path(name).suffix.lower() not in (".docx", ".pdf"):
         raise HTTPException(422, "Envie o documento em .docx ou PDF.")
-    conteudo = await arquivo.read()
-    anterior = (projeto.get("mapeamento") or {}).get("documento_id")
+    content = await arquivo.read()
+    previous = (project.get("mapeamento") or {}).get("documento_id")
     try:
-        atual = m.biblioteca.obter(anterior) if anterior else None
-    except ArquivoNaoEncontrado:
-        atual = None  # o documento anterior foi excluído dos Arquivos
+        current = m.biblioteca.obter(previous) if previous else None
+    except FileNotFound:
+        current = None  # o documento anterior foi excluído dos Arquivos
     try:
-        if atual and atual.get("extensao") == "docx" and nome.lower().endswith(".docx"):
-            meta = m.biblioteca.substituir(anterior, conteudo)
+        if current and current.get("extensao") == "docx" and name.lower().endswith(".docx"):
+            meta = m.biblioteca.substituir(previous, content)
         else:
-            meta = m.biblioteca.adicionar(nome, conteudo, pasta=projeto.get("nome", ""))
-    except ArquivoInvalido as e:
+            meta = m.biblioteca.adicionar(name, content, pasta=project.get("nome", ""))
+    except FileInvalid as e:
         raise HTTPException(422, str(e)) from e
     if meta.get("status") == "convertendo":
         tarefas.add_task(m.biblioteca.converter, meta["id"])
     return m.iniciar(id_, meta["id"])
 
 
-class PedidoMapeamento(BaseModel):
+class RequestMapping(BaseModel):
     documento_id: str | None = None
     """Outro .docx/PDF que já está nos Arquivos; vazio = o documento já anexado."""
 
 
 @router.post("/{id_}/mapeamento", status_code=202)
-async def refazer(id_: str, m: MapeadorDep, pedido: PedidoMapeamento | None = None) -> Any:
-    projeto = _projeto(m, id_)
+async def redo(id_: str, m: MapperDep, pedido: RequestMapping | None = None) -> Any:
+    project = _project(m, id_)
     doc = (pedido.documento_id if pedido else None) or \
-        (projeto.get("mapeamento") or {}).get("documento_id")
+        (project.get("mapeamento") or {}).get("documento_id")
     if not doc:
         raise HTTPException(422, "Anexe o documento (.docx ou PDF) primeiro.")
     try:
         meta = m.biblioteca.obter(doc)
-    except ArquivoNaoEncontrado as e:
+    except FileNotFound as e:
         raise HTTPException(404, "Documento não está mais nos Arquivos.") from e
     if meta.get("extensao") not in ("docx", "pdf"):
         raise HTTPException(422, "O documento precisa ser .docx ou PDF.")

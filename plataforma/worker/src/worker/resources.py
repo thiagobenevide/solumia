@@ -11,22 +11,22 @@ from typing import Any
 def _ram_pct() -> float | None:
     try:
         info = dict(
-            linha.split(":", 1) for linha in Path("/proc/meminfo").read_text().splitlines()
+            line.split(":", 1) for line in Path("/proc/meminfo").read_text().splitlines()
         )
         total = int(info["MemTotal"].split()[0])
-        livre = int(info["MemAvailable"].split()[0])
+        free = int(info["MemAvailable"].split()[0])
     except (OSError, KeyError, ValueError):
         return None
-    return round(100 * (total - livre) / total, 1)
+    return round(100 * (total - free) / total, 1)
 
 
 def _gpus() -> list[dict[str, Any]]:
     if not shutil.which("nvidia-smi"):
         return []
-    campos = "name,utilization.gpu,memory.used,memory.total,temperature.gpu"
+    fields = "name,utilization.gpu,memory.used,memory.total,temperature.gpu"
     try:
-        saida = subprocess.run(
-            ["nvidia-smi", f"--query-gpu={campos}", "--format=csv,noheader,nounits"],
+        output = subprocess.run(
+            ["nvidia-smi", f"--query-gpu={fields}", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
             timeout=3,
@@ -35,12 +35,12 @@ def _gpus() -> list[dict[str, Any]]:
     except (OSError, subprocess.SubprocessError):
         return []
     gpus = []
-    for linha in saida.strip().splitlines():
-        nome, uso, usada, total, temp = (c.strip() for c in linha.split(","))
+    for line in output.strip().splitlines():
+        name, usage, usada, total, temp = (c.strip() for c in line.split(","))
         gpus.append(
             {
-                "nome": nome,
-                "uso_pct": float(uso),
+                "nome": name,
+                "uso_pct": float(usage),
                 "mem_usada_mb": float(usada),
                 "mem_total_mb": float(total),
                 "temp_c": float(temp),
@@ -49,7 +49,7 @@ def _gpus() -> list[dict[str, Any]]:
     return gpus
 
 
-def coletar() -> dict[str, Any]:
+def collect() -> dict[str, Any]:
     try:
         cpu = round(100 * os.getloadavg()[0] / (os.cpu_count() or 1), 1)
     except OSError:

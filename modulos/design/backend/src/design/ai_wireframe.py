@@ -17,12 +17,12 @@ import uuid
 import zipfile
 from typing import Any
 
-FORMATO = "agent-wireframe"
-VERSAO = 1
-ESTADOS = ("existe", "proposto", "divergencia")
-CORES = ("azul", "ambar", "vermelho", "verde", "roxo", "ciano", "cinza")
-CORES_TEXTO = ("tinta", "suave", "branco", *CORES)
-LEGENDA = {
+FORMAT = "agent-wireframe"
+VERSION = 1
+STATES = ("existe", "proposto", "divergencia")
+COLORS = ("azul", "ambar", "vermelho", "verde", "roxo", "ciano", "cinza")
+COLORS_TEXT = ("tinta", "suave", "branco", *COLORS)
+CAPTION = {
     "existe": "azul: já existe no sistema",
     "proposto": "âmbar tracejado: proposto (ainda não existe)",
     "divergencia": "vermelho tracejado: divergência entre o que existe e o esperado",
@@ -30,14 +30,14 @@ LEGENDA = {
 _STR = {"type": "string"}
 _BOOL = {"type": "boolean"}
 _NUM = {"type": "number"}
-_ITEM_ESTADO = {
+_ITEM_STATE = {
     "type": "object",
     "required": ["texto"],
-    "properties": {"texto": _STR, "estado": {"enum": [*ESTADOS, "desabilitado"]}},
+    "properties": {"texto": _STR, "estado": {"enum": [*STATES, "desabilitado"]}},
 }
 
 # Catálogo: tipo → (descrição, props). É a fonte do schema, do AGENTS.md e da validação.
-COMPONENTES: dict[str, tuple[str, dict[str, Any]]] = {
+COMPONENTS: dict[str, tuple[str, dict[str, Any]]] = {
     "texto": (
         "Texto solto (títulos, legendas).",
         {
@@ -45,7 +45,7 @@ COMPONENTES: dict[str, tuple[str, dict[str, Any]]] = {
             "tamanho": {**_NUM, "default": 13},
             "negrito": _BOOL,
             "mono": _BOOL,
-            "cor": {"enum": list(CORES_TEXTO), "default": "tinta"},
+            "cor": {"enum": list(COLORS_TEXT), "default": "tinta"},
         },
     ),
     "botao": (
@@ -72,10 +72,10 @@ COMPONENTES: dict[str, tuple[str, dict[str, Any]]] = {
         },
     ),
     "caixa": ("Caixa de marcação.", {"marcado": _BOOL, "texto": _STR}),
-    "selo": ("Etiqueta colorida (status).", {"texto": _STR, "cor": {"enum": list(CORES)}}),
+    "selo": ("Etiqueta colorida (status).", {"texto": _STR, "cor": {"enum": list(COLORS)}}),
     "abas": (
         "Barra de abas.",
-        {"itens": {"type": "array", "items": _ITEM_ESTADO}, "ativa": {"type": "integer"}},
+        {"itens": {"type": "array", "items": _ITEM_STATE}, "ativa": {"type": "integer"}},
     ),
     "cartoes": (
         "Linha de cartões de resumo (rótulo + valor).",
@@ -101,7 +101,7 @@ COMPONENTES: dict[str, tuple[str, dict[str, Any]]] = {
                     "properties": {
                         "titulo": _STR,
                         "largura": _NUM,
-                        "estado": {"enum": list(ESTADOS)},
+                        "estado": {"enum": list(STATES)},
                     },
                 },
             },
@@ -115,7 +115,7 @@ COMPONENTES: dict[str, tuple[str, dict[str, Any]]] = {
                             {
                                 "type": "object",
                                 "required": ["texto"],
-                                "properties": {"texto": _STR, "selo": {"enum": list(CORES)}},
+                                "properties": {"texto": _STR, "selo": {"enum": list(COLORS)}},
                             },
                         ]
                     },
@@ -126,14 +126,14 @@ COMPONENTES: dict[str, tuple[str, dict[str, Any]]] = {
         },
     ),
     "paginador": ("Rodapé de paginação.", {"info": _STR}),
-    "menu": ("Menu suspenso.", {"itens": {"type": "array", "items": _ITEM_ESTADO}}),
+    "menu": ("Menu suspenso.", {"itens": {"type": "array", "items": _ITEM_STATE}}),
     "modal": (
         "Janela modal: escurece a tela; os componentes seguintes ficam por cima.",
         {"titulo": _STR},
     ),
     "painel": (
         "Retângulo de agrupamento, com título opcional.",
-        {"titulo": _STR, "fundo": {"enum": ["branco", "cinza", *CORES]}},
+        {"titulo": _STR, "fundo": {"enum": ["branco", "cinza", *COLORS]}},
     ),
     "seta": (
         "Seta por pontos relativos a (x, y); a ponta fica no último.",
@@ -143,25 +143,25 @@ COMPONENTES: dict[str, tuple[str, dict[str, Any]]] = {
                 "minItems": 2,
                 "items": {"type": "array", "items": _NUM, "minItems": 2, "maxItems": 2},
             },
-            "cor": {"enum": list(CORES_TEXTO)},
+            "cor": {"enum": list(COLORS_TEXT)},
         },
     ),
 }
-TIPOS = tuple(COMPONENTES)
+KINDS = tuple(COMPONENTS)
 _BASE = ("id", "tipo", "x", "y", "largura", "altura", "estado")
 
 
-class FormatoInvalido(Exception):
+class FormatInvalid(Exception):
     pass
 
 
-def _novo_id() -> str:
+def _new_id() -> str:
     return uuid.uuid4().hex[:12]
 
 
-def tela_padrao(n: int = 1) -> dict[str, Any]:
+def screen_default(n: int = 1) -> dict[str, Any]:
     return {
-        "id": _novo_id(),
+        "id": _new_id(),
         "nome": f"Tela {n}",
         "codigo": f"WF-{n:02d}",
         "subtitulo": "",
@@ -173,12 +173,12 @@ def tela_padrao(n: int = 1) -> dict[str, Any]:
 
 
 def schema() -> dict[str, Any]:
-    componentes = [
+    components = [
         {
             "if": {"properties": {"tipo": {"const": t}}},
             "then": {"properties": props, "description": desc},
         }
-        for t, (desc, props) in COMPONENTES.items()
+        for t, (desc, props) in COMPONENTS.items()
     ]
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -187,8 +187,8 @@ def schema() -> dict[str, Any]:
         "type": "object",
         "required": ["formato", "versao", "titulo", "telas"],
         "properties": {
-            "formato": {"const": FORMATO},
-            "versao": {"const": VERSAO},
+            "formato": {"const": FORMAT},
+            "versao": {"const": VERSION},
             "titulo": _STR,
             "legenda": {"type": "object", "additionalProperties": _STR},
             "telas": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/tela"}},
@@ -218,22 +218,22 @@ def schema() -> dict[str, Any]:
                 "required": ["id", "tipo", "x", "y", "largura", "altura"],
                 "properties": {
                     "id": _STR,
-                    "tipo": {"enum": list(TIPOS)},
+                    "tipo": {"enum": list(KINDS)},
                     "x": _NUM,
                     "y": _NUM,
                     "largura": _NUM,
                     "altura": _NUM,
-                    "estado": {"enum": list(ESTADOS), "default": "existe"},
+                    "estado": {"enum": list(STATES), "default": "existe"},
                     "nota": {"type": "integer", "description": "Número da nota ligada (marcador)"},
                 },
-                "allOf": componentes,
+                "allOf": components,
             },
             "nota": {
                 "type": "object",
                 "required": ["n", "titulo"],
                 "properties": {
                     "n": {"type": "integer"},
-                    "estado": {"enum": list(ESTADOS)},
+                    "estado": {"enum": list(STATES)},
                     "titulo": _STR,
                     "linhas": {
                         "type": "array",
@@ -253,11 +253,11 @@ def schema() -> dict[str, Any]:
 
 
 def agents_md(titulo: str) -> str:
-    catalogo = "\n".join(
+    catalog = "\n".join(
         f"| `{t}` | {desc} | {', '.join(f'`{p}`' for p in props) or '—'} |"
-        for t, (desc, props) in COMPONENTES.items()
+        for t, (desc, props) in COMPONENTS.items()
     )
-    estados = "\n".join(f"- `{k}`: {v}" for k, v in LEGENDA.items())
+    states = "\n".join(f"- `{k}`: {v}" for k, v in CAPTION.items())
     return f"""# Wireframe: {titulo}
 
 Pacote `agent-wireframe` v1. Você vai editar **`wireframe.json`**; ele segue `wireframe.schema.json`
@@ -272,7 +272,7 @@ Pacote `agent-wireframe` v1. Você vai editar **`wireframe.json`**; ele segue `w
 3. A ordem de `componentes` é a ordem de desenho: o que vem depois fica por cima. Um `modal`
    escurece tudo o que veio antes; ponha o conteúdo do modal logo depois dele.
 4. `estado` de cada componente, aba, item de menu e coluna:
-{estados}
+{states}
 5. `notas` formam o painel lateral (componente, clique, endpoint). Ligue componente e nota com
    `"nota": <n>`; o número aparece num marcador sobre o componente.
 6. Use só os tipos e propriedades do catálogo abaixo; nada de HTML ou CSS.
@@ -283,7 +283,7 @@ Pacote `agent-wireframe` v1. Você vai editar **`wireframe.json`**; ele segue `w
 
 | tipo | o que é | propriedades |
 |---|---|---|
-{catalogo}
+{catalog}
 
 ## Exemplo de componente
 
@@ -294,13 +294,13 @@ Pacote `agent-wireframe` v1. Você vai editar **`wireframe.json`**; ele segue `w
 """
 
 
-def para_ia(doc: dict[str, Any]) -> dict[str, Any]:
+def for_ai(doc: dict[str, Any]) -> dict[str, Any]:
     """Documento interno → `wireframe.json`."""
-    paginas = doc.get("paginas") or [tela_padrao()]
-    primeira = paginas[0]["id"]
+    pages = doc.get("paginas") or [screen_default()]
+    primeira = pages[0]["id"]
     telas = []
-    for p in paginas:
-        componentes = []
+    for p in pages:
+        components = []
         for e in doc.get("elementos", []):
             if (e.get("pagina") or primeira) != p["id"]:
                 continue
@@ -314,7 +314,7 @@ def para_ia(doc: dict[str, Any]) -> dict[str, Any]:
                 "estado": e.get("estado", "existe"),
             }
             c.update({k: v for k, v in (e.get("props") or {}).items() if k not in _BASE})
-            componentes.append(c)
+            components.append(c)
         telas.append(
             {
                 "id": p["id"],
@@ -324,48 +324,48 @@ def para_ia(doc: dict[str, Any]) -> dict[str, Any]:
                 "caminho": p.get("caminho", []),
                 "largura": p.get("largura", 1280),
                 "altura": p.get("altura", 1080),
-                "componentes": componentes,
+                "componentes": components,
                 "notas": p.get("notas", []),
             }
         )
     return {
         "$schema": "./wireframe.schema.json",
-        "formato": FORMATO,
-        "versao": VERSAO,
+        "formato": FORMAT,
+        "versao": VERSION,
         "titulo": doc.get("titulo", ""),
-        "legenda": LEGENDA,
+        "legenda": CAPTION,
         "telas": telas,
     }
 
 
-def _num(v: Any, onde: str) -> float:
+def _num(v: Any, where: str) -> float:
     if isinstance(v, bool) or not isinstance(v, int | float):
-        raise FormatoInvalido(f"{onde}: número esperado")
+        raise FormatInvalid(f"{where}: número esperado")
     return v
 
 
-def de_ia(dados: dict[str, Any]) -> dict[str, Any]:
+def of_ai(dados: dict[str, Any]) -> dict[str, Any]:
     """`wireframe.json` → `{titulo, paginas, elementos}` internos; o erro diz onde falhou."""
-    if not isinstance(dados, dict) or dados.get("formato") != FORMATO:
-        raise FormatoInvalido(f'"formato" deve ser "{FORMATO}"')
-    if dados.get("versao") != VERSAO:
-        raise FormatoInvalido(f"Versão {dados.get('versao')!r} não suportada (esperado {VERSAO})")
+    if not isinstance(dados, dict) or dados.get("formato") != FORMAT:
+        raise FormatInvalid(f'"formato" deve ser "{FORMAT}"')
+    if dados.get("versao") != VERSION:
+        raise FormatInvalid(f"Versão {dados.get('versao')!r} não suportada (esperado {VERSION})")
     telas = dados.get("telas")
     if not isinstance(telas, list) or not telas:
-        raise FormatoInvalido('"telas" precisa de ao menos uma tela')
-    paginas, elementos, ids = [], [], set()
+        raise FormatInvalid('"telas" precisa de ao menos uma tela')
+    pages, elements, ids = [], [], set()
     for i, t in enumerate(telas, 1):
         if not isinstance(t, dict):
-            raise FormatoInvalido(f"telas[{i - 1}]: objeto esperado")
+            raise FormatInvalid(f"telas[{i - 1}]: objeto esperado")
         # O id vira nome do PNG da tela no pacote: só letras, números, _ e -.
-        tid = re.sub(r"[^\w-]", "-", str(t.get("id") or _novo_id()))[:64]
-        notas = t.get("notas") or []
-        for nota in notas:
-            if not isinstance(nota, dict) or not isinstance(nota.get("n"), int):
-                raise FormatoInvalido(f"Tela {tid}: nota sem número inteiro em n")
-            if nota.get("estado", "existe") not in ESTADOS:
-                raise FormatoInvalido(f"Tela {tid}, nota {nota['n']}: estado inválido")
-        paginas.append(
+        tid = re.sub(r"[^\w-]", "-", str(t.get("id") or _new_id()))[:64]
+        notes = t.get("notas") or []
+        for note in notes:
+            if not isinstance(note, dict) or not isinstance(note.get("n"), int):
+                raise FormatInvalid(f"Tela {tid}: nota sem número inteiro em n")
+            if note.get("estado", "existe") not in STATES:
+                raise FormatInvalid(f"Tela {tid}, nota {note['n']}: estado inválido")
+        pages.append(
             {
                 "id": tid,
                 "nome": str(t.get("titulo") or f"Tela {i}"),
@@ -374,74 +374,74 @@ def de_ia(dados: dict[str, Any]) -> dict[str, Any]:
                 "caminho": [str(c) for c in t.get("caminho") or []],
                 "largura": _num(t.get("largura", 1280), f"Tela {tid}.largura"),
                 "altura": _num(t.get("altura", 1080), f"Tela {tid}.altura"),
-                "notas": notas,
+                "notas": notes,
             }
         )
         for c in t.get("componentes") or []:
-            onde = f"Tela {tid}, componente {c.get('id', '?') if isinstance(c, dict) else '?'}"
-            if not isinstance(c, dict) or c.get("tipo") not in TIPOS:
-                raise FormatoInvalido(f"{onde}: tipo desconhecido (use {', '.join(TIPOS)})")
-            if c.get("estado", "existe") not in ESTADOS:
-                raise FormatoInvalido(f"{onde}: estado inválido")
-            cid = str(c.get("id") or _novo_id())
+            where = f"Tela {tid}, componente {c.get('id', '?') if isinstance(c, dict) else '?'}"
+            if not isinstance(c, dict) or c.get("tipo") not in KINDS:
+                raise FormatInvalid(f"{where}: tipo desconhecido (use {', '.join(KINDS)})")
+            if c.get("estado", "existe") not in STATES:
+                raise FormatInvalid(f"{where}: estado inválido")
+            cid = str(c.get("id") or _new_id())
             if cid in ids:
-                cid = f"{cid}-{_novo_id()[:4]}"
+                cid = f"{cid}-{_new_id()[:4]}"
             ids.add(cid)
-            elementos.append(
+            elements.append(
                 {
                     "id": cid,
                     "tipo": c["tipo"],
                     "pagina": tid,
-                    "x": _num(c.get("x", 0), f"{onde}.x"),
-                    "y": _num(c.get("y", 0), f"{onde}.y"),
-                    "w": _num(c.get("largura", 0), f"{onde}.largura"),
-                    "h": _num(c.get("altura", 0), f"{onde}.altura"),
+                    "x": _num(c.get("x", 0), f"{where}.x"),
+                    "y": _num(c.get("y", 0), f"{where}.y"),
+                    "w": _num(c.get("largura", 0), f"{where}.largura"),
+                    "h": _num(c.get("altura", 0), f"{where}.altura"),
                     "estado": c.get("estado", "existe"),
                     "props": {k: v for k, v in c.items() if k not in _BASE and k != "pagina"},
                 }
             )
-    titulo = str(dados.get("titulo") or "Wireframe")[:200]
-    return {"titulo": titulo, "paginas": paginas, "elementos": elementos}
+    title = str(dados.get("titulo") or "Wireframe")[:200]
+    return {"titulo": title, "paginas": pages, "elementos": elements}
 
 
-def pacote(doc: dict[str, Any], imagens: dict[str, bytes] | None = None) -> bytes:
+def package(doc: dict[str, Any], images: dict[str, bytes] | None = None) -> bytes:
     """ZIP para mandar a outra IA: `AGENTS.md`, `wireframe.schema.json`, `wireframe.json` e, com
     [imagens] ({id da tela: PNG}), `telas/<id>.png`, apontado no campo `imagem` de cada tela."""
-    imagens = imagens or {}
-    troca = para_ia(doc)
-    for t in troca["telas"]:
-        if t["id"] in imagens:
+    images = images or {}
+    swap = for_ai(doc)
+    for t in swap["telas"]:
+        if t["id"] in images:
             t["imagem"] = f"telas/{t['id']}.png"
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("AGENTS.md", agents_md(doc.get("titulo", "")))
         z.writestr("wireframe.schema.json", json.dumps(schema(), ensure_ascii=False, indent=2))
-        z.writestr("wireframe.json", json.dumps(troca, ensure_ascii=False, indent=2))
-        for t in troca["telas"]:
-            if t["id"] in imagens:
-                z.writestr(t["imagem"], imagens[t["id"]], zipfile.ZIP_STORED)
+        z.writestr("wireframe.json", json.dumps(swap, ensure_ascii=False, indent=2))
+        for t in swap["telas"]:
+            if t["id"] in images:
+                z.writestr(t["imagem"], images[t["id"]], zipfile.ZIP_STORED)
     return buf.getvalue()
 
 
-def ler(bruto: bytes) -> dict[str, Any]:
+def read(raw: bytes) -> dict[str, Any]:
     """ZIP (acha o `wireframe.json`), JSON puro ou texto com bloco ```json → formato interno."""
-    if bruto.startswith(b"PK"):
+    if raw.startswith(b"PK"):
         try:
-            with zipfile.ZipFile(io.BytesIO(bruto)) as z:
-                nomes = [n for n in z.namelist() if n.endswith(".json") and "schema" not in n]
-                nome = next((n for n in nomes if n.endswith("wireframe.json")), None)
-                if nome is None and not nomes:
-                    raise FormatoInvalido("ZIP sem wireframe.json")
-                texto = z.read(nome or nomes[0]).decode("utf-8")
+            with zipfile.ZipFile(io.BytesIO(raw)) as z:
+                names = [n for n in z.namelist() if n.endswith(".json") and "schema" not in n]
+                name = next((n for n in names if n.endswith("wireframe.json")), None)
+                if name is None and not names:
+                    raise FormatInvalid("ZIP sem wireframe.json")
+                text = z.read(name or names[0]).decode("utf-8")
         except zipfile.BadZipFile as e:
-            raise FormatoInvalido("ZIP corrompido") from e
+            raise FormatInvalid("ZIP corrompido") from e
     else:
-        texto = bruto.decode("utf-8", "ignore")
-        bloco = re.search(r"```(?:json)?\s*(\{.*\})\s*```", texto, re.S)
-        if bloco:
-            texto = bloco.group(1)
+        text = raw.decode("utf-8", "ignore")
+        block = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.S)
+        if block:
+            text = block.group(1)
     try:
-        dados = json.loads(texto)
+        data = json.loads(text)
     except json.JSONDecodeError as e:
-        raise FormatoInvalido(f"JSON inválido (linha {e.lineno}, coluna {e.colno})") from e
-    return de_ia(dados)
+        raise FormatInvalid(f"JSON inválido (linha {e.lineno}, coluna {e.colno})") from e
+    return of_ai(data)

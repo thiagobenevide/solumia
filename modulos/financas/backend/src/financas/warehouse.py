@@ -10,19 +10,19 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from financas.patterns import CATEGORIAS_BASE, QUESTIONARIO_BASE
+from financas.patterns import CATEGORIES_BASE, QUESTIONNAIRE_BASE
 
 
-class NaoEncontrado(Exception):
+class NotFound(Exception):
     pass
 
 
-class Invalido(Exception):
+class Invalid(Exception):
     pass
 
 
 # tipos: str, num, int, bool, data, lista, dict, ref:<colecao>, opcao:<a|b|c>
-ESQUEMAS: dict[str, dict[str, tuple[str, Any]]] = {
+SCHEMAS: dict[str, dict[str, tuple[str, Any]]] = {
     "contas": {
         "nome": ("str", ""),
         "tipo": ("opcao:corrente|poupanca|cartao|investimento|carteira", "corrente"),
@@ -143,7 +143,7 @@ ESQUEMAS: dict[str, dict[str, tuple[str, Any]]] = {
     },
 }
 
-OBRIGATORIOS = {
+REQUIRED = {
     "contas": ["nome"],
     "categorias": ["nome"],
     "transacoes": ["data", "descricao"],
@@ -159,7 +159,7 @@ OBRIGATORIOS = {
 }
 
 # ao excluir um documento, limpa as referências a ele nas outras coleções
-REFERENCIAS = {
+REFERENCES = {
     "contas": [("transacoes", "conta_id"), ("programacoes", "conta_id"), ("operacoes", "conta_id")],
     "categorias": [
         ("transacoes", "categoria_id"),
@@ -170,7 +170,7 @@ REFERENCIAS = {
 }
 
 
-def _gravar(caminho: Path, dados: Any) -> None:
+def _write(caminho: Path, dados: Any) -> None:
     tmp = caminho.with_suffix(".tmp")
     tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=1), "utf-8")
     os.replace(tmp, caminho)
@@ -180,10 +180,10 @@ def data_iso(valor: Any) -> str:
     try:
         return date.fromisoformat(str(valor)[:10]).isoformat()
     except ValueError as e:
-        raise Invalido(f"Data inválida: {valor}") from e
+        raise Invalid(f"Data inválida: {valor}") from e
 
 
-def _converter(campo: str, tipo: str, valor: Any) -> Any:
+def _convert(field: str, tipo: str, valor: Any) -> Any:
     if valor is None:
         return None if tipo == "data" else valor
     try:
@@ -206,168 +206,168 @@ def _converter(campo: str, tipo: str, valor: Any) -> Any:
                 raise TypeError
             return dict(valor)
         if tipo.startswith("opcao:"):
-            opcoes = tipo[6:].split("|")
-            if valor not in opcoes:
-                raise Invalido(f"{campo}: use {', '.join(o for o in opcoes if o)}")
+            options = tipo[6:].split("|")
+            if valor not in options:
+                raise Invalid(f"{field}: use {', '.join(o for o in options if o)}")
             return valor
     except (TypeError, ValueError) as e:
-        raise Invalido(f"{campo}: valor inválido") from e
-    raise Invalido(campo)
+        raise Invalid(f"{field}: valor inválido") from e
+    raise Invalid(field)
 
 
-class Armazem:
-    def __init__(self, raiz: str | Path) -> None:
-        self.raiz = Path(raiz).expanduser()
+class Warehouse:
+    def __init__(self, root: str | Path) -> None:
+        self.raiz = Path(root).expanduser()
         self.raiz.mkdir(parents=True, exist_ok=True)
         self.trava = threading.RLock()
         self._cache: dict[str, list[dict[str, Any]]] = {}
 
-    def _arquivo(self, colecao: str) -> Path:
-        return self.raiz / f"{colecao}.json"
+    def _arquivo(self, collection: str) -> Path:
+        return self.raiz / f"{collection}.json"
 
-    def todos(self, colecao: str) -> list[dict[str, Any]]:
+    def todos(self, collection: str) -> list[dict[str, Any]]:
         """Lista viva da coleção (não alterar fora de `salvar`)."""
-        if colecao not in ESQUEMAS:
-            raise NaoEncontrado(colecao)
+        if collection not in SCHEMAS:
+            raise NotFound(collection)
         with self.trava:
-            if colecao not in self._cache:
-                arq = self._arquivo(colecao)
-                if arq.exists():
-                    self._cache[colecao] = json.loads(arq.read_text("utf-8"))
+            if collection not in self._cache:
+                file = self._arquivo(collection)
+                if file.exists():
+                    self._cache[collection] = json.loads(file.read_text("utf-8"))
                 else:
-                    self._cache[colecao] = self._semente(colecao)
-                    if self._cache[colecao]:
-                        self.salvar(colecao)
-            return self._cache[colecao]
+                    self._cache[collection] = self._semente(collection)
+                    if self._cache[collection]:
+                        self.salvar(collection)
+            return self._cache[collection]
 
-    def _semente(self, colecao: str) -> list[dict[str, Any]]:
-        if colecao != "categorias":
+    def _semente(self, collection: str) -> list[dict[str, Any]]:
+        if collection != "categorias":
             return []
         return [
             self._completar("categorias", {"id": f"cat-{i}", **c})
-            for i, c in enumerate(CATEGORIAS_BASE)
+            for i, c in enumerate(CATEGORIES_BASE)
         ]
 
-    def salvar(self, colecao: str) -> None:
+    def salvar(self, collection: str) -> None:
         with self.trava:
-            _gravar(self._arquivo(colecao), self._cache[colecao])
+            _write(self._arquivo(collection), self._cache[collection])
 
-    def _completar(self, colecao: str, dados: dict[str, Any]) -> dict[str, Any]:
+    def _completar(self, collection: str, dados: dict[str, Any]) -> dict[str, Any]:
         doc = {"id": dados.get("id") or uuid.uuid4().hex[:12]}
-        for campo, (tipo, padrao) in ESQUEMAS[colecao].items():
-            valor = dados.get(campo, padrao)
-            doc[campo] = _converter(campo, tipo, valor if valor is not None else padrao)
+        for field, (kind, default) in SCHEMAS[collection].items():
+            value = dados.get(field, default)
+            doc[field] = _convert(field, kind, value if value is not None else default)
         return doc
 
-    def obter(self, colecao: str, id_: str) -> dict[str, Any]:
-        for d in self.todos(colecao):
+    def obter(self, collection: str, id_: str) -> dict[str, Any]:
+        for d in self.todos(collection):
             if d["id"] == id_:
                 return d
-        raise NaoEncontrado(id_)
+        raise NotFound(id_)
 
-    def criar(self, colecao: str, dados: dict[str, Any], gravar: bool = True) -> dict[str, Any]:
+    def criar(self, collection: str, dados: dict[str, Any], gravar: bool = True) -> dict[str, Any]:
         with self.trava:
             dados = {k: v for k, v in dados.items() if k != "id"}
-            for campo in OBRIGATORIOS.get(colecao, []):
-                if dados.get(campo) in (None, ""):
-                    raise Invalido(f"{campo} é obrigatório")
-            doc = self._completar(colecao, dados)
-            if colecao == "empresas":
+            for field in REQUIRED.get(collection, []):
+                if dados.get(field) in (None, ""):
+                    raise Invalid(f"{field} é obrigatório")
+            doc = self._completar(collection, dados)
+            if collection == "empresas":
                 doc["ticker"] = doc["ticker"].upper()
-                if any(e["ticker"] == doc["ticker"] for e in self.todos(colecao)):
-                    raise Invalido(f"{doc['ticker']} já cadastrada")
-            self.todos(colecao).append(doc)
+                if any(e["ticker"] == doc["ticker"] for e in self.todos(collection)):
+                    raise Invalid(f"{doc['ticker']} já cadastrada")
+            self.todos(collection).append(doc)
             if gravar:
-                self.salvar(colecao)
+                self.salvar(collection)
             return doc
 
-    def editar(self, colecao: str, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
+    def editar(self, collection: str, id_: str, dados: dict[str, Any]) -> dict[str, Any]:
         with self.trava:
-            doc = self.obter(colecao, id_)
-            esquema = ESQUEMAS[colecao]
-            novo = dict(doc)
-            for campo, valor in dados.items():
-                if campo in esquema:
-                    novo[campo] = _converter(campo, esquema[campo][0], valor)
-            for campo in OBRIGATORIOS.get(colecao, []):
-                if novo.get(campo) in (None, ""):
-                    raise Invalido(f"{campo} é obrigatório")
-            if colecao == "empresas":
-                novo["ticker"] = novo["ticker"].upper()
-            doc.update(novo)
-            self.salvar(colecao)
+            doc = self.obter(collection, id_)
+            schema = SCHEMAS[collection]
+            new = dict(doc)
+            for field, value in dados.items():
+                if field in schema:
+                    new[field] = _convert(field, schema[field][0], value)
+            for field in REQUIRED.get(collection, []):
+                if new.get(field) in (None, ""):
+                    raise Invalid(f"{field} é obrigatório")
+            if collection == "empresas":
+                new["ticker"] = new["ticker"].upper()
+            doc.update(new)
+            self.salvar(collection)
             return doc
 
-    def excluir(self, colecao: str, id_: str) -> None:
+    def excluir(self, collection: str, id_: str) -> None:
         with self.trava:
-            lista = self.todos(colecao)
-            doc = self.obter(colecao, id_)
-            lista.remove(doc)
-            self.salvar(colecao)
-            for outra, campo in REFERENCIAS.get(colecao, []):
+            items = self.todos(collection)
+            doc = self.obter(collection, id_)
+            items.remove(doc)
+            self.salvar(collection)
+            for other, field in REFERENCES.get(collection, []):
                 mudou = False
-                for d in self.todos(outra):
-                    if d.get(campo) == id_:
-                        d[campo] = ""
+                for d in self.todos(other):
+                    if d.get(field) == id_:
+                        d[field] = ""
                         mudou = True
                 if mudou:
-                    self.salvar(outra)
+                    self.salvar(other)
 
-    def excluir_varios(self, colecao: str, ids: list[str]) -> int:
+    def excluir_varios(self, collection: str, ids: list[str]) -> int:
         """Exclusão em lote: grava cada arquivo uma vez só; ids que não existem são ignorados."""
-        alvo = set(ids)
+        target = set(ids)
         with self.trava:
-            lista = self.todos(colecao)
-            antes = len(lista)
-            lista[:] = [d for d in lista if d.get("id") not in alvo]
-            removidos = antes - len(lista)
+            items = self.todos(collection)
+            before = len(items)
+            items[:] = [d for d in items if d.get("id") not in target]
+            removidos = before - len(items)
             if not removidos:
                 return 0
-            self.salvar(colecao)
-            for outra, campo in REFERENCIAS.get(colecao, []):
+            self.salvar(collection)
+            for other, field in REFERENCES.get(collection, []):
                 mudou = False
-                for d in self.todos(outra):
-                    if d.get(campo) in alvo:
-                        d[campo] = ""
+                for d in self.todos(other):
+                    if d.get(field) in target:
+                        d[field] = ""
                         mudou = True
                 if mudou:
-                    self.salvar(outra)
+                    self.salvar(other)
             return removidos
 
     # --- questionário (modelo editável) ---
 
     def questionario(self) -> list[dict[str, Any]]:
-        arq = self.raiz / "questionario.json"
+        file = self.raiz / "questionario.json"
         with self.trava:
-            if not arq.exists():
-                return [dict(p) for p in QUESTIONARIO_BASE]
-            lista: list[dict[str, Any]] = json.loads(arq.read_text("utf-8"))
-            return lista
+            if not file.exists():
+                return [dict(p) for p in QUESTIONNAIRE_BASE]
+            items: list[dict[str, Any]] = json.loads(file.read_text("utf-8"))
+            return items
 
     def salvar_questionario(self, perguntas: list[dict[str, Any]]) -> list[dict[str, Any]]:
         limpas = []
         ids = set()
         for p in perguntas:
-            texto = str(p.get("texto", "")).strip()
-            if not texto:
+            text = str(p.get("texto", "")).strip()
+            if not text:
                 continue
             id_ = str(p.get("id") or uuid.uuid4().hex[:8])
             if id_ in ids:
-                raise Invalido(f"Pergunta repetida: {id_}")
+                raise Invalid(f"Pergunta repetida: {id_}")
             ids.add(id_)
-            alvo = p.get("alvo", "empresa")
-            if alvo not in ("empresa", "setor"):
-                raise Invalido("alvo: use empresa ou setor")
+            target = p.get("alvo", "empresa")
+            if target not in ("empresa", "setor"):
+                raise Invalid("alvo: use empresa ou setor")
             limpas.append(
                 {
                     "id": id_,
-                    "alvo": alvo,
+                    "alvo": target,
                     "bloco": str(p.get("bloco", "Geral")).strip() or "Geral",
-                    "texto": texto,
+                    "texto": text,
                     "ajuda": str(p.get("ajuda", "")),
                     "peso": max(0, int(p.get("peso", 1))),
                 }
             )
         with self.trava:
-            _gravar(self.raiz / "questionario.json", limpas)
+            _write(self.raiz / "questionario.json", limpas)
         return limpas

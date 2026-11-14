@@ -101,10 +101,10 @@ def _seguranca_do_backend():
 def test_hash_e_totp_compativeis_com_o_gateway() -> None:
     backend = _seguranca_do_backend()
     h = segredos.hash_senha("SenhaForte123")
-    assert backend.verificar_senha("SenhaForte123", h)
-    assert not backend.verificar_senha("errada", h)
+    assert backend.verify_password("SenhaForte123", h)
+    assert not backend.verify_password("errada", h)
     s = segredos.segredo_totp()
-    assert segredos.codigo_totp(s, 1000) == backend.codigo_totp(s, 1000)
+    assert segredos.codigo_totp(s, 1000) == backend.code_totp(s, 1000)
 
 
 def test_senha_fraca() -> None:

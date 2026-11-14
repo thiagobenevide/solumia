@@ -8,24 +8,24 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from estudos.api_language import router as linguagem_router
-from estudos.knowledge import ItemInexistente
-from estudos.studies import AREAS, STATUS_LEITURA, Estudos, Invalido, NaoEncontrado
-from estudos.languages import IDIOMAS, NIVEIS
-from estudos.projects import STATUS_USO, TIPOS_CITACAO, TIPOS_CONTEUDO, exportar_xlsx
+from estudos.knowledge import ItemNonexistent
+from estudos.studies import AREAS, STATUS_READING, Studies, Invalid, NotFound
+from estudos.languages import LANGUAGES, LEVELS
+from estudos.projects import STATUS_USAGE, KINDS_QUOTE, KINDS_CONTENT, export_xlsx
 
 router = APIRouter(tags=["estudos"])
 router.include_router(linguagem_router)
 
 
-def get_estudos(request: Request) -> Estudos:
-    estudos: Estudos = request.app.state.estudos
-    return estudos
+def get_studies(request: Request) -> Studies:
+    studies: Studies = request.app.state.estudos
+    return studies
 
 
-EstudosDep = Annotated[Estudos, Depends(get_estudos)]
+StudiesDep = Annotated[Studies, Depends(get_studies)]
 
 
-class LeituraEntrada(BaseModel):
+class ReadingInput(BaseModel):
     titulo: str = Field(min_length=1, max_length=300)
     autor: str = Field("", max_length=200)
     tipo: str = Field("livro", pattern="^(livro|artigo)$")
@@ -45,7 +45,7 @@ class LeituraEntrada(BaseModel):
     idioma: str | None = Field(None, max_length=40)
 
 
-class LeituraEdicao(BaseModel):
+class ReadingEdit(BaseModel):
     titulo: str | None = Field(None, min_length=1, max_length=300)
     autor: str | None = Field(None, max_length=200)
     tipo: str | None = Field(None, pattern="^(livro|artigo)$")
@@ -65,7 +65,7 @@ class LeituraEdicao(BaseModel):
     idioma: str | None = Field(None, max_length=40)
 
 
-class TrilhaEntrada(BaseModel):
+class TrackInput(BaseModel):
     idioma: str
     nivel_inicial: str = "A1"
     nivel_alvo: str = "C2"
@@ -74,7 +74,7 @@ class TrilhaEntrada(BaseModel):
     inicio: str | None = None
 
 
-class TrilhaEdicao(BaseModel):
+class TrackEdit(BaseModel):
     nivel_inicial: str | None = None
     nivel_alvo: str | None = None
     minutos_por_dia: int | None = Field(None, ge=10, le=600)
@@ -82,117 +82,117 @@ class TrilhaEdicao(BaseModel):
     inicio: str | None = None
 
 
-class Sessao(BaseModel):
+class Session(BaseModel):
     data: str
     minutos: int = Field(ge=0, le=1440)
 
 
-def _erro(e: Exception) -> HTTPException:
-    if isinstance(e, NaoEncontrado | ItemInexistente):
+def _error(e: Exception) -> HTTPException:
+    if isinstance(e, NotFound | ItemNonexistent):
         return HTTPException(404, "Não encontrado")
     return HTTPException(422, str(e))
 
 
 @router.get("/opcoes")
-def opcoes() -> Any:
+def read_options() -> Any:
     return {
         "areas": AREAS,
-        "status": STATUS_LEITURA,
-        "idiomas": IDIOMAS,
-        "niveis": NIVEIS,
-        "tipos_citacao": TIPOS_CITACAO,
-        "tipos_conteudo": TIPOS_CONTEUDO,
-        "status_uso": STATUS_USO,
+        "status": STATUS_READING,
+        "idiomas": LANGUAGES,
+        "niveis": LEVELS,
+        "tipos_citacao": KINDS_QUOTE,
+        "tipos_conteudo": KINDS_CONTENT,
+        "status_uso": STATUS_USAGE,
     }
 
 
 @router.get("/leituras")
-def listar_leituras(estudos: EstudosDep, area: str | None = None, status: str | None = None) -> Any:
+def list_readings(estudos: StudiesDep, area: str | None = None, status: str | None = None) -> Any:
     return estudos.listar_leituras(area, status)
 
 
 @router.post("/leituras", status_code=201)
-def criar_leitura(estudos: EstudosDep, corpo: LeituraEntrada) -> Any:
+def create_reading(estudos: StudiesDep, corpo: ReadingInput) -> Any:
     try:
         return estudos.criar_leitura(corpo.model_dump())
-    except Invalido as e:
-        raise _erro(e) from e
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.patch("/leituras/{id_}")
-def editar_leitura(estudos: EstudosDep, id_: str, corpo: LeituraEdicao) -> Any:
+def edit_reading(estudos: StudiesDep, id_: str, corpo: ReadingEdit) -> Any:
     try:
         return estudos.editar_leitura(id_, corpo.model_dump(exclude_unset=True))
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.delete("/leituras/{id_}", status_code=204)
-def excluir_leitura(estudos: EstudosDep, id_: str) -> None:
+def delete_reading(estudos: StudiesDep, id_: str) -> None:
     try:
         estudos.leituras.excluir(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.get("/idiomas")
-def listar_trilhas(estudos: EstudosDep) -> Any:
+def list_tracks(estudos: StudiesDep) -> Any:
     return estudos.listar_trilhas()
 
 
 @router.post("/idiomas", status_code=201)
-def criar_trilha(estudos: EstudosDep, corpo: TrilhaEntrada) -> Any:
+def create_track(estudos: StudiesDep, corpo: TrackInput) -> Any:
     try:
         return estudos.criar_trilha(corpo.model_dump(exclude_none=True))
-    except Invalido as e:
-        raise _erro(e) from e
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.get("/idiomas/{id_}")
-def trilha(estudos: EstudosDep, id_: str) -> Any:
+def track(estudos: StudiesDep, id_: str) -> Any:
     try:
         return estudos.trilha(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.patch("/idiomas/{id_}")
-def editar_trilha(estudos: EstudosDep, id_: str, corpo: TrilhaEdicao) -> Any:
+def edit_track(estudos: StudiesDep, id_: str, corpo: TrackEdit) -> Any:
     try:
         return estudos.editar_trilha(id_, corpo.model_dump(exclude_none=True))
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.delete("/idiomas/{id_}", status_code=204)
-def excluir_trilha(estudos: EstudosDep, id_: str) -> None:
+def delete_track(estudos: StudiesDep, id_: str) -> None:
     try:
         estudos.trilhas.excluir(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.get("/idiomas/{id_}/cronograma")
-def cronograma(estudos: EstudosDep, id_: str, de: str, ate: str) -> Any:
+def schedule(estudos: StudiesDep, id_: str, de: str, ate: str) -> Any:
     try:
         return estudos.cronograma(id_, de, ate)
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.post("/idiomas/{id_}/sessoes")
-def registrar_sessao(estudos: EstudosDep, id_: str, corpo: Sessao) -> Any:
+def register_session(estudos: StudiesDep, id_: str, corpo: Session) -> Any:
     try:
         return estudos.registrar_sessao(id_, corpo.data, corpo.minutos)
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
-class LivroEdicao(BaseModel):
+class BookEdit(BaseModel):
     tenho: bool
 
 
-class MarcaEtapa(BaseModel):
+class MarkStage(BaseModel):
     leitura: int | None = Field(None, ge=0)
     feita: bool = True
     pratica: bool | None = None
@@ -200,63 +200,63 @@ class MarcaEtapa(BaseModel):
 
 
 @router.get("/conhecimento/trilhas")
-def trilhas_conhecimento(estudos: EstudosDep) -> Any:
+def tracks_knowledge(estudos: StudiesDep) -> Any:
     return estudos.conhecimento.listar_trilhas()
 
 
 @router.get("/conhecimento/trilhas/{id_}")
-def trilha_conhecimento(estudos: EstudosDep, id_: str, frente: str | None = None) -> Any:
+def track_knowledge(estudos: StudiesDep, id_: str, frente: str | None = None) -> Any:
     try:
         return estudos.conhecimento.trilha(id_, frente)
-    except ItemInexistente as e:
-        raise _erro(e) from e
+    except ItemNonexistent as e:
+        raise _error(e) from e
 
 
 @router.post("/conhecimento/trilhas/{id_}/etapas/{etapa}")
-def marcar_etapa(estudos: EstudosDep, id_: str, etapa: str, corpo: MarcaEtapa) -> Any:
+def mark_stage(estudos: StudiesDep, id_: str, etapa: str, corpo: MarkStage) -> Any:
     try:
         return estudos.conhecimento.marcar(id_, etapa, corpo.model_dump())
-    except ItemInexistente as e:
-        raise _erro(e) from e
+    except ItemNonexistent as e:
+        raise _error(e) from e
 
 
 @router.get("/conhecimento/livros")
-def livros_conhecimento(estudos: EstudosDep) -> Any:
+def books_knowledge(estudos: StudiesDep) -> Any:
     return estudos.conhecimento.livros()
 
 
 @router.patch("/conhecimento/livros/{id_}")
-def editar_livro(estudos: EstudosDep, id_: str, corpo: LivroEdicao) -> Any:
+def edit_book(estudos: StudiesDep, id_: str, corpo: BookEdit) -> Any:
     try:
         return estudos.conhecimento.editar_livro(id_, corpo.tenho)
-    except ItemInexistente as e:
-        raise _erro(e) from e
+    except ItemNonexistent as e:
+        raise _error(e) from e
 
 
 @router.post("/conhecimento/livros/{id_}/leitura")
-def vincular_leitura(estudos: EstudosDep, id_: str) -> Any:
+def link_reading(estudos: StudiesDep, id_: str) -> Any:
     """Liga o livro a uma leitura (cria se não houver) para ler e grifar na aba Leituras."""
     try:
         return estudos.conhecimento.vincular_leitura(id_)
-    except ItemInexistente as e:
-        raise _erro(e) from e
+    except ItemNonexistent as e:
+        raise _error(e) from e
 
 
-class ProjetoEntrada(BaseModel):
+class ProjectInput(BaseModel):
     nome: str = Field(min_length=1, max_length=200)
     descricao: str = Field("", max_length=4000)
     cor: int | None = None
     secoes: list[str] = []
 
 
-class ProjetoEdicao(BaseModel):
+class ProjectEdit(BaseModel):
     nome: str | None = Field(None, min_length=1, max_length=200)
     descricao: str | None = Field(None, max_length=4000)
     cor: int | None = None
     secoes: list[str] | None = None
 
 
-class Classificacao(BaseModel):
+class Classification(BaseModel):
     secao: str | None = Field(None, max_length=300)
     tipo_citacao: str | None = Field(None, max_length=100)
     tipo_conteudo: str | None = Field(None, max_length=100)
@@ -267,57 +267,57 @@ class Classificacao(BaseModel):
 
 
 @router.get("/projetos")
-def listar_projetos(estudos: EstudosDep) -> Any:
+def list_projects(estudos: StudiesDep) -> Any:
     return estudos.listar_projetos()
 
 
 @router.post("/projetos", status_code=201)
-def criar_projeto(estudos: EstudosDep, corpo: ProjetoEntrada) -> Any:
+def create_project(estudos: StudiesDep, corpo: ProjectInput) -> Any:
     return estudos.criar_projeto(corpo.model_dump(exclude_none=True))
 
 
 @router.patch("/projetos/{id_}")
-def editar_projeto(estudos: EstudosDep, id_: str, corpo: ProjetoEdicao) -> Any:
+def edit_project(estudos: StudiesDep, id_: str, corpo: ProjectEdit) -> Any:
     try:
         return estudos.editar_projeto(id_, corpo.model_dump(exclude_none=True))
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.delete("/projetos/{id_}", status_code=204)
-def excluir_projeto(estudos: EstudosDep, id_: str) -> None:
+def delete_project(estudos: StudiesDep, id_: str) -> None:
     try:
         estudos.projetos.excluir(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.get("/projetos/{id_}/matriz")
-def matriz(estudos: EstudosDep, id_: str) -> Any:
+def matrix(estudos: StudiesDep, id_: str) -> Any:
     try:
         return estudos.matriz(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.patch("/projetos/{id_}/itens/{item_id}")
-def classificar(estudos: EstudosDep, id_: str, item_id: str, corpo: Classificacao) -> Any:
+def classify(estudos: StudiesDep, id_: str, item_id: str, corpo: Classification) -> Any:
     try:
         return estudos.classificar(id_, item_id, corpo.model_dump(exclude_none=True))
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.get("/projetos/{id_}/exportar")
-def exportar(estudos: EstudosDep, id_: str) -> Response:
+def export(estudos: StudiesDep, id_: str) -> Response:
     try:
         m = estudos.matriz(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
-    ascii_ = unicodedata.normalize("NFKD", m["projeto"]["nome"]).encode("ascii", "ignore").decode()
-    nome = "".join(c for c in ascii_ if c.isalnum() or c in " -_").strip() or "projeto"
+    except NotFound as e:
+        raise _error(e) from e
+    plain_ = unicodedata.normalize("NFKD", m["projeto"]["nome"]).encode("ascii", "ignore").decode()
+    name = "".join(c for c in plain_ if c.isalnum() or c in " -_").strip() or "projeto"
     return Response(
-        exportar_xlsx(m),
+        export_xlsx(m),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="Matriz - {nome}.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="Matriz - {name}.xlsx"'},
     )

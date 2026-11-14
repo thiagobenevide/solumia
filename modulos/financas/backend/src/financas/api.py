@@ -9,22 +9,22 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Request, UploadFile
 
 from financas import analysis, study, statement, reports
-from financas.warehouse import ESQUEMAS, Armazem, Invalido, NaoEncontrado, data_iso
+from financas.warehouse import SCHEMAS, Warehouse, Invalid, NotFound, data_iso
 
 router = APIRouter(tags=["financas"])
 
 
-def get_armazem(request: Request) -> Armazem:
-    arm: Armazem = request.app.state.financas
+def get_warehouse(request: Request) -> Warehouse:
+    arm: Warehouse = request.app.state.financas
     return arm
 
 
-ArmDep = Annotated[Armazem, Depends(get_armazem)]
-Corpo = Annotated[dict[str, Any], Body()]
+ArmDep = Annotated[Warehouse, Depends(get_warehouse)]
+Payload = Annotated[dict[str, Any], Body()]
 
 
-def _erro(e: Exception) -> HTTPException:
-    if isinstance(e, NaoEncontrado):
+def _error(e: Exception) -> HTTPException:
+    if isinstance(e, NotFound):
         return HTTPException(404, "Não encontrado")
     return HTTPException(422, str(e))
 
@@ -33,66 +33,66 @@ def _erro(e: Exception) -> HTTPException:
 
 
 @router.get("/resumo")
-def resumo(arm: ArmDep, mes: str | None = None) -> Any:
+def summary(arm: ArmDep, mes: str | None = None) -> Any:
     try:
-        return reports.resumo(arm, mes or date.today().isoformat()[:7])
-    except Invalido as e:
-        raise _erro(e) from e
+        return reports.summary(arm, mes or date.today().isoformat()[:7])
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.get("/fluxo")
-def fluxo(arm: ArmDep, meses: int = 12, ate: str | None = None) -> Any:
+def flow(arm: ArmDep, meses: int = 12, ate: str | None = None) -> Any:
     try:
-        return reports.fluxo(arm, max(1, min(meses, 60)), ate)
-    except Invalido as e:
-        raise _erro(e) from e
+        return reports.flow(arm, max(1, min(meses, 60)), ate)
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.get("/contrapartes")
-def contrapartes(
+def counterparts(
     arm: ArmDep, de: str | None = None, ate: str | None = None, limite: int = 15
 ) -> Any:
     try:
-        return reports.contrapartes(arm, de, ate, limite)
-    except Invalido as e:
-        raise _erro(e) from e
+        return reports.counterparts(arm, de, ate, limite)
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.get("/faturas/{conta_id}")
-def faturas(arm: ArmDep, conta_id: str) -> Any:
+def invoices(arm: ArmDep, conta_id: str) -> Any:
     try:
-        return reports.faturas(arm, conta_id)
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+        return reports.invoices(arm, conta_id)
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.get("/projecao")
-def projecao(arm: ArmDep, dias: int = 60) -> Any:
+def projection(arm: ArmDep, dias: int = 60) -> Any:
     dias = max(1, min(dias, 366))
     return {
-        "itens": reports.projecao(arm, dias=dias),
-        "saldo": reports.projecao_saldo(arm, dias),
+        "itens": reports.projection(arm, dias=dias),
+        "saldo": reports.projection_balance(arm, dias),
     }
 
 
 @router.post("/programacoes/{id_}/lancar", status_code=201)
-def lancar(arm: ArmDep, id_: str, corpo: Corpo) -> Any:
+def post(arm: ArmDep, id_: str, corpo: Payload) -> Any:
     try:
-        return reports.lancar(arm, id_, data_iso(corpo.get("data", "")))
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+        return reports.post(arm, id_, data_iso(corpo.get("data", "")))
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.get("/metas/progresso")
-def metas(arm: ArmDep) -> Any:
-    return reports.metas(arm)
+def goals(arm: ArmDep) -> Any:
+    return reports.goals(arm)
 
 
 # --- extrato ---
 
 
 @router.get("/transacoes")
-def transacoes(
+def transactions(
     arm: ArmDep,
     de: str | None = None,
     ate: str | None = None,
@@ -103,46 +103,46 @@ def transacoes(
     limite: int = 2000,
 ) -> Any:
     try:
-        de_, ate_ = (data_iso(de) if de else ""), (data_iso(ate) if ate else "9999")
-    except Invalido as e:
-        raise _erro(e) from e
-    alvo = statement.normalizar(q)
-    itens = [
+        de_, until_ = (data_iso(de) if de else ""), (data_iso(ate) if ate else "9999")
+    except Invalid as e:
+        raise _error(e) from e
+    target = statement.normalize(q)
+    items = [
         t
         for t in arm.todos("transacoes")
-        if de_ <= (t["data"] or "") <= ate_
+        if de_ <= (t["data"] or "") <= until_
         and (conta_id is None or t["conta_id"] == conta_id)
         and (categoria_id is None or t["categoria_id"] == categoria_id)
         and (not sem_categoria or not t["categoria_id"])
         and (
-            not alvo
-            or alvo in statement.normalizar(f"{t['descricao']} {t['contraparte']} {t['observacao']}")
+            not target
+            or target in statement.normalize(f"{t['descricao']} {t['contraparte']} {t['observacao']}")
         )
     ]
-    itens.sort(key=lambda t: (t["data"] or "", t["id"]), reverse=True)
-    return itens[:limite]
+    items.sort(key=lambda t: (t["data"] or "", t["id"]), reverse=True)
+    return items[:limite]
 
 
 @router.post("/transacoes/lote")
-def lote(arm: ArmDep, corpo: Corpo) -> Any:
+def batch(arm: ArmDep, corpo: Payload) -> Any:
     """Aplica os mesmos campos (`dados`) em várias transações (`ids`); `regra` cria a regra."""
     ids = set(corpo.get("ids") or [])
-    dados = corpo.get("dados") or {}
+    data = corpo.get("dados") or {}
     try:
-        feitas = [arm.editar("transacoes", i, _preparar("transacoes", dados)) for i in ids]
-        if corpo.get("regra") and feitas and dados.get("categoria_id"):
+        done = [arm.editar("transacoes", i, _prepare("transacoes", data)) for i in ids]
+        if corpo.get("regra") and done and data.get("categoria_id"):
             arm.criar(
                 "regras",
                 {
                     "padrao": corpo["regra"],
-                    "categoria_id": dados["categoria_id"],
-                    "contraparte": dados.get("contraparte", ""),
+                    "categoria_id": data["categoria_id"],
+                    "contraparte": data.get("contraparte", ""),
                 },
             )
-            statement.aplicar_regras(arm)
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
-    return {"alteradas": len(feitas)}
+            statement.apply_rules(arm)
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
+    return {"alteradas": len(done)}
 
 
 def get_llms(request: Request) -> dict[str, Any]:
@@ -154,11 +154,11 @@ LLMsDep = Annotated[dict[str, Any], Depends(get_llms)]
 
 # Tarefas de IA em andamento (em memória): o LLM pode levar minutos e a Cloudflare corta resposta
 # que demora mais de 100 s para começar; o app cria a tarefa e consulta `GET /tarefas/{id}`.
-_TAREFAS: dict[str, dict[str, Any]] = {}
-_SEGUNDO_PLANO: set[Any] = set()  # referência às tasks soltas para o GC não as matar
+_TASKS: dict[str, dict[str, Any]] = {}
+_SECOND_PLAN: set[Any] = set()  # referência às tasks soltas para o GC não as matar
 
 
-def _tarefa(trabalho: Any, parcial: dict[str, Any] | None = None) -> dict[str, Any]:
+def _task(work: Any, parcial: dict[str, Any] | None = None) -> dict[str, Any]:
     """Começa [trabalho] (corrotina) em segundo plano; só pode ser chamada de rota `async`. Com
     [parcial], o trabalho vai preenchendo esse dict e o app mostra o que já chegou."""
     import asyncio
@@ -171,15 +171,15 @@ def _tarefa(trabalho: Any, parcial: dict[str, Any] | None = None) -> dict[str, A
 
     async def rodar() -> None:
         try:
-            t.update(estado="pronto", resultado=await trabalho())
-        except Invalido as e:
+            t.update(estado="pronto", resultado=await work())
+        except Invalid as e:
             t.update(estado="erro", erro=str(e))
         except Exception as e:  # worker desligado, tempo esgotado, API fora
             t.update(estado="erro", erro=f"A IA não respondeu: {e}")
 
-    while len(_TAREFAS) >= 50:
-        _TAREFAS.pop(next(iter(_TAREFAS)))
-    _TAREFAS[tid] = t
+    while len(_TASKS) >= 50:
+        _TASKS.pop(next(iter(_TASKS)))
+    _TASKS[tid] = t
     t["_task"] = asyncio.create_task(rodar())
     return {"tarefa": tid, "estado": "rodando"}
 
@@ -192,35 +192,35 @@ def _llm(llms: dict[str, Any], provedor: str) -> Any:
 
 
 @router.get("/tarefas/{tid}")
-def tarefa(tid: str) -> Any:
-    t = _TAREFAS.get(tid)
+def task(tid: str) -> Any:
+    t = _TASKS.get(tid)
     if t is None:
         raise HTTPException(404, "Tarefa não encontrada (o servidor reiniciou?).")
     return {k: v for k, v in t.items() if not k.startswith("_")}
 
 
 @router.get("/ia/provedores")
-def provedores(llms: LLMsDep) -> Any:
+def providers(llms: LLMsDep) -> Any:
     return sorted(k for k in llms if k != "local_rapido")  # o modo rápido é interno da conversa
 
 
-def _guardar_original(request: Request, conta: dict[str, Any], nome: str, conteudo: bytes) -> None:
+def _store_original(request: Request, account: dict[str, Any], nome: str, content: bytes) -> None:
     """O arquivo bruto do extrato vai para o módulo Arquivos (`Finanças/Extratos/<conta>`)."""
-    biblioteca = getattr(request.app.state, "biblioteca", None)
-    if biblioteca is None:
+    collection = getattr(request.app.state, "biblioteca", None)
+    if collection is None:
         return
     import threading
 
     try:
-        meta = biblioteca.adicionar(nome, conteudo, pasta=f"Finanças/Extratos/{conta['nome']}")
+        meta = collection.adicionar(nome, content, pasta=f"Finanças/Extratos/{account['nome']}")
         if meta.get("status") == "convertendo":
-            threading.Thread(target=biblioteca.converter, args=(meta["id"],), daemon=True).start()
+            threading.Thread(target=collection.converter, args=(meta["id"],), daemon=True).start()
     except Exception:  # noqa: BLE001 — guardar a cópia não pode impedir a importação
         pass
 
 
 @router.post("/importar")
-async def importar(
+async def run_import(
     request: Request,
     arm: ArmDep,
     llms: LLMsDep,
@@ -230,40 +230,40 @@ async def importar(
 ) -> Any:
     """Lê o extrato (OFX, CSV e XLS/XLSX dos bancos) e grava sem duplicar. PDF ou layout que o
     código não reconhece vira tarefa da IA (resposta 202 com `tarefa`)."""
-    nome, conteudo = arquivo.filename or "", await arquivo.read()
+    name, content = arquivo.filename or "", await arquivo.read()
     try:
-        conta = arm.obter("contas", conta_id)
-        _guardar_original(request, conta, nome, conteudo)
+        account = arm.obter("contas", conta_id)
+        _store_original(request, account, name, content)
         try:
-            r = statement.gravar_lancamentos(
-                arm, statement.ler_arquivo(nome, conteudo, conta["tipo"]), conta_id
+            r = statement.write_entries(
+                arm, statement.read_file(name, content, account["tipo"]), conta_id
             )
-            return _categorizar_novas(arm, llms.get(provedor), r)
-        except statement.PrecisaIA as e:
+            return _categorize_new(arm, llms.get(provedor), r)
+        except statement.NeedsAi as e:
             from fastapi.responses import JSONResponse
 
             from financas import ai
 
-            llm, texto = _llm(llms, provedor), e.texto
+            llm, text = _llm(llms, provedor), e.texto
 
             async def trabalho() -> Any:
-                itens = await ai.extrair_lancamentos(llm, texto, fatura=conta["tipo"] == "cartao")
-                r = statement.gravar_lancamentos(arm, itens, conta_id)
+                items = await ai.extract_entries(llm, text, fatura=account["tipo"] == "cartao")
+                r = statement.write_entries(arm, items, conta_id)
                 ids = r.pop("ids")
                 if r["sem_categoria"] and arm.todos("categorias"):
                     try:
-                        feito = await ai.categorizar(llm, arm, ids=ids)
-                        r["sem_categoria"] -= feito["categorizadas"]
+                        done = await ai.categorize(llm, arm, ids=ids)
+                        r["sem_categoria"] -= done["categorizadas"]
                     except Exception:  # noqa: BLE001 — os lançamentos já estão gravados
                         pass
                 return {**r, "lido_pela_ia": True}
 
-            return JSONResponse(_tarefa(trabalho) | {"motivo": str(e)}, status_code=202)
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+            return JSONResponse(_task(trabalho) | {"motivo": str(e)}, status_code=202)
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
-def _categorizar_novas(arm: Armazem, llm: Any, r: dict[str, Any]) -> dict[str, Any]:
+def _categorize_new(arm: Warehouse, llm: Any, r: dict[str, Any]) -> dict[str, Any]:
     """O que as regras e o histórico não categorizaram vai para a IA em segundo plano; o app
     acompanha pela tarefa em `categorizando`."""
     ids = r.pop("ids")
@@ -271,143 +271,143 @@ def _categorizar_novas(arm: Armazem, llm: Any, r: dict[str, Any]) -> dict[str, A
         return r
     from financas import ai
 
-    return {**r, "categorizando": _tarefa(lambda: ai.categorizar(llm, arm, ids=ids))["tarefa"]}
+    return {**r, "categorizando": _task(lambda: ai.categorize(llm, arm, ids=ids))["tarefa"]}
 
 
 @router.post("/regras/aplicar")
-def aplicar_regras(arm: ArmDep) -> Any:
-    return {"categorizadas": statement.aplicar_regras(arm)}
+def apply_rules(arm: ArmDep) -> Any:
+    return {"categorizadas": statement.apply_rules(arm)}
 
 
 @router.post("/corrigir", status_code=202)
-async def corrigir(request: Request, arm: ArmDep, llms: LLMsDep, provedor: str = "local") -> Any:
+async def fix(request: Request, arm: ArmDep, llms: LLMsDep, provedor: str = "local") -> Any:
     """Reconferência em segundo plano: conserta o que já está gravado (sinal e forma de pagamento da
     conta do cartão, regras) e passa na IA o que segue sem categoria ou sem forma, o que a IA
     categorizou antes e o que está na categoria do sentido errado."""
 
     from financas import ai
 
-    biblioteca = getattr(request.app.state, "biblioteca", None)
+    collection = getattr(request.app.state, "biblioteca", None)
     llm = llms.get(provedor)
 
     def originais() -> dict[str, list[tuple[str, bytes]]]:
-        if biblioteca is None:
+        if collection is None:
             return {}
-        por_conta: dict[str, list[tuple[str, bytes]]] = {}
+        by_account: dict[str, list[tuple[str, bytes]]] = {}
         for c in arm.todos("contas"):
-            for meta in biblioteca.listar(pasta=f"Finanças/Extratos/{c['nome']}"):
+            for meta in collection.listar(pasta=f"Finanças/Extratos/{c['nome']}"):
                 try:
-                    caminho, nome = biblioteca.caminho_original(meta["id"])
-                    por_conta.setdefault(c["id"], []).append((nome, caminho.read_bytes()))
+                    path, name = collection.caminho_original(meta["id"])
+                    by_account.setdefault(c["id"], []).append((name, path.read_bytes()))
                 except Exception:  # noqa: BLE001 — arquivo sumido não impede o resto
                     continue
-        return por_conta
+        return by_account
 
     async def trabalho() -> Any:
-        feito = statement.corrigir(arm, originais())
-        feito["categorizadas_ia"] = feito["trocadas_ia"] = 0
+        done = statement.fix(arm, originais())
+        done["categorizadas_ia"] = done["trocadas_ia"] = 0
         if llm is not None and arm.todos("categorias"):
             try:
-                r = await ai.categorizar(llm, arm, limite=3000, revisar=True)
-                feito["categorizadas_ia"], feito["trocadas_ia"] = r["categorizadas"], r["trocadas"]
-                feito["formas"] += r["formas"]
+                r = await ai.categorize(llm, arm, limite=3000, revisar=True)
+                done["categorizadas_ia"], done["trocadas_ia"] = r["categorizadas"], r["trocadas"]
+                done["formas"] += r["formas"]
             except Exception as e:  # noqa: BLE001 — o conserto do sinal e da forma já foi gravado
-                feito["erro_ia"] = f"A IA não respondeu: {e}"
-        feito["sem_categoria"] = sum(1 for t in arm.todos("transacoes") if not t["categoria_id"])
-        return feito
+                done["erro_ia"] = f"A IA não respondeu: {e}"
+        done["sem_categoria"] = sum(1 for t in arm.todos("transacoes") if not t["categoria_id"])
+        return done
 
-    return _tarefa(trabalho)
+    return _task(trabalho)
 
 
 @router.post("/categorizar-ia", status_code=202)
-async def categorizar_ia(arm: ArmDep, llms: LLMsDep, provedor: str = "local") -> Any:
+async def categorize_ai(arm: ArmDep, llms: LLMsDep, provedor: str = "local") -> Any:
     """Categoriza com a IA os lançamentos que as regras e o histórico não pegaram."""
     from financas import ai
 
     llm = _llm(llms, provedor)
-    return _tarefa(lambda: ai.categorizar(llm, arm))
+    return _task(lambda: ai.categorize(llm, arm))
 
 
 # --- parcelamentos e cenários (análise preditiva) ---
 
 
 @router.get("/parcelamentos")
-def parcelamentos(arm: ArmDep) -> Any:
+def installment_plans(arm: ArmDep) -> Any:
     from financas import scenarios
 
-    return scenarios.parcelamentos(arm)
+    return scenarios.installment_plans(arm)
 
 
 @router.post("/cenarios/simular")
-def simular(arm: ArmDep, corpo: Corpo) -> Any:
+def simulate(arm: ArmDep, corpo: Payload) -> Any:
     """Juntar × financiar um bem sobre a sua realidade do extrato (só contas, sem IA)."""
     from financas import scenarios
 
     if not corpo.get("valor"):
         raise HTTPException(422, "Informe o valor do bem.")
     try:
-        return scenarios.simular(arm, corpo)
+        return scenarios.simulate(arm, corpo)
     except (TypeError, ValueError) as e:
         raise HTTPException(422, f"Parâmetro inválido: {e}") from e
 
 
 @router.post("/cenarios/perguntar", status_code=202)
-async def perguntar(request: Request, arm: ArmDep, llms: LLMsDep, corpo: Corpo) -> Any:
+async def ask(request: Request, arm: ArmDep, llms: LLMsDep, corpo: Payload) -> Any:
     """Pergunta livre ("quero um EcoSport 2015 de 45 mil, quanto tempo para juntar?"): a IA tira os
     parâmetros, o Python simula e a IA explica o resultado. `ajustes` sobrescreve o que a IA
     tirou."""
     from financas import scenarios, ai
 
-    pergunta = str(corpo.get("pergunta") or "").strip()
-    if not pergunta:
+    question = str(corpo.get("pergunta") or "").strip()
+    if not question:
         raise HTTPException(422, "Escreva o que você quer comprar.")
     llm = _llm(llms, str(corpo.get("provedor") or "local"))
-    ajustes = corpo.get("ajustes") or {}
+    adjustments = corpo.get("ajustes") or {}
 
     internet = getattr(request.app.state, "internet", None)
 
     async def trabalho() -> Any:
-        parametros = {**await ai.interpretar(llm, pergunta), **ajustes}
+        parameters = {**await ai.interpret(llm, question), **adjustments}
         # Dados de hoje: preço FIPE (completa o valor que faltou) e CDI (rendimento da reserva).
-        atuais = await ai.dados_atuais(internet, parametros)
-        if not parametros.get("valor") and atuais.get("fipe"):
-            parametros["valor"] = atuais["fipe"]["media"]
-        if not parametros.get("valor"):
-            raise Invalido(
+        current = await ai.data_current(internet, parameters)
+        if not parameters.get("valor") and current.get("fipe"):
+            parameters["valor"] = current["fipe"]["media"]
+        if not parameters.get("valor"):
+            raise Invalid(
                 "Não achei o valor do bem: diga quanto custa (ex.: 'carro de R$ 45 mil')."
             )
-        if atuais.get("rendimento_mensal"):
-            parametros.setdefault("rendimento_mensal", atuais["rendimento_mensal"])
-        resultado = scenarios.simular(arm, parametros)
+        if current.get("rendimento_mensal"):
+            parameters.setdefault("rendimento_mensal", current["rendimento_mensal"])
+        result = scenarios.simulate(arm, parameters)
         return {
-            "parametros": parametros,
-            "dados_atuais": atuais,
-            "resultado": resultado,
-            "analise": await ai.analisar(llm, pergunta, resultado, atuais),
+            "parametros": parameters,
+            "dados_atuais": current,
+            "resultado": result,
+            "analise": await ai.analyze(llm, question, result, current),
         }
 
-    return _tarefa(trabalho)
+    return _task(trabalho)
 
 
 @router.post("/cenarios/conversar")
-async def conversar(arm: ArmDep, llms: LLMsDep, corpo: Corpo) -> Any:
+async def chat(arm: ArmDep, llms: LLMsDep, corpo: Payload) -> Any:
     """Conversa curta (texto ou voz) sobre os seus dados e a simulação aberta. `mensagens`:
     [{role: user|assistant, content}], a última é a pergunta; `cenario`: {pergunta, analise}.
     No LLM local usa o modo rápido (sem raciocínio): a resposta sai em 1–3 s."""
     from financas import ai
 
-    mensagens = [
+    messages = [
         {"role": m["role"], "content": str(m["content"])[:4000]}
         for m in corpo.get("mensagens") or []
         if isinstance(m, dict) and m.get("role") in ("user", "assistant") and m.get("content")
     ]
-    if not mensagens or mensagens[-1]["role"] != "user":
+    if not messages or messages[-1]["role"] != "user":
         raise HTTPException(422, "Diga ou escreva a sua pergunta.")
-    provedor = str(corpo.get("provedor") or "local")
-    llm = llms.get("local_rapido") if provedor == "local" else None
-    llm = llm or _llm(llms, provedor)
-    resposta = await ai.conversar(llm, mensagens, ai.contexto_financeiro(arm), corpo.get("cenario"))
-    return {"resposta": resposta}
+    provider = str(corpo.get("provedor") or "local")
+    llm = llms.get("local_rapido") if provider == "local" else None
+    llm = llm or _llm(llms, provider)
+    answer = await ai.chat(llm, messages, ai.context_financial(arm), corpo.get("cenario"))
+    return {"resposta": answer}
 
 
 # --- mercado em tempo real e dados oficiais (CVM) ---
@@ -420,26 +420,26 @@ def _internet(request: Request) -> Any:
     return internet
 
 
-def _cvm(arm: Armazem) -> Any:
+def _cvm(arm: Warehouse) -> Any:
     from financas.cvm import CVM
 
     return CVM(arm.raiz)
 
 
-_AQUECIDO = [0.0]
+_WARM = [0.0]
 
 
 @router.get("/mercado/destaques")
-async def destaques(request: Request, arm: ArmDep, tipo: str = "stock") -> Any:
+async def highlights(request: Request, arm: ArmDep, tipo: str = "stock") -> Any:
     """10 maiores altas e 10 maiores baixas do dia na B3 (`fund` = fundos/FIIs). De carona, renova
     em segundo plano os arquivos da CVM (no máximo 1x/hora) para a ficha do ativo abrir rápido."""
     import asyncio
     import time
 
-    if time.time() - _AQUECIDO[0] > 3600:
-        _AQUECIDO[0] = time.time()
-        _SEGUNDO_PLANO.add(t := asyncio.create_task(asyncio.to_thread(_cvm(arm).aquecer)))
-        t.add_done_callback(_SEGUNDO_PLANO.discard)
+    if time.time() - _WARM[0] > 3600:
+        _WARM[0] = time.time()
+        _SECOND_PLAN.add(t := asyncio.create_task(asyncio.to_thread(_cvm(arm).aquecer)))
+        t.add_done_callback(_SECOND_PLAN.discard)
     r = await _internet(request).usar("mercado", {"tipo": "fund" if tipo == "fund" else "stock"})
     if "erro" in r:
         raise HTTPException(503, r["erro"])
@@ -447,7 +447,7 @@ async def destaques(request: Request, arm: ArmDep, tipo: str = "stock") -> Any:
 
 
 @router.get("/mercado/noticias")
-async def noticias(request: Request, tema: str = "economia") -> Any:
+async def news(request: Request, tema: str = "economia") -> Any:
     """Manchetes do dia por tema: economia, acoes, fiis, impostos ou juros."""
     r = await _internet(request).usar("noticias", {"tema": tema})
     if "erro" in r:
@@ -456,7 +456,7 @@ async def noticias(request: Request, tema: str = "economia") -> Any:
 
 
 @router.post("/mercado/ativo", status_code=202)
-async def ativo(request: Request, arm: ArmDep, corpo: Corpo) -> Any:
+async def active(request: Request, arm: ArmDep, corpo: Payload) -> Any:
     """Tudo sobre um ticker ou nome: cotação, proventos e, conforme o tipo, os informes do FII ou
     DRE/balanço/fluxo (CVM) com os links dos DFP, ITR e releases. Vira tarefa: a primeira consulta
     baixa os arquivos da CVM."""
@@ -482,41 +482,41 @@ async def ativo(request: Request, arm: ArmDep, corpo: Corpo) -> Any:
     async def trabalho() -> Any:
         ticker = q.upper() if re.fullmatch(r"[A-Za-z0-9]{4}\d{1,2}", q) else ""
         if not ticker:  # nome ou apelido: o mais provável da busca (ação ou FII)
-            sugestoes = await asyncio.to_thread(base.sugerir, q, 1)
-            if sugestoes and sugestoes[0]["tipo"] == "fii":
-                ticker = sugestoes[0]["tickers"][0]
+            suggestions = await asyncio.to_thread(base.sugerir, q, 1)
+            if suggestions and suggestions[0]["tipo"] == "fii":
+                ticker = suggestions[0]["tickers"][0]
         # cotação e proventos já saem junto com a leitura da CVM
         cotacoes = asyncio.create_task(mercado(ticker))
-        fundo = await asyncio.to_thread(m_cvm.fii, base, ticker) if ticker.endswith("11") else None
-        if fundo:
+        background = await asyncio.to_thread(m_cvm.fii, base, ticker) if ticker.endswith("11") else None
+        if background:
             cot, prov = await cotacoes
             preco = cot.get("cotacoes", {}).get(ticker, {})
-            vp = (fundo["meses"][-1]["valor_patrimonial_cota"] if fundo["meses"] else None) or None
+            vp = (background["meses"][-1]["valor_patrimonial_cota"] if background["meses"] else None) or None
             return {
                 "tipo": "fii",
-                **fundo,
+                **background,
                 "cotacao": preco,
                 "proventos": prov,
                 "p_vp": round(preco["preco"] / vp, 2) if preco.get("preco") and vp else None,
             }
-        achados = await asyncio.to_thread(base.buscar, ticker or q)
-        if not achados:
+        found = await asyncio.to_thread(base.buscar, ticker or q)
+        if not found:
             cotacoes.cancel()
-            raise Invalido(f"Não achei '{q}' na CVM (empresa ou FII listado).")
-        e = achados[0]
+            raise Invalid(f"Não achei '{q}' na CVM (empresa ou FII listado).")
+        e = found[0]
         if ticker not in e["tickers"]:
             cotacoes.cancel()
             ticker = e["tickers"][0] if e["tickers"] else ""
             cotacoes = asyncio.create_task(mercado(ticker))
         carregando = parcial.setdefault("carregando", [])
         carregando += ["cotacao", "demonstrativos", "documentos"]
-        parcial.update({**e, "tipo": "acao", "ticker": ticker, "outros": achados[1:5]})
+        parcial.update({**e, "tipo": "acao", "ticker": ticker, "outros": found[1:5]})
         parcial["demonstrativos"] = []
 
         def resumir() -> None:
             """Indicadores e valuation com o que já chegou (refeito quando chega mais)."""
             preco = (parcial.get("cotacao") or {}).get("preco")
-            parcial.update(analysis.resumo_ficha(parcial["demonstrativos"], preco, e["setor"]))
+            parcial.update(analysis.summary_card(parcial["demonstrativos"], preco, e["setor"]))
 
         async def cotacao() -> None:
             cot, prov = await cotacoes
@@ -526,13 +526,13 @@ async def ativo(request: Request, arm: ArmDep, corpo: Corpo) -> Any:
             carregando.remove("cotacao")
             resumir()
 
-        def ao_ano(anos: list[dict[str, Any]]) -> None:
-            parcial["demonstrativos"] = analysis.limpar_demonstrativos(anos)
+        def ao_ano(years: list[dict[str, Any]]) -> None:
+            parcial["demonstrativos"] = analysis.clean_statements(years)
             resumir()
 
         async def demonstrativos() -> None:
             d = await asyncio.to_thread(base.demonstrativos, e["codigo_cvm"], ao_ano=ao_ano)
-            parcial["demonstrativos"] = analysis.limpar_demonstrativos(d) if d else []
+            parcial["demonstrativos"] = analysis.clean_statements(d) if d else []
             carregando.remove("demonstrativos")
             resumir()
 
@@ -545,11 +545,11 @@ async def ativo(request: Request, arm: ArmDep, corpo: Corpo) -> Any:
         await asyncio.gather(cotacao(), demonstrativos(), documentos())
         return {k: v for k, v in parcial.items() if k != "carregando"}
 
-    return _tarefa(trabalho, parcial)
+    return _task(trabalho, parcial)
 
 
 @router.get("/mercado/sugerir")
-async def sugerir(arm: ArmDep, q: str = "", limite: int = 12) -> Any:
+async def suggest(arm: ArmDep, q: str = "", limite: int = 12) -> Any:
     """Busca enquanto digita (ações e FIIs): ticker pelo começo, nome, apelido e nome parecido."""
     import asyncio
 
@@ -561,66 +561,66 @@ async def sugerir(arm: ArmDep, q: str = "", limite: int = 12) -> Any:
         raise HTTPException(503, f"Busca indisponível: {e}") from e
 
 
-async def _vazio() -> dict[str, Any]:
+async def _empty() -> dict[str, Any]:
     return {}
 
 
 @router.post("/empresas/{id_}/importar-cvm", status_code=202)
-async def importar_cvm(request: Request, arm: ArmDep, id_: str) -> Any:
+async def import_cvm(request: Request, arm: ArmDep, id_: str) -> Any:
     """Preenche DRE, balanço e fluxo de caixa (6 anos, R$ mil), o número de ações (mil), a cotação
     do dia e o cadastro da empresa pela CVM: sem ações e cotação, P/L, P/VP e preço justo ficam
     vazios."""
     import asyncio
 
     try:
-        empresa = arm.obter("empresas", id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+        company = arm.obter("empresas", id_)
+    except NotFound as e:
+        raise _error(e) from e
     base = _cvm(arm)
 
     async def trabalho() -> Any:
-        achados = await asyncio.to_thread(base.buscar, empresa["ticker"] or empresa["nome"])
-        if not achados:
-            raise Invalido(f"{empresa['ticker']} não está na CVM.")
-        e = achados[0]
-        ticker = empresa["ticker"].upper() if empresa["ticker"] in e["tickers"] else ""
+        found = await asyncio.to_thread(base.buscar, company["ticker"] or company["nome"])
+        if not found:
+            raise Invalid(f"{company['ticker']} não está na CVM.")
+        e = found[0]
+        ticker = company["ticker"].upper() if company["ticker"] in e["tickers"] else ""
         ticker = ticker or (e["tickers"][0] if e["tickers"] else "")
-        anos, cot = await asyncio.gather(
+        years, cot = await asyncio.gather(
             asyncio.to_thread(base.demonstrativos, e["codigo_cvm"]),
-            _internet(request).usar("acoes", {"tickers": [ticker]}) if ticker else _vazio(),
+            _internet(request).usar("acoes", {"tickers": [ticker]}) if ticker else _empty(),
         )
         preco = ((cot or {}).get("cotacoes", {}).get(ticker) or {}).get("preco")
-        acoes = next((d["acoes"] for d in reversed(anos) if d.get("acoes")), None)
-        antigos = {d["ano"]: d for d in empresa["demonstrativos"]}
-        for d in anos:  # o que veio da CVM substitui o ano; o resto que você digitou fica
-            antigos[d["ano"]] = {**antigos.get(d["ano"], {}), **d}
-        dados = {
-            "demonstrativos": analysis.limpar_demonstrativos(list(antigos.values())),
-            "cnpj": empresa["cnpj"] or e["cnpj"],
-            "site": empresa["site"] or e["site"],
-            "nome": empresa["nome"] or e["nome"],
-            "setor": empresa["setor"] or e["setor"],
-            "descricao": empresa["descricao"] or e["atividade"],
-            "ticker": empresa["ticker"].upper() or ticker,
+        actions = next((d["acoes"] for d in reversed(years) if d.get("acoes")), None)
+        old = {d["ano"]: d for d in company["demonstrativos"]}
+        for d in years:  # o que veio da CVM substitui o ano; o resto que você digitou fica
+            old[d["ano"]] = {**old.get(d["ano"], {}), **d}
+        data = {
+            "demonstrativos": analysis.clean_statements(list(old.values())),
+            "cnpj": company["cnpj"] or e["cnpj"],
+            "site": company["site"] or e["site"],
+            "nome": company["nome"] or e["nome"],
+            "setor": company["setor"] or e["setor"],
+            "descricao": company["descricao"] or e["atividade"],
+            "ticker": company["ticker"].upper() or ticker,
             **({"cotacao": preco} if preco else {}),
-            **({"acoes": acoes} if acoes else {}),
+            **({"acoes": actions} if actions else {}),
         }
-        return {"empresa": arm.editar("empresas", id_, dados), "anos": [d["ano"] for d in anos]}
+        return {"empresa": arm.editar("empresas", id_, data), "anos": [d["ano"] for d in years]}
 
-    return _tarefa(trabalho)
+    return _task(trabalho)
 
 
-def pdf_do_documento(conteudo: bytes) -> bytes | None:
+def pdf_of_document(content: bytes) -> bytes | None:
     """O PDF de um documento da CVM: o próprio arquivo (release, apresentação) ou, no pacote ZIP do
     DFP/ITR, o maior PDF lá dentro (as demonstrações completas)."""
     import io
     import zipfile
 
-    if conteudo.startswith(b"%PDF"):
-        return conteudo
-    if conteudo.startswith(b"PK"):
+    if content.startswith(b"%PDF"):
+        return content
+    if content.startswith(b"PK"):
         try:
-            with zipfile.ZipFile(io.BytesIO(conteudo)) as z:
+            with zipfile.ZipFile(io.BytesIO(content)) as z:
                 pdfs = [i for i in z.infolist() if i.filename.lower().endswith(".pdf")]
                 if pdfs:
                     return z.read(max(pdfs, key=lambda i: i.file_size))
@@ -629,26 +629,26 @@ def pdf_do_documento(conteudo: bytes) -> bytes | None:
     return None
 
 
-def link_seguro(url: str) -> str:
+def link_safe(url: str) -> str:
     """Os links da CVM vêm em http://, que a CVM recusa (e o Android bloqueia): sempre https."""
     return "https://" + url.split("://", 1)[1] if url.startswith("http://") else url
 
 
 @router.post("/mercado/guardar", status_code=202)
-async def guardar_documento(request: Request, corpo: Corpo) -> Any:
+async def store_document(request: Request, corpo: Payload) -> Any:
     """Baixa um documento da CVM (release, apresentação, DFP/ITR) e guarda o PDF no módulo Arquivos
     (`Finanças/<ticker>`), para abrir no leitor do app, grifar e anotar. Vira tarefa: o pacote do
     DFP passa de 20 MB. O mesmo documento de novo não duplica (o Arquivos devolve o já guardado)."""
     import httpx
 
-    url = link_seguro(str(corpo.get("url") or ""))
+    url = link_safe(str(corpo.get("url") or ""))
     ticker = str(corpo.get("ticker") or "Mercado").upper()
     if not url.startswith("https://www.rad.cvm.gov.br/"):
         raise HTTPException(422, "Só documentos do RAD da CVM.")
-    biblioteca = getattr(request.app.state, "biblioteca", None)
-    if biblioteca is None:
+    collection = getattr(request.app.state, "biblioteca", None)
+    if collection is None:
         raise HTTPException(503, "Módulo Arquivos indisponível.")
-    titulo = (
+    title = (
         re.sub(r"[^\w\s.-]", "", str(corpo.get("titulo") or "documento"))[:80].strip()
         or "documento"
     )
@@ -659,30 +659,30 @@ async def guardar_documento(request: Request, corpo: Corpo) -> Any:
                 r = await c.get(url, headers={"User-Agent": "Mozilla/5.0"})
                 r.raise_for_status()
         except httpx.HTTPError as e:
-            raise Invalido(f"A CVM não entregou o documento ({e.__class__.__name__}).") from e
-        pdf = pdf_do_documento(r.content)
+            raise Invalid(f"A CVM não entregou o documento ({e.__class__.__name__}).") from e
+        pdf = pdf_of_document(r.content)
         if pdf is None:
-            raise Invalido("O documento da CVM não tem PDF dentro: abra pelo navegador.")
-        meta = biblioteca.adicionar(f"{ticker} {titulo}.pdf", pdf, pasta=f"Finanças/{ticker}")
+            raise Invalid("O documento da CVM não tem PDF dentro: abra pelo navegador.")
+        meta = collection.adicionar(f"{ticker} {title}.pdf", pdf, pasta=f"Finanças/{ticker}")
         return {"arquivo": meta}
 
-    return _tarefa(trabalho)
+    return _task(trabalho)
 
 
 # --- empresas, setores e carteira ---
 
 
 @router.get("/questionario")
-def questionario(arm: ArmDep) -> Any:
+def questionnaire(arm: ArmDep) -> Any:
     return arm.questionario()
 
 
 @router.put("/questionario")
-def salvar_questionario(arm: ArmDep, corpo: Annotated[list[dict[str, Any]], Body()]) -> Any:
+def save_questionnaire(arm: ArmDep, corpo: Annotated[list[dict[str, Any]], Body()]) -> Any:
     try:
         return arm.salvar_questionario(corpo)
-    except Invalido as e:
-        raise _erro(e) from e
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.get("/empresas/ranking")
@@ -691,166 +691,166 @@ def ranking(arm: ArmDep) -> Any:
 
 
 @router.get("/empresas/{id_}/analise")
-def analisar(arm: ArmDep, id_: str) -> Any:
+def analyze(arm: ArmDep, id_: str) -> Any:
     try:
-        return analysis.analisar(arm, arm.obter("empresas", id_))
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+        return analysis.analyze(arm, arm.obter("empresas", id_))
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.get("/setores/{id_}/analise")
-def analisar_setor(arm: ArmDep, id_: str) -> Any:
+def analyze_sector(arm: ArmDep, id_: str) -> Any:
     try:
-        return analysis.setor_analise(arm, arm.obter("setores", id_))
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+        return analysis.sector_analysis(arm, arm.obter("setores", id_))
+    except NotFound as e:
+        raise _error(e) from e
 
 
 # ---------- estudos de finanças (trilha, livros, artigos, relatórios) ----------
 
 
 @router.get("/estudo")
-def estudo_trilha(arm: ArmDep, objetivo: str = "") -> Any:
+def study_track(arm: ArmDep, objetivo: str = "") -> Any:
     """Trilha de finanças com o progresso, o guia de cada livro, artigos e relatórios."""
-    return study.montar(arm, objetivo)
+    return study.assemble(arm, objetivo)
 
 
 @router.put("/estudo/objetivo")
-def estudo_objetivo(arm: ArmDep, corpo: Corpo) -> Any:
-    objetivo = str(corpo.get("objetivo") or "")
-    if objetivo not in {o["id"] for o in study.OBJETIVOS}:
+def study_goal(arm: ArmDep, corpo: Payload) -> Any:
+    goal = str(corpo.get("objetivo") or "")
+    if goal not in {o["id"] for o in study.GOALS}:
         raise HTTPException(422, "Objetivo desconhecido.")
-    study.marcar(arm, "objetivo", {"nota": objetivo})
-    return study.montar(arm, objetivo)
+    study.mark(arm, "objetivo", {"nota": goal})
+    return study.assemble(arm, goal)
 
 
 @router.patch("/estudo/itens")
-def estudo_marcar(arm: ArmDep, corpo: Corpo) -> Any:
+def study_mark(arm: ArmDep, corpo: Payload) -> Any:
     """`{item, status?, nota?}`: item = `etapa:<id>`, `livro:<id>`, `cap:<livro>:<n>`,
     `artigo:<id>` ou `relatorio:<id>`."""
     try:
-        return study.marcar(arm, str(corpo.get("item") or ""), corpo)
-    except Invalido as e:
-        raise _erro(e) from e
+        return study.mark(arm, str(corpo.get("item") or ""), corpo)
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.put("/estudo/livros/{id_}/tenho")
-def estudo_tenho(arm: ArmDep, id_: str, corpo: Corpo) -> Any:
+def study_have(arm: ArmDep, id_: str, corpo: Payload) -> Any:
     try:
-        return study.tenho(arm, id_, bool(corpo.get("tenho")))
-    except (Invalido, NaoEncontrado) as e:
-        raise _erro(e) from e
+        return study.have(arm, id_, bool(corpo.get("tenho")))
+    except (Invalid, NotFound) as e:
+        raise _error(e) from e
 
 
-def _reescrita(request: Request) -> Any:
+def _rewrite(request: Request) -> Any:
     """Claude Code headless do worker (o mesmo do mapeamento de leituras), ou 503."""
     r = getattr(request.app.state, "reescrita", None)
-    motivo = r.disponivel() if r is not None else "Claude indisponível neste servidor."
-    if motivo or r.executar_json is None:
-        raise HTTPException(503, motivo or "Claude indisponível neste servidor.")
+    reason = r.disponivel() if r is not None else "Claude indisponível neste servidor."
+    if reason or r.executar_json is None:
+        raise HTTPException(503, reason or "Claude indisponível neste servidor.")
     return r
 
 
 @router.post("/estudo/livros/{id_}/guia", status_code=202)
-async def estudo_guia(request: Request, arm: ArmDep, id_: str) -> Any:
+async def study_guide(request: Request, arm: ArmDep, id_: str) -> Any:
     """O Claude monta o guia de leitura não linear do livro (capítulos, ordem, por quê) e o guia
     fica gravado; nos livros do catálogo ele completa o que já está escrito."""
-    claude = _reescrita(request)
-    livro = study.livros(arm).get(id_)
-    if livro is None:
+    claude = _rewrite(request)
+    book = study.books(arm).get(id_)
+    if book is None:
         raise HTTPException(404, "Livro não encontrado.")
 
     async def trabalho() -> Any:
-        guia = await claude.executar_json(
+        guide = await claude.executar_json(
             {
-                "prompt": study.prompt_guia(livro),
-                "sistema": study.SISTEMA_GUIA,
-                "esquema": study.ESQUEMA_GUIA,
+                "prompt": study.prompt_guide(book),
+                "sistema": study.SYSTEM_GUIDE,
+                "esquema": study.SCHEMA_GUIDE,
                 "effort": "high",
                 "limite_s": 280,
             }
         )
-        if not isinstance(guia, dict) or not guia.get("capitulos"):
-            raise Invalido("O Claude não devolveu o guia.")
-        registro = livro["registro_id"] or study.tenho(arm, id_, livro["tenho"])["id"]
-        arm.editar("estudo_livros", registro, {"guia": guia})
-        return study.livros(arm)[id_]
+        if not isinstance(guide, dict) or not guide.get("capitulos"):
+            raise Invalid("O Claude não devolveu o guia.")
+        record = book["registro_id"] or study.have(arm, id_, book["tenho"])["id"]
+        arm.editar("estudo_livros", record, {"guia": guide})
+        return study.books(arm)[id_]
 
-    return _tarefa(trabalho)
+    return _task(trabalho)
 
 
 @router.post("/estudo/livros", status_code=201)
-def estudo_novo_livro(arm: ArmDep, corpo: Corpo) -> Any:
+def study_new_book(arm: ArmDep, corpo: Payload) -> Any:
     """Livro que você tem e não está no catálogo; depois peça o guia ao Claude."""
-    titulo = str(corpo.get("titulo") or "").strip()
-    if not titulo:
+    title = str(corpo.get("titulo") or "").strip()
+    if not title:
         raise HTTPException(422, "Diga o título.")
     r = arm.criar(
         "estudo_livros",
-        {"titulo": titulo, "autor": str(corpo.get("autor") or "").strip(), "tenho": "sim"},
+        {"titulo": title, "autor": str(corpo.get("autor") or "").strip(), "tenho": "sim"},
     )
-    return study.livros(arm)[r["id"]]
+    return study.books(arm)[r["id"]]
 
 
 @router.post("/estudo/ler", status_code=201)
-def estudo_ler(request: Request, arm: ArmDep, corpo: Corpo) -> Any:
+def study_read(request: Request, arm: ArmDep, corpo: Payload) -> Any:
     """Põe o livro ou artigo em Estudos › Leituras (área Finanças) e garante o projeto de leitura
     "Trilha de Finanças": com ele ativo no leitor, grifos e comentários viram citações da trilha."""
-    estudos = getattr(request.app.state, "estudos", None)
-    if estudos is None:
+    studies = getattr(request.app.state, "estudos", None)
+    if studies is None:
         raise HTTPException(503, "Módulo Estudos indisponível.")
     item = str(corpo.get("item") or "")
-    tipo, _, chave = item.partition(":")
-    if tipo == "livro" and (livro := study.livros(arm).get(chave)):
-        dados = {"titulo": livro["titulo"], "autor": livro["autor"], "tipo": "livro"}
-    elif tipo == "artigo" and chave in study.ARTIGOS:
-        autores, titulo, revista, _n, _p = study.ARTIGOS[chave]
-        dados = {
-            "titulo": titulo,
+    kind, _, key = item.partition(":")
+    if kind == "livro" and (book := study.books(arm).get(key)):
+        data = {"titulo": book["titulo"], "autor": book["autor"], "tipo": "livro"}
+    elif kind == "artigo" and key in study.ARTICLES:
+        autores, title, revista, _n, _p = study.ARTICLES[key]
+        data = {
+            "titulo": title,
             "autor": autores,
             "tipo": "artigo",
-            "referencia": f"{autores}. {titulo}. {revista}.",
+            "referencia": f"{autores}. {title}. {revista}.",
         }
     else:
         raise HTTPException(404, "Item não encontrado.")
-    leitura_id = next(
+    reading_id = next(
         (p["leitura_id"] for p in arm.todos("estudo_progresso") if p["item"] == item), ""
     )
-    leituras = {x["id"]: x for x in estudos.listar_leituras(area="Finanças")}
-    if leitura_id not in leituras:
-        mesma = next((x for x in leituras.values() if x["titulo"] == dados["titulo"]), None)
-        leitura = mesma or estudos.criar_leitura(
-            {**dados, "area": "Finanças", "status": "lendo", "tags": ["trilha-financas"]}
+    readings = {x["id"]: x for x in studies.listar_leituras(area="Finanças")}
+    if reading_id not in readings:
+        mesma = next((x for x in readings.values() if x["titulo"] == data["titulo"]), None)
+        reading = mesma or studies.criar_leitura(
+            {**data, "area": "Finanças", "status": "lendo", "tags": ["trilha-financas"]}
         )
-        leitura_id = leitura["id"]
-    study.marcar(arm, item, {"leitura_id": leitura_id, "status": "lendo"})
-    projeto = next((p for p in estudos.listar_projetos() if p["nome"] == study.PROJETO), None)
-    if projeto is None:
-        projeto = estudos.criar_projeto(
+        reading_id = reading["id"]
+    study.mark(arm, item, {"leitura_id": reading_id, "status": "lendo"})
+    project = next((p for p in studies.listar_projetos() if p["nome"] == study.PROJECT), None)
+    if project is None:
+        project = studies.criar_projeto(
             {
-                "nome": study.PROJETO,
+                "nome": study.PROJECT,
                 "descricao": "Grifos e comentários das leituras da trilha de finanças.",
-                "secoes": [titulo for titulo, _ in study.NIVEIS.values()],
+                "secoes": [title for title, _ in study.LEVELS.values()],
             }
         )
-    return {"leitura_id": leitura_id, "projeto_id": projeto["id"], "projeto": study.PROJETO}
+    return {"leitura_id": reading_id, "projeto_id": project["id"], "projeto": study.PROJECT}
 
 
 @router.get("/estudo/citacoes")
-def estudo_citacoes(request: Request) -> Any:
+def study_quotes(request: Request) -> Any:
     """Grifos, comentários e citações (ABNT) do projeto "Trilha de Finanças", por obra."""
-    estudos = getattr(request.app.state, "estudos", None)
-    if estudos is None:
+    studies = getattr(request.app.state, "estudos", None)
+    if studies is None:
         return {"projeto_id": None, "obras": []}
-    projeto = next((p for p in estudos.listar_projetos() if p["nome"] == study.PROJETO), None)
-    if projeto is None:
+    project = next((p for p in studies.listar_projetos() if p["nome"] == study.PROJECT), None)
+    if project is None:
         return {"projeto_id": None, "obras": []}
-    m = estudos.matriz(projeto["id"])
-    obras: dict[str, dict[str, Any]] = {}
+    m = studies.matriz(project["id"])
+    works: dict[str, dict[str, Any]] = {}
     for i in m["itens"]:
         if i["tipo"] == "manuscrito":
             continue
-        o = obras.setdefault(
+        o = works.setdefault(
             i["arquivo_id"],
             {"arquivo_id": i["arquivo_id"], "titulo": i["arquivo_titulo"], "itens": []},
         )
@@ -864,77 +864,77 @@ def estudo_citacoes(request: Request) -> Any:
                 "secao": (i.get("classificacao") or {}).get("secao", ""),
             }
         )
-    return {"projeto_id": projeto["id"], "obras": list(obras.values())}
+    return {"projeto_id": project["id"], "obras": list(works.values())}
 
 
 @router.get("/carteira")
-def carteira(arm: ArmDep) -> Any:
-    return analysis.carteira(arm)
+def portfolio(arm: ArmDep) -> Any:
+    return analysis.portfolio(arm)
 
 
 # --- CRUD genérico ---
 
 
-def _preparar(colecao: str, dados: dict[str, Any]) -> dict[str, Any]:
-    if colecao == "empresas" and "demonstrativos" in dados:
-        dados = {**dados, "demonstrativos": analysis.limpar_demonstrativos(dados["demonstrativos"])}
-    if colecao == "transacoes" and "categoria_id" in dados and "categoria_ia" not in dados:
+def _prepare(collection: str, dados: dict[str, Any]) -> dict[str, Any]:
+    if collection == "empresas" and "demonstrativos" in dados:
+        dados = {**dados, "demonstrativos": analysis.clean_statements(dados["demonstrativos"])}
+    if collection == "transacoes" and "categoria_id" in dados and "categoria_ia" not in dados:
         dados = {**dados, "categoria_ia": False}  # escolha do usuário: a reconferência não troca
     return dados
 
 
 @router.get("/{colecao}")
-def listar(arm: ArmDep, colecao: str) -> Any:
+def list_all(arm: ArmDep, colecao: str) -> Any:
     try:
         return arm.todos(colecao)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.post("/{colecao}/excluir-lote")
-def excluir_lote(arm: ArmDep, colecao: str, corpo: Corpo) -> Any:
+def delete_batch(arm: ArmDep, colecao: str, corpo: Payload) -> Any:
     """Exclui vários documentos (`ids`, até 500 por chamada; o app manda em lotes)."""
     ids = [str(i) for i in corpo.get("ids") or []]
     if len(ids) > 500:
         raise HTTPException(422, "No máximo 500 ids por lote")
     try:
         return {"excluidas": arm.excluir_varios(colecao, ids)}
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.post("/{colecao}", status_code=201)
-def criar(arm: ArmDep, colecao: str, corpo: Corpo) -> Any:
-    if colecao not in ESQUEMAS:
+def create(arm: ArmDep, colecao: str, corpo: Payload) -> Any:
+    if colecao not in SCHEMAS:
         raise HTTPException(404, "Não encontrado")
     try:
-        doc = arm.criar(colecao, _preparar(colecao, corpo))
-        if colecao == "transacoes" and statement.categorizar(arm, doc):
+        doc = arm.criar(colecao, _prepare(colecao, corpo))
+        if colecao == "transacoes" and statement.categorize(arm, doc):
             arm.salvar("transacoes")
         return doc
-    except Invalido as e:
-        raise _erro(e) from e
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.get("/{colecao}/{id_}")
-def obter(arm: ArmDep, colecao: str, id_: str) -> Any:
+def get(arm: ArmDep, colecao: str, id_: str) -> Any:
     try:
         return arm.obter(colecao, id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.patch("/{colecao}/{id_}")
-def editar(arm: ArmDep, colecao: str, id_: str, corpo: Corpo) -> Any:
+def edit(arm: ArmDep, colecao: str, id_: str, corpo: Payload) -> Any:
     try:
-        return arm.editar(colecao, id_, _preparar(colecao, corpo))
-    except (NaoEncontrado, Invalido) as e:
-        raise _erro(e) from e
+        return arm.editar(colecao, id_, _prepare(colecao, corpo))
+    except (NotFound, Invalid) as e:
+        raise _error(e) from e
 
 
 @router.delete("/{colecao}/{id_}", status_code=204)
-def excluir(arm: ArmDep, colecao: str, id_: str) -> None:
+def delete(arm: ArmDep, colecao: str, id_: str) -> None:
     try:
         arm.excluir(colecao, id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e

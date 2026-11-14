@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.api.deps import require_client_api_key
-from backend.files.library import ArquivoNaoEncontrado, Biblioteca
+from backend.files.library import FileNotFound, Collection
 from shared.claude_code import (
     REWRITE_GOALS,
     REWRITE_SCHEMA,
@@ -21,7 +21,7 @@ from shared.claude_code import (
 
 
 @dataclass
-class Reescrita:
+class Rewrite:
     executar: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
     disponivel: Callable[[], str | None]
     """Motivo de não dar para reescrever agora (sem worker e sem `claude` aqui), ou None."""
@@ -31,7 +31,7 @@ class Reescrita:
     """O mesmo pedido pela LLM local: a tradução das páginas (sem ela, cai no `executar_json`)."""
 
 
-class PedidoReescrita(BaseModel):
+class RequestRewrite(BaseModel):
     trecho: str = Field(min_length=1, max_length=60_000)
     objetivo: str = "orientador"
     instrucao: str = Field("", max_length=4_000)
@@ -46,17 +46,17 @@ router = APIRouter(
 )
 
 
-def get_reescrita(request: Request) -> Reescrita:
-    reescrita: Reescrita = request.app.state.reescrita
-    return reescrita
+def get_rewrite(request: Request) -> Rewrite:
+    rewrite: Rewrite = request.app.state.reescrita
+    return rewrite
 
 
-ReescritaDep = Annotated[Reescrita, Depends(get_reescrita)]
+RewriteDep = Annotated[Rewrite, Depends(get_rewrite)]
 
 
-def texto_do_documento(biblioteca: Biblioteca, id_: str) -> str:
+def text_of_document(collection: Collection, id_: str) -> str:
     """Texto do PDF exibido (DOCX já convertido) pelo pdftotext; vazio se não houver."""
-    pdf = biblioteca.caminho_pdf(id_)
+    pdf = collection.caminho_pdf(id_)
     if pdf is None:
         return ""
     try:
@@ -69,43 +69,43 @@ def texto_do_documento(biblioteca: Biblioteca, id_: str) -> str:
 
 
 @router.get("/reescrita")
-def estado(reescrita: ReescritaDep) -> Any:
+def state(reescrita: RewriteDep) -> Any:
     return {"objetivos": sorted(REWRITE_GOALS), "indisponivel": reescrita.disponivel()}
 
 
 @router.post("/reescrever")
-async def reescrever(pedido: PedidoReescrita, request: Request, reescrita: ReescritaDep) -> Any:
+async def rewrite(pedido: RequestRewrite, request: Request, reescrita: RewriteDep) -> Any:
     # traduzir vai pela LLM local quando houver; os demais objetivos, pelo Claude
     local = reescrita.traducao_json if pedido.objetivo == "traduzir" else None
-    motivo = None if local else reescrita.disponivel()
-    if motivo:
-        raise HTTPException(503, motivo)
-    dados = pedido.model_dump()
+    reason = None if local else reescrita.disponivel()
+    if reason:
+        raise HTTPException(503, reason)
+    data = pedido.model_dump()
     if not pedido.contexto and pedido.arquivo_id:
-        biblioteca: Biblioteca = request.app.state.biblioteca
+        collection: Collection = request.app.state.biblioteca
         try:
-            biblioteca.obter(pedido.arquivo_id)
-        except ArquivoNaoEncontrado as e:
+            collection.obter(pedido.arquivo_id)
+        except FileNotFound as e:
             raise HTTPException(404, "Arquivo não encontrado") from e
-        dados["contexto"] = texto_do_documento(biblioteca, pedido.arquivo_id)
+        data["contexto"] = text_of_document(collection, pedido.arquivo_id)
     try:
-        build_rewrite_prompt(dados)  # valida antes de ocupar o worker
+        build_rewrite_prompt(data)  # valida antes de ocupar o worker
     except InvalidRewriteRequest as e:
         raise HTTPException(422, str(e)) from e
     try:
         if local:
-            prompt = build_rewrite_prompt(dados)
+            prompt = build_rewrite_prompt(data)
             return await local(
                 {"prompt": prompt, "sistema": REWRITE_SYSTEM_PROMPT, "esquema": REWRITE_SCHEMA}
             )
-        return await reescrita.executar(dados)
+        return await reescrita.executar(data)
     except RuntimeError as e:
         raise HTTPException(502, str(e)) from e
 
 
 # --- tradução do documento, frase a frase (o leitor liga cada frase em português ao original) ---
 
-SISTEMA_TRADUCAO = """Você traduz artigos acadêmicos para o português do Brasil, para um leitor \
+SYSTEM_TRANSLATION = """Você traduz artigos acadêmicos para o português do Brasil, para um leitor \
 que está aprendendo inglês e precisa ler o documento inteiro.
 
 Regras fixas:
@@ -118,7 +118,7 @@ bibliográficas como estão (traduza só as palavras comuns delas).
 - Hifenização de quebra de linha ("trans- lation") é uma palavra só. Cabeçalhos, legendas e \
 fragmentos soltos também são traduzidos, do jeito que vierem."""
 
-ESQUEMA_TRADUCAO = {
+SCHEMA_TRANSLATION = {
     "type": "object",
     "properties": {
         "traducoes": {
@@ -135,83 +135,83 @@ ESQUEMA_TRADUCAO = {
     "additionalProperties": False,
 }
 
-LIMITE_TRADUCAO = 40_000
+LIMIT_TRANSLATION = 40_000
 """Caracteres por pedido (o app manda algumas páginas por vez)."""
 
 
-class PaginaParaTraduzir(BaseModel):
+class PageParaTranslate(BaseModel):
     pagina: int = Field(ge=0)
     segmentos: list[str] = Field(max_length=600)
 
 
-class PedidoTraducao(BaseModel):
-    paginas: list[PaginaParaTraduzir] = Field(min_length=1, max_length=60)
+class RequestTranslation(BaseModel):
+    paginas: list[PageParaTranslate] = Field(min_length=1, max_length=60)
     refazer: bool = False
 
 
-def prompt_traducao(titulo: str, segmentos: list[str]) -> str:
-    linhas = "\n".join(f"[{n}] {s}" for n, s in enumerate(segmentos, 1))
-    return f"Documento: {titulo}\n\nTraduza cada frase:\n\n{linhas}"
+def prompt_translation(titulo: str, segments: list[str]) -> str:
+    lines = "\n".join(f"[{n}] {s}" for n, s in enumerate(segments, 1))
+    return f"Documento: {titulo}\n\nTraduza cada frase:\n\n{lines}"
 
 
 @router.get("/{id_}/traducao")
-def traducao(id_: str, request: Request) -> Any:
-    biblioteca: Biblioteca = request.app.state.biblioteca
+def translation(id_: str, request: Request) -> Any:
+    collection: Collection = request.app.state.biblioteca
     try:
-        return biblioteca.traducao(id_)
-    except ArquivoNaoEncontrado as e:
+        return collection.traducao(id_)
+    except FileNotFound as e:
         raise HTTPException(404, "Arquivo não encontrado") from e
 
 
 @router.post("/{id_}/traducao")
-async def traduzir(
-    id_: str, pedido: PedidoTraducao, request: Request, reescrita: ReescritaDep
+async def translate(
+    id_: str, pedido: RequestTranslation, request: Request, reescrita: RewriteDep
 ) -> Any:
     """Traduz as páginas pedidas (as que já estão no cache com as mesmas frases voltam direto)."""
-    biblioteca: Biblioteca = request.app.state.biblioteca
+    collection: Collection = request.app.state.biblioteca
     try:
-        meta = biblioteca.obter(id_)
-        cache = biblioteca.traducao(id_)
-    except ArquivoNaoEncontrado as e:
+        meta = collection.obter(id_)
+        cache = collection.traducao(id_)
+    except FileNotFound as e:
         raise HTTPException(404, "Arquivo não encontrado") from e
-    faltam = [
+    missing = [
         p
         for p in pedido.paginas
         if pedido.refazer or cache.get(str(p.pagina), {}).get("segmentos") != p.segmentos
     ]
-    if faltam:
-        frases = [s for p in faltam for s in p.segmentos]
-        if sum(len(s) for s in frases) > LIMITE_TRADUCAO:
+    if missing:
+        sentences = [s for p in missing for s in p.segmentos]
+        if sum(len(s) for s in sentences) > LIMIT_TRANSLATION:
             raise HTTPException(422, "Páginas demais num pedido só.")
-        por_n: dict[int, str] = {}
-        if frases:
-            executar = reescrita.traducao_json or reescrita.executar_json
-            motivo = None if reescrita.traducao_json else reescrita.disponivel()
-            if motivo or executar is None:
-                raise HTTPException(503, motivo or "Tradução indisponível neste servidor.")
+        by_n: dict[int, str] = {}
+        if sentences:
+            execute = reescrita.traducao_json or reescrita.executar_json
+            reason = None if reescrita.traducao_json else reescrita.disponivel()
+            if reason or execute is None:
+                raise HTTPException(503, reason or "Tradução indisponível neste servidor.")
             try:
-                r = await executar(
+                r = await execute(
                     {
-                        "prompt": prompt_traducao(str(meta.get("titulo") or ""), frases),
-                        "sistema": SISTEMA_TRADUCAO,
-                        "esquema": ESQUEMA_TRADUCAO,
+                        "prompt": prompt_translation(str(meta.get("titulo") or ""), sentences),
+                        "sistema": SYSTEM_TRANSLATION,
+                        "esquema": SCHEMA_TRANSLATION,
                         "effort": "medium",
                         "limite_s": 280,
                     }
                 )
             except RuntimeError as e:
                 raise HTTPException(502, str(e)) from e
-            por_n = {
+            by_n = {
                 int(t["n"]): str(t.get("pt") or "").strip()
                 for t in r.get("traducoes") or []
                 if isinstance(t, dict) and isinstance(t.get("n"), int)
             }
-        novas, n = {}, 1
-        for p in faltam:
+        new, n = {}, 1
+        for p in missing:
             traducoes = []
             for _ in p.segmentos:
-                traducoes.append(por_n.get(n, ""))
+                traducoes.append(by_n.get(n, ""))
                 n += 1
-            novas[str(p.pagina)] = {"segmentos": p.segmentos, "traducoes": traducoes}
-        cache = biblioteca.salvar_traducao(id_, novas)
+            new[str(p.pagina)] = {"segmentos": p.segmentos, "traducoes": traducoes}
+        cache = collection.salvar_traducao(id_, new)
     return {str(p.pagina): cache[str(p.pagina)] for p in pedido.paginas}

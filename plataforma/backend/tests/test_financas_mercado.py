@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from financas.cvm import CVM, fii, ticker_do_isin
+from financas.cvm import CVM, fii, ticker_of_isin
 
 ANO = date.today().year
 
@@ -28,8 +28,8 @@ def _csv(cab: list[str], linhas: list[list[str]]) -> bytes:
 
 def _zip(destino: Path, arquivos: dict[str, bytes]) -> None:
     with zipfile.ZipFile(destino, "w") as z:
-        for nome, conteudo in arquivos.items():
-            z.writestr(nome, conteudo)
+        for name, content in arquivos.items():
+            z.writestr(name, content)
 
 
 DEM = [
@@ -279,18 +279,18 @@ def pasta(tmp_path: Path) -> Path:
 
 
 def test_isin_do_fii() -> None:
-    assert ticker_do_isin("BRMXRFCTF008") == "MXRF11"
-    assert ticker_do_isin("BRPETRACNPR6") == ""
+    assert ticker_of_isin("BRMXRFCTF008") == "MXRF11"
+    assert ticker_of_isin("BRPETRACNPR6") == ""
 
 
 def test_empresa_demonstrativos_e_links(pasta: Path) -> None:
     c = CVM(pasta)
     [e] = c.buscar("EMPX4")
     assert (e["codigo_cvm"], e["tickers"]) == (9999, ["EMPX3", "EMPX4"])
-    anos = c.demonstrativos(9999)
-    ultimo = anos[-1]
-    assert ultimo["receita_liquida"] == 1000.0 + ultimo["ano"]
-    assert (ultimo["divida_bruta"], ultimo["capex"], ultimo["dividendos"]) == (200.0, 80.0, 40.0)
+    years = c.demonstrativos(9999)
+    last = years[-1]
+    assert last["receita_liquida"] == 1000.0 + last["ano"]
+    assert (last["divida_bruta"], last["capex"], last["dividendos"]) == (200.0, 80.0, 40.0)
     docs = c.documentos(9999, "EMPX4")
     assert docs["anuais_dfp"] and docs["releases_e_comunicados"][0]["assunto"].startswith(
         "Resultado"
@@ -349,17 +349,17 @@ def _esperar(api: TestClient, tid: str) -> dict:
 def test_rotas_mercado(api: TestClient) -> None:
     assert api.get("/api/financas/mercado/destaques").json()["altas"][0]["ticker"] == "EMPX4"
     assert api.get("/api/financas/mercado/noticias?tema=fiis").json()["tema"] == "fiis"
-    acao = _esperar(
+    action = _esperar(
         api, api.post("/api/financas/mercado/ativo", json={"q": "empx4"}).json()["tarefa"]
     )
-    assert acao["estado"] == "pronto", acao
-    r = acao["resultado"]
+    assert action["estado"] == "pronto", action
+    r = action["resultado"]
     assert (r["tipo"], r["ticker"], r["cotacao"]["preco"]) == ("acao", "EMPX4", 12.0)
     assert r["demonstrativos"] and r["documentos"]["releases_e_comunicados"]
-    fundo = _esperar(
+    background = _esperar(
         api, api.post("/api/financas/mercado/ativo", json={"q": "FUND11"}).json()["tarefa"]
     )
-    assert fundo["resultado"]["tipo"] == "fii" and fundo["resultado"]["p_vp"] == 1.2
+    assert background["resultado"]["tipo"] == "fii" and background["resultado"]["p_vp"] == 1.2
     # importar a DRE da CVM para a empresa cadastrada
     emp = api.post("/api/financas/empresas", json={"ticker": "EMPX4"}).json()
     t = _esperar(api, api.post(f"/api/financas/empresas/{emp['id']}/importar-cvm").json()["tarefa"])
@@ -372,18 +372,18 @@ def test_rotas_mercado(api: TestClient) -> None:
 
 
 def test_pdf_de_dentro_do_pacote_e_link_https() -> None:
-    from financas.api import link_seguro, pdf_do_documento
+    from financas.api import link_safe, pdf_of_document
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
         z.writestr("009512DFP.xml", "<x/>")
         z.writestr("pequeno.pdf", b"%PDF-1.4 pequeno")
         z.writestr("155122_009512.pdf", b"%PDF-1.4 " + b"x" * 5000)
-    assert pdf_do_documento(buf.getvalue()).startswith(b"%PDF-1.4 xxx")  # o maior PDF do pacote
-    assert pdf_do_documento(b"%PDF-1.6 release") == b"%PDF-1.6 release"
-    assert pdf_do_documento(b"<html>") is None
+    assert pdf_of_document(buf.getvalue()).startswith(b"%PDF-1.4 xxx")  # o maior PDF do pacote
+    assert pdf_of_document(b"%PDF-1.6 release") == b"%PDF-1.6 release"
+    assert pdf_of_document(b"<html>") is None
     assert (
-        link_seguro("http://www.rad.cvm.gov.br/ENETCONSULTA/x")
+        link_safe("http://www.rad.cvm.gov.br/ENETCONSULTA/x")
         == "https://www.rad.cvm.gov.br/ENETCONSULTA/x"
     )
 
@@ -393,7 +393,7 @@ def test_noticias_do_rss() -> None:
 
     import httpx
 
-    from backend.internet.tools import noticias
+    from backend.internet.tools import news
 
     rss = """<rss><channel>
     <item><title>Selic fica em 10% - Valor</title><link>https://a/1</link>
@@ -406,7 +406,7 @@ def test_noticias_do_rss() -> None:
     async def rodar() -> dict:
         t = httpx.MockTransport(lambda r: httpx.Response(200, text=rss))
         async with httpx.AsyncClient(transport=t) as c:
-            return await noticias(c, "fiis")
+            return await news(c, "fiis")
 
     d = asyncio.run(rodar())
     assert [n["titulo"] for n in d["noticias"]] == ["IFIX bate recorde", "Selic fica em 10%"]
@@ -418,7 +418,7 @@ def test_moedas_cai_para_o_yahoo_quando_a_awesomeapi_recusa() -> None:
 
     import httpx
 
-    from backend.internet.tools import moedas
+    from backend.internet.tools import currencies
 
     def responder(r: httpx.Request) -> httpx.Response:
         if "awesomeapi" in r.url.host:
@@ -429,7 +429,7 @@ def test_moedas_cai_para_o_yahoo_quando_a_awesomeapi_recusa() -> None:
 
     async def rodar() -> dict:
         async with httpx.AsyncClient(transport=httpx.MockTransport(responder)) as c:
-            return await moedas(c, ["USD-BRL"])
+            return await currencies(c, ["USD-BRL"])
 
     d = asyncio.run(rodar())
     assert d["fonte"] == "Yahoo Finance" and d["cotacoes"]["USD-BRL"]["venda"] == 5.59

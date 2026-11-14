@@ -14,68 +14,68 @@ from typing import Any
 
 from concursos import ai_plan
 
-Busca = Callable[[str], Awaitable[dict[str, Any]]]
+Search = Callable[[str], Awaitable[dict[str, Any]]]
 ChatLLM = Callable[[list[dict[str, str]]], Awaitable[str]]
-TIPOS_MATERIAL = ("prova", "questoes", "apostila", "video", "resumo", "edital", "outro")
+KINDS_MATERIAL = ("prova", "questoes", "apostila", "video", "resumo", "edital", "outro")
 
 
-class Invalido(Exception):
+class Invalid(Exception):
     pass
 
 
-def _agora() -> str:
+def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def _slug(texto: str) -> str:
-    sem = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode().lower()
+def _slug(text: str) -> str:
+    sem = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().lower()
     return re.sub(r"[^a-z0-9]+", "-", sem).strip("-")
 
 
-class Estudo:
-    def __init__(self, raiz: Path) -> None:
-        self.raiz = raiz
+class Study:
+    def __init__(self, root: Path) -> None:
+        self.raiz = root
         self._trava = threading.RLock()
 
     def _arq(self, id_: str, nome: str) -> Path:
         return self.raiz / id_ / nome
 
-    def _ler(self, id_: str, nome: str, padrao: Any) -> Any:
-        arq = self._arq(id_, nome)
-        return json.loads(arq.read_text("utf-8")) if arq.exists() else padrao
+    def _ler(self, id_: str, nome: str, default: Any) -> Any:
+        file = self._arq(id_, nome)
+        return json.loads(file.read_text("utf-8")) if file.exists() else default
 
     def _gravar(self, id_: str, nome: str, dados: Any) -> None:
-        arq = self._arq(id_, nome)
-        tmp = arq.with_suffix(".tmp")
+        file = self._arq(id_, nome)
+        tmp = file.with_suffix(".tmp")
         tmp.write_text(json.dumps(dados, ensure_ascii=False, indent=1), "utf-8")
-        tmp.replace(arq)
+        tmp.replace(file)
 
     # ---------- simulados ----------
     def pedido_simulado(
-        self, concurso: dict[str, Any], n: int, disciplina: str = ""
+        self, exam: dict[str, Any], n: int, subject: str = ""
     ) -> tuple[dict[str, Any], str]:
         """Registra um simulado `gerando` e devolve (registro, prompt para o Claude)."""
-        estrutura = concurso.get("estrutura")
-        if not estrutura:
-            raise Invalido("Gere o plano do concurso antes do simulado.")
-        discs = {d["nome"]: max(1, int(d.get("questoes") or 1)) for d in estrutura["disciplinas"]}
-        if disciplina:
-            if disciplina not in discs:
-                raise Invalido(f"Disciplina fora do edital: {disciplina}")
-            discs = {disciplina: 1}
-        cotas = ai_plan.distribuir(discs, n)
-        feitos = {
+        structure = exam.get("estrutura")
+        if not structure:
+            raise Invalid("Gere o plano do concurso antes do simulado.")
+        discs = {d["nome"]: max(1, int(d.get("questoes") or 1)) for d in structure["disciplinas"]}
+        if subject:
+            if subject not in discs:
+                raise Invalid(f"Disciplina fora do edital: {subject}")
+            discs = {subject: 1}
+        cotas = ai_plan.distribute(discs, n)
+        done = {
             t["chave"].split("|")[1]
-            for t in concurso["tarefas"]
+            for t in exam["tarefas"]
             if t.get("feito") and t.get("chave")
         }
-        registro = {
+        record = {
             "id": uuid.uuid4().hex[:10],
-            "criado": _agora(),
+            "criado": _now(),
             "estado": "gerando",
             "erro": "",
-            "titulo": f"{disciplina or 'Simulado geral'} · {n} questões",
-            "disciplina": disciplina,
+            "titulo": f"{subject or 'Simulado geral'} · {n} questões",
+            "disciplina": subject,
             "minutos": round(n * 4.5),  # ~ ritmo da prova objetiva (60 questões em ~4h30)
             "cotas": cotas,
             "questoes": [],
@@ -84,19 +84,19 @@ class Estudo:
         }
         with self._trava:
             self._gravar(
-                concurso["id"],
+                exam["id"],
                 "simulados.json",
-                [*self._ler(concurso["id"], "simulados.json", []), registro],
+                [*self._ler(exam["id"], "simulados.json", []), record],
             )
-        return registro, ai_plan.prompt_simulado(concurso, cotas, sorted(feitos))
+        return record, ai_plan.prompt_mock_exam(exam, cotas, sorted(done))
 
     def _alterar(self, id_: str, sid: str, f: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
         with self._trava:
-            lista = self._ler(id_, "simulados.json", [])
-            for s in lista:
+            items = self._ler(id_, "simulados.json", [])
+            for s in items:
                 if s["id"] == sid:
                     f(s)
-                    self._gravar(id_, "simulados.json", lista)
+                    self._gravar(id_, "simulados.json", items)
                     return dict(s)
         raise KeyError(sid)
 
@@ -107,7 +107,7 @@ class Estudo:
             if len(q.get("alternativas") or []) == 5 and 0 <= int(q.get("correta", -1)) <= 4
         ]
         if not questoes:
-            raise Invalido("O Claude não devolveu questões válidas.")
+            raise Invalid("O Claude não devolveu questões válidas.")
 
         def f(s: dict[str, Any]) -> None:
             s.update(estado="pronto", questoes=questoes, minutos=round(len(questoes) * 4.5))
@@ -135,17 +135,17 @@ class Estudo:
 
     def excluir_simulado(self, id_: str, sid: str) -> None:
         with self._trava:
-            lista = self._ler(id_, "simulados.json", [])
-            self._gravar(id_, "simulados.json", [s for s in lista if s["id"] != sid])
+            items = self._ler(id_, "simulados.json", [])
+            self._gravar(id_, "simulados.json", [s for s in items if s["id"] != sid])
 
     def responder(
-        self, id_: str, sid: str, respostas: list[int | None], segundos: int
+        self, id_: str, sid: str, respostas: list[int | None], seconds: int
     ) -> dict[str, Any]:
         def f(s: dict[str, Any]) -> None:
             if s["estado"] != "pronto":
-                raise Invalido("Simulado ainda não está pronto.")
+                raise Invalid("Simulado ainda não está pronto.")
             if len(respostas) != len(s["questoes"]):
-                raise Invalido("Uma resposta por questão (vazio = em branco).")
+                raise Invalid("Uma resposta por questão (vazio = em branco).")
             por: dict[str, dict[str, int]] = {}
             acertos = 0
             for q, r in zip(s["questoes"], respostas, strict=True):
@@ -157,13 +157,13 @@ class Estudo:
             total = len(s["questoes"])
             s.update(
                 respostas=respostas,
-                respondido=_agora(),
+                respondido=_now(),
                 resultado={
                     "acertos": acertos,
                     "total": total,
                     "pct": round(100 * acertos / total),
                     "em_branco": sum(1 for r in respostas if r is None),
-                    "segundos": segundos,
+                    "segundos": seconds,
                     "por_disciplina": por,
                     "aprovado": acertos / total >= 0.6,
                 },
@@ -173,21 +173,21 @@ class Estudo:
 
     def desempenho(self, id_: str) -> dict[str, Any]:
         """Acertos por disciplina somando todos os simulados respondidos, do pior para o melhor."""
-        soma: dict[str, dict[str, int]] = {}
+        total: dict[str, dict[str, int]] = {}
         evolucao = []
         for s in self._ler(id_, "simulados.json", []):
             r = s.get("resultado")
             if not r:
                 continue
             evolucao.append({"data": s["respondido"][:10], "pct": r["pct"], "titulo": s["titulo"]})
-            for nome, d in r["por_disciplina"].items():
-                t = soma.setdefault(nome, {"acertos": 0, "total": 0})
+            for name, d in r["por_disciplina"].items():
+                t = total.setdefault(name, {"acertos": 0, "total": 0})
                 t["acertos"] += d["acertos"]
                 t["total"] += d["total"]
         disciplinas = sorted(
             (
                 {"disciplina": k, **v, "pct": round(100 * v["acertos"] / v["total"])}
-                for k, v in soma.items()
+                for k, v in total.items()
             ),
             key=lambda x: x["pct"],
         )
@@ -195,10 +195,10 @@ class Estudo:
 
     # ---------- materiais ----------
     def materiais(self, id_: str) -> dict[str, Any]:
-        dados: dict[str, Any] = self._ler(
+        data: dict[str, Any] = self._ler(
             id_, "materiais.json", {"estado": "vazio", "atualizado": None, "itens": []}
         )
-        return dados
+        return data
 
     def marcar_materiais(self, id_: str, estado: str, erro: str = "") -> None:
         with self._trava:
@@ -207,39 +207,39 @@ class Estudo:
             self._gravar(id_, "materiais.json", m)
 
     async def buscar_materiais(
-        self, concurso: dict[str, Any], buscar: Busca, llm: ChatLLM | None
+        self, exam: dict[str, Any], fetch: Search, llm: ChatLLM | None
     ) -> None:
         """Pesquisa na web (DuckDuckGo) e a LLM local classifica; só links que a busca trouxe."""
-        banca = concurso.get("banca") or ""
-        cargo = concurso["cargo"]
+        banca = exam.get("banca") or ""
+        cargo = exam["cargo"]
         discs = sorted(
-            (concurso.get("estrutura") or {}).get("disciplinas", []),
+            (exam.get("estrutura") or {}).get("disciplinas", []),
             key=lambda d: -int(d.get("questoes") or 0),
         )
-        consultas = [
+        queries = [
             f"provas anteriores {banca} {cargo} pdf gabarito",
             f"prova {banca} analista tecnologia da informação questões comentadas",
-            f"{concurso['nome']} material de estudo gratuito",
+            f"{exam['nome']} material de estudo gratuito",
             *[f"{d['nome']} questões {banca} concurso resumo" for d in discs[:4]],
         ]
-        resultados: list[dict[str, Any]] = []
-        vistos: set[str] = set()
-        for q in consultas:
+        results: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for q in queries:
             try:
-                r = await buscar(q)
+                r = await fetch(q)
             except Exception:
                 continue
             for x in r.get("resultados", []):
-                if x.get("url", "").startswith("http") and x["url"] not in vistos:
-                    vistos.add(x["url"])
-                    resultados.append(x)
-        itens: list[dict[str, Any]] = []
+                if x.get("url", "").startswith("http") and x["url"] not in seen:
+                    seen.add(x["url"])
+                    results.append(x)
+        items: list[dict[str, Any]] = []
         # provas anteriores: o link "Provas relacionadas" do PCI (radar) ou a página da banca
-        provas = (concurso.get("radar") or {}).get("provas_url") or (
+        provas = (exam.get("radar") or {}).get("provas_url") or (
             f"https://www.pciconcursos.com.br/provas/{_slug(banca)}" if banca else ""
         )
         if provas:
-            itens.append(
+            items.append(
                 {
                     "titulo": f"Provas anteriores da {banca or 'banca'} (PCI Concursos)",
                     "tipo": "prova",
@@ -249,12 +249,12 @@ class Estudo:
                 }
             )
         classes: dict[int, dict[str, Any]] = {}
-        if llm and resultados:
+        if llm and results:
             lista = "\n".join(
                 f"{i}. {x.get('titulo', '')} — {x['url']} — {x.get('trecho', '')[:200]}"
-                for i, x in enumerate(resultados)
+                for i, x in enumerate(results)
             )
-            sistema = (
+            system = (
                 "Você classifica resultados de busca para um candidato de concurso. "
                 'Responda SOMENTE com JSON {"itens": [{"n": 0, "util": true, '
                 '"tipo": "prova|questoes|apostila|video|resumo|edital|outro", '
@@ -262,10 +262,10 @@ class Estudo:
                 '"util" = ajuda a estudar para este concurso; '
                 '"descricao" em 1 frase. Não invente links.'
             )
-            usuario = f"Concurso: {concurso['nome']} — banca {banca} — cargo {cargo}\n\n{lista}"
+            user = f"Concurso: {exam['nome']} — banca {banca} — cargo {cargo}\n\n{lista}"
             try:
                 resp = await llm(
-                    [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]
+                    [{"role": "system", "content": system}, {"role": "user", "content": user}]
                 )
                 m = re.search(r"\{.*\}", resp, re.S)
                 for c in json.loads(m[0]).get("itens", []) if m else []:
@@ -273,29 +273,29 @@ class Estudo:
                         classes[c["n"]] = c
             except Exception:
                 classes = {}
-        for i, x in enumerate(resultados):
+        for i, x in enumerate(results):
             c = classes.get(i)
             if classes and (not c or not c.get("util")):
                 continue
-            tipo = (c or {}).get("tipo", "outro")
-            itens.append(
+            kind = (c or {}).get("tipo", "outro")
+            items.append(
                 {
                     "titulo": x.get("titulo") or x["url"],
                     "url": x["url"],
-                    "tipo": tipo if tipo in TIPOS_MATERIAL else "outro",
+                    "tipo": kind if kind in KINDS_MATERIAL else "outro",
                     "disciplina": (c or {}).get("disciplina", ""),
                     "descricao": (c or {}).get("descricao") or x.get("trecho", "")[:200],
                 }
             )
         with self._trava:
             self._gravar(
-                concurso["id"],
+                exam["id"],
                 "materiais.json",
                 {
                     "estado": "pronto",
                     "erro": "",
-                    "atualizado": _agora(),
-                    "itens": itens,
+                    "atualizado": _now(),
+                    "itens": items,
                     "classificado": bool(classes),
                 },
             )

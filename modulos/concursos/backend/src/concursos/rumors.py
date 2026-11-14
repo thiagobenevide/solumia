@@ -16,13 +16,13 @@ from typing import Any
 
 logger = logging.getLogger("concursos.rumors")
 
-ExecutarClaude = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
+ExecuteClaude = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
-ESFERAS = ("federal", "estadual", "municipal")
-FASES = ("rumor", "solicitado", "autorizado", "comissao", "banca", "edital")
-_TEXTO = {"type": "string"}
+SPHERES = ("federal", "estadual", "municipal")
+PHASES = ("rumor", "solicitado", "autorizado", "comissao", "banca", "edital")
+_TEXT = {"type": "string"}
 
-ESQUEMA_BUSCA = {
+SCHEMA_SEARCH = {
     "type": "object",
     "properties": {
         "rumores": {
@@ -30,16 +30,16 @@ ESQUEMA_BUSCA = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "orgao": _TEXTO,
-                    "uf": _TEXTO,
-                    "esfera": {"type": "string", "enum": list(ESFERAS)},
-                    "fase": {"type": "string", "enum": list(FASES)},
-                    "cargos_ti": {"type": "array", "items": _TEXTO},
+                    "orgao": _TEXT,
+                    "uf": _TEXT,
+                    "esfera": {"type": "string", "enum": list(SPHERES)},
+                    "fase": {"type": "string", "enum": list(PHASES)},
+                    "cargos_ti": {"type": "array", "items": _TEXT},
                     "vagas_previstas": {"type": "integer"},
-                    "fonte_nome": _TEXTO,
-                    "fonte_url": _TEXTO,
-                    "data_noticia": _TEXTO,
-                    "resumo": _TEXTO,
+                    "fonte_nome": _TEXT,
+                    "fonte_url": _TEXT,
+                    "data_noticia": _TEXT,
+                    "resumo": _TEXT,
                 },
                 "required": ["orgao", "uf", "esfera", "fase", "cargos_ti", "fonte_url", "resumo"],
             },
@@ -48,7 +48,7 @@ ESQUEMA_BUSCA = {
     "required": ["rumores"],
 }
 
-ESQUEMA_NOVIDADES = {
+SCHEMA_UPDATES = {
     "type": "object",
     "properties": {
         "novidades": {
@@ -56,12 +56,12 @@ ESQUEMA_NOVIDADES = {
             "items": {
                 "type": "object",
                 "properties": {
-                    "id": _TEXTO,
-                    "fase": {"type": "string", "enum": list(FASES)},
-                    "texto": _TEXTO,
-                    "fonte_nome": _TEXTO,
-                    "fonte_url": _TEXTO,
-                    "data": _TEXTO,
+                    "id": _TEXT,
+                    "fase": {"type": "string", "enum": list(PHASES)},
+                    "texto": _TEXT,
+                    "fonte_nome": _TEXT,
+                    "fonte_url": _TEXT,
+                    "data": _TEXT,
                 },
                 "required": ["id", "texto", "fonte_url"],
             },
@@ -70,7 +70,7 @@ ESQUEMA_NOVIDADES = {
     "required": ["novidades"],
 }
 
-SISTEMA = """Você pesquisa na internet (WebSearch e WebFetch) RUMORES e PREVISÕES de concursos
+SYSTEM = """Você pesquisa na internet (WebSearch e WebFetch) RUMORES e PREVISÕES de concursos
 públicos brasileiros que tenham ou devam ter cargos de TI (analista/técnico de TI, desenvolvimento,
 sistemas, dados, redes, segurança da informação, infraestrutura, suporte, informática).
 Rumor = concurso ainda SEM edital: pedido de autorização, autorização publicada, previsão na LOA ou
@@ -83,7 +83,7 @@ Não invente: o que não achar fica "" ou []; datas em AAAA-MM-DD; "fonte_nome" 
 "fonte_url" = página onde você leu; "resumo" com até 2 frases sobre o estágio atual."""
 
 
-def _agora() -> str:
+def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
@@ -91,11 +91,11 @@ def id_rumor(orgao: str, uf: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", f"{orgao} {uf}".lower()).strip("-")[:100]
 
 
-class Rumores:
-    def __init__(self, raiz: str | Path, hoje: Callable[[], date] = date.today) -> None:
-        pasta = Path(raiz).expanduser() / "radar"
-        pasta.mkdir(parents=True, exist_ok=True)
-        self._arquivo = pasta / "rumores.json"
+class Rumors:
+    def __init__(self, root: str | Path, hoje: Callable[[], date] = date.today) -> None:
+        folder = Path(root).expanduser() / "radar"
+        folder.mkdir(parents=True, exist_ok=True)
+        self._arquivo = folder / "rumores.json"
         self.hoje = hoje
         self.pesquisando = False
         self._trava = asyncio.Lock()
@@ -103,8 +103,8 @@ class Rumores:
     def _ler(self) -> dict[str, Any]:
         if not self._arquivo.exists():
             return {"itens": {}, "busca": None}
-        dados: dict[str, Any] = json.loads(self._arquivo.read_text("utf-8"))
-        return dados
+        data: dict[str, Any] = json.loads(self._arquivo.read_text("utf-8"))
+        return data
 
     def _gravar(self, dados: dict[str, Any]) -> None:
         tmp = self._arquivo.with_suffix(".tmp")
@@ -113,27 +113,27 @@ class Rumores:
 
     def listar(self) -> dict[str, Any]:
         """Acompanhados primeiro, depois do mais recente ao mais antigo."""
-        dados = self._ler()
-        itens = sorted(
-            dados["itens"].values(),
+        data = self._ler()
+        items = sorted(
+            data["itens"].values(),
             key=lambda i: (i.get("data_noticia") or i["visto_em"][:10]),
             reverse=True,
         )
-        itens.sort(key=lambda i: not i.get("acompanhado"))
-        return {"pesquisando": self.pesquisando, "busca": dados.get("busca"), "itens": itens}
+        items.sort(key=lambda i: not i.get("acompanhado"))
+        return {"pesquisando": self.pesquisando, "busca": data.get("busca"), "itens": items}
 
     def acompanhar(self, id_: str, sim: bool) -> dict[str, Any] | None:
-        dados = self._ler()
-        item = dados["itens"].get(id_)
+        data = self._ler()
+        item = data["itens"].get(id_)
         if item is None:
             return None
         item["acompanhado"] = sim
-        self._gravar(dados)
+        self._gravar(data)
         return item  # type: ignore[no-any-return]
 
     def alertas(self) -> list[dict[str, Any]]:
         """Novidades de hoje dos rumores acompanhados (o notificador manda cada uma uma vez)."""
-        hoje = self.hoje().isoformat()
+        today = self.hoje().isoformat()
         return [
             {
                 "nivel": "aviso",
@@ -144,97 +144,97 @@ class Rumores:
             for i in self._ler()["itens"].values()
             if i.get("acompanhado")
             for n in i.get("novidades", [])
-            if n["registrada_em"][:10] == hoje
+            if n["registrada_em"][:10] == today
         ]
 
-    async def pesquisar(self, executar: ExecutarClaude, consulta: str = "") -> dict[str, Any]:
+    async def pesquisar(self, execute: ExecuteClaude, query: str = "") -> dict[str, Any]:
         """Busca rumores pelo Claude Code (opcionalmente filtrando por [consulta], ex. "TRF5",
         "Pernambuco", "Analista de dados") e depois procura novidades dos acompanhados."""
         if self.pesquisando:
             return {"ja_rodando": True}
         self.pesquisando = True
-        achados, erro = 0, ""
+        found, error = 0, ""
         try:
-            hoje = self.hoje()
-            foco = f' Foque em: "{consulta}".' if consulta.strip() else ""
-            r = await executar(
+            today = self.hoje()
+            focus = f' Foque em: "{query}".' if query.strip() else ""
+            r = await execute(
                 {
-                    "prompt": f"Hoje é {hoje.isoformat()}. Liste os rumores e previsões de "
+                    "prompt": f"Hoje é {today.isoformat()}. Liste os rumores e previsões de "
                     f"concursos com cargos de TI nas esferas federal, estadual e municipal, "
-                    f"noticiados nos últimos 12 meses, para {hoje.year} e {hoje.year + 1}.{foco} "
+                    f"noticiados nos últimos 12 meses, para {today.year} e {today.year + 1}.{focus} "
                     "Traga o máximo que conseguir confirmar, cada um com a fonte.",
-                    "sistema": SISTEMA,
-                    "esquema": ESQUEMA_BUSCA,
+                    "sistema": SYSTEM,
+                    "esquema": SCHEMA_SEARCH,
                     "limite_s": 900,
                     "effort": "medium",
                     "ferramentas": "WebSearch,WebFetch",
                 }
             )
             async with self._trava:
-                achados = self._juntar(r.get("rumores") or [])
-            await self._verificar(executar)
+                found = self._juntar(r.get("rumores") or [])
+            await self._verificar(execute)
         except Exception as e:
             logger.exception("Falha na pesquisa de rumores")
-            erro = str(e)[:300] or type(e).__name__
+            error = str(e)[:300] or type(e).__name__
         finally:
-            dados = self._ler()
-            dados["busca"] = {
-                "em": _agora(),
-                "consulta": consulta,
-                "achados": achados,
-                "erro": erro,
+            data = self._ler()
+            data["busca"] = {
+                "em": _now(),
+                "consulta": query,
+                "achados": found,
+                "erro": error,
             }
-            self._gravar(dados)
+            self._gravar(data)
             self.pesquisando = False
-        return {"erro": erro} if erro else {"achados": achados}
+        return {"erro": error} if error else {"achados": found}
 
-    def _juntar(self, rumores: list[Any]) -> int:
-        dados = self._ler()
-        itens: dict[str, Any] = dados["itens"]
+    def _juntar(self, rumors: list[Any]) -> int:
+        data = self._ler()
+        items: dict[str, Any] = data["itens"]
         n = 0
-        for r in rumores:
+        for r in rumors:
             if not isinstance(r, dict) or not r.get("orgao") or not r.get("fonte_url"):
                 continue
             uf = str(r.get("uf") or "")[:2].upper()
             id_ = id_rumor(str(r["orgao"]), uf)
-            fase = r.get("fase") if r.get("fase") in FASES else "rumor"
-            fonte = {"nome": str(r.get("fonte_nome") or ""), "url": str(r["fonte_url"])}
-            item = itens.get(id_)
+            fase = r.get("fase") if r.get("fase") in PHASES else "rumor"
+            source = {"nome": str(r.get("fonte_nome") or ""), "url": str(r["fonte_url"])}
+            item = items.get(id_)
             if item is None:
-                item = itens[id_] = {
+                item = items[id_] = {
                     "id": id_,
                     "acompanhado": False,
                     "novidades": [],
                     "fontes": [],
-                    "visto_em": _agora(),
+                    "visto_em": _now(),
                 }
-            elif FASES.index(fase) < FASES.index(item.get("fase") or "rumor"):
+            elif PHASES.index(fase) < PHASES.index(item.get("fase") or "rumor"):
                 fase = item["fase"]  # notícia mais antiga que a fase conhecida: a fase não volta
             elif item.get("acompanhado") and fase != item.get("fase"):
-                self._novidade(item, f"Mudou para {fase}: {r.get('resumo', '')}", fonte, fase)
+                self._novidade(item, f"Mudou para {fase}: {r.get('resumo', '')}", source, fase)
             item.update(
                 orgao=str(r["orgao"]),
                 uf=uf,
-                esfera=r.get("esfera") if r.get("esfera") in ESFERAS else "",
+                esfera=r.get("esfera") if r.get("esfera") in SPHERES else "",
                 fase=fase,
                 cargos_ti=[str(c) for c in r.get("cargos_ti") or []],
                 vagas_previstas=int(r.get("vagas_previstas") or 0),
                 data_noticia=str(r.get("data_noticia") or ""),
                 resumo=str(r.get("resumo") or ""),
-                atualizado_em=_agora(),
+                atualizado_em=_now(),
             )
-            if fonte["url"] not in {f["url"] for f in item["fontes"]}:
-                item["fontes"].append(fonte)
+            if source["url"] not in {f["url"] for f in item["fontes"]}:
+                item["fontes"].append(source)
             n += 1
-        self._gravar(dados)
+        self._gravar(data)
         return n
 
-    def _novidade(self, item: dict[str, Any], texto: str, fonte: dict[str, str], fase: str) -> None:
+    def _novidade(self, item: dict[str, Any], text: str, fonte: dict[str, str], fase: str) -> None:
         item["novidades"].append(
-            {"texto": texto, "fonte": fonte, "fase": fase, "registrada_em": _agora()}
+            {"texto": text, "fonte": fonte, "fase": fase, "registrada_em": _now()}
         )
 
-    async def _verificar(self, executar: ExecutarClaude) -> int:
+    async def _verificar(self, execute: ExecuteClaude) -> int:
         """Pede ao Claude o que saiu depois da última notícia conhecida de cada acompanhado."""
         acompanhados = [i for i in self._ler()["itens"].values() if i.get("acompanhado")]
         if not acompanhados:
@@ -244,56 +244,56 @@ class Rumores:
                 return str(i["novidades"][-1]["registrada_em"][:10])
             return str(i.get("data_noticia") or "?")
 
-        lista = "\n".join(
+        items = "\n".join(
             f'- id "{i["id"]}": {i["orgao"]} ({i["uf"]}), fase {i["fase"]}, '
             f"última notícia {ultima(i)}: {i.get('resumo', '')}"
             for i in acompanhados
         )
-        r = await executar(
+        r = await execute(
             {
                 "prompt": f"Hoje é {self.hoje().isoformat()}. Para cada concurso abaixo, procure o "
                 "que saiu DEPOIS da última notícia indicada (autorização, comissão, banca, edital, "
                 "datas, vagas de TI). Devolva só novidades reais, com o mesmo id; nada novo = não "
-                f"inclua.\n{lista}",
-                "sistema": SISTEMA,
-                "esquema": ESQUEMA_NOVIDADES,
+                f"inclua.\n{items}",
+                "sistema": SYSTEM,
+                "esquema": SCHEMA_UPDATES,
                 "limite_s": 600,
                 "effort": "medium",
                 "ferramentas": "WebSearch,WebFetch",
             }
         )
         async with self._trava:
-            dados = self._ler()
+            data = self._ler()
             n = 0
             for nov in r.get("novidades") or []:
-                item = dados["itens"].get(str(nov.get("id", "")))
+                item = data["itens"].get(str(nov.get("id", "")))
                 if not item or not item.get("acompanhado") or not nov.get("texto"):
                     continue
-                fonte = {"nome": str(nov.get("fonte_nome") or ""), "url": str(nov["fonte_url"])}
+                source = {"nome": str(nov.get("fonte_nome") or ""), "url": str(nov["fonte_url"])}
                 ja = {(x["fonte"]["url"], x["texto"]) for x in item["novidades"]}
-                if (fonte["url"], nov["texto"]) in ja:
+                if (source["url"], nov["texto"]) in ja:
                     continue
-                fase = nov.get("fase") if nov.get("fase") in FASES else item["fase"]
-                self._novidade(item, str(nov["texto"]), fonte, fase)
+                fase = nov.get("fase") if nov.get("fase") in PHASES else item["fase"]
+                self._novidade(item, str(nov["texto"]), source, fase)
                 item["fase"] = fase
-                if fonte["url"] not in {f["url"] for f in item["fontes"]}:
-                    item["fontes"].append(fonte)
+                if source["url"] not in {f["url"] for f in item["fontes"]}:
+                    item["fontes"].append(source)
                 n += 1
-            self._gravar(dados)
+            self._gravar(data)
         return n
 
     async def rodar(
-        self, executar: ExecutarClaude, intervalo_s: float, atraso_s: float = 600
+        self, execute: ExecuteClaude, interval_s: float, delay_s: float = 600
     ) -> None:
         """Reverifica os acompanhados de tempos em tempos (sem busca nova de rumores)."""
-        await asyncio.sleep(atraso_s)
+        await asyncio.sleep(delay_s)
         while True:
             if not self.pesquisando:
                 self.pesquisando = True
                 try:
-                    await self._verificar(executar)
+                    await self._verificar(execute)
                 except Exception:
                     logger.exception("Falha ao reverificar os rumores acompanhados")
                 finally:
                     self.pesquisando = False
-            await asyncio.sleep(intervalo_s)
+            await asyncio.sleep(interval_s)

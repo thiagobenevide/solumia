@@ -5,7 +5,7 @@ imagens; os de saco de pancada não têm imagem lá e recebem a do usuário."""
 
 from typing import Any
 
-URL_IMAGENS = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/{ref}/{n}.jpg"
+URL_IMAGES = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/{ref}/{n}.jpg"
 
 AREAS = ["Peito", "Costas", "Ombros", "Braços", "Abdômen", "Pernas", "Glúteos", "Cardio e luta"]
 
@@ -115,12 +115,12 @@ _BASE: list[tuple[str, str, str, str, str, str | None, int, str, str]] = [
 ]
 
 
-def exercicios_base() -> list[dict[str, Any]]:
+def exercises_base() -> list[dict[str, Any]]:
     return [
         {
-            "id": id_, "nome": nome, "area": area, "grupo": grupo, "equipamento": equipamento,
+            "id": id_, "nome": name, "area": area, "grupo": group, "equipamento": equipamento,
             "ref": ref, "series": series, "repeticoes": reps, "carga_kg": None,
-            "instrucoes": instrucoes, "personalizado": False, "imagem_propria": False,
+            "instrucoes": instructions, "personalizado": False, "imagem_propria": False,
         }
-        for id_, nome, area, grupo, equipamento, ref, series, reps, instrucoes in _BASE
+        for id_, name, area, group, equipamento, ref, series, reps, instructions in _BASE
     ]

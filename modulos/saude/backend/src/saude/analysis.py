@@ -10,15 +10,15 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from saude.mental import Mental
-from saude.watch import Relogio
-from saude.sessions import Sessoes
-from saude.workouts import Treinos
+from saude.watch import Clock
+from saude.sessions import Sessions
+from saude.workouts import Workouts
 
 ChatLLM = Callable[[list[dict[str, str]]], Awaitable[str]]
 # (de, ate) -> texto com o que os outros módulos registraram no período
-ContextoExtra = Callable[[date, date], str]
+ContextExtra = Callable[[date, date], str]
 
-SISTEMA = """Você é um acompanhante de saúde pessoal: sono, atividade física, coração, corpo e
+SYSTEM = """Você é um acompanhante de saúde pessoal: sono, atividade física, coração, corpo e
 saúde mental. Recebe os dados diários do relógio (Galaxy Watch) e os registros do próprio usuário.
 Responda em português do Brasil, em Markdown, direto e acolhedor, sem diagnóstico médico.
 Estrutura:
@@ -34,7 +34,7 @@ diga só o que os dados sustentam e o tamanho da amostra)
 Metas de referência: sono 7–9 h, 8000 passos, 30 min ativos, 2 L de água.
 Se faltarem dados, diga quais e como registrá-los."""
 
-ROTULOS = {
+LABELS = {
     "sono_min": "sono",
     "sono_profundo_min": "profundo",
     "sono_rem_min": "REM",
@@ -57,59 +57,59 @@ ROTULOS = {
 }
 
 
-def _horas(minutos: float) -> str:
+def _hours(minutos: float) -> str:
     return f"{int(minutos // 60)}h{int(minutos % 60):02d}"
 
 
-def _linha_relogio(d: dict[str, Any]) -> str:
-    partes = []
-    for k, rotulo in ROTULOS.items():
+def _line_clock(d: dict[str, Any]) -> str:
+    parts = []
+    for k, label in LABELS.items():
         if k not in d:
             continue
         v = d[k]
-        texto = _horas(v) if k.startswith("sono") and k.endswith("_min") else v
-        partes.append(f"{rotulo} {texto}")
+        text = _hours(v) if k.startswith("sono") and k.endswith("_min") else v
+        parts.append(f"{label} {text}")
     for e in d.get("exercicios", []):
-        partes.append(f"exercício {e.get('tipo')} {e.get('minutos')} min")
-    return ", ".join(partes)
+        parts.append(f"exercício {e.get('tipo')} {e.get('minutos')} min")
+    return ", ".join(parts)
 
 
-def montar_contexto(
-    relogio: Relogio,
+def assemble_context(
+    clock: Clock,
     mental: Mental,
-    treinos: Treinos,
+    workouts: Workouts,
     de: date,
     ate: date,
-    extra: ContextoExtra | None = None,
+    extra: ContextExtra | None = None,
 ) -> str:
     d1, d2 = de.isoformat(), ate.isoformat()
-    por_dia: dict[str, list[str]] = {}
+    by_day: dict[str, list[str]] = {}
 
-    def add(dia: str, texto: str) -> None:
-        if texto:
-            por_dia.setdefault(dia, []).append(texto)
+    def add(day: str, text: str) -> None:
+        if text:
+            by_day.setdefault(day, []).append(text)
 
-    for d in relogio.dias(d1, d2):
-        add(d["data"], "relógio: " + _linha_relogio(d))
+    for d in clock.dias(d1, d2):
+        add(d["data"], "relógio: " + _line_clock(d))
     for d in mental.diario(d1, d2):
-        campos = [
+        fields = [
             f"{k} {d[k]}" for k in ("humor", "ansiedade", "gatilhos") if d.get(k) not in (None, "")
         ]
-        add(d["data"], "diário: " + ", ".join(campos) if campos else "")
-    for dia, minutos in mental.foco(d1, d2)["minutos_por_dia"].items():
-        add(dia, f"foco {minutos} min")
-    habitos = mental.habitos(d1, d2)
-    for h in habitos:
-        for dia in h["feitos"]:
-            add(dia, f"hábito {'feito' if h['tipo'] == 'construir' else 'recaída'}: {h['nome']}")
-    treinos_dia: dict[str, list[int]] = {}
-    for i in treinos.agenda(d1, d2):
-        treinos_dia.setdefault(i["data"], [0, 0])
-        treinos_dia[i["data"]][0] += 1
-        treinos_dia[i["data"]][1] += 1 if i.get("feito") else 0
-    for dia, (total, feitos) in treinos_dia.items():
-        add(dia, f"treino {feitos}/{total} exercícios feitos")
-    for s in Sessoes(treinos).listar(d1, d2):
+        add(d["data"], "diário: " + ", ".join(fields) if fields else "")
+    for day, minutes in mental.foco(d1, d2)["minutos_por_dia"].items():
+        add(day, f"foco {minutes} min")
+    habits = mental.habitos(d1, d2)
+    for h in habits:
+        for day in h["feitos"]:
+            add(day, f"hábito {'feito' if h['tipo'] == 'construir' else 'recaída'}: {h['nome']}")
+    workouts_day: dict[str, list[int]] = {}
+    for i in workouts.agenda(d1, d2):
+        workouts_day.setdefault(i["data"], [0, 0])
+        workouts_day[i["data"]][0] += 1
+        workouts_day[i["data"]][1] += 1 if i.get("feito") else 0
+    for day, (total, done) in workouts_day.items():
+        add(day, f"treino {done}/{total} exercícios feitos")
+    for s in Sessions(workouts).listar(d1, d2):
         if (r := s.get("resumo")) is None:
             continue
         fc = s.get("frequencia") or {}
@@ -119,49 +119,49 @@ def montar_contexto(
             + (f", FC média {fc['media']:.0f} máx {fc['maxima']:.0f}"
                if fc.get("media") and fc.get("maxima") else ""))
 
-    resumo = relogio.resumo(d1, d2)
-    linhas = [f"Período: {d1} a {d2} ({(ate - de).days + 1} dias)", "", "# Médias do relógio"]
-    linhas += [f"- {ROTULOS.get(k, k)}: {v}" for k, v in sorted(resumo["medias"].items())]
-    linhas += ["", "# Metas"]
-    linhas += [
+    summary = clock.resumo(d1, d2)
+    lines = [f"Período: {d1} a {d2} ({(ate - de).days + 1} dias)", "", "# Médias do relógio"]
+    lines += [f"- {LABELS.get(k, k)}: {v}" for k, v in sorted(summary["medias"].items())]
+    lines += ["", "# Metas"]
+    lines += [
         f"- {k}: {m['batidos']} de {m['dias']} dias (meta {m['meta']})"
-        for k, m in resumo["metas"].items()
+        for k, m in summary["metas"].items()
     ]
-    if habitos:
-        linhas += ["", "# Hábitos"]
-        linhas += [f"- {h['nome']} ({h['tipo']}), sequência {h['sequencia']}" for h in habitos]
-    linhas += ["", "# Dia a dia"]
-    linhas += [f"- {dia}: " + "; ".join(por_dia[dia]) for dia in sorted(por_dia)]
+    if habits:
+        lines += ["", "# Hábitos"]
+        lines += [f"- {h['nome']} ({h['tipo']}), sequência {h['sequencia']}" for h in habits]
+    lines += ["", "# Dia a dia"]
+    lines += [f"- {day}: " + "; ".join(by_day[day]) for day in sorted(by_day)]
     if extra:
-        texto = extra(de, ate).strip()
-        if texto:
-            linhas += ["", "# Outros módulos", texto[:6000]]
-    return "\n".join(linhas)
+        text = extra(de, ate).strip()
+        if text:
+            lines += ["", "# Outros módulos", text[:6000]]
+    return "\n".join(lines)
 
 
-async def analisar(
+async def analyze(
     llm: ChatLLM,
-    relogio: Relogio,
+    clock: Clock,
     mental: Mental,
-    treinos: Treinos,
+    workouts: Workouts,
     dias: int = 30,
     pergunta: str = "",
-    extra: ContextoExtra | None = None,
+    extra: ContextExtra | None = None,
     hoje: date | None = None,
 ) -> dict[str, Any]:
-    ate = hoje or date.today()
-    de = ate - timedelta(days=dias - 1)
-    contexto = montar_contexto(relogio, mental, treinos, de, ate, extra)
-    usuario = contexto + (f"\n\nPergunta do usuário: {pergunta}" if pergunta.strip() else "")
-    texto = await llm(
-        [{"role": "system", "content": SISTEMA}, {"role": "user", "content": usuario}]
+    until = hoje or date.today()
+    de = until - timedelta(days=dias - 1)
+    context = assemble_context(clock, mental, workouts, de, until, extra)
+    user = context + (f"\n\nPergunta do usuário: {pergunta}" if pergunta.strip() else "")
+    text = await llm(
+        [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
     )
-    return relogio.guardar_analise(
+    return clock.guardar_analise(
         {
             "criada_em": datetime.now(UTC).isoformat(timespec="seconds"),
             "de": de.isoformat(),
-            "ate": ate.isoformat(),
+            "ate": until.isoformat(),
             "pergunta": pergunta.strip(),
-            "texto": texto.strip(),
+            "texto": text.strip(),
         }
     )

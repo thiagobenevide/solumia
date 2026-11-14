@@ -11,13 +11,13 @@ import re
 from typing import Any
 
 from eletronica.library import POR_ID
-from eletronica.projects import BuscaSimbolo
+from eletronica.projects import SearchSymbol
 
-Ponto = tuple[str, int, int]  # (folha, x, y)
+Point = tuple[str, int, int]  # (folha, x, y)
 
 
-def posicao_pino(c: dict[str, Any], pino: dict[str, Any]) -> tuple[int, int]:
-    x, y = pino["x"], pino["y"]
+def position_pin(c: dict[str, Any], pin: dict[str, Any]) -> tuple[int, int]:
+    x, y = pin["x"], pin["y"]
     if c.get("espelho"):
         x = -x
     for _ in range(c.get("rot", 0) // 90):
@@ -25,7 +25,7 @@ def posicao_pino(c: dict[str, Any], pino: dict[str, Any]) -> tuple[int, int]:
     return c["x"] + x, c["y"] + y
 
 
-class _Uniao:
+class _Union:
     def __init__(self) -> None:
         self.pai: dict[Any, Any] = {}
 
@@ -40,139 +40,139 @@ class _Uniao:
         self.pai[self.achar(a)] = self.achar(b)
 
 
-def _no_segmento(p: tuple[int, int], a: list[int], b: list[int]) -> bool:
+def _in_segment(p: tuple[int, int], a: list[int], b: list[int]) -> bool:
     (x, y), (x1, y1), (x2, y2) = p, a, b
     if (x2 - x1) * (y - y1) != (y2 - y1) * (x - x1):
         return False
     return min(x1, x2) <= x <= max(x1, x2) and min(y1, y2) <= y <= max(y1, y2)
 
 
-def _chave_natural(ref: str) -> list[Any]:
+def _key_natural(ref: str) -> list[Any]:
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", ref)]
 
 
-def netlist(projeto: dict[str, Any], simbolo: BuscaSimbolo = POR_ID.get) -> dict[str, Any]:
+def netlist(project: dict[str, Any], symbol: SearchSymbol = POR_ID.get) -> dict[str, Any]:
     """`redes` [{nome, pinos: [{ref, pino, nome}]}], `soltos` (pinos sem ligação) e `sondas`
     [{id, tipo, rede | ref}]: a rede onde cada ponta de tensão encosta (None se em nada)."""
-    u = _Uniao()
-    pinos: list[tuple[Ponto, dict[str, Any], dict[str, Any]]] = []
-    nomes: dict[Any, set[str]] = {}
+    u = _Union()
+    pins: list[tuple[Point, dict[str, Any], dict[str, Any]]] = []
+    names: dict[Any, set[str]] = {}
 
     def nomear(no: Any, nome: str) -> None:
         u.unir(no, ("nome", nome))
-        nomes.setdefault(("nome", nome), set()).add(nome)
+        names.setdefault(("nome", nome), set()).add(nome)
 
-    for c in projeto.get("componentes", []):
-        simb = simbolo(c["simbolo"])
+    for c in project.get("componentes", []):
+        simb = symbol(c["simbolo"])
         if simb is None:
             continue
-        for pino in simb["pinos"]:
-            ponto = (c["folha"], *posicao_pino(c, pino))
-            u.achar(ponto)
+        for pin in simb["pinos"]:
+            point = (c["folha"], *position_pin(c, pin))
+            u.achar(point)
             if simb["tipo"] == "alimentacao":
-                nomear(ponto, c.get("valor") or simb["valor"])
+                nomear(point, c.get("valor") or simb["valor"])
             else:
-                pinos.append((ponto, c, pino))
+                pins.append((point, c, pin))
 
-    fios = projeto.get("fios", [])
+    fios = project.get("fios", [])
     for f in fios:
         cantos = [(f["folha"], x, y) for x, y in f["pontos"]]
         for a in cantos[1:]:
             u.unir(cantos[0], a)
     # Pontas de fio e pinos no meio de um fio da mesma folha.
     pontas = [(f["folha"], *f["pontos"][i]) for f in fios for i in (0, -1)]
-    pontas += [p for p, _, _ in pinos]
-    sondas_v = [s for s in projeto.get("sondas", []) if s.get("tipo") == "v"]
+    pontas += [p for p, _, _ in pins]
+    sondas_v = [s for s in project.get("sondas", []) if s.get("tipo") == "v"]
     for s in sondas_v:
-        ponto = (s["folha"], s["x"], s["y"])
-        u.achar(ponto)
-        pontas.append(ponto)
+        point = (s["folha"], s["x"], s["y"])
+        u.achar(point)
+        pontas.append(point)
     for f in fios:
         dono = (f["folha"], *f["pontos"][0])
-        for folha, x, y in pontas:
-            if folha != f["folha"]:
+        for sheet, x, y in pontas:
+            if sheet != f["folha"]:
                 continue
             pts = f["pontos"]
-            if any(_no_segmento((x, y), pts[i], pts[i + 1]) for i in range(len(pts) - 1)):
-                u.unir((folha, x, y), dono)
+            if any(_in_segment((x, y), pts[i], pts[i + 1]) for i in range(len(pts) - 1)):
+                u.unir((sheet, x, y), dono)
 
-    for r in projeto.get("rotulos", []):
+    for r in project.get("rotulos", []):
         nomear((r["folha"], r["x"], r["y"]), r["nome"].strip())
 
-    grupos: dict[Any, list[dict[str, Any]]] = {}
-    for ponto, c, pino in pinos:
-        grupos.setdefault(u.achar(ponto), []).append(
-            {"ref": c.get("ref", "?"), "pino": pino["n"], "nome": pino["nome"]}
+    groups: dict[Any, list[dict[str, Any]]] = {}
+    for point, c, pin in pins:
+        groups.setdefault(u.achar(point), []).append(
+            {"ref": c.get("ref", "?"), "pino": pin["n"], "nome": pin["nome"]}
         )
-    nome_de: dict[Any, str] = {}
-    for chave, conj in nomes.items():
-        nome_de.setdefault(u.achar(chave), sorted(conj)[0])
+    name_of: dict[Any, str] = {}
+    for key, conj in names.items():
+        name_of.setdefault(u.achar(key), sorted(conj)[0])
 
-    redes, soltos, anonimas = [], [], 0
-    nome_raiz: dict[Any, str] = dict(nome_de)
-    for raiz, lista in sorted(
-        grupos.items(), key=lambda kv: _chave_natural(min(p["ref"] for p in kv[1]))
+    redes, loose, anonimas = [], [], 0
+    name_root: dict[Any, str] = dict(name_of)
+    for root, items in sorted(
+        groups.items(), key=lambda kv: _key_natural(min(p["ref"] for p in kv[1]))
     ):
-        lista.sort(key=lambda p: (_chave_natural(p["ref"]), _chave_natural(p["pino"])))
-        nome = nome_de.get(raiz)
+        items.sort(key=lambda p: (_key_natural(p["ref"]), _key_natural(p["pino"])))
+        nome = name_of.get(root)
         if nome is None:
-            if len(lista) == 1:
-                soltos.extend(lista)
+            if len(items) == 1:
+                loose.extend(items)
                 continue
             anonimas += 1
             nome = f"N${anonimas}"
-        nome_raiz[raiz] = nome
-        redes.append({"nome": nome, "pinos": lista})
-    redes.sort(key=lambda r: _chave_natural(r["nome"]))
+        name_root[root] = nome
+        redes.append({"nome": nome, "pinos": items})
+    redes.sort(key=lambda r: _key_natural(r["nome"]))
     sondas = [
-        {"id": s["id"], "tipo": "v", "rede": nome_raiz.get(u.achar((s["folha"], s["x"], s["y"])))}
+        {"id": s["id"], "tipo": "v", "rede": name_root.get(u.achar((s["folha"], s["x"], s["y"])))}
         for s in sondas_v
     ] + [
         {"id": s["id"], "tipo": "i", "ref": s.get("ref", "")}
-        for s in projeto.get("sondas", [])
+        for s in project.get("sondas", [])
         if s.get("tipo") == "i"
     ]
-    return {"redes": redes, "soltos": soltos, "sondas": sondas}
+    return {"redes": redes, "soltos": loose, "sondas": sondas}
 
 
-def bom(projeto: dict[str, Any], simbolo: BuscaSimbolo = POR_ID.get) -> list[dict[str, Any]]:
+def bom(project: dict[str, Any], symbol: SearchSymbol = POR_ID.get) -> list[dict[str, Any]]:
     """Uma linha por símbolo + valor + encapsulamento, com as referências em ordem natural.
     Unidades de um mesmo CI (U1 A, U1 B) contam uma vez."""
-    linhas: dict[tuple[str, str, str], list[str]] = {}
-    for c in projeto.get("componentes", []):
-        simb = simbolo(c["simbolo"])
+    lines: dict[tuple[str, str, str], list[str]] = {}
+    for c in project.get("componentes", []):
+        simb = symbol(c["simbolo"])
         if simb is not None and simb["tipo"] != "componente":
             continue
-        nome = simb["nome"].split(" (")[0] if simb else c["simbolo"]
-        chave = (nome, c.get("valor", ""), c.get("encapsulamento", ""))
-        refs = linhas.setdefault(chave, [])
+        name = simb["nome"].split(" (")[0] if simb else c["simbolo"]
+        key = (name, c.get("valor", ""), c.get("encapsulamento", ""))
+        refs = lines.setdefault(key, [])
         if c.get("ref", "?") not in refs:
             refs.append(c.get("ref", "?"))
-    saida = [
+    output = [
         {
-            "refs": sorted(refs, key=_chave_natural),
+            "refs": sorted(refs, key=_key_natural),
             "quantidade": len(refs),
-            "descricao": nome,
-            "valor": valor,
+            "descricao": name,
+            "valor": value,
             "encapsulamento": enc,
         }
-        for (nome, valor, enc), refs in linhas.items()
+        for (name, value, enc), refs in lines.items()
     ]
-    return sorted(saida, key=lambda linha: _chave_natural(linha["refs"][0]))
+    return sorted(output, key=lambda line: _key_natural(line["refs"][0]))
 
 
-def bom_csv(projeto: dict[str, Any], simbolo: BuscaSimbolo = POR_ID.get) -> str:
-    saida = io.StringIO()
-    w = csv.writer(saida)
+def bom_csv(project: dict[str, Any], symbol: SearchSymbol = POR_ID.get) -> str:
+    output = io.StringIO()
+    w = csv.writer(output)
     w.writerow(["Referências", "Quantidade", "Descrição", "Valor", "Encapsulamento"])
-    for linha in bom(projeto, simbolo):
+    for line in bom(project, symbol):
         w.writerow(
             [
-                " ".join(linha["refs"]),
-                linha["quantidade"],
-                linha["descricao"],
-                linha["valor"],
-                linha["encapsulamento"],
+                " ".join(line["refs"]),
+                line["quantidade"],
+                line["descricao"],
+                line["valor"],
+                line["encapsulamento"],
             ]
         )
-    return saida.getvalue()
+    return output.getvalue()

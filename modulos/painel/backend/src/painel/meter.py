@@ -8,46 +8,46 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-MEMORIA = 2000
+MEMORY = 2000
 
 
-def _pct(valores: list[int], p: float) -> int | None:
-    if not valores:
+def _pct(values: list[int], p: float) -> int | None:
+    if not values:
         return None
-    ordenados = sorted(valores)
+    ordenados = sorted(values)
     return ordenados[min(len(ordenados) - 1, int(p * len(ordenados)))]
 
 
-class Medidor:
-    def __init__(self, raiz: str | Path) -> None:
-        self.raiz = Path(raiz).expanduser()
+class Meter:
+    def __init__(self, root: str | Path) -> None:
+        self.raiz = Path(root).expanduser()
         self.raiz.mkdir(parents=True, exist_ok=True)
         self._arquivo = self.raiz / "uso.jsonl"
         self._trava = threading.Lock()
-        self._linhas: deque[dict[str, Any]] = deque(maxlen=MEMORIA)
+        self._linhas: deque[dict[str, Any]] = deque(maxlen=MEMORY)
         if self._arquivo.exists():
             with self._arquivo.open(encoding="utf-8") as f:
-                for linha in f:
-                    if linha.strip():
-                        self._linhas.append(json.loads(linha))
+                for line in f:
+                    if line.strip():
+                        self._linhas.append(json.loads(line))
 
-    def registrar(self, evento: dict[str, Any]) -> None:
-        linha = {"em": time.time(), **evento}
+    def registrar(self, event: dict[str, Any]) -> None:
+        line = {"em": time.time(), **event}
         with self._trava:
-            self._linhas.append(linha)
+            self._linhas.append(line)
             with self._arquivo.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(linha, ensure_ascii=False) + "\n")
+                f.write(json.dumps(line, ensure_ascii=False) + "\n")
 
-    def resumo(self, horas: float = 24, recentes: int = 50) -> dict[str, Any]:
-        desde = time.time() - horas * 3600
+    def resumo(self, horas: float = 24, recent: int = 50) -> dict[str, Any]:
+        since = time.time() - horas * 3600
         with self._trava:
-            linhas = [x for x in self._linhas if x["em"] >= desde]
-        provedores: dict[str, dict[str, Any]] = {}
-        for p in sorted({x["provedor"] for x in linhas}):
-            dele = [x for x in linhas if x["provedor"] == p]
+            lines = [x for x in self._linhas if x["em"] >= since]
+        providers: dict[str, dict[str, Any]] = {}
+        for p in sorted({x["provedor"] for x in lines}):
+            dele = [x for x in lines if x["provedor"] == p]
             ok = [x for x in dele if not x.get("erro")]
             ms = [x["ms"] for x in ok]
-            provedores[p] = {
+            providers[p] = {
                 "pedidos": len(dele),
                 "erros": len(dele) - len(ok),
                 "disponibilidade_pct": round(100 * len(ok) / len(dele), 1),
@@ -59,6 +59,6 @@ class Medidor:
             }
         return {
             "janela_horas": horas,
-            "provedores": provedores,
-            "recentes": list(reversed(linhas[-recentes:])),
+            "provedores": providers,
+            "recentes": list(reversed(lines[-recent:])),
         }

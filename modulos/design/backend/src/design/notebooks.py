@@ -7,115 +7,115 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
-from design.api import Gravacao, QuadroEdicao, QuadroEntrada
-from design.boards import Conflito, NaoEncontrado, Quadros
+from design.api import Recording, FrameEdit, FrameInput
+from design.boards import Conflict, NotFound, Frames
 
 router = APIRouter(tags=["design"])
 
 
-def get_cadernos(request: Request) -> Quadros:
-    cadernos: Quadros = request.app.state.cadernos_design
-    return cadernos
+def get_notebooks(request: Request) -> Frames:
+    notebooks: Frames = request.app.state.cadernos_design
+    return notebooks
 
 
-CadernosDep = Annotated[Quadros, Depends(get_cadernos)]
+NotebooksDep = Annotated[Frames, Depends(get_notebooks)]
 
 
-def _erro(e: Exception) -> HTTPException:
-    if isinstance(e, NaoEncontrado):
+def _error(e: Exception) -> HTTPException:
+    if isinstance(e, NotFound):
         return HTTPException(404, "Caderno não encontrado")
     return HTTPException(422, str(e))
 
 
 @router.get("/cadernos")
-def listar(cadernos: CadernosDep) -> Any:
+def list_all(cadernos: NotebooksDep) -> Any:
     return cadernos.listar()
 
 
 @router.post("/cadernos", status_code=201)
-def criar(entrada: QuadroEntrada, cadernos: CadernosDep) -> Any:
-    campos = entrada.model_dump()
-    campos["titulo"] = campos["titulo"] or "Caderno sem título"
+def create(entrada: FrameInput, cadernos: NotebooksDep) -> Any:
+    fields = entrada.model_dump()
+    fields["titulo"] = fields["titulo"] or "Caderno sem título"
     try:
-        return cadernos.criar(campos)
+        return cadernos.criar(fields)
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.get("/cadernos/{id_}")
-def obter(id_: str, cadernos: CadernosDep) -> Any:
+def get(id_: str, cadernos: NotebooksDep) -> Any:
     try:
         return cadernos.obter(id_)
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.get("/cadernos/{id_}/drawio")
-def exportar_drawio(id_: str, cadernos: CadernosDep) -> Response:
+def export_drawio(id_: str, cadernos: NotebooksDep) -> Response:
     from design import drawio
 
     try:
         q = cadernos.obter(id_)
     except Exception as e:
-        raise _erro(e) from e
-    nome = drawio.nome_arquivo(q["titulo"])
+        raise _error(e) from e
+    name = drawio.name_file(q["titulo"])
     return Response(
-        drawio.escrever(q),
+        drawio.write(q),
         media_type="application/xml",
-        headers={"Content-Disposition": "attachment; filename*=UTF-8''" + nome},
+        headers={"Content-Disposition": "attachment; filename*=UTF-8''" + name},
     )
 
 
 @router.patch("/cadernos/{id_}")
-def editar(id_: str, edicao: QuadroEdicao, cadernos: CadernosDep) -> Any:
+def edit(id_: str, edicao: FrameEdit, cadernos: NotebooksDep) -> Any:
     try:
         return cadernos.editar(id_, edicao.model_dump(exclude_unset=True))
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.put("/cadernos/{id_}/elementos")
-def salvar(id_: str, g: Gravacao, cadernos: CadernosDep) -> Any:
+def save(id_: str, g: Recording, cadernos: NotebooksDep) -> Any:
     try:
         return cadernos.salvar(id_, g.elementos, g.versao)
-    except Conflito as e:
-        corpo = {"error": {"message": str(e)}, "quadro": e.atual}
-        return JSONResponse(status_code=409, content=corpo)
+    except Conflict as e:
+        body = {"error": {"message": str(e)}, "quadro": e.atual}
+        return JSONResponse(status_code=409, content=body)
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.get("/cadernos/{id_}/miniatura")
-def miniatura(id_: str, cadernos: CadernosDep) -> FileResponse:
+def thumbnail(id_: str, cadernos: NotebooksDep) -> FileResponse:
     try:
         return FileResponse(cadernos.miniatura(id_), media_type="image/png")
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.post("/cadernos/{id_}/miniatura", status_code=204)
-async def guardar_miniatura(
-    id_: str, cadernos: CadernosDep, arquivo: Annotated[UploadFile, File()]
+async def store_thumbnail(
+    id_: str, cadernos: NotebooksDep, arquivo: Annotated[UploadFile, File()]
 ) -> Response:
     try:
         cadernos.guardar_miniatura(id_, await arquivo.read())
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
     return Response(status_code=204)
 
 
 @router.post("/cadernos/{id_}/duplicar", status_code=201)
-def duplicar(id_: str, cadernos: CadernosDep) -> Any:
+def duplicate(id_: str, cadernos: NotebooksDep) -> Any:
     try:
         return cadernos.duplicar(id_)
     except Exception as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.delete("/cadernos/{id_}", status_code=204)
-def excluir(id_: str, cadernos: CadernosDep) -> Response:
+def delete(id_: str, cadernos: NotebooksDep) -> Response:
     try:
         cadernos.excluir(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
     return Response(status_code=204)

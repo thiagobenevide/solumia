@@ -18,8 +18,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from painel import agent, performance
-from painel.nagger import Cobrador, Invalido, NaoEncontrado
-from painel.meter import Medidor
+from painel.nagger import Nagger, Invalid, NotFound
+from painel.meter import Meter
 
 router = APIRouter(tags=["painel"])
 log = logging.getLogger(__name__)
@@ -27,13 +27,13 @@ log = logging.getLogger(__name__)
 # `content` é texto ou, com imagem, partes no formato OpenAI (text + image_url com data URL).
 ChatLLM = Callable[[list[dict[str, Any]]], Awaitable[str]]
 # Aviso de andamento ("consultando a internet…") para quem acompanha pelas rotas `/fluxo`.
-Aviso = Callable[..., Awaitable[None]]
+Notice = Callable[..., Awaitable[None]]
 
 
-async def _sem_aviso(_: str, evento: str = "aviso") -> None:
+async def _without_warning(_: str, event: str = "aviso") -> None:
     return None
 
-SISTEMA = (
+SYSTEM = (
     "Você é o Cobrador: o assistente de disciplina do usuário. Responda em português, curto e "
     "direto, como um parceiro exigente porém justo. Use o retrato do dia abaixo (agenda, metas, "
     "alertas e tarefas) para dizer o que fazer agora, cobrar o que está atrasado e defender as "
@@ -42,12 +42,12 @@ SISTEMA = (
 )
 
 
-class LLMIndisponivel(Exception):
+class LLMUnavailable(Exception):
     pass
 
 
 @dataclass
-class Fontes:
+class Sources:
     tarefas: Callable[[], list[dict[str, Any]]]
     buscar_notas: Callable[[str], list[dict[str, Any]]]
     ler_nota: Callable[[str], dict[str, Any]]
@@ -62,7 +62,7 @@ class Fontes:
 
 
 @dataclass
-class Voz:
+class Voice:
     """Fala e escuta pelo worker: `transcrever(audio, mime, idioma) → texto` (idioma `pt`, `en` ou
     vazio = detecta entre os dois) e `falar(texto, trecho=None) → wav` (com trecho, só aquele
     pedaço da fala; vazio depois do último)."""
@@ -71,14 +71,14 @@ class Voz:
     falar: Callable[..., Awaitable[bytes]]
 
 
-def get_cobrador(request: Request) -> Cobrador:
-    cobrador: Cobrador = request.app.state.cobrador
-    return cobrador
+def get_nagger(request: Request) -> Nagger:
+    nagger: Nagger = request.app.state.cobrador
+    return nagger
 
 
-def get_fontes(request: Request) -> Fontes:
-    fontes: Fontes = request.app.state.painel_fontes
-    return fontes
+def get_sources(request: Request) -> Sources:
+    sources: Sources = request.app.state.painel_fontes
+    return sources
 
 
 def get_llms(request: Request) -> dict[str, ChatLLM]:
@@ -86,14 +86,14 @@ def get_llms(request: Request) -> dict[str, ChatLLM]:
     return llms
 
 
-def get_voz(request: Request) -> Voz:
-    voz: Voz = request.app.state.painel_voz
-    return voz
+def get_voice(request: Request) -> Voice:
+    voice: Voice = request.app.state.painel_voz
+    return voice
 
 
-def get_medidor(request: Request) -> Medidor:
-    medidor: Medidor = request.app.state.medidor
-    return medidor
+def get_meter(request: Request) -> Meter:
+    meter: Meter = request.app.state.medidor
+    return meter
 
 
 # Comando no PC pelo worker: `{"acao": ..., ...}` → `{"ok", "detalhe"}` (ver worker/pc.py).
@@ -105,10 +105,10 @@ def get_pc(request: Request) -> PC | None:
 
 
 PCDep = Annotated[PC | None, Depends(get_pc)]
-CobradorDep = Annotated[Cobrador, Depends(get_cobrador)]
-VozDep = Annotated[Voz, Depends(get_voz)]
-MedidorDep = Annotated[Medidor, Depends(get_medidor)]
-FontesDep = Annotated[Fontes, Depends(get_fontes)]
+NaggerDep = Annotated[Nagger, Depends(get_nagger)]
+VoiceDep = Annotated[Voice, Depends(get_voice)]
+MeterDep = Annotated[Meter, Depends(get_meter)]
+SourcesDep = Annotated[Sources, Depends(get_sources)]
 LLMsDep = Annotated[dict[str, ChatLLM], Depends(get_llms)]
 
 
@@ -120,19 +120,19 @@ def get_internet(request: Request) -> Any:
 InternetDep = Annotated[Any, Depends(get_internet)]
 
 
-class MetaEntrada(BaseModel):
+class MetaInput(BaseModel):
     titulo: str = Field(min_length=1, max_length=200)
     frequencia: str = "diaria"
     alvo: float = 1
     unidade: str = Field("vez", max_length=40)
 
 
-class AcaoEntrada(BaseModel):
+class ActionInput(BaseModel):
     quantidade: float = Field(1, gt=0)
     nota: str = Field("", max_length=2000)
 
 
-class Bloco(BaseModel):
+class Block(BaseModel):
     id: str | None = None
     titulo: str = Field(min_length=1, max_length=200)
     inicio: str = Field(pattern=r"^\d{2}:\d{2}$")
@@ -143,25 +143,25 @@ class Bloco(BaseModel):
     feito: bool = False
 
 
-class AgendaEntrada(BaseModel):
-    blocos: list[Bloco] = Field(max_length=60)
+class AgendaInput(BaseModel):
+    blocos: list[Block] = Field(max_length=60)
     motivo: str = Field("", max_length=2000)
 
 
-class Mensagem(BaseModel):
+class Message(BaseModel):
     papel: str = Field(pattern="^(usuario|assistente)$")
     texto: str = Field(max_length=8000)
 
 
-class Fala(BaseModel):
+class Speech(BaseModel):
     texto: str = Field(min_length=1, max_length=4000)
     trecho: int | None = Field(default=None, ge=0)
     """Só o n-ésimo pedaço da fala: o app toca um enquanto o próximo é sintetizado."""
 
 
-class Conversa(BaseModel):
+class Conversation(BaseModel):
     mensagem: str = Field(min_length=1, max_length=8000)
-    historico: list[Mensagem] = Field([], max_length=20)
+    historico: list[Message] = Field([], max_length=20)
     provedor: str = "local"
     # foto anexada à mensagem (base64, sem o prefixo data:); só vale para esta mensagem
     imagem: str | None = None
@@ -171,8 +171,8 @@ class Conversa(BaseModel):
     falada: bool = False
 
 
-def _erro(e: Exception) -> HTTPException:
-    if isinstance(e, NaoEncontrado):
+def _error(e: Exception) -> HTTPException:
+    if isinstance(e, NotFound):
         return HTTPException(404, "Não encontrado")
     return HTTPException(422, str(e))
 
@@ -181,91 +181,91 @@ def _erro(e: Exception) -> HTTPException:
 
 
 @router.get("/metas")
-def metas(cobrador: CobradorDep) -> Any:
+def goals(cobrador: NaggerDep) -> Any:
     return cobrador.metas()
 
 
 @router.post("/metas", status_code=201)
-def criar_meta(m: MetaEntrada, cobrador: CobradorDep) -> Any:
+def create_meta(m: MetaInput, cobrador: NaggerDep) -> Any:
     try:
         return cobrador.criar_meta(m.model_dump())
-    except Invalido as e:
-        raise _erro(e) from e
+    except Invalid as e:
+        raise _error(e) from e
 
 
 @router.delete("/metas/{id_}", status_code=204)
-def excluir_meta(id_: str, cobrador: CobradorDep) -> None:
+def delete_meta(id_: str, cobrador: NaggerDep) -> None:
     try:
         cobrador.excluir_meta(id_)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 @router.post("/metas/{id_}/acoes", status_code=201)
-def registrar_acao(id_: str, a: AcaoEntrada, cobrador: CobradorDep) -> Any:
+def register_action(id_: str, a: ActionInput, cobrador: NaggerDep) -> Any:
     try:
         return cobrador.registrar_acao(id_, a.quantidade, a.nota)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 # --- agenda ---
 
 
 @router.get("/agenda/{dia}")
-def agenda(dia: str, cobrador: CobradorDep) -> Any:
+def agenda(dia: str, cobrador: NaggerDep) -> Any:
     try:
         return cobrador.agenda(dia)
     except ValueError as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.post("/agenda/{dia}/sugerir")
-def sugerir(dia: str, cobrador: CobradorDep, fontes: FontesDep) -> Any:
+def suggest(dia: str, cobrador: NaggerDep, fontes: SourcesDep) -> Any:
     try:
         return cobrador.sugerir(dia, fontes.tarefas())
     except ValueError as e:
-        raise _erro(e) from e
+        raise _error(e) from e
 
 
 @router.put("/agenda/{dia}")
-def salvar_agenda(dia: str, ag: AgendaEntrada, cobrador: CobradorDep) -> Any:
-    blocos = [b.model_dump(exclude_none=True) for b in ag.blocos]
+def save_agenda(dia: str, ag: AgendaInput, cobrador: NaggerDep) -> Any:
+    blocks = [b.model_dump(exclude_none=True) for b in ag.blocos]
     try:
-        return cobrador.salvar(dia, blocos, ag.motivo)
-    except (Invalido, ValueError) as e:
-        raise _erro(e) from e
+        return cobrador.salvar(dia, blocks, ag.motivo)
+    except (Invalid, ValueError) as e:
+        raise _error(e) from e
 
 
 @router.post("/agenda/{dia}/blocos/{bloco_id}/feito")
-def marcar(dia: str, bloco_id: str, cobrador: CobradorDep, feito: bool = True) -> Any:
+def mark(dia: str, bloco_id: str, cobrador: NaggerDep, feito: bool = True) -> Any:
     try:
         return cobrador.marcar(dia, bloco_id, feito)
-    except NaoEncontrado as e:
-        raise _erro(e) from e
+    except NotFound as e:
+        raise _error(e) from e
 
 
 # --- cobrança ---
 
 
 @router.get("/disciplina")
-def disciplina(cobrador: CobradorDep, fontes: FontesDep) -> Any:
+def subject(cobrador: NaggerDep, fontes: SourcesDep) -> Any:
     return cobrador.disciplina(fontes.tarefas())
 
 
 @router.get("/desempenho")
-def ver_desempenho(cobrador: CobradorDep, fontes: FontesDep, dias: int = 30) -> Any:
-    return performance.analisar(fontes.tarefas(), cobrador, dias)
+def show_performance(cobrador: NaggerDep, fontes: SourcesDep, dias: int = 30) -> Any:
+    return performance.analyze(fontes.tarefas(), cobrador, dias)
 
 
 @router.get("/provedores")
-def provedores(llms: LLMsDep) -> Any:
+def providers(llms: LLMsDep) -> Any:
     return sorted(llms)
 
 
 # --- conversa ---
 
-_ANOTAR = re.compile(
+_ANNOTATE = re.compile(
     r"^\s*(?:anot[ae]|nota:|escrev[ae] (?:uma|essa|esta|a) nota|cri[ae] (?:uma|a) nota)"
     r"(?:\s+(?:que|sobre|isso|isto))?\s*[:,\-]?\s*",
     re.I,
@@ -278,7 +278,7 @@ _INTERNET = re.compile(
     re.I,
 )
 # Assuntos que pedem dado atual mesmo sem dizer "internet": cotação, FIPE, juros, notícias.
-_TEMPO_REAL = re.compile(
+_TIME_REAL = re.compile(
     r"\b(?:cota[cç][aã]o|d[oó]lar|euro|bitcoin|fipe|selic|cdi|ipca|infla[cç][aã]o|ibovespa|"
     r"pre[cç]o (?:atual|de hoje|hoje)|not[ií]cias?|quanto (?:est[aá]|custa) (?:o|a|hoje))\b",
     re.I,
@@ -286,13 +286,13 @@ _TEMPO_REAL = re.compile(
 
 # Pedido para o computador ("abre o Brave e pesquisa…", "desliga o PC"): vai direto ao agente,
 # sem os atalhos de pesquisa na web/notas acima.
-_COMANDO_PC = re.compile(
+_COMMAND_PC = re.compile(
     r"^\s*(?:abr[ae]|abrir|desligu?[ae]|desligar|cancel[ae] o desligamento)\b|"
     r"\b(?:brave|firefox|navegador|youtube|computador|pc)\b",
     re.I,
 )
 
-_PESQUISAR = re.compile(
+_SEARCH = re.compile(
     r"^\s*(?:pesquis[ae]|busc?que|busca|procur[ae])"
     r"(?:\s+(?:na|em|nas)\s+(?:nossa\s+)?(?:base(?: de conhecimento)?|notas|cofre))?"
     r"(?:\s+(?:sobre|por|o que|pelo|pela))?\s*[:,\-]?\s*",
@@ -300,57 +300,57 @@ _PESQUISAR = re.compile(
 )
 
 
-def _sem_acento(texto: str) -> str:
+def _without_accent(text: str) -> str:
     return "".join(
-        c for c in unicodedata.normalize("NFD", texto.lower()) if unicodedata.category(c) != "Mn"
+        c for c in unicodedata.normalize("NFD", text.lower()) if unicodedata.category(c) != "Mn"
     )
 
 
-def _buscar(fontes: Fontes, consulta: str, limite: int = 5) -> list[dict[str, Any]]:
+def _fetch(sources: Sources, query: str, limite: int = 5) -> list[dict[str, Any]]:
     """Notas que contêm mais palavras da consulta (palavras de 4+ letras)."""
-    palavras = [p for p in re.findall(r"\w+", _sem_acento(consulta)) if len(p) >= 4] or [consulta]
-    pontos: dict[str, int] = {}
-    achadas: dict[str, dict[str, Any]] = {}
-    for p in palavras:
-        for n in fontes.buscar_notas(p):
-            pontos[n["id"]] = pontos.get(n["id"], 0) + 1
-            achadas[n["id"]] = n
-    ordem = sorted(pontos, key=lambda i: -pontos[i])[:limite]
-    return [achadas[i] for i in ordem]
+    words = [p for p in re.findall(r"\w+", _without_accent(query)) if len(p) >= 4] or [query]
+    points: dict[str, int] = {}
+    found: dict[str, dict[str, Any]] = {}
+    for p in words:
+        for n in sources.buscar_notas(p):
+            points[n["id"]] = points.get(n["id"], 0) + 1
+            found[n["id"]] = n
+    order = sorted(points, key=lambda i: -points[i])[:limite]
+    return [found[i] for i in order]
 
 
-async def _responder(llm: ChatLLM, sistema: str, c: Conversa, pergunta: str) -> str:
-    papeis = {"usuario": "user", "assistente": "assistant"}
-    mensagens: list[dict[str, Any]] = [{"role": "system", "content": sistema}]
-    mensagens += [{"role": papeis[m.papel], "content": m.texto} for m in c.historico]
-    conteudo: Any = pergunta
+async def _answer(llm: ChatLLM, system: str, c: Conversation, pergunta: str) -> str:
+    roles = {"usuario": "user", "assistente": "assistant"}
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
+    messages += [{"role": roles[m.papel], "content": m.texto} for m in c.historico]
+    content: Any = pergunta
     if c.imagem:
         url = f"data:{c.imagem_mime};base64,{c.imagem}"
-        conteudo = [
+        content = [
             {"type": "text", "text": pergunta},
             {"type": "image_url", "image_url": {"url": url}},
         ]
-    mensagens.append({"role": "user", "content": conteudo})
-    return await llm(mensagens)
+    messages.append({"role": "user", "content": content})
+    return await llm(messages)
 
 
-_FALADA = (
+_SPOKEN = (
     "[Mensagem por voz: sua resposta será ouvida, não lida. Responda em até 3 frases curtas e "
     "naturais, sem markdown, tabelas ou listas longas; se houver passos, diga primeiro, segundo.]"
     "\n\n"
 )
 
-_MAX_IMAGEM = 8_000_000  # caracteres de base64 (~6 MB de imagem)
+_MAX_IMAGE = 8_000_000  # caracteres de base64 (~6 MB de imagem)
 
 
-async def _conversar(
-    c: Conversa,
-    cobrador: Cobrador,
-    fontes: Fontes,
+async def _chat(
+    c: Conversation,
+    nagger: Nagger,
+    sources: Sources,
     llms: dict[str, ChatLLM],
     internet: Any = None,
     pc: PC | None = None,
-    aviso: Aviso = _sem_aviso,
+    aviso: Notice = _without_warning,
 ) -> Any:
     """Chat do cobrador. Entende dois comandos antes de ir ao LLM: “anote …” cria uma nota no
     cofre e “pesquise …” busca na base de notas e responde com elas como contexto. No resto, o
@@ -358,31 +358,31 @@ async def _conversar(
     if c.provedor not in llms:
         raise HTTPException(422, f"Provedor indisponível: {c.provedor}")
     # o app já manda ≤ 1 MB; acima disso a mensagem ao worker (teto 16 MB) poderia estourar
-    if c.imagem and len(c.imagem) > _MAX_IMAGEM:
+    if c.imagem and len(c.imagem) > _MAX_IMAGE:
         raise HTTPException(413, "Imagem grande demais; envie uma foto menor (até ~6 MB).")
     llm = llms[c.provedor]
 
-    if m := _ANOTAR.match(c.mensagem):
-        corpo = c.mensagem[m.end() :].strip()
-        if not corpo:
+    if m := _ANNOTATE.match(c.mensagem):
+        body = c.mensagem[m.end() :].strip()
+        if not body:
             raise HTTPException(422, "Diga o que anotar depois de “anote”.")
-        primeira = re.split(r"[.\n!?]", corpo, maxsplit=1)[0].strip()
-        titulo = f"{cobrador.agora():%Y-%m-%d %H%M} {primeira[:60]}".strip()
-        nota = fontes.criar_nota({"titulo": titulo, "corpo": corpo, "tags": ["cobrador"]})
-        return {"resposta": f"Anotado em “{nota['titulo']}”.", "acao": "nota", "nota": nota}
+        primeira = re.split(r"[.\n!?]", body, maxsplit=1)[0].strip()
+        title = f"{nagger.agora():%Y-%m-%d %H%M} {primeira[:60]}".strip()
+        note = sources.criar_nota({"titulo": title, "corpo": body, "tags": ["cobrador"]})
+        return {"resposta": f"Anotado em “{note['titulo']}”.", "acao": "nota", "nota": note}
 
-    no_pc = pc is not None and bool(_COMANDO_PC.search(c.mensagem))
+    node_pc = pc is not None and bool(_COMMAND_PC.search(c.mensagem))
     m = _INTERNET.match(c.mensagem)
-    if not no_pc and internet is not None and (
-        m or (_TEMPO_REAL.search(c.mensagem) and not _ANOTAR.match(c.mensagem))
+    if not node_pc and internet is not None and (
+        m or (_TIME_REAL.search(c.mensagem) and not _ANNOTATE.match(c.mensagem))
     ):
-        pedido = c.mensagem[m.end() :].strip() if m else c.mensagem
+        request = c.mensagem[m.end() :].strip() if m else c.mensagem
         await aviso("Certo, vou consultar na internet. Um instante.")
         try:
             r = await internet.pesquisar(
-                llm, pedido or c.mensagem, contexto=_FALADA if c.falada else "", aviso=aviso
+                llm, request or c.mensagem, contexto=_SPOKEN if c.falada else "", aviso=aviso
             )
-        except LLMIndisponivel as e:
+        except LLMUnavailable as e:
             raise HTTPException(503, str(e)) from e
         return {
             "resposta": r["resposta"],
@@ -391,79 +391,79 @@ async def _conversar(
             "links": r["links"],
         }
 
-    if not no_pc and (m := _PESQUISAR.match(c.mensagem)):
-        consulta = c.mensagem[m.end() :].strip() or c.mensagem
-        notas = _buscar(fontes, consulta)
-        if not notas:
+    if not node_pc and (m := _SEARCH.match(c.mensagem)):
+        query = c.mensagem[m.end() :].strip() or c.mensagem
+        notes = _fetch(sources, query)
+        if not notes:
             return {
-                "resposta": f"Nada na base sobre “{consulta}”.",
+                "resposta": f"Nada na base sobre “{query}”.",
                 "acao": "pesquisa",
                 "notas": [],
             }
-        trechos = []
-        for n in notas[:3]:
-            corpo = str(fontes.ler_nota(n["id"]).get("corpo", ""))[:3000]
-            trechos.append(f"### {n['titulo']}\n{corpo}")
-        sistema = (
+        spans = []
+        for n in notes[:3]:
+            body = str(sources.ler_nota(n["id"]).get("corpo", ""))[:3000]
+            spans.append(f"### {n['titulo']}\n{body}")
+        system = (
             "Responda em português, curto, usando só as notas abaixo da base de conhecimento do "
             "usuário; cite o título da nota de onde veio cada informação.\n\n"
-            + "\n\n".join(trechos)
+            + "\n\n".join(spans)
         )
         try:
-            resposta = await _responder(llm, sistema, c, f"Pergunta: {consulta}")
-        except LLMIndisponivel:
-            resposta = "Sem LLM agora; notas encontradas:\n" + "\n".join(
-                f"- {n['titulo']}" for n in notas
+            answer = await _answer(llm, system, c, f"Pergunta: {query}")
+        except LLMUnavailable:
+            answer = "Sem LLM agora; notas encontradas:\n" + "\n".join(
+                f"- {n['titulo']}" for n in notes
             )
-        return {"resposta": resposta, "acao": "pesquisa", "notas": notas}
+        return {"resposta": answer, "acao": "pesquisa", "notas": notes}
 
     # Ordem pensada para o cache do llama-server: o que quase não muda (instruções, agenda,
     # tarefas) vai no sistema e o que muda a cada minuto (hora, alertas) só na última mensagem;
     # assim cada mensagem processa só o texto novo em vez do prompt inteiro.
-    tarefas = fontes.tarefas()
-    sistema = SISTEMA + agent.INSTRUCOES + agent.instrucoes_modulos(fontes.modulos)
+    tasks = sources.tarefas()
+    system = SYSTEM + agent.INSTRUCTIONS + agent.instructions_modules(sources.modulos)
     if pc is not None:
-        sistema += agent.COMPUTADOR
-    sistema += "\n# Retrato do dia\n" + cobrador.retrato(tarefas)
-    analise = None
-    if _DESEMPENHO.search(c.mensagem):
-        analise = performance.analisar(tarefas, cobrador)
-        sistema += "\n" + performance.texto(analise) + "\n" + agent.ANALISE
-    agora = f"[{cobrador.momento(tarefas)}]\n\n"
+        system += agent.COMPUTER
+    system += "\n# Retrato do dia\n" + nagger.retrato(tasks)
+    analysis = None
+    if _PERFORMANCE.search(c.mensagem):
+        analysis = performance.analyze(tasks, nagger)
+        system += "\n" + performance.text(analysis) + "\n" + agent.ANALYSIS
+    now = f"[{nagger.momento(tasks)}]\n\n"
     if c.falada:  # na última mensagem, não no sistema: não invalida o cache do prompt
-        agora += _FALADA
+        now += _SPOKEN
 
-    async def agir(acoes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        no_pc, acoes = agent.separar_pc(acoes)
-        nos_modulos, acoes = agent.separar_modulos(acoes, fontes.modulos)
-        feitas = agent.executar(acoes, cobrador, fontes, motivo=c.mensagem[:300])
-        feitas += await agent.executar_modulos(nos_modulos, fontes.modulos, llm)
-        return feitas + await agent.executar_pc(no_pc, pc)
+    async def agir(actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        node_pc, actions = agent.separate_pc(actions)
+        nodes_modules, actions = agent.separate_modules(actions, sources.modulos)
+        done = agent.execute(actions, nagger, sources, motivo=c.mensagem[:300])
+        done += await agent.execute_modules(nodes_modules, sources.modulos, llm)
+        return done + await agent.execute_pc(node_pc, pc)
 
     try:
-        bruta = await _responder(llm, sistema, c, agora + c.mensagem)
-        resposta, acoes = agent.extrair(bruta)
-        consultas, acoes = agent.separar(acoes)
-        executadas = await agir(acoes)
+        raw = await _answer(llm, system, c, now + c.mensagem)
+        answer, actions = agent.extract(raw)
+        queries, actions = agent.separate(actions)
+        executadas = await agir(actions)
         links: list[dict[str, Any]] = []
-        if consultas:
+        if queries:
             # uma rodada de consultas: o LLM recebe os resultados e responde de novo
-            resultados = []
-            for a in consultas[:3]:
-                await aviso(_ANDAMENTO.get(str(a.get("tipo")), "Consultando…"))
-                texto, feita, achados = await _consultar(a, llm, cobrador, fontes, internet)
-                resultados.append(texto)
+            results = []
+            for a in queries[:3]:
+                await aviso(_ONGOING.get(str(a.get("tipo")), "Consultando…"))
+                text, feita, found = await _query(a, llm, nagger, sources, internet)
+                results.append(text)
                 executadas.append(feita)
-                links += achados
-            pergunta = (
-                f"{agora}{c.mensagem}\n\n[Resultados das consultas que você pediu]\n"
-                + "\n\n".join(resultados)
+                links += found
+            question = (
+                f"{now}{c.mensagem}\n\n[Resultados das consultas que você pediu]\n"
+                + "\n\n".join(results)
                 + "\n\nResponda agora com esses resultados; não peça as mesmas consultas."
             )
-            resposta, acoes = agent.extrair(await _responder(llm, sistema, c, pergunta))
-            _, acoes = agent.separar(acoes)
-            executadas += await agir(acoes)
-    except LLMIndisponivel as e:
+            answer, actions = agent.extract(await _answer(llm, system, c, question))
+            _, actions = agent.separate(actions)
+            executadas += await agir(actions)
+    except LLMUnavailable as e:
         if c.imagem and c.provedor == "local":
             raise HTTPException(
                 503,
@@ -472,79 +472,79 @@ async def _conversar(
             ) from e
         raise HTTPException(503, str(e)) from e
     r: dict[str, Any] = {
-        "resposta": resposta,
-        "acao": "agente" if executadas else ("desempenho" if analise else None),
+        "resposta": answer,
+        "acao": "agente" if executadas else ("desempenho" if analysis else None),
         "executadas": executadas,
     }
     if links:
         r["links"] = links
-    if analise:
-        r["desempenho"] = analise
+    if analysis:
+        r["desempenho"] = analysis
     return r
 
 
-_ANDAMENTO = {
+_ONGOING = {
     "pesquisar_web": "Deixa eu pesquisar na internet.",
     "pesquisar_notas": "Vou procurar nas suas notas.",
     "analisar_desempenho": "Vou analisar o seu desempenho.",
 }
 
 # "como está meu desempenho", "analise minha produtividade": a análise entra no prompt.
-_DESEMPENHO = re.compile(r"\b(?:desempenho|produtividade|rendimento)\b", re.I)
+_PERFORMANCE = re.compile(r"\b(?:desempenho|produtividade|rendimento)\b", re.I)
 
 
-async def _consultar(
-    a: dict[str, Any], llm: ChatLLM, cobrador: Cobrador, fontes: Fontes, internet: Any
+async def _query(
+    a: dict[str, Any], llm: ChatLLM, nagger: Nagger, sources: Sources, internet: Any
 ) -> tuple[str, dict[str, Any], list[dict[str, Any]]]:
     """Executa uma consulta do agente: (texto para o LLM, item de `executadas`, links)."""
-    tipo = str(a.get("tipo"))
-    consulta = str(a.get("consulta", "")).strip()
-    if tipo == "analisar_desempenho":
-        dias = int(a.get("dias") or 30)
-        texto = performance.texto(performance.analisar(fontes.tarefas(), cobrador, dias))
-        return texto, {"tipo": tipo, "ok": True, "detalhe": f"Analisei {dias} dias"}, []
-    if not consulta:
-        return "", {"tipo": tipo, "ok": False, "detalhe": "Consulta vazia."}, []
-    if tipo == "pesquisar_notas":
-        notas = _buscar(fontes, consulta)
-        trechos = [
-            f"### {n['titulo']}\n{str(fontes.ler_nota(n['id']).get('corpo', ''))[:1500]}"
-            for n in notas[:3]
+    kind = str(a.get("tipo"))
+    query = str(a.get("consulta", "")).strip()
+    if kind == "analisar_desempenho":
+        days = int(a.get("dias") or 30)
+        text = performance.text(performance.analyze(sources.tarefas(), nagger, days))
+        return text, {"tipo": kind, "ok": True, "detalhe": f"Analisei {days} dias"}, []
+    if not query:
+        return "", {"tipo": kind, "ok": False, "detalhe": "Consulta vazia."}, []
+    if kind == "pesquisar_notas":
+        notes = _fetch(sources, query)
+        spans = [
+            f"### {n['titulo']}\n{str(sources.ler_nota(n['id']).get('corpo', ''))[:1500]}"
+            for n in notes[:3]
         ]
-        texto = f"## Notas sobre “{consulta}”\n" + ("\n\n".join(trechos) or "nenhuma")
-        detalhe = f"Busquei nas notas: {consulta} ({len(notas)})"
-        return texto, {"tipo": tipo, "ok": True, "detalhe": detalhe}, []
+        text = f"## Notas sobre “{query}”\n" + ("\n\n".join(spans) or "nenhuma")
+        detail = f"Busquei nas notas: {query} ({len(notes)})"
+        return text, {"tipo": kind, "ok": True, "detalhe": detail}, []
     if internet is None:
-        return "", {"tipo": tipo, "ok": False, "detalhe": "Internet indisponível."}, []
+        return "", {"tipo": kind, "ok": False, "detalhe": "Internet indisponível."}, []
     try:
-        r = await internet.pesquisar(llm, consulta)
-    except LLMIndisponivel:
+        r = await internet.pesquisar(llm, query)
+    except LLMUnavailable:
         raise
     except Exception as e:  # ferramenta externa fora do ar não derruba a conversa
-        return "", {"tipo": tipo, "ok": False, "detalhe": f"Falha na web: {e}"}, []
-    texto = f"## Web: “{consulta}”\n{r['resposta']}"
-    return texto, {"tipo": tipo, "ok": True, "detalhe": f"Pesquisei na web: {consulta}"}, r["links"]
+        return "", {"tipo": kind, "ok": False, "detalhe": f"Falha na web: {e}"}, []
+    text = f"## Web: “{query}”\n{r['resposta']}"
+    return text, {"tipo": kind, "ok": True, "detalhe": f"Pesquisei na web: {query}"}, r["links"]
 
 
 @router.post("/conversar")
-async def conversar(
-    c: Conversa,
-    cobrador: CobradorDep,
-    fontes: FontesDep,
+async def chat(
+    c: Conversation,
+    cobrador: NaggerDep,
+    fontes: SourcesDep,
     llms: LLMsDep,
     internet: InternetDep,
     pc: PCDep,
 ) -> Any:
-    return await _conversar(c, cobrador, fontes, llms, internet, pc)
+    return await _chat(c, cobrador, fontes, llms, internet, pc)
 
 
-class ComandoPC(BaseModel):
+class CommandPC(BaseModel):
     acao: Literal["ligar", "desligar", "cancelar_desligar"]
     minutos: int = Field(0, ge=0, le=600)
 
 
 @router.post("/pc")
-async def comando_pc(cmd: ComandoPC, pc: PCDep) -> Any:
+async def command_pc(cmd: CommandPC, pc: PCDep) -> Any:
     """Botão do app: desligar o PC (ou cancelar um desligamento agendado)."""
     if pc is None:
         raise HTTPException(503, "Comandos no PC indisponíveis.")
@@ -557,32 +557,32 @@ async def comando_pc(cmd: ComandoPC, pc: PCDep) -> Any:
 # --- voz ---
 
 
-async def _transcrever(voz: Voz, audio: bytes, tipo: str, idioma: str) -> str:
+async def _transcribe(voice: Voice, audio: bytes, tipo: str, language: str) -> str:
     try:
-        texto = await voz.transcrever(audio, tipo, idioma)
-    except LLMIndisponivel as e:
+        text = await voice.transcrever(audio, tipo, language)
+    except LLMUnavailable as e:
         raise HTTPException(503, str(e)) from e
-    if not texto.strip():
+    if not text.strip():
         raise HTTPException(422, "Não entendi o áudio; tente de novo mais perto do microfone.")
-    return texto
+    return text
 
 
 @router.post("/transcrever")
-async def transcrever(
-    audio: UploadFile, voz: VozDep, idioma: Annotated[str, Form()] = ""
+async def transcribe(
+    audio: UploadFile, voz: VoiceDep, idioma: Annotated[str, Form()] = ""
 ) -> dict[str, str]:
     """Só a transcrição, para o microfone dos outros chats (rotinas, código…): o app põe o texto
     no próprio chat."""
-    return {"texto": await _transcrever(voz, await audio.read(), audio.content_type or "", idioma)}
+    return {"texto": await _transcribe(voz, await audio.read(), audio.content_type or "", idioma)}
 
 
 @router.post("/voz")
-async def voz(
+async def voice(
     audio: UploadFile,
-    cobrador: CobradorDep,
-    fontes: FontesDep,
+    cobrador: NaggerDep,
+    fontes: SourcesDep,
     llms: LLMsDep,
-    voz: VozDep,
+    voz: VoiceDep,
     internet: InternetDep,
     pc: PCDep,
     provedor: Annotated[str, Form()] = "local",
@@ -590,46 +590,46 @@ async def voz(
     idioma: Annotated[str, Form()] = "",
 ) -> Any:
     """Mensagem falada: o worker transcreve e a transcrição segue como mensagem de texto."""
-    texto = await _transcrever(voz, await audio.read(), audio.content_type or "", idioma)
-    c = Conversa(
-        mensagem=texto[:8000], historico=_historico(historico), provedor=provedor, falada=True
+    text = await _transcribe(voz, await audio.read(), audio.content_type or "", idioma)
+    c = Conversation(
+        mensagem=text[:8000], historico=_history(historico), provedor=provedor, falada=True
     )
-    return {"transcricao": texto} | await _conversar(c, cobrador, fontes, llms, internet, pc)
+    return {"transcricao": text} | await _chat(c, cobrador, fontes, llms, internet, pc)
 
 
-def _historico(historico: str) -> list[Mensagem]:
+def _history(historico: str) -> list[Message]:
     try:
-        return [Mensagem(**m) for m in json.loads(historico)][-20:]
+        return [Message(**m) for m in json.loads(historico)][-20:]
     except (ValueError, TypeError) as e:
         raise HTTPException(422, "Histórico inválido") from e
 
 
-def _fluxo(trabalho: Callable[[Aviso], Awaitable[dict[str, Any]]]) -> StreamingResponse:
+def _flow(work: Callable[[Notice], Awaitable[dict[str, Any]]]) -> StreamingResponse:
     """Resposta em NDJSON, uma linha por evento: `aviso` (andamento, para o app mostrar e falar
     enquanto espera), `transcricao`, e no fim `fim` (o mesmo corpo da rota sem fluxo) ou `erro`.
     Linha vazia a cada 10 s mantém a conexão viva nos proxies."""
-    fila: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
 
-    async def aviso(texto: str, evento: str = "aviso") -> None:
-        await fila.put({"evento": evento, "texto": texto})
+    async def aviso(text: str, event: str = "aviso") -> None:
+        await queue.put({"evento": event, "texto": text})
 
     async def rodar() -> None:
         try:
-            await fila.put({"evento": "fim"} | await trabalho(aviso))
+            await queue.put({"evento": "fim"} | await work(aviso))
         except HTTPException as e:
-            await fila.put({"evento": "erro", "detalhe": str(e.detail), "status": e.status_code})
+            await queue.put({"evento": "erro", "detalhe": str(e.detail), "status": e.status_code})
         except Exception:
             log.exception("conversa em fluxo falhou")
-            await fila.put({"evento": "erro", "detalhe": "Falha no servidor.", "status": 500})
+            await queue.put({"evento": "erro", "detalhe": "Falha no servidor.", "status": 500})
         finally:
-            await fila.put(None)
+            await queue.put(None)
 
     async def linhas() -> Any:
-        tarefa = asyncio.create_task(rodar())
+        task = asyncio.create_task(rodar())
         try:
             while True:
                 try:
-                    ev = await asyncio.wait_for(fila.get(), 10)
+                    ev = await asyncio.wait_for(queue.get(), 10)
                 except TimeoutError:
                     yield "\n"
                     continue
@@ -637,7 +637,7 @@ def _fluxo(trabalho: Callable[[Aviso], Awaitable[dict[str, Any]]]) -> StreamingR
                     break
                 yield json.dumps(ev, ensure_ascii=False) + "\n"
         finally:
-            tarefa.cancel()  # o app desconectou: não segue gastando LLM
+            task.cancel()  # o app desconectou: não segue gastando LLM
 
     return StreamingResponse(
         linhas(),
@@ -647,25 +647,25 @@ def _fluxo(trabalho: Callable[[Aviso], Awaitable[dict[str, Any]]]) -> StreamingR
 
 
 @router.post("/conversar/fluxo")
-async def conversar_fluxo(
-    c: Conversa,
-    cobrador: CobradorDep,
-    fontes: FontesDep,
+async def chat_flow(
+    c: Conversation,
+    cobrador: NaggerDep,
+    fontes: SourcesDep,
     llms: LLMsDep,
     internet: InternetDep,
     pc: PCDep,
 ) -> StreamingResponse:
     """[conversar] com avisos de andamento ([_fluxo])."""
-    return _fluxo(lambda aviso: _conversar(c, cobrador, fontes, llms, internet, pc, aviso))
+    return _flow(lambda aviso: _chat(c, cobrador, fontes, llms, internet, pc, aviso))
 
 
 @router.post("/voz/fluxo")
-async def voz_fluxo(
+async def voice_flow(
     audio: UploadFile,
-    cobrador: CobradorDep,
-    fontes: FontesDep,
+    cobrador: NaggerDep,
+    fontes: SourcesDep,
     llms: LLMsDep,
-    voz: VozDep,
+    voz: VoiceDep,
     internet: InternetDep,
     pc: PCDep,
     provedor: Annotated[str, Form()] = "local",
@@ -673,27 +673,27 @@ async def voz_fluxo(
     idioma: Annotated[str, Form()] = "",
 ) -> StreamingResponse:
     """[voz] com avisos: a transcrição sai assim que fica pronta, depois os avisos e o `fim`."""
-    dados, tipo = await audio.read(), audio.content_type or ""  # o arquivo fecha antes do fluxo
-    anteriores = _historico(historico)
+    data, kind = await audio.read(), audio.content_type or ""  # o arquivo fecha antes do fluxo
+    previous = _history(historico)
 
-    async def trabalho(aviso: Aviso) -> dict[str, Any]:
-        texto = await _transcrever(voz, dados, tipo, idioma)
-        await aviso(texto, "transcricao")
-        c = Conversa(mensagem=texto[:8000], historico=anteriores, provedor=provedor, falada=True)
-        return {"transcricao": texto} | await _conversar(
+    async def trabalho(aviso: Notice) -> dict[str, Any]:
+        text = await _transcribe(voz, data, kind, idioma)
+        await aviso(text, "transcricao")
+        c = Conversation(mensagem=text[:8000], historico=previous, provedor=provedor, falada=True)
+        return {"transcricao": text} | await _chat(
             c, cobrador, fontes, llms, internet, pc, aviso
         )
 
-    return _fluxo(trabalho)
+    return _flow(trabalho)
 
 
 @router.post("/falar")
-async def falar(f: Fala, voz: VozDep) -> Response:
+async def speak(f: Speech, voz: VoiceDep) -> Response:
     """A resposta do cobrador em áudio (WAV), sintetizada no worker; com `trecho`, 204 depois do
     último pedaço."""
     try:
         wav = await (voz.falar(f.texto) if f.trecho is None else voz.falar(f.texto, f.trecho))
-    except LLMIndisponivel as e:
+    except LLMUnavailable as e:
         raise HTTPException(503, str(e)) from e
     if not wav:
         return Response(status_code=204)
@@ -704,7 +704,7 @@ async def falar(f: Fala, voz: VozDep) -> Response:
 
 
 @router.get("/dashboard")
-def dashboard(request: Request, medidor: MedidorDep, llms: LLMsDep, horas: float = 24) -> Any:
+def dashboard(request: Request, medidor: MeterDep, llms: LLMsDep, horas: float = 24) -> Any:
     """Uso por provedor (pedidos, erros, latência p50/p95, tokens), últimos pedidos e os
     workers conectados com o uso de CPU/RAM/GPU da máquina."""
     workers: list[dict[str, Any]] = request.app.state.painel_workers()

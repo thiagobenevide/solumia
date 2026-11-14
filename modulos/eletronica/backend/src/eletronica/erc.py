@@ -7,28 +7,28 @@ podem repetir a ref."""
 from typing import Any
 
 from eletronica.library import POR_ID
-from eletronica.netlist import _no_segmento, _Uniao, netlist, posicao_pino
-from eletronica.projects import BuscaSimbolo
+from eletronica.netlist import _in_segment, _Union, netlist, position_pin
+from eletronica.projects import SearchSymbol
 
-ORDEM = {"erro": 0, "aviso": 1}
+ORDER = {"erro": 0, "aviso": 1}
 
 
-def _problema(
+def _problem(
     nivel: str,
     codigo: str,
     mensagem: str,
-    pinos: list[dict[str, Any]] | None = None,
+    pins: list[dict[str, Any]] | None = None,
     refs: list[str] | None = None,
     rede: str | None = None,
     ponto: tuple[str, int, int] | None = None,
 ) -> dict[str, Any]:
-    pinos = pinos or []
+    pins = pins or []
     p: dict[str, Any] = {
         "nivel": nivel,
         "codigo": codigo,
         "mensagem": mensagem,
-        "refs": refs if refs is not None else sorted({x["ref"] for x in pinos}),
-        "pinos": pinos,
+        "refs": refs if refs is not None else sorted({x["ref"] for x in pins}),
+        "pinos": pins,
         "rede": rede,
     }
     if ponto is not None:
@@ -36,225 +36,225 @@ def _problema(
     return p
 
 
-def _eh_fonte(simb: dict[str, Any]) -> bool:
+def _is_source(simb: dict[str, Any]) -> bool:
     return simb.get("categoria") == "Fontes" or simb.get("prefixo") in ("V", "BT")
 
 
-def _unidade(id_: str) -> tuple[str, str] | None:
+def _unit(id_: str) -> tuple[str, str] | None:
     """(`<lib>:<nome>`, `<n>`) para símbolos de várias unidades; senão None."""
-    partes = id_.split(":")
-    if len(partes) == 3 and partes[2].isdigit():
-        return f"{partes[0]}:{partes[1]}", partes[2]
+    parts = id_.split(":")
+    if len(parts) == 3 and parts[2].isdigit():
+        return f"{parts[0]}:{parts[1]}", parts[2]
     return None
 
 
-def erc(projeto: dict[str, Any], simbolo: BuscaSimbolo = POR_ID.get) -> list[dict[str, Any]]:
-    u = _Uniao()
-    componentes = projeto.get("componentes", [])
-    fios = projeto.get("fios", [])
-    rotulos = projeto.get("rotulos", [])
+def erc(project: dict[str, Any], symbol: SearchSymbol = POR_ID.get) -> list[dict[str, Any]]:
+    u = _Union()
+    components = project.get("componentes", [])
+    fios = project.get("fios", [])
+    labels = project.get("rotulos", [])
     # (ponto, componente, pino) dos símbolos que não são de alimentação.
-    pinos: list[tuple[tuple[str, int, int], dict[str, Any], dict[str, Any]]] = []
-    pontos_pino: set[tuple[str, int, int]] = set()
+    pins: list[tuple[tuple[str, int, int], dict[str, Any], dict[str, Any]]] = []
+    points_pin: set[tuple[str, int, int]] = set()
     alimentados: set[Any] = set()  # nós com símbolo de alimentação
-    fontes: list[tuple[str, int, int]] = []
-    nomes_alimentacao: set[str] = set()
+    sources: list[tuple[str, int, int]] = []
+    names_nutrition: set[str] = set()
 
-    for c in componentes:
-        simb = simbolo(c["simbolo"])
+    for c in components:
+        simb = symbol(c["simbolo"])
         if simb is None:
             continue
-        for pino in simb["pinos"]:
-            ponto = (c["folha"], *posicao_pino(c, pino))
-            u.achar(ponto)
-            pontos_pino.add(ponto)
+        for pin in simb["pinos"]:
+            point = (c["folha"], *position_pin(c, pin))
+            u.achar(point)
+            points_pin.add(point)
             if simb["tipo"] == "alimentacao":
-                nome = c.get("valor") or simb["valor"]
-                nomes_alimentacao.add(nome)
-                u.unir(ponto, ("nome", nome))
-                alimentados.add(ponto)
+                name = c.get("valor") or simb["valor"]
+                names_nutrition.add(name)
+                u.unir(point, ("nome", name))
+                alimentados.add(point)
             else:
-                pinos.append((ponto, c, pino))
-                if _eh_fonte(simb):
-                    fontes.append(ponto)
+                pins.append((point, c, pin))
+                if _is_source(simb):
+                    sources.append(point)
 
     for f in fios:
         cantos = [(f["folha"], x, y) for x, y in f["pontos"]]
         for a in cantos[1:]:
             u.unir(cantos[0], a)
     pontas = [(f["folha"], *f["pontos"][i]) for f in fios for i in (0, -1)]
-    pontas += [p for p, _, _ in pinos]
+    pontas += [p for p, _, _ in pins]
     for f in fios:
         dono = (f["folha"], *f["pontos"][0])
         pts = f["pontos"]
-        for folha, x, y in pontas:
-            if folha == f["folha"] and any(
-                _no_segmento((x, y), pts[i], pts[i + 1]) for i in range(len(pts) - 1)
+        for sheet, x, y in pontas:
+            if sheet == f["folha"] and any(
+                _in_segment((x, y), pts[i], pts[i + 1]) for i in range(len(pts) - 1)
             ):
-                u.unir((folha, x, y), dono)
+                u.unir((sheet, x, y), dono)
 
-    nomes_rotulo: dict[str, int] = {}
-    raiz_rotulo: dict[Any, str] = {}
-    for r in rotulos:
-        nome = r["nome"].strip()
-        ponto = (r["folha"], r["x"], r["y"])
-        u.unir(ponto, ("nome", nome))
-        nomes_rotulo[nome] = nomes_rotulo.get(nome, 0) + 1
+    names_label: dict[str, int] = {}
+    root_label: dict[Any, str] = {}
+    for r in labels:
+        name = r["nome"].strip()
+        point = (r["folha"], r["x"], r["y"])
+        u.unir(point, ("nome", name))
+        names_label[name] = names_label.get(name, 0) + 1
 
-    for r in rotulos:
-        raiz_rotulo.setdefault(u.achar(("nome", r["nome"].strip())), r["nome"].strip())
-    raizes_alimentadas = {u.achar(p) for p in alimentados}
-    raizes_fonte = {u.achar(p) for p in fontes}
+    for r in labels:
+        root_label.setdefault(u.achar(("nome", r["nome"].strip())), r["nome"].strip())
+    roots_alimentadas = {u.achar(p) for p in alimentados}
+    roots_source = {u.achar(p) for p in sources}
 
     # Nome da rede igual ao da netlist (mesma ordem de N$k).
-    nome_de: dict[tuple[str, str], str] = {}
-    for rede in netlist(projeto, simbolo)["redes"]:
+    name_of: dict[tuple[str, str], str] = {}
+    for rede in netlist(project, symbol)["redes"]:
         for x in rede["pinos"]:
-            nome_de.setdefault((x["ref"], x["pino"]), rede["nome"])
+            name_of.setdefault((x["ref"], x["pino"]), rede["nome"])
 
-    grupos: dict[Any, list[tuple[tuple[str, int, int], dict[str, Any], dict[str, Any]]]] = {}
-    for item in pinos:
-        grupos.setdefault(u.achar(item[0]), []).append(item)
+    groups: dict[Any, list[tuple[tuple[str, int, int], dict[str, Any], dict[str, Any]]]] = {}
+    for item in pins:
+        groups.setdefault(u.achar(item[0]), []).append(item)
 
-    def info(c: dict[str, Any], pino: dict[str, Any]) -> dict[str, Any]:
-        return {"ref": c.get("ref", "?"), "pino": pino["n"], "nome": pino["nome"]}
+    def info(c: dict[str, Any], pin: dict[str, Any]) -> dict[str, Any]:
+        return {"ref": c.get("ref", "?"), "pino": pin["n"], "nome": pin["nome"]}
 
-    def rotulo_pino(c: dict[str, Any], pino: dict[str, Any]) -> str:
-        nome = f" ({pino['nome']})" if pino["nome"] else ""
-        return f"{c.get('ref', '?')} pino {pino['n']}{nome}"
+    def rotulo_pino(c: dict[str, Any], pin: dict[str, Any]) -> str:
+        name = f" ({pin['nome']})" if pin["nome"] else ""
+        return f"{c.get('ref', '?')} pino {pin['n']}{name}"
 
-    problemas: list[dict[str, Any]] = []
-    for raiz, lista in grupos.items():
-        primeiro = lista[0]
-        rede = nome_de.get((primeiro[1].get("ref", "?"), primeiro[2]["n"]))
-        alimentada = raiz in raizes_alimentadas
-        rotulada = raiz in raiz_rotulo
-        if len(lista) == 1:
-            ponto, c, pino = primeiro
+    problems: list[dict[str, Any]] = []
+    for root, items in groups.items():
+        primeiro = items[0]
+        rede = name_of.get((primeiro[1].get("ref", "?"), primeiro[2]["n"]))
+        alimentada = root in roots_alimentadas
+        rotulada = root in root_label
+        if len(items) == 1:
+            point, c, pin = primeiro
             if rotulada and not alimentada:
-                problemas.append(
-                    _problema(
+                problems.append(
+                    _problem(
                         "aviso",
                         "rede_um_pino",
-                        f"A rede {raiz_rotulo[raiz]} liga só {rotulo_pino(c, pino)}.",
-                        [info(c, pino)],
-                        rede=raiz_rotulo[raiz],
-                        ponto=ponto,
+                        f"A rede {root_label[root]} liga só {rotulo_pino(c, pin)}.",
+                        [info(c, pin)],
+                        rede=root_label[root],
+                        ponto=point,
                     )
                 )
-            elif not rotulada and not alimentada and pino.get("tipo") != "nc":
-                problemas.append(
-                    _problema(
+            elif not rotulada and not alimentada and pin.get("tipo") != "nc":
+                problems.append(
+                    _problem(
                         "erro",
                         "pino_solto",
-                        f"{rotulo_pino(c, pino)} não está ligado a nada.",
-                        [info(c, pino)],
-                        ponto=ponto,
+                        f"{rotulo_pino(c, pin)} não está ligado a nada.",
+                        [info(c, pin)],
+                        ponto=point,
                     )
                 )
-        saidas = [(p, c, pino) for p, c, pino in lista if pino.get("tipo") == "saida"]
+        saidas = [(p, c, pin) for p, c, pin in items if pin.get("tipo") == "saida"]
         if len(saidas) >= 2:
-            problemas.append(
-                _problema(
+            problems.append(
+                _problem(
                     "erro",
                     "saidas_em_curto",
                     f"{len(saidas)} saídas ligadas na mesma rede {rede}: "
-                    + ", ".join(rotulo_pino(c, pino) for _, c, pino in saidas)
+                    + ", ".join(rotulo_pino(c, pin) for _, c, pin in saidas)
                     + ".",
-                    [info(c, pino) for _, c, pino in saidas],
+                    [info(c, pin) for _, c, pin in saidas],
                     rede=rede,
                     ponto=saidas[0][0],
                 )
             )
-        tipos = {pino.get("tipo") for _, _, pino in lista}
-        if len(lista) >= 2 and tipos == {"entrada"} and not alimentada:
-            problemas.append(
-                _problema(
+        kinds = {pin.get("tipo") for _, _, pin in items}
+        if len(items) >= 2 and kinds == {"entrada"} and not alimentada:
+            problems.append(
+                _problem(
                     "erro",
                     "entrada_sem_acionamento",
                     f"A rede {rede} só liga entradas; nada a aciona.",
-                    [info(c, pino) for _, c, pino in lista],
+                    [info(c, pin) for _, c, pin in items],
                     rede=rede,
                     ponto=primeiro[0],
                 )
             )
-        if not alimentada and raiz not in raizes_fonte:
-            for ponto, c, pino in lista:
-                if pino.get("tipo") == "alimentacao":
-                    problemas.append(
-                        _problema(
+        if not alimentada and root not in roots_source:
+            for point, c, pin in items:
+                if pin.get("tipo") == "alimentacao":
+                    problems.append(
+                        _problem(
                             "aviso",
                             "alimentacao_sem_fonte",
-                            f"{rotulo_pino(c, pino)} é de alimentação, mas a rede não tem "
+                            f"{rotulo_pino(c, pin)} é de alimentação, mas a rede não tem "
                             "símbolo de alimentação nem fonte.",
-                            [info(c, pino)],
+                            [info(c, pin)],
                             rede=rede,
-                            ponto=ponto,
+                            ponto=point,
                         )
                     )
 
     # Referências repetidas (menos símbolos de alimentação e unidades diferentes do mesmo CI).
-    por_ref: dict[str, list[dict[str, Any]]] = {}
-    for c in componentes:
-        simb = simbolo(c["simbolo"])
+    by_ref: dict[str, list[dict[str, Any]]] = {}
+    for c in components:
+        simb = symbol(c["simbolo"])
         if simb is not None and simb["tipo"] != "componente":
             continue
-        por_ref.setdefault(c.get("ref", "?"), []).append(c)
-    for ref, lista in por_ref.items():
-        if len(lista) < 2:
+        by_ref.setdefault(c.get("ref", "?"), []).append(c)
+    for ref, items in by_ref.items():
+        if len(items) < 2:
             continue
-        unidades = [_unidade(c["simbolo"]) for c in lista]
+        units = [_unit(c["simbolo"]) for c in items]
         if (
-            all(unidades)
-            and len({un[0] for un in unidades if un}) == 1
-            and len({un[1] for un in unidades if un}) == len(unidades)
+            all(units)
+            and len({un[0] for un in units if un}) == 1
+            and len({un[1] for un in units if un}) == len(units)
         ):
             continue
-        c = lista[1]
-        problemas.append(
-            _problema(
+        c = items[1]
+        problems.append(
+            _problem(
                 "erro",
                 "ref_duplicada",
-                f"A referência {ref} aparece {len(lista)} vezes.",
+                f"A referência {ref} aparece {len(items)} vezes.",
                 refs=[ref],
                 ponto=(c["folha"], c["x"], c["y"]),
             )
         )
 
-    por_posicao: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
-    for c in componentes:
-        por_posicao.setdefault((c["folha"], c["x"], c["y"]), []).append(c)
-    for ponto, lista in por_posicao.items():
-        if len(lista) >= 2:
-            refs = [c.get("ref", "?") for c in lista]
-            problemas.append(
-                _problema(
+    by_position: dict[tuple[str, int, int], list[dict[str, Any]]] = {}
+    for c in components:
+        by_position.setdefault((c["folha"], c["x"], c["y"]), []).append(c)
+    for point, items in by_position.items():
+        if len(items) >= 2:
+            refs = [c.get("ref", "?") for c in items]
+            problems.append(
+                _problem(
                     "erro",
                     "componentes_sobrepostos",
                     f"Componentes um em cima do outro: {', '.join(refs)}.",
                     refs=refs,
-                    ponto=ponto,
+                    ponto=point,
                 )
             )
 
-    pontos_rotulo = {(r["folha"], r["x"], r["y"]) for r in rotulos}
+    points_label = {(r["folha"], r["x"], r["y"]) for r in labels}
     for f in fios:
         for i in (0, -1):
             ponta = (f["folha"], *f["pontos"][i])
-            if ponta in pontos_pino or ponta in pontos_rotulo:
+            if ponta in points_pin or ponta in points_label:
                 continue
             if any(
                 g is not f
                 and g["folha"] == f["folha"]
                 and any(
-                    _no_segmento(ponta[1:], g["pontos"][k], g["pontos"][k + 1])
+                    _in_segment(ponta[1:], g["pontos"][k], g["pontos"][k + 1])
                     for k in range(len(g["pontos"]) - 1)
                 )
                 for g in fios
             ):
                 continue
-            problemas.append(
-                _problema(
+            problems.append(
+                _problem(
                     "aviso",
                     "fio_solto",
                     "Ponta de fio que não liga a nada.",
@@ -263,19 +263,19 @@ def erc(projeto: dict[str, Any], simbolo: BuscaSimbolo = POR_ID.get) -> list[dic
                 )
             )
 
-    for r in rotulos:
-        nome = r["nome"].strip()
-        if nomes_rotulo.get(nome) == 1 and nome not in nomes_alimentacao:
-            problemas.append(
-                _problema(
+    for r in labels:
+        name = r["nome"].strip()
+        if names_label.get(name) == 1 and name not in names_nutrition:
+            problems.append(
+                _problem(
                     "aviso",
                     "rotulo_unico",
-                    f"O rótulo {nome} aparece uma vez só no projeto.",
+                    f"O rótulo {name} aparece uma vez só no projeto.",
                     refs=[],
-                    rede=nome,
+                    rede=name,
                     ponto=(r["folha"], r["x"], r["y"]),
                 )
             )
 
-    problemas.sort(key=lambda p: ORDEM[p["nivel"]])
-    return problemas
+    problems.sort(key=lambda p: ORDER[p["nivel"]])
+    return problems

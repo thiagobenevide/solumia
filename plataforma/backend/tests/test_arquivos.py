@@ -44,13 +44,13 @@ def test_envio_listagem_edicao_e_exclusao(api: TestClient) -> None:
     assert api.get("/api/arquivos/pastas").json() == ["Biologia"]
     assert api.get(f"/api/arquivos/{meta['id']}/pdf").content == PDF
 
-    editado = api.patch(f"/api/arquivos/{meta['id']}", json={"titulo": "Novo", "tags": ["a"]})
-    assert editado.json()["titulo"] == "Novo"
+    edited = api.patch(f"/api/arquivos/{meta['id']}", json={"titulo": "Novo", "tags": ["a"]})
+    assert edited.json()["titulo"] == "Novo"
 
     assert api.delete(f"/api/arquivos/{meta['id']}").status_code == 204
     assert api.get(f"/api/arquivos/{meta['id']}").status_code == 404
-    acoes = [m["acao"] for m in api.get("/api/arquivos/mudancas").json()["mudancas"]]
-    assert acoes == ["criado", "editado", "excluido"]
+    actions = [m["acao"] for m in api.get("/api/arquivos/mudancas").json()["mudancas"]]
+    assert actions == ["criado", "editado", "excluido"]
     assert len(api.get("/api/arquivos/mudancas?desde=2").json()["mudancas"]) == 1
 
 
@@ -58,10 +58,10 @@ def test_duplicar(api: TestClient) -> None:
     meta = _enviar(api, "Artigo.pdf", pasta="Biologia")
     r = api.post(f"/api/arquivos/{meta['id']}/duplicar")
     assert r.status_code == 201
-    copia = r.json()
-    assert copia["id"] != meta["id"] and copia["titulo"] == "Artigo (cópia)"
-    assert copia["pasta"] == "Biologia"
-    assert api.get(f"/api/arquivos/{copia['id']}/pdf").content == PDF
+    copy = r.json()
+    assert copy["id"] != meta["id"] and copy["titulo"] == "Artigo (cópia)"
+    assert copy["pasta"] == "Biologia"
+    assert api.get(f"/api/arquivos/{copy['id']}/pdf").content == PDF
     assert len(api.get("/api/arquivos").json()) == 2
     assert api.post("/api/arquivos/000000000000/duplicar").status_code == 404
 
@@ -77,10 +77,10 @@ def test_xml_fica_pronto_sem_pdf(api: TestClient) -> None:
     assert meta["tipo"] == "xml" and meta["status"] == "pronto"
     assert api.get(f"/api/arquivos/{meta['id']}/original").content.startswith(b"<nota>")
 
-    novo = b"<nota><valor>20</valor></nota>"
-    r = api.put(f"/api/arquivos/{meta['id']}/original", files={"arquivo": ("nfe.xml", novo)})
+    new = b"<nota><valor>20</valor></nota>"
+    r = api.put(f"/api/arquivos/{meta['id']}/original", files={"arquivo": ("nfe.xml", new)})
     assert r.status_code == 200 and r.json()["status"] == "pronto"
-    assert api.get(f"/api/arquivos/{meta['id']}/original").content == novo
+    assert api.get(f"/api/arquivos/{meta['id']}/original").content == new
 
 
 @pytest.mark.skipif(shutil.which("soffice") is None, reason="LibreOffice não instalado")
@@ -116,15 +116,15 @@ def test_cria_em_branco(api: TestClient, tipo: str, ext: str) -> None:
 def test_anotacoes_com_conflito_e_destaques(api: TestClient) -> None:
     meta = _enviar(api, "Fotossintese.pdf")
     url = f"/api/arquivos/{meta['id']}/anotacoes"
-    destaque = {"id": "d1", "pagina": 2, "texto": "A clorofila absorve luz", "cor": 4294961979}
-    salvo = api.put(url, json={"versao_base": 0, "destaques": [destaque], "tracos": [{"id": "t"}]})
+    highlight = {"id": "d1", "pagina": 2, "texto": "A clorofila absorve luz", "cor": 4294961979}
+    salvo = api.put(url, json={"versao_base": 0, "destaques": [highlight], "tracos": [{"id": "t"}]})
     assert salvo.json()["versao"] == 1
 
-    conflito = api.put(url, json={"versao_base": 0})
-    assert conflito.status_code == 409
-    assert conflito.json()["atuais"]["destaques"][0]["id"] == "d1"
+    conflict = api.put(url, json={"versao_base": 0})
+    assert conflict.status_code == 409
+    assert conflict.json()["atuais"]["destaques"][0]["id"] == "d1"
 
-    achados = api.get("/api/arquivos/destaques?q=clorofila").json()
-    assert achados[0]["arquivo_titulo"] == "Fotossintese"
-    assert achados[0]["referencia"] == "> A clorofila absorve luz\n— [[Fotossintese]], p. 3"
+    found = api.get("/api/arquivos/destaques?q=clorofila").json()
+    assert found[0]["arquivo_titulo"] == "Fotossintese"
+    assert found[0]["referencia"] == "> A clorofila absorve luz\n— [[Fotossintese]], p. 3"
     assert api.get(f"/api/arquivos/{meta['id']}").json()["destaques"] == 1

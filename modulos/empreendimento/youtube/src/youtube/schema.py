@@ -8,8 +8,8 @@ no grafo das notas.
 
 from typing import Any
 
-RAIZ = "Notas/Empreendimento/YouTube"
-MAPA = "[[MOC — Rede de Canais no YouTube]]"
+ROOT = "Notas/Empreendimento/YouTube"
+MAP = "[[MOC — Rede de Canais no YouTube]]"
 
 STATUS = [
     "rascunho",
@@ -20,16 +20,16 @@ STATUS = [
     "publicado",
     "arquivada",
 ]
-STATUS_CANAL = ["ideia", "em-andamento", "ativo", "pausado", "arquivada"]
+STATUS_CHANNEL = ["ideia", "em-andamento", "ativo", "pausado", "arquivada"]
 
 
-def _campo(nome: str, rotulo: str, tipo: str = "texto", opcoes: list[str] | None = None) -> dict:
-    return {"nome": nome, "rotulo": rotulo, "tipo": tipo, "opcoes": opcoes or []}
+def _field(nome: str, label: str, tipo: str = "texto", options: list[str] | None = None) -> dict:
+    return {"nome": nome, "rotulo": label, "tipo": tipo, "opcoes": options or []}
 
 
-_STATUS = _campo("status", "Status", "opcoes", STATUS)
+_STATUS = _field("status", "Status", "opcoes", STATUS)
 
-COLECOES: dict[str, dict[str, Any]] = {
+COLLECTIONS: dict[str, dict[str, Any]] = {
     "temas": {
         "tipo": "tema",
         "nome": "Temas",
@@ -38,11 +38,11 @@ COLECOES: dict[str, dict[str, Any]] = {
         "tag": "empreendimento/youtube/temas",
         "campos": [
             _STATUS,
-            _campo("numero", "Número", "numero"),
-            _campo("fio", "Fio"),
-            _campo("plano", "Plano", "link"),
-            _campo("roteiro", "Roteiro", "link"),
-            _campo("historia", "História", "link"),
+            _field("numero", "Número", "numero"),
+            _field("fio", "Fio"),
+            _field("plano", "Plano", "link"),
+            _field("roteiro", "Roteiro", "link"),
+            _field("historia", "História", "link"),
         ],
         "modelo": (
             "## Títulos\n\n## Miniaturas (Testar e comparar)\n\n## Descrição do vídeo\n\n"
@@ -56,7 +56,7 @@ COLECOES: dict[str, dict[str, Any]] = {
         "item": "História",
         "pasta": "História",
         "tag": "empreendimento/youtube/historia",
-        "campos": [_STATUS, _campo("tema", "Tema", "link"), _campo("roteiro", "Roteiro", "link")],
+        "campos": [_STATUS, _field("tema", "Tema", "link"), _field("roteiro", "Roteiro", "link")],
         "modelo": (
             "## A história do vídeo\n\n## Arco narrativo\n\n| # | Parte | Início |\n|---|---|---|\n"
         ),
@@ -69,13 +69,13 @@ COLECOES: dict[str, dict[str, Any]] = {
         "tag": "empreendimento/youtube/roteiros",
         "campos": [
             _STATUS,
-            _campo("video", "Vídeo nº", "numero"),
-            _campo("fio", "Fio"),
-            _campo("formato", "Formato", "opcoes", ["L", "M", "D"]),
-            _campo("evidencia", "Evidência", "opcoes", ["Consenso", "Moderada", "Debate"]),
-            _campo("modo", "Modo", "opcoes", ["dark", "apresentador"]),
-            _campo("tema", "Tema", "link"),
-            _campo("plano", "Plano", "link"),
+            _field("video", "Vídeo nº", "numero"),
+            _field("fio", "Fio"),
+            _field("formato", "Formato", "opcoes", ["L", "M", "D"]),
+            _field("evidencia", "Evidência", "opcoes", ["Consenso", "Moderada", "Debate"]),
+            _field("modo", "Modo", "opcoes", ["dark", "apresentador"]),
+            _field("tema", "Tema", "link"),
+            _field("plano", "Plano", "link"),
         ],
         "modelo": "## Leitura antes de gravar\n\n## Parte 1\n\n## Parte 2\n\n## Fechamento\n",
     },
@@ -102,38 +102,38 @@ COLECOES: dict[str, dict[str, Any]] = {
     },
 }
 
-MODELO_CANAL = (
+MODEL_CHANNEL = (
     "> [!abstract] Posicionamento\n> \n\n## Público\n\n## Pilares de conteúdo\n\n"
     "## Formatos\n\n## Metas\n"
 )
 
 # Para o app de notas (`/api/notas/tipos`) mostrar os mesmos formulários.
-TIPOS_NOTA: list[dict[str, Any]] = [
+KINDS_NOTE: list[dict[str, Any]] = [
     {
         "id": "canal",
         "nome": "Canal do YouTube",
-        "campos": [_campo("status", "Status", "opcoes", STATUS_CANAL)],
+        "campos": [_field("status", "Status", "opcoes", STATUS_CHANNEL)],
         "relacoes": ["mapa", "relacionados"],
-        "modelo": MODELO_CANAL,
+        "modelo": MODEL_CHANNEL,
     },
     *(
         {
             "id": c["tipo"],
             "nome": c["item"],
-            "campos": [_campo("canal", "Canal", "link"), *c["campos"]],
+            "campos": [_field("canal", "Canal", "link"), *c["campos"]],
             "relacoes": ["canal", *(x["nome"] for x in c["campos"] if x["tipo"] == "link")],
             "modelo": c["modelo"],
         }
-        for c in COLECOES.values()
+        for c in COLLECTIONS.values()
     ),
 ]
 
 
-def esquema() -> dict[str, Any]:
+def schema() -> dict[str, Any]:
     return {
-        "status_canal": STATUS_CANAL,
+        "status_canal": STATUS_CHANNEL,
         "colecoes": [
             {"id": k, "nome": c["nome"], "item": c["item"], "campos": c["campos"]}
-            for k, c in COLECOES.items()
+            for k, c in COLLECTIONS.items()
         ],
     }

@@ -46,13 +46,13 @@ ARQUIVO = (
 
 
 def test_le_paginas_formas_cores_e_contêiner() -> None:
-    r = drawio.ler(ARQUIVO)
+    r = drawio.read(ARQUIVO)
     assert [p["nome"] for p in r["paginas"]] == ["1. Investimento", "2. Verbas"]
     pag1 = [e for e in r["elementos"] if e["pagina"] == r["paginas"][0]["id"]]
     pag2 = [e for e in r["elementos"] if e["pagina"] == r["paginas"][1]["id"]]
     assert len(pag1) == len(pag2) == 9  # a página comprimida lê igual
-    nos = {e["id"].split(".")[1]: e for e in pag1 if e["tipo"] == "no"}
-    assert {k: v["no"] for k, v in nos.items()} == {
+    nodes = {e["id"].split(".")[1]: e for e in pag1 if e["tipo"] == "no"}
+    assert {k: v["no"] for k, v in nodes.items()} == {
         "raia": "container",
         "ini": "inicio",
         "dec": "decisao",
@@ -60,31 +60,31 @@ def test_le_paginas_formas_cores_e_contêiner() -> None:
         "nota": "nota",
         "db": "banco",
     }
-    assert nos["dec"]["texto"] == "Tipo **válido**?"
-    assert nos["nota"]["texto"] == "Atenção:\nnão sobrescreve"
-    assert nos["dec"]["a"] == [120.0, 220.0]  # filho do contêiner: posição somada à do pai
-    assert nos["dec"]["fundo"] == 0xFFFFF2CC and nos["ini"]["cor"] == 0xFF9673A6
+    assert nodes["dec"]["texto"] == "Tipo **válido**?"
+    assert nodes["nota"]["texto"] == "Atenção:\nnão sobrescreve"
+    assert nodes["dec"]["a"] == [120.0, 220.0]  # filho do contêiner: posição somada à do pai
+    assert nodes["dec"]["fundo"] == 0xFFFFF2CC and nodes["ini"]["cor"] == 0xFF9673A6
     assert pag1[0]["no"] == "container"  # contêiner atrás dos blocos
     setas = [e for e in pag1 if e["tipo"] == "ligacao"]
     assert [(s["rotulo"], s["ortogonal"]) for s in setas] == [("", True), ("Não", True)]
-    [texto] = [e for e in pag1 if e["tipo"] == "texto"]
-    assert texto["texto"] == "Título do diagrama"
+    [text] = [e for e in pag1 if e["tipo"] == "texto"]
+    assert text["texto"] == "Título do diagrama"
 
 
 def test_ida_e_volta() -> None:
-    r = drawio.ler(ARQUIVO)
-    de_novo = drawio.ler(drawio.escrever({"titulo": "x", **r}))
-    assert [p["nome"] for p in de_novo["paginas"]] == ["1. Investimento", "2. Verbas"]
-    assert sorted((e["tipo"], e.get("no", "")) for e in de_novo["elementos"]) == sorted(
+    r = drawio.read(ARQUIVO)
+    of_new = drawio.read(drawio.write({"titulo": "x", **r}))
+    assert [p["nome"] for p in of_new["paginas"]] == ["1. Investimento", "2. Verbas"]
+    assert sorted((e["tipo"], e.get("no", "")) for e in of_new["elementos"]) == sorted(
         (e["tipo"], e.get("no", "")) for e in r["elementos"]
     )
-    dec = next(e for e in de_novo["elementos"] if e.get("no") == "decisao")
+    dec = next(e for e in of_new["elementos"] if e.get("no") == "decisao")
     assert dec["texto"] == "Tipo **válido**?" and dec["fundo"] == 0xFFFFF2CC
 
 
 def test_arquivo_invalido() -> None:
-    with pytest.raises(drawio.ArquivoInvalido):
-        drawio.ler("<html></html>")
+    with pytest.raises(drawio.FileInvalid):
+        drawio.read("<html></html>")
 
 
 @pytest.fixture
@@ -101,11 +101,11 @@ def test_rotas(api: TestClient) -> None:
     assert r.status_code == 201, r.text
     q = r.json()
     assert (q["titulo"], q["total"], len(q["paginas"])) == ("hub-verbas", 18, 2)
-    completo = api.get(f"/api/design/quadros/{q['id']}").json()
+    complete = api.get(f"/api/design/quadros/{q['id']}").json()
     # blocos e setas de fluxograma agora gravam (antes o servidor recusava `no`/`ligacao`)
     salvo = api.put(
         f"/api/design/quadros/{q['id']}/elementos",
-        json={"versao": completo["versao"], "elementos": completo["elementos"]},
+        json={"versao": complete["versao"], "elementos": complete["elementos"]},
     )
     assert salvo.status_code == 200
     assert (
@@ -134,14 +134,14 @@ REFERENCIA = Path(__file__).parents[3] / "modulo-verbas-atual.drawio"
 )
 def test_arquivo_de_referencia_ida_e_volta() -> None:
     """O .drawio real (10 páginas): tudo vira bloco/seta/texto e volta igual na exportação."""
-    r = drawio.ler(REFERENCIA.read_text("utf-8"))
+    r = drawio.read(REFERENCIA.read_text("utf-8"))
     assert len(r["paginas"]) == 10 and r["ignorados"] == 0
     setas = [e for e in r["elementos"] if e["tipo"] == "ligacao"]
     assert len(setas) >= 170 and any(s["tracejada"] for s in setas)
     assert any(e.get("esquerda") for e in r["elementos"] if e["tipo"] == "no")
-    volta = drawio.ler(drawio.escrever({"titulo": "x", **r}))
-    assert [p["nome"] for p in volta["paginas"]] == [p["nome"] for p in r["paginas"]]
-    assert len(volta["elementos"]) == len(r["elementos"])
-    assert sum(1 for e in volta["elementos"] if e.get("tracejada")) == sum(
+    lap = drawio.read(drawio.write({"titulo": "x", **r}))
+    assert [p["nome"] for p in lap["paginas"]] == [p["nome"] for p in r["paginas"]]
+    assert len(lap["elementos"]) == len(r["elementos"])
+    assert sum(1 for e in lap["elementos"] if e.get("tracejada")) == sum(
         1 for s in setas if s["tracejada"]
     )

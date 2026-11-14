@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from youtube.importer import importar, normalizar
+from youtube.importer import run_import, normalize
 
 R = "/api/youtube"
 
@@ -36,8 +36,8 @@ def test_canal_crud(api: TestClient, tmp_path: Path) -> None:
     assert api.post(f"{R}/canais", json={"slug": "Com Espaço", "titulo": "Y"}).status_code == 409
     [c] = api.get(f"{R}/canais").json()
     assert (c["slug"], c["nome"], c["status"]) == ("finlumia", "Finlumia", "ideia")
-    arq = tmp_path / "notas/Notas/Empreendimento/YouTube/finlumia/Canal 1 — Finanças.md"
-    assert "tipo: canal" in arq.read_text()
+    file = tmp_path / "notas/Notas/Empreendimento/YouTube/finlumia/Canal 1 — Finanças.md"
+    assert "tipo: canal" in file.read_text()
 
     r = api.patch(f"{R}/canais/finlumia", json={"status": "ativo", "nome": "Finlumia BR"})
     assert (r.json()["status"], r.json()["nome"]) == ("ativo", "Finlumia BR")
@@ -100,30 +100,30 @@ def test_temas_derivar_e_gerencia(api: TestClient, tmp_path: Path) -> None:
 
 def test_normalizar_padrao_das_notas() -> None:
     ids: set[str] = set()
-    texto = (
+    text = (
         '---\nid: "1"\ntipo: tema\ncriado: "2026-10-20"\natualizado: 2026-10-25\n'
         "status: rascunho\n---\n\n# T\n"
     )
-    saida = normalizar(texto, ids)
-    assert "criada: '2026-10-20'" in saida and "atualizada: '2026-10-25'" in saida
-    assert "criado:" not in saida and saida.endswith("# T\n")
-    assert "id: 1-2" in normalizar(texto, ids).replace("'", "")
+    output = normalize(text, ids)
+    assert "criada: '2026-10-20'" in output and "atualizada: '2026-10-25'" in output
+    assert "criado:" not in output and output.endswith("# T\n")
+    assert "id: 1-2" in normalize(text, ids).replace("'", "")
 
 
 def test_importar_do_vault(tmp_path: Path) -> None:
-    pasta = tmp_path / "vault/Notas/Empreendimento/YouTube/finlumia"
-    (pasta / "Temas").mkdir(parents=True)
-    (pasta / ".gerador").mkdir()
-    (pasta / "Canal 1.md").write_text("---\nid: '10'\ntipo: canal\n---\n\n# Canal 1\n")
-    (pasta / "Temas/Tema — A.md").write_text("---\nid: '10'\ntipo: tema\n---\n\n# A\n")
-    (pasta / ".gerador/x.md").write_text("ignorar")
-    destino = tmp_path / "notas"
-    assert importar(tmp_path / "vault", destino)["importadas"] == 2
-    assert importar(tmp_path / "vault", destino)["puladas"] == 2
+    folder = tmp_path / "vault/Notas/Empreendimento/YouTube/finlumia"
+    (folder / "Temas").mkdir(parents=True)
+    (folder / ".gerador").mkdir()
+    (folder / "Canal 1.md").write_text("---\nid: '10'\ntipo: canal\n---\n\n# Canal 1\n")
+    (folder / "Temas/Tema — A.md").write_text("---\nid: '10'\ntipo: tema\n---\n\n# A\n")
+    (folder / ".gerador/x.md").write_text("ignorar")
+    destination = tmp_path / "notas"
+    assert run_import(tmp_path / "vault", destination)["importadas"] == 2
+    assert run_import(tmp_path / "vault", destination)["puladas"] == 2
 
     s = Settings(
         client_api_keys=CLIENT_API_KEY,
-        notas_dir=str(destino),
+        notas_dir=str(destination),
         youtube_vault=str(tmp_path / "vault"),
     )
     api = TestClient(create_app(settings=s), headers=AUTH_HEADERS)

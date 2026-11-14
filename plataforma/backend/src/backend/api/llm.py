@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from backend.api.deps import require_client_api_key
-from backend.core.llm_model import ModeloLLM
+from backend.core.llm_model import ModelLLM
 from backend.core.worker_registry import (
     WorkerDisconnected,
     WorkerRegistry,
@@ -17,18 +17,18 @@ router = APIRouter(
 )
 
 # Carregar um .gguf na GPU pode levar minutos.
-_TEMPO_CARGA_S = 330.0
+_TIME_LOAD_S = 330.0
 
 
-class Troca(BaseModel):
+class Swap(BaseModel):
     modelo: str
 
 
-def _partes(request: Request) -> tuple[WorkerRegistry, ModeloLLM]:
+def _parts(request: Request) -> tuple[WorkerRegistry, ModelLLM]:
     return request.app.state.worker_registry, request.app.state.modelo_llm
 
 
-async def _no_worker(registry: WorkerRegistry) -> dict[str, Any]:
+async def _on_worker(registry: WorkerRegistry) -> dict[str, Any]:
     """Pergunta ao worker os modelos (atualiza a lista), os carregados e os que processam."""
     worker = registry.pick_worker(None)
     if worker is None:
@@ -41,45 +41,45 @@ async def _no_worker(registry: WorkerRegistry) -> dict[str, Any]:
     return r
 
 
-def _em_uso(registry: WorkerRegistry, ocupados: list[str]) -> list[dict[str, Any]]:
+def _in_use(registry: WorkerRegistry, ocupados: list[str]) -> list[dict[str, Any]]:
     """Pedidos deste backend + modelos processando no llama-server sem pedido daqui: uso direto
     (a esteira fala com o llama-server sem passar pelo backend)."""
     nossos = registry.em_uso()
-    modelos_nossos = {u["modelo"] for u in nossos}
+    models_nossos = {u["modelo"] for u in nossos}
     diretos = [
         {"origem": "Esteira (empreendimento)", "tarefa": "chat", "modelo": m, "ha_s": None}
         for m in ocupados
-        if m not in modelos_nossos
+        if m not in models_nossos
     ]
     # Pedido nosso sem modelo explícito também ocupa o llama-server: não conta em dobro.
-    return nossos + ([] if "" in modelos_nossos else diretos)
+    return nossos + ([] if "" in models_nossos else diretos)
 
 
 @router.get("")
-async def estado(request: Request) -> dict[str, Any]:
-    registry, modelo = _partes(request)
-    w = await _no_worker(registry)
+async def state(request: Request) -> dict[str, Any]:
+    registry, model = _parts(request)
+    w = await _on_worker(registry)
     return {
-        "modelo": modelo.atual,
+        "modelo": model.atual,
         "carregados": w.get("carregados") or [],
         "disponiveis": registry.all_models(),
         "workers": len(registry.descrever()),
-        "em_uso": _em_uso(registry, w.get("ocupados") or []),
+        "em_uso": _in_use(registry, w.get("ocupados") or []),
     }
 
 
 @router.put("")
-async def trocar(t: Troca, request: Request) -> dict[str, Any]:
-    registry, modelo = _partes(request)
-    em_uso = _em_uso(registry, (await _no_worker(registry)).get("ocupados") or [])
-    if em_uso:
-        origens = ", ".join(sorted({u["origem"] for u in em_uso}))
+async def swap(t: Swap, request: Request) -> dict[str, Any]:
+    registry, model = _parts(request)
+    in_usage = _in_use(registry, (await _on_worker(registry)).get("ocupados") or [])
+    if in_usage:
+        origins = ", ".join(sorted({u["origem"] for u in in_usage}))
         raise HTTPException(
             409,
             {
-                "message": f"O LLM está em uso por: {origens}. Espere terminar para trocar.",
+                "message": f"O LLM está em uso por: {origins}. Espere terminar para trocar.",
                 "type": "llm_em_uso",
-                "em_uso": em_uso,
+                "em_uso": in_usage,
             },
         )
     worker = registry.pick_worker(None)
@@ -92,12 +92,12 @@ async def trocar(t: Troca, request: Request) -> dict[str, Any]:
             worker,
             str(uuid4()),
             {"task": "carregar_modelo", "modelo": t.modelo},
-            _TEMPO_CARGA_S,
+            _TIME_LOAD_S,
             origem="Troca de modelo",
         )
     except TimeoutError as e:
         raise HTTPException(504, "O worker não terminou de carregar o modelo a tempo.") from e
     except (WorkerDisconnected, WorkerRespondedWithError) as e:
         raise HTTPException(502, str(e)) from e
-    modelo.trocar(t.modelo)
-    return await estado(request)
+    model.trocar(t.modelo)
+    return await state(request)

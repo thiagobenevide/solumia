@@ -3,13 +3,13 @@ import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
-from worker.coding import Codigo, etapas, linhas_novas, mudancas
+from worker.coding import Code, stages, lines_new, changes
 
 
 def test_linhas_novas_e_mudancas() -> None:
     diff = "diff --git a/x b/x\n@@ -3,0 +4,2 @@\n+a\n+b\n@@ -9 +11 @@\n-c\n+d\n@@ -20,3 +23,0 @@\n"
-    assert linhas_novas(diff) == [4, 5, 11]
-    assert mudancas("A\tnovo.py\nM\tvelho.py\nR087\tde.py\tpara.py\n") == [
+    assert lines_new(diff) == [4, 5, 11]
+    assert changes("A\tnovo.py\nM\tvelho.py\nR087\tde.py\tpara.py\n") == [
         {"caminho": "novo.py", "status": "A"},
         {"caminho": "velho.py", "status": "M"},
         {"caminho": "para.py", "status": "R"},
@@ -30,36 +30,36 @@ def test_arvore_e_arquivo_do_commit(tmp_path: Path) -> None:
     git("add", ".")
     git("commit", "-qm", "segundo")
 
-    codigo = Codigo(SimpleNamespace(codigo_dir=str(tmp_path)), None)  # type: ignore[arg-type]
-    arvore = asyncio.run(codigo.arvore(""))
-    assert arvore["arquivos"] == ["a.py", "b.bin"]
-    assert [c["assunto"] for c in arvore["commits"]] == ["segundo", "primeiro"]
-    assert arvore["mudancas"] == [
+    code = Code(SimpleNamespace(codigo_dir=str(tmp_path)), None)  # type: ignore[arg-type]
+    tree = asyncio.run(code.arvore(""))
+    assert tree["arquivos"] == ["a.py", "b.bin"]
+    assert [c["assunto"] for c in tree["commits"]] == ["segundo", "primeiro"]
+    assert tree["mudancas"] == [
         {"caminho": "a.py", "status": "M"},
         {"caminho": "b.bin", "status": "A"},
     ]
-    arquivo = asyncio.run(codigo.arquivo("a.py", ""))
-    assert arquivo["texto"].startswith("um\nnovo") and arquivo["novas"] == [2]
-    achados = asyncio.run(codigo.buscar("dois", ""))["resultados"]
-    assert [(r["caminho"], r["linha"]) for r in achados] == [("a.py", 2), ("a.py", 3)]
-    obs = asyncio.run(codigo.buscar("dois", "", observacoes=True))["resultados"]
+    file = asyncio.run(code.arquivo("a.py", ""))
+    assert file["texto"].startswith("um\nnovo") and file["novas"] == [2]
+    found = asyncio.run(code.buscar("dois", ""))["resultados"]
+    assert [(r["caminho"], r["linha"]) for r in found] == [("a.py", 2), ("a.py", 3)]
+    obs = asyncio.run(code.buscar("dois", "", observacoes=True))["resultados"]
     assert [r["linha"] for r in obs] == [2]
-    marcas = asyncio.run(codigo.buscar("", "", observacoes=True))["resultados"]
-    assert [r["linha"] for r in marcas] == [2]
-    assert asyncio.run(codigo.buscar("nada-disso", ""))["resultados"] == []
-    assert asyncio.run(codigo.arquivo("b.bin", ""))["binario"]
-    primeiro = arvore["commits"][1]["curto"]
-    assert asyncio.run(codigo.arquivo("a.py", primeiro))["novas"] == [1, 2]
-    for ruim in [("../x", ""), ("a.py", "HEAD~1"), ("a.py", "--all")]:
+    marks = asyncio.run(code.buscar("", "", observacoes=True))["resultados"]
+    assert [r["linha"] for r in marks] == [2]
+    assert asyncio.run(code.buscar("nada-disso", ""))["resultados"] == []
+    assert asyncio.run(code.arquivo("b.bin", ""))["binario"]
+    primeiro = tree["commits"][1]["curto"]
+    assert asyncio.run(code.arquivo("a.py", primeiro))["novas"] == [1, 2]
+    for bad in [("../x", ""), ("a.py", "HEAD~1"), ("a.py", "--all")]:
         try:
-            asyncio.run(codigo.arquivo(*ruim))
+            asyncio.run(code.arquivo(*bad))
         except RuntimeError:
             continue
-        raise AssertionError(ruim)
+        raise AssertionError(bad)
 
 
 def test_etapas_do_stream_json() -> None:
-    assert etapas({"type": "system", "subtype": "init", "session_id": "s1", "model": "m"}) == [
+    assert stages({"type": "system", "subtype": "init", "session_id": "s1", "model": "m"}) == [
         {"tipo": "inicio", "claude_sessao": "s1", "modelo": "m"}
     ]
     assistente = {
@@ -71,18 +71,18 @@ def test_etapas_do_stream_json() -> None:
             ]
         },
     }
-    assert etapas(assistente) == [
+    assert stages(assistente) == [
         {"tipo": "texto", "texto": "Vou ler."},
         {"tipo": "ferramenta", "nome": "Read", "resumo": "/a.py"},
     ]
-    resultado = {
+    result = {
         "type": "user",
         "message": {
             "content": [{"type": "tool_result", "is_error": True, "content": [{"text": "x" * 900}]}]
         },
     }
-    [r] = etapas(resultado)
+    [r] = stages(result)
     assert r["erro"] and r["resumo"].endswith("…") and len(r["resumo"]) == 601
-    [fim] = etapas({"type": "result", "result": "ok", "session_id": "s1", "num_turns": 3})
-    assert fim["tipo"] == "fim" and fim["claude_sessao"] == "s1" and not fim["erro"]
-    assert etapas({"type": "stream_event"}) == []
+    [end] = stages({"type": "result", "result": "ok", "session_id": "s1", "num_turns": 3})
+    assert end["tipo"] == "fim" and end["claude_sessao"] == "s1" and not end["erro"]
+    assert stages({"type": "stream_event"}) == []

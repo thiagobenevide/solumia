@@ -31,47 +31,47 @@ FLUXO = {
 
 
 def test_extrai_json_de_resposta_com_think_e_cerca() -> None:
-    resposta = (
+    answer = (
         "<think>pensando {não é json}</think>\nAqui está:\n```json\n" + json.dumps(FLUXO) + "\n```"
     )
-    assert flows.extrair_json(resposta)["titulo"] == "Venda a prazo"
-    with pytest.raises(flows.FluxoInvalido):
-        flows.extrair_json("sem fluxo")
+    assert flows.extract_json(answer)["titulo"] == "Venda a prazo"
+    with pytest.raises(flows.FlowInvalid):
+        flows.extract_json("sem fluxo")
 
 
 def test_valida_e_posiciona_em_camadas() -> None:
-    f = flows.posicionar(flows.validar(FLUXO))
-    nos = {n["id"]: n for n in f["nos"]}
-    assert nos["d"]["tipo"] == "decisao"
+    f = flows.position(flows.validate(FLUXO))
+    nodes = {n["id"]: n for n in f["nos"]}
+    assert nodes["d"]["tipo"] == "decisao"
     assert len(f["ligacoes"]) == 5
     # início em cima, decisão abaixo, os dois ramos lado a lado abaixo dela, o fim por último
-    assert nos["i"]["y"] < nos["d"]["y"] < nos["a"]["y"] == nos["r"]["y"] < nos["f"]["y"]
+    assert nodes["i"]["y"] < nodes["d"]["y"] < nodes["a"]["y"] == nodes["r"]["y"] < nodes["f"]["y"]
     assert (
-        nos["a"]["x"] + nos["a"]["w"] <= nos["r"]["x"]
-        or nos["r"]["x"] + nos["r"]["w"] <= nos["a"]["x"]
+        nodes["a"]["x"] + nodes["a"]["w"] <= nodes["r"]["x"]
+        or nodes["r"]["x"] + nodes["r"]["w"] <= nodes["a"]["x"]
     )
 
 
 def test_mensagens_levam_codigo_cortado_e_fluxo_atual() -> None:
-    m = flows.montar_mensagens(
+    m = flows.assemble_messages(
         "detalhe",
-        codigo="x" * (flows.MAX_CODIGO + 10),
+        codigo="x" * (flows.MAX_CODE + 10),
         arquivo="a.py",
-        atual=flows.posicionar(flows.validar(FLUXO)),
+        atual=flows.position(flows.validate(FLUXO)),
     )
-    usuario = m[1]["content"]
-    assert "código cortado" in usuario and "a.py" in usuario and '"Cliente tem crédito?"' in usuario
-    assert '"x":' not in usuario  # posições não vão para a IA
+    user = m[1]["content"]
+    assert "código cortado" in user and "a.py" in user and '"Cliente tem crédito?"' in user
+    assert '"x":' not in user  # posições não vão para a IA
 
 
 @pytest.fixture
 def api(tmp_path: Path) -> TestClient:
     s = Settings(client_api_keys=CLIENT_API_KEY, design_dir=str(tmp_path))
     app = create_app(settings=s)
-    respostas = ["não sei", json.dumps(FLUXO)]  # a primeira falha e a rota pede de novo
+    answers = ["não sei", json.dumps(FLUXO)]  # a primeira falha e a rota pede de novo
 
     async def llm(mensagens: list[dict[str, str]]) -> str:
-        return respostas.pop(0)
+        return answers.pop(0)
 
     app.state.design_llms = {"local": llm}
     return TestClient(app, headers=AUTH_HEADERS)

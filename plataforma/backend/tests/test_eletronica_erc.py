@@ -66,13 +66,13 @@ def test_pino_solto_fio_solto_e_rotulo_unico() -> None:
         "fios": [_fio("w1", (3 * G, 0), (6 * G, 0))],
         "rotulos": [_rotulo("l1", "SINAL", -3 * G, 0)],
     }
-    problemas = erc(p)
-    assert _codigos(problemas) == ["fio_solto", "pino_solto", "rede_um_pino", "rotulo_unico"]
-    solto = next(x for x in problemas if x["codigo"] == "pino_solto")
+    problems = erc(p)
+    assert _codigos(problems) == ["fio_solto", "pino_solto", "rede_um_pino", "rotulo_unico"]
+    solto = next(x for x in problems if x["codigo"] == "pino_solto")
     assert solto["nivel"] == "erro" and solto["pinos"] == [{"ref": "R1", "pino": "2", "nome": ""}]
-    fio = next(x for x in problemas if x["codigo"] == "fio_solto")
+    fio = next(x for x in problems if x["codigo"] == "fio_solto")
     assert (fio["nivel"], fio["folha"], fio["x"], fio["y"]) == ("aviso", "f1", 6 * G, 0)
-    assert problemas[0]["nivel"] == "erro"
+    assert problems[0]["nivel"] == "erro"
 
 
 def test_saidas_em_curto_entradas_sem_acionamento_e_alimentacao_sem_fonte() -> None:
@@ -87,13 +87,13 @@ def test_saidas_em_curto_entradas_sem_acionamento_e_alimentacao_sem_fonte() -> N
             _fio("w2", (-3 * U, -U), (-3 * U, 9 * U)),  # entradas +
         ],
     }
-    problemas = erc(p)
-    codigos = _codigos(problemas)
+    problems = erc(p)
+    codigos = _codigos(problems)
     assert codigos.count("saidas_em_curto") == 1
     assert codigos.count("entrada_sem_acionamento") == 1
     assert codigos.count("alimentacao_sem_fonte") == 4
-    curto = next(x for x in problemas if x["codigo"] == "saidas_em_curto")
-    assert curto["refs"] == ["U1", "U2"] and curto["rede"].startswith("N$")
+    short = next(x for x in problems if x["codigo"] == "saidas_em_curto")
+    assert short["refs"] == ["U1", "U2"] and short["rede"].startswith("N$")
 
 
 def test_alimentacao_com_simbolo_nao_avisa() -> None:
@@ -109,13 +109,13 @@ def test_alimentacao_com_simbolo_nao_avisa() -> None:
 
 
 def test_ref_duplicada_menos_unidades_do_mesmo_ci_e_sobreposicao() -> None:
-    simbolos = {
+    symbols = {
         "Amp:LM358:1": {**POR_ID["amp_op"], "id": "Amp:LM358:1", "pinos": []},
         "Amp:LM358:2": {**POR_ID["amp_op"], "id": "Amp:LM358:2", "pinos": []},
     }
 
     def busca(id_: str) -> dict[str, object] | None:
-        return simbolos.get(id_) or POR_ID.get(id_)
+        return symbols.get(id_) or POR_ID.get(id_)
 
     p = {
         "componentes": [
@@ -126,16 +126,16 @@ def test_ref_duplicada_menos_unidades_do_mesmo_ci_e_sobreposicao() -> None:
         ],
         "fios": [_fio("w1", (-3 * G, 20 * G), (3 * G, 20 * G))],
     }
-    problemas = erc(p, busca)  # type: ignore[arg-type]
-    assert _codigos(problemas) == ["componentes_sobrepostos", "ref_duplicada"]
-    assert next(x for x in problemas if x["codigo"] == "ref_duplicada")["refs"] == ["R1"]
+    problems = erc(p, busca)  # type: ignore[arg-type]
+    assert _codigos(problems) == ["componentes_sobrepostos", "ref_duplicada"]
+    assert next(x for x in problems if x["codigo"] == "ref_duplicada")["refs"] == ["R1"]
 
 
 def test_rota_erc(api: TestClient) -> None:
     p = api.post("/api/eletronica/projetos", json={"titulo": "ERC"}).json()
     url = f"/api/eletronica/projetos/{p['id']}"
-    corpo = {"versao": 1, "folhas": FOLHAS, "componentes": [_comp("a", "resistor", "R1", 0, 0)]}
-    assert api.put(f"{url}/esquematico", json=corpo).status_code == 200
-    problemas = api.get(f"{url}/erc").json()
-    assert [x["codigo"] for x in problemas] == ["pino_solto", "pino_solto"]
+    body = {"versao": 1, "folhas": FOLHAS, "componentes": [_comp("a", "resistor", "R1", 0, 0)]}
+    assert api.put(f"{url}/esquematico", json=body).status_code == 200
+    problems = api.get(f"{url}/erc").json()
+    assert [x["codigo"] for x in problems] == ["pino_solto", "pino_solto"]
     assert api.get("/api/eletronica/projetos/" + "0" * 32 + "/erc").status_code == 404

@@ -10,12 +10,12 @@ import subprocess
 from typing import Any
 from urllib.parse import quote_plus, urlparse
 
-TAREFA = "pc"
+TASK = "pc"
 
-NAVEGADORES = {"brave": "brave-browser", "firefox": "firefox"}
+BROWSERS = {"brave": "brave-browser", "firefox": "firefox"}
 
 # nome falado → executável; só os instalados aparecem como disponíveis
-PROGRAMAS = {
+PROGRAMS = {
     "brave": "brave-browser",
     "navegador": "brave-browser",
     "firefox": "firefox",
@@ -29,21 +29,21 @@ PROGRAMAS = {
     "discord": "discord",
 }
 
-BUSCAS = {
+SEARCHES = {
     "google": "https://www.google.com/search?q={}",
     "youtube": "https://www.youtube.com/results?search_query={}",
 }
 
 
-class ComandoInvalido(ValueError):
+class CommandInvalid(ValueError):
     pass
 
 
-def programas() -> list[str]:
-    return sorted(n for n, exe in PROGRAMAS.items() if shutil.which(exe))
+def programs() -> list[str]:
+    return sorted(n for n, exe in PROGRAMS.items() if shutil.which(exe))
 
 
-def _lancar(*args: str) -> None:
+def _post(*args: str) -> None:
     # sessão própria: o programa continua aberto se o worker reiniciar
     subprocess.Popen(
         args,
@@ -54,10 +54,10 @@ def _lancar(*args: str) -> None:
     )
 
 
-def _navegador(nome: str) -> str:
-    exe = NAVEGADORES.get((nome or "brave").lower())
+def _browser(nome: str) -> str:
+    exe = BROWSERS.get((nome or "brave").lower())
     if exe is None or not shutil.which(exe):
-        raise ComandoInvalido(f"navegador {nome!r} não disponível")
+        raise CommandInvalid(f"navegador {nome!r} não disponível")
     return exe
 
 
@@ -66,53 +66,53 @@ def _url(url: str) -> str:
     if "://" not in url:
         url = "https://" + url
     if urlparse(url).scheme not in ("http", "https") or not urlparse(url).netloc:
-        raise ComandoInvalido(f"endereço inválido: {url!r}")
+        raise CommandInvalid(f"endereço inválido: {url!r}")
     return url
 
 
-async def executar(payload: dict[str, Any]) -> dict[str, Any]:
+async def execute(payload: dict[str, Any]) -> dict[str, Any]:
     """`payload["acao"]`: `abrir_site` (url), `pesquisar` (consulta, onde=google|youtube),
     `abrir_programa` (nome), `desligar` (minutos=0) ou `cancelar_desligar`.
     Devolve `{"ok": True, "detalhe": "..."}`; pedido inválido levanta [ComandoInvalido]."""
-    acao = str(payload.get("acao", ""))
-    if acao == "abrir_site":
+    action = str(payload.get("acao", ""))
+    if action == "abrir_site":
         url = _url(str(payload.get("url", "")))
-        _lancar(_navegador(str(payload.get("navegador", ""))), url)
+        _post(_browser(str(payload.get("navegador", ""))), url)
         return {"ok": True, "detalhe": f"Abri {url}"}
-    if acao == "pesquisar":
-        consulta = str(payload.get("consulta", "")).strip()
-        onde = str(payload.get("onde") or "google").lower()
-        if not consulta or onde not in BUSCAS:
-            raise ComandoInvalido("pesquisa sem consulta ou com destino desconhecido")
-        url = BUSCAS[onde].format(quote_plus(consulta))
-        _lancar(_navegador(str(payload.get("navegador", ""))), url)
-        return {"ok": True, "detalhe": f"Pesquisei “{consulta}” no {onde}"}
-    if acao == "abrir_programa":
-        nome = str(payload.get("nome", "")).lower().strip()
-        exe = PROGRAMAS.get(nome)
+    if action == "pesquisar":
+        query = str(payload.get("consulta", "")).strip()
+        where = str(payload.get("onde") or "google").lower()
+        if not query or where not in SEARCHES:
+            raise CommandInvalid("pesquisa sem consulta ou com destino desconhecido")
+        url = SEARCHES[where].format(quote_plus(query))
+        _post(_browser(str(payload.get("navegador", ""))), url)
+        return {"ok": True, "detalhe": f"Pesquisei “{query}” no {where}"}
+    if action == "abrir_programa":
+        name = str(payload.get("nome", "")).lower().strip()
+        exe = PROGRAMS.get(name)
         if exe is None or not shutil.which(exe):
-            disponiveis = ", ".join(programas())
-            raise ComandoInvalido(f"programa {nome!r} não disponível (há: {disponiveis})")
-        _lancar(exe)
-        return {"ok": True, "detalhe": f"Abri {nome}"}
-    if acao == "desligar":
-        minutos = max(0, int(payload.get("minutos", 0)))
-        if minutos:
-            await _rodar("shutdown", "-h", f"+{minutos}")
-            return {"ok": True, "detalhe": f"PC desliga em {minutos} min"}
+            available = ", ".join(programs())
+            raise CommandInvalid(f"programa {name!r} não disponível (há: {available})")
+        _post(exe)
+        return {"ok": True, "detalhe": f"Abri {name}"}
+    if action == "desligar":
+        minutes = max(0, int(payload.get("minutos", 0)))
+        if minutes:
+            await _run("shutdown", "-h", f"+{minutes}")
+            return {"ok": True, "detalhe": f"PC desliga em {minutes} min"}
         # alguns segundos para a resposta chegar ao app antes de a rede cair
-        _lancar("sh", "-c", "sleep 3; systemctl poweroff")
+        _post("sh", "-c", "sleep 3; systemctl poweroff")
         return {"ok": True, "detalhe": "Desligando o PC"}
-    if acao == "cancelar_desligar":
-        await _rodar("shutdown", "-c")
+    if action == "cancelar_desligar":
+        await _run("shutdown", "-c")
         return {"ok": True, "detalhe": "Desligamento cancelado"}
-    raise ComandoInvalido(f"ação {acao!r} desconhecida")
+    raise CommandInvalid(f"ação {action!r} desconhecida")
 
 
-async def _rodar(*args: str) -> None:
-    proc = await asyncio.create_subprocess_exec(
+async def _run(*args: str) -> None:
+    process = await asyncio.create_subprocess_exec(
         *args, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE
     )
-    _, erro = await proc.communicate()
-    if proc.returncode:
-        raise RuntimeError(erro.decode(errors="replace").strip() or f"{args[0]} falhou")
+    _, error = await process.communicate()
+    if process.returncode:
+        raise RuntimeError(error.decode(errors="replace").strip() or f"{args[0]} falhou")

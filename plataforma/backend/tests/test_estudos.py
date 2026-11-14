@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import Settings
 from backend.main import create_app
-from estudos.languages import cronograma, marcos, nivel_de_horas
+from estudos.languages import schedule, milestones, level_of_hours
 
 
 @pytest.fixture
@@ -52,10 +52,10 @@ def test_trilha_cronograma_e_sessoes(api: TestClient) -> None:
     assert (t["nome"], t["nivel_atual"], t["horas"]) == ("Francês", "A1", 0)
     assert [m["nivel"] for m in t["marcos"]] == ["A1", "A2", "B1", "B2", "C1", "C2"]
 
-    dias = api.get(f"/api/estudos/idiomas/{t['id']}/cronograma?de=2026-11-02&ate=2026-11-08").json()
-    assert [d["data"] for d in dias] == ["2026-11-02", "2026-11-04", "2026-11-06"]
-    assert sum(b["minutos"] for b in dias[0]["blocos"]) == 60
-    assert dias[0]["blocos"][1]["habilidade"] == "gramatica"
+    days = api.get(f"/api/estudos/idiomas/{t['id']}/cronograma?de=2026-11-02&ate=2026-11-08").json()
+    assert [d["data"] for d in days] == ["2026-11-02", "2026-11-04", "2026-11-06"]
+    assert sum(b["minutos"] for b in days[0]["blocos"]) == 60
+    assert days[0]["blocos"][1]["habilidade"] == "gramatica"
 
     t = api.post(
         f"/api/estudos/idiomas/{t['id']}/sessoes", json={"data": "2026-11-02", "minutos": 90}
@@ -66,9 +66,9 @@ def test_trilha_cronograma_e_sessoes(api: TestClient) -> None:
 
 def test_niveis_e_marcos() -> None:
     assert (
-        nivel_de_horas(0) == "A1" and nivel_de_horas(250) == "B1" and nivel_de_horas(5000) == "C2"
+        level_of_hours(0) == "A1" and level_of_hours(250) == "B1" and level_of_hours(5000) == "C2"
     )
-    trilha = {
+    track = {
         "idioma": "en",
         "nivel_inicial": "B1",
         "nivel_alvo": "B2",
@@ -77,10 +77,10 @@ def test_niveis_e_marcos() -> None:
         "inicio": "2026-01-05",
         "sessoes": {},
     }
-    m = marcos(trilha, date(2026, 1, 5))
+    m = milestones(track, date(2026, 1, 5))
     assert [x["concluido"] for x in m] == [True, True, False, False]
     assert m[-1]["horas_faltando"] == 400 and m[-1]["previsao"] == "2027-07-19"
-    assert cronograma(trilha, date(2026, 1, 3), date(2026, 1, 4)) == []
+    assert schedule(track, date(2026, 1, 3), date(2026, 1, 4)) == []
 
 
 def test_projetos_de_leitura_matriz_e_exportacao(tmp_path: Path) -> None:
@@ -104,14 +104,14 @@ def test_projetos_de_leitura_matriz_e_exportacao(tmp_path: Path) -> None:
     pid = api.post("/api/estudos/projetos", json={"nome": "Pré-TCC", "secoes": ["1 Introdução"]})
     pid = pid.json()["id"]
     outro = api.post("/api/estudos/projetos", json={"nome": "Vídeo"}).json()["id"]
-    arq = api.post("/api/arquivos", files={"arquivo": ("Artigo.pdf", pdf)}).json()
+    file = api.post("/api/arquivos", files={"arquivo": ("Artigo.pdf", pdf)}).json()
     api.post(
         "/api/estudos/leituras",
         json={"titulo": "Recuperação", "area": "Tecnologia", "autor": "Araújo, W. C. O.",
-              "ano": "2020", "arquivo_id": arq["id"]},
+              "ano": "2020", "arquivo_id": file["id"]},
     )
     r = api.put(
-        f"/api/arquivos/{arq['id']}/anotacoes",
+        f"/api/arquivos/{file['id']}/anotacoes",
         json={
             "versao_base": 0,
             "destaques": [
@@ -143,22 +143,22 @@ def test_projetos_de_leitura_matriz_e_exportacao(tmp_path: Path) -> None:
     r = api.patch(f"/api/estudos/projetos/{pid}/itens/d1", json={"status_uso": "Usado",
                                                                 "secao": "1 Introdução"})
     assert r.json()["status_uso"] == "Usado"
-    lista = {p["id"]: p for p in api.get("/api/estudos/projetos").json()}
-    assert lista[pid]["trechos"] == 1 and lista[pid]["manuscritos"] == 1
+    items = {p["id"]: p for p in api.get("/api/estudos/projetos").json()}
+    assert items[pid]["trechos"] == 1 and items[pid]["manuscritos"] == 1
 
     r = api.get(f"/api/estudos/projetos/{pid}/exportar")
     assert r.status_code == 200
     wb = load_workbook(io.BytesIO(r.content))
     assert wb.sheetnames == ["Trabalhos", "Trechos", "Painel", "Referências"]
-    trechos = [c.value for linha in wb["Trechos"].iter_rows(min_row=5) for c in linha]
-    assert "Search strategy" in trechos and "Estratégia" in trechos and "Usado" in trechos
+    spans = [c.value for line in wb["Trechos"].iter_rows(min_row=5) for c in line]
+    assert "Search strategy" in spans and "Estratégia" in spans and "Usado" in spans
     assert api.delete(f"/api/estudos/projetos/{pid}").status_code == 204
 
 
 def test_trilha_de_conhecimento(api: TestClient) -> None:
-    [resumo] = api.get("/api/estudos/conhecimento/trilhas").json()
-    assert resumo["id"] == "arquiteto-software" and resumo["progresso"] == 0
-    assert resumo["proxima"]["etapa_id"] == "mentalidade"
+    [summary] = api.get("/api/estudos/conhecimento/trilhas").json()
+    assert summary["id"] == "arquiteto-software" and summary["progresso"] == 0
+    assert summary["proxima"]["etapa_id"] == "mentalidade"
 
     t = api.get("/api/estudos/conhecimento/trilhas/arquiteto-software?frente=Dados").json()
     assert t["etapas"] and all("Dados" in e["frentes"] for e in t["etapas"])
@@ -175,13 +175,13 @@ def test_trilha_de_conhecimento(api: TestClient) -> None:
     assert api.post(url, json={"leitura": 99}).status_code == 404
 
     # sem o livro na estante, a próxima pede para conseguir; ligar cria a leitura
-    livros = "/api/estudos/conhecimento/livros"
-    assert api.patch(f"{livros}/codigo-limpo", json={"tenho": False}).json()["tenho"] is False
+    books = "/api/estudos/conhecimento/livros"
+    assert api.patch(f"{books}/codigo-limpo", json={"tenho": False}).json()["tenho"] is False
     t = api.get("/api/estudos/conhecimento/trilhas/arquiteto-software").json()
     assert t["proxima"]["tipo"] == "leitura"  # cap. 7 do Programador Pragmático
-    livro = api.post(f"{livros}/codigo-limpo/leitura").json()
-    assert livro["tenho"] and livro["leitura"]["status"] == "quero ler"
+    book = api.post(f"{books}/codigo-limpo/leitura").json()
+    assert book["tenho"] and book["leitura"]["status"] == "quero ler"
     assert api.get("/api/estudos/leituras?area=Tecnologia").json()[0]["titulo"] == "Código Limpo"
-    de_novo = api.post(f"{livros}/codigo-limpo/leitura").json()
-    assert de_novo["leitura"]["id"] == livro["leitura"]["id"]
-    assert api.get(f"{livros}").json()[0]["indicacoes"] > 0
+    of_new = api.post(f"{books}/codigo-limpo/leitura").json()
+    assert of_new["leitura"]["id"] == book["leitura"]["id"]
+    assert api.get(f"{books}").json()[0]["indicacoes"] > 0

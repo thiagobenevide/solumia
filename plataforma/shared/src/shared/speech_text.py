@@ -23,8 +23,8 @@ LONG_PAUSE_SECONDS = 0.7
 def split_words(text: str) -> list[tuple[str, int, int]]:
     """(word, start, end) of each word of [text]; end is exclusive."""
     words = []
-    for match in _WORD_PATTERN.finditer(text):
-        words.append((match.group(), match.start(), match.end()))
+    for found in _WORD_PATTERN.finditer(text):
+        words.append((found.group(), found.start(), found.end()))
     return words
 
 

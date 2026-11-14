@@ -23,15 +23,15 @@ import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from backend.files.library import ArquivoInvalido, ArquivoNaoEncontrado, Biblioteca
+from backend.files.library import FileInvalid, FileNotFound, Collection
 from backend.core.config import Settings
 
 router = APIRouter(prefix="/wopi", tags=["wopi"])
 
-TRAVA_SEGUNDOS = 30 * 60
-DISCOVERY_SEGUNDOS = 60 * 60
+LOCK_SECONDS = 30 * 60
+DISCOVERY_SECONDS = 60 * 60
 # Ordem de preferência das ações do discovery (edição primeiro).
-ACOES = ("edit", "view_comment", "view")
+ACTIONS = ("edit", "view_comment", "view")
 
 
 # --- token (HMAC-SHA256 sobre JSON em base64url) ---
@@ -41,42 +41,42 @@ def _b64(dados: bytes) -> str:
     return base64.urlsafe_b64encode(dados).rstrip(b"=").decode()
 
 
-def _de_b64(texto: str) -> bytes:
-    return base64.urlsafe_b64decode(texto + "=" * (-len(texto) % 4))
+def _of_b64(text: str) -> bytes:
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
-def _segredo(request: Request) -> bytes:
+def _secret(request: Request) -> bytes:
     settings: Settings = request.app.state.settings
-    valor = settings.wopi_secret.get_secret_value()
-    if valor:
-        return valor.encode()
+    value = settings.wopi_secret.get_secret_value()
+    if value:
+        return value.encode()
     # Sem segredo configurado: um aleatório por processo (tokens caem num reinício).
     if not hasattr(request.app.state, "wopi_segredo"):
         request.app.state.wopi_segredo = secrets.token_bytes(32)
-    segredo: bytes = request.app.state.wopi_segredo
-    return segredo
+    secret: bytes = request.app.state.wopi_segredo
+    return secret
 
 
-def gerar_token(segredo: bytes, id_: str, validade: int, origem: str = "") -> tuple[str, int]:
+def generate_token(secret: bytes, id_: str, validity: int, origem: str = "") -> tuple[str, int]:
     """Devolve (token, expiração em ms desde a época — o `access_token_ttl` do WOPI)."""
-    exp = int(time.time()) + validade
-    corpo = _b64(json.dumps({"id": id_, "exp": exp, "origem": origem}).encode())
-    assinatura = _b64(hmac.new(segredo, corpo.encode(), hashlib.sha256).digest())
-    return f"{corpo}.{assinatura}", exp * 1000
+    exp = int(time.time()) + validity
+    body = _b64(json.dumps({"id": id_, "exp": exp, "origem": origem}).encode())
+    signature = _b64(hmac.new(secret, body.encode(), hashlib.sha256).digest())
+    return f"{body}.{signature}", exp * 1000
 
 
-def validar_token(segredo: bytes, token: str, id_: str) -> dict[str, Any]:
+def validate_token(secret: bytes, token: str, id_: str) -> dict[str, Any]:
     try:
-        corpo, assinatura = token.split(".", 1)
-        esperado = _b64(hmac.new(segredo, corpo.encode(), hashlib.sha256).digest())
-        if not hmac.compare_digest(esperado, assinatura):
+        body, signature = token.split(".", 1)
+        expected = _b64(hmac.new(secret, body.encode(), hashlib.sha256).digest())
+        if not hmac.compare_digest(expected, signature):
             raise ValueError
-        dados: dict[str, Any] = json.loads(_de_b64(corpo))
+        data: dict[str, Any] = json.loads(_of_b64(body))
     except ValueError as e:
         raise HTTPException(401, "Token WOPI inválido") from e
-    if dados.get("id") != id_ or int(dados.get("exp", 0)) < time.time():
+    if data.get("id") != id_ or int(data.get("exp", 0)) < time.time():
         raise HTTPException(401, "Token WOPI inválido ou expirado")
-    return dados
+    return data
 
 
 # --- discovery ---
@@ -84,97 +84,97 @@ def validar_token(segredo: bytes, token: str, id_: str) -> dict[str, Any]:
 _discovery: dict[str, tuple[float, dict[str, str]]] = {}
 
 
-def _ler_discovery(xml: str) -> dict[str, str]:
+def _read_discovery(xml: str) -> dict[str, str]:
     """extensão → urlsrc, preferindo a ação de edição."""
-    acoes: dict[str, tuple[int, str]] = {}
-    for acao in ET.fromstring(xml).iter("action"):
-        ext, nome, url = acao.get("ext"), acao.get("name"), acao.get("urlsrc")
-        if not ext or not url or nome not in ACOES:
+    actions: dict[str, tuple[int, str]] = {}
+    for action in ET.fromstring(xml).iter("action"):
+        ext, name, url = action.get("ext"), action.get("name"), action.get("urlsrc")
+        if not ext or not url or name not in ACTIONS:
             continue
-        prioridade = ACOES.index(nome)
-        if ext not in acoes or prioridade < acoes[ext][0]:
-            acoes[ext] = (prioridade, url)
-    return {ext: url for ext, (_, url) in acoes.items()}
+        prioridade = ACTIONS.index(name)
+        if ext not in actions or prioridade < actions[ext][0]:
+            actions[ext] = (prioridade, url)
+    return {ext: url for ext, (_, url) in actions.items()}
 
 
-async def _discovery_de(settings: Settings) -> dict[str, str]:
+async def _discovery_of(settings: Settings) -> dict[str, str]:
     base = (settings.collabora_interno_url or settings.collabora_url).rstrip("/")
-    em_cache = _discovery.get(base)
-    if em_cache and time.time() - em_cache[0] < DISCOVERY_SEGUNDOS:
-        return em_cache[1]
+    in_cache = _discovery.get(base)
+    if in_cache and time.time() - in_cache[0] < DISCOVERY_SECONDS:
+        return in_cache[1]
     try:
         async with httpx.AsyncClient(timeout=10) as cliente:
             r = await cliente.get(f"{base}/hosting/discovery")
             r.raise_for_status()
-        acoes = _ler_discovery(r.text)
+        actions = _read_discovery(r.text)
     except (httpx.HTTPError, ET.ParseError) as e:
         raise HTTPException(502, f"Collabora indisponível: {e}") from e
-    _discovery[base] = (time.time(), acoes)
-    return acoes
+    _discovery[base] = (time.time(), actions)
+    return actions
 
 
-async def url_acao(settings: Settings, extensao: str, id_: str) -> str:
+async def url_action(settings: Settings, extension: str, id_: str) -> str:
     """Action URL do Collabora para a extensão, com o `WOPISrc` deste arquivo."""
     if not settings.collabora_url:
         raise HTTPException(503, "Collabora não configurado (GATEWAY_COLLABORA_URL)")
-    urlsrc = (await _discovery_de(settings)).get(extensao.lower())
+    urlsrc = (await _discovery_of(settings)).get(extension.lower())
     if urlsrc is None:
-        raise HTTPException(415, f"O Collabora não edita .{extensao}")
+        raise HTTPException(415, f"O Collabora não edita .{extension}")
     # Tira os marcadores opcionais (<ui=UI_LLCC&>) e troca a origem pela pública: o backend pode
     # ter lido o discovery por um endereço interno (http://collabora:9980).
     urlsrc = re.sub(r"<[^>]*>", "", urlsrc)
     publica = urlsplit(settings.collabora_url)
-    partes = urlsplit(urlsrc)._replace(scheme=publica.scheme, netloc=publica.netloc)
-    url = urlunsplit(partes)
+    parts = urlsplit(urlsrc)._replace(scheme=publica.scheme, netloc=publica.netloc)
+    url = urlunsplit(parts)
     wopi_src = f"{settings.wopi_base_url.rstrip('/')}/wopi/files/{id_}"
     separador = "" if url.endswith(("?", "&")) else ("&" if "?" in url else "?")
     return f"{url}{separador}WOPISrc={quote(wopi_src, safe='')}&lang=pt-BR"
 
 
-async def sessao(request: Request, id_: str) -> dict[str, Any]:
+async def session(request: Request, id_: str) -> dict[str, Any]:
     """Usado por `POST /api/arquivos/{id}/collabora` (rota protegida pela chave do app)."""
     settings: Settings = request.app.state.settings
-    biblioteca: Biblioteca = request.app.state.biblioteca
+    collection: Collection = request.app.state.biblioteca
     try:
-        meta = biblioteca.obter(id_)
-    except ArquivoNaoEncontrado as e:
+        meta = collection.obter(id_)
+    except FileNotFound as e:
         raise HTTPException(404, "Arquivo não encontrado") from e
-    url = await url_acao(settings, meta["extensao"], id_)
-    origem = request.headers.get("origin", "")
-    token, ttl = gerar_token(_segredo(request), id_, settings.wopi_token_minutos * 60, origem)
+    url = await url_action(settings, meta["extensao"], id_)
+    origin = request.headers.get("origin", "")
+    token, ttl = generate_token(_secret(request), id_, settings.wopi_token_minutos * 60, origin)
     return {"url": url, "access_token": token, "access_token_ttl": ttl}
 
 
 # --- travas (em memória, expiram em 30 min) ---
 
 
-class Travas:
+class Locks:
     def __init__(self) -> None:
         self._travas: dict[str, tuple[str, float]] = {}
         self.mutex = threading.Lock()
 
     def atual(self, id_: str) -> str:
-        trava = self._travas.get(id_)
-        if trava is None or trava[1] < time.time():
+        lock = self._travas.get(id_)
+        if lock is None or lock[1] < time.time():
             self._travas.pop(id_, None)
             return ""
-        return trava[0]
+        return lock[0]
 
     def travar(self, id_: str, valor: str) -> None:
-        self._travas[id_] = (valor, time.time() + TRAVA_SEGUNDOS)
+        self._travas[id_] = (valor, time.time() + LOCK_SECONDS)
 
     def soltar(self, id_: str) -> None:
         self._travas.pop(id_, None)
 
 
-def _travas(request: Request) -> Travas:
+def _locks(request: Request) -> Locks:
     if not hasattr(request.app.state, "wopi_travas"):
-        request.app.state.wopi_travas = Travas()
-    travas: Travas = request.app.state.wopi_travas
-    return travas
+        request.app.state.wopi_travas = Locks()
+    locks: Locks = request.app.state.wopi_travas
+    return locks
 
 
-def _conflito(atual: str, motivo: str) -> Response:
+def _conflict(atual: str, motivo: str) -> Response:
     # Cabeçalho HTTP só aceita ASCII: motivos sem acento.
     return Response(
         status_code=409, headers={"X-WOPI-Lock": atual, "X-WOPI-LockFailureReason": motivo}
@@ -185,16 +185,16 @@ def _conflito(atual: str, motivo: str) -> Response:
 
 
 def _meta(request: Request, id_: str, token: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    dados = validar_token(_segredo(request), token, id_)
+    data = validate_token(_secret(request), token, id_)
     try:
-        return request.app.state.biblioteca.obter(id_), dados
-    except ArquivoNaoEncontrado as e:
+        return request.app.state.biblioteca.obter(id_), data
+    except FileNotFound as e:
         raise HTTPException(404, "Arquivo não encontrado") from e
 
 
 @router.get("/files/{id_}")
 def check_file_info(id_: str, request: Request, access_token: str = "") -> Any:
-    meta, dados = _meta(request, id_, access_token)
+    meta, data = _meta(request, id_, access_token)
     settings: Settings = request.app.state.settings
     info: dict[str, Any] = {
         "BaseFileName": meta["nome_original"],
@@ -210,17 +210,17 @@ def check_file_info(id_: str, request: Request, access_token: str = "") -> Any:
         "SupportsGetLock": True,
         "SupportsUpdate": True,
     }
-    if dados.get("origem"):
-        info["PostMessageOrigin"] = dados["origem"]
+    if data.get("origem"):
+        info["PostMessageOrigin"] = data["origem"]
     return info
 
 
 @router.get("/files/{id_}/contents")
 def get_file(id_: str, request: Request, access_token: str = "") -> Response:
     meta, _ = _meta(request, id_, access_token)
-    caminho, _ = request.app.state.biblioteca.caminho_original(id_)
+    path, _ = request.app.state.biblioteca.caminho_original(id_)
     return Response(
-        caminho.read_bytes(),
+        path.read_bytes(),
         media_type="application/octet-stream",
         headers={"X-WOPI-ItemVersion": meta["sha256"]},
     )
@@ -233,9 +233,9 @@ async def put_file(
     meta, _ = _meta(request, id_, access_token)
     if request.headers.get("x-wopi-override", "PUT").upper() != "PUT":
         raise HTTPException(400, "X-WOPI-Override inválido")
-    atual = _travas(request).atual(id_)
-    if atual and request.headers.get("x-wopi-lock", "") != atual:
-        return _conflito(atual, "Arquivo travado por outra sessao")
+    current = _locks(request).atual(id_)
+    if current and request.headers.get("x-wopi-lock", "") != current:
+        return _conflict(current, "Arquivo travado por outra sessao")
     # O Collabora manda o horário da versão que abriu; se o arquivo mudou por fora, avisa.
     carimbo = request.headers.get("x-cool-wopi-timestamp") or request.headers.get(
         "x-lool-wopi-timestamp"
@@ -244,66 +244,66 @@ async def put_file(
         return JSONResponse(
             status_code=409, content={"COOLStatusCode": 1010, "LOOLStatusCode": 1010}
         )
-    biblioteca: Biblioteca = request.app.state.biblioteca
+    collection: Collection = request.app.state.biblioteca
     try:
-        novo = biblioteca.substituir(id_, await request.body())
-    except ArquivoInvalido as e:
+        new = collection.substituir(id_, await request.body())
+    except FileInvalid as e:
         raise HTTPException(400, str(e)) from e
-    if novo["status"] == "convertendo":
-        tarefas.add_task(biblioteca.converter, id_)
+    if new["status"] == "convertendo":
+        tarefas.add_task(collection.converter, id_)
     return JSONResponse(
-        {"LastModifiedTime": novo["atualizado"]},
-        headers={"X-WOPI-ItemVersion": novo["sha256"]},
+        {"LastModifiedTime": new["atualizado"]},
+        headers={"X-WOPI-ItemVersion": new["sha256"]},
     )
 
 
 @router.post("/files/{id_}")
-def trava(id_: str, request: Request, access_token: str = "") -> Response:
+def lock(id_: str, request: Request, access_token: str = "") -> Response:
     _meta(request, id_, access_token)
-    travas = _travas(request)
-    operacao = request.headers.get("x-wopi-override", "").upper()
+    locks = _locks(request)
+    operation = request.headers.get("x-wopi-override", "").upper()
     pedida = request.headers.get("x-wopi-lock", "")
-    antiga = request.headers.get("x-wopi-oldlock", "")
-    with travas.mutex:
-        atual = travas.atual(id_)
-        if operacao == "GET_LOCK":
-            return Response(headers={"X-WOPI-Lock": atual})
+    old = request.headers.get("x-wopi-oldlock", "")
+    with locks.mutex:
+        current = locks.atual(id_)
+        if operation == "GET_LOCK":
+            return Response(headers={"X-WOPI-Lock": current})
         if not pedida:
             raise HTTPException(400, "Falta X-WOPI-Lock")
-        if operacao == "LOCK" and antiga:  # UnlockAndRelock
-            if atual != antiga:
-                return _conflito(atual, "Trava diferente")
-        elif operacao == "LOCK":
-            if atual and atual != pedida:
-                return _conflito(atual, "Arquivo travado por outra sessao")
-        elif operacao in ("UNLOCK", "REFRESH_LOCK"):
-            if atual != pedida:
-                return _conflito(atual, "Trava diferente")
-            if operacao == "UNLOCK":
-                travas.soltar(id_)
+        if operation == "LOCK" and old:  # UnlockAndRelock
+            if current != old:
+                return _conflict(current, "Trava diferente")
+        elif operation == "LOCK":
+            if current and current != pedida:
+                return _conflict(current, "Arquivo travado por outra sessao")
+        elif operation in ("UNLOCK", "REFRESH_LOCK"):
+            if current != pedida:
+                return _conflict(current, "Trava diferente")
+            if operation == "UNLOCK":
+                locks.soltar(id_)
                 return Response()
         else:
-            raise HTTPException(501, f"X-WOPI-Override não suportado: {operacao}")
-        travas.travar(id_, pedida)
+            raise HTTPException(501, f"X-WOPI-Override não suportado: {operation}")
+        locks.travar(id_, pedida)
     return Response()
 
 
 @router.get("/abrir/{id_}")
-async def abrir(id_: str, request: Request, t: str = "") -> HTMLResponse:
+async def open_file(id_: str, request: Request, t: str = "") -> HTMLResponse:
     """Página que faz POST do token para o Collabora: o app no desktop (sem webview) abre
     esta URL no navegador. `t` é o `access_token` de `POST /api/arquivos/{id}/collabora`."""
-    meta, dados = _meta(request, id_, t)
+    meta, data = _meta(request, id_, t)
     settings: Settings = request.app.state.settings
-    url = await url_acao(settings, meta["extensao"], id_)
+    url = await url_action(settings, meta["extensao"], id_)
     nonce = secrets.token_urlsafe(16)
     publica = urlsplit(settings.collabora_url)
-    origem = f"{publica.scheme}://{publica.netloc}"
+    origin = f"{publica.scheme}://{publica.netloc}"
     return HTMLResponse(
-        pagina_formulario(url, t, int(dados["exp"]) * 1000, meta["nome_original"], nonce),
+        page_form(url, t, int(data["exp"]) * 1000, meta["nome_original"], nonce),
         headers={
             # O middleware de segurança só preenche o que faltar: libera o script e o POST.
             "Content-Security-Policy": (
-                f"default-src 'none'; script-src 'nonce-{nonce}'; form-action {origem}; "
+                f"default-src 'none'; script-src 'nonce-{nonce}'; form-action {origin}; "
                 "frame-ancestors 'none'"
             ),
             "Cache-Control": "no-store",
@@ -311,7 +311,7 @@ async def abrir(id_: str, request: Request, t: str = "") -> HTMLResponse:
     )
 
 
-def pagina_formulario(url: str, token: str, ttl: int, titulo: str, nonce: str = "") -> str:
+def page_form(url: str, token: str, ttl: int, titulo: str, nonce: str = "") -> str:
     """HTML com o formulário WOPI que se envia sozinho (o app usa o mesmo HTML na webview)."""
     atributo = f' nonce="{nonce}"' if nonce else ""
     return (

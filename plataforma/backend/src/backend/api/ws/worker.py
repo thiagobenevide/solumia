@@ -62,8 +62,8 @@ async def worker_endpoint(websocket: WebSocket) -> None:
         return
 
     if not any(
-        hmac.compare_digest(hello_message.api_key.encode(), chave.encode())
-        for chave in settings.worker_api_key_list
+        hmac.compare_digest(hello_message.api_key.encode(), key.encode())
+        for key in settings.worker_api_key_list
     ):
         logger.warning(
             "Tentativa de conexão de worker com api_key inválida (worker_name=%s)",
@@ -74,7 +74,7 @@ async def worker_endpoint(websocket: WebSocket) -> None:
 
     worker_id = str(uuid4())
     registry.register(worker_id, websocket, hello_message.available_models)
-    _anotar_ip_casa(settings, websocket.client.host if websocket.client else "")
+    _annotate_ip_matches(settings, websocket.client.host if websocket.client else "")
 
     ack = WorkerHelloAck(
         worker_id=worker_id,
@@ -111,15 +111,15 @@ async def worker_endpoint(websocket: WebSocket) -> None:
         await registry.unregister(worker_id)
 
 
-def _anotar_ip_casa(settings: Settings, ip: str) -> None:
+def _annotate_ip_matches(settings: Settings, ip: str) -> None:
     """Guarda o IP público de onde o worker conectou: é para ele que o "Ligar o PC" manda o
     Wake-on-LAN. IP local/privado (worker na mesma máquina, dev) não conta."""
     try:
         if not ipaddress.ip_address(ip).is_global:
             return
-        arquivo = Path(settings.wol_ip_arquivo).expanduser()
-        arquivo.parent.mkdir(parents=True, exist_ok=True)
-        arquivo.write_text(ip)
+        file = Path(settings.wol_ip_arquivo).expanduser()
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(ip)
     except (ValueError, OSError) as e:
         logger.warning("Não foi possível anotar o IP de casa (%s): %s", ip, e)
 

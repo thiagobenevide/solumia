@@ -5,7 +5,7 @@ from shared.protocol import ChatRequest
 from worker import resources
 from worker.core.config import WorkerSettings
 from worker.providers.base import Provider
-from worker.voice import Voz
+from worker.voice import Voice
 from worker.ws_client import WorkerClient
 
 
@@ -72,7 +72,7 @@ async def test_handle_chat_request_sends_error_on_provider_failure() -> None:
     assert "lm studio indisponível" in fake_ws.sent[0]["message"]
 
 
-class _VozFalsa(Voz):
+class _VozFalsa(Voice):
     async def executar(self, tarefa: str, payload: dict[str, Any]) -> dict[str, Any]:
         return {"texto": f"{tarefa}:{payload['audio_b64']}"}
 
@@ -89,5 +89,5 @@ async def test_tarefa_de_voz_vai_para_a_voz_e_nao_ao_provider() -> None:
 
 
 def test_recursos_tem_cpu_ram_e_gpus() -> None:
-    uso = resources.coletar()
-    assert set(uso) == {"cpu_pct", "ram_pct", "gpus"}
+    usage = resources.collect()
+    assert set(usage) == {"cpu_pct", "ram_pct", "gpus"}

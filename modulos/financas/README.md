@@ -51,7 +51,7 @@ Nota da empresa = 50% questionário + 30% checagens dos indicadores + 20% nota d
 
 Dados em tempo real vêm da plataforma (`app.state.internet`, `plataforma/backend/src/backend/internet/`:
 FIPE, moedas, cotações, proventos, Selic/CDI/IPCA, maiores altas/baixas e busca na web).
-| `GET /mercado/sugerir?q=` | busca enquanto digita (ações e FIIs): ticker pelo começo, nome, apelido (`cvm.APELIDOS`), nome antigo e nome parecido |
+| `GET /mercado/sugerir?q=` | busca enquanto digita (ações e FIIs): ticker pelo começo, nome, apelido (`cvm.NICKNAMES`), nome antigo e nome parecido |
 | `GET /estudo?objetivo=` · `PUT /estudo/objetivo` · `PATCH /estudo/itens` | trilha de finanças (`estudo.py`): níveis → etapas com livro e capítulos certos, artigos, relatórios e prática; progresso em `estudo_progresso` |
 | `POST /estudo/livros` · `PUT /estudo/livros/{id}/tenho` · `POST /estudo/livros/{id}/guia` | livros que você tem; o Claude (Claude Code no worker, `app.state.reescrita`) monta o guia não linear |
 | `POST /estudo/ler` · `GET /estudo/citacoes` | leitura em Estudos (área Finanças) + projeto "Trilha de Finanças"; grifos do projeto por obra |

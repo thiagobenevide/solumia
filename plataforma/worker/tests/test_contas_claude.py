@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from worker.claude_accounts import PRINCIPAL, Contas
+from worker.claude_accounts import MAIN, Accounts
 
 # `claude` falso: `auth status` diz logado só se a pasta da conta tiver `.credentials.json`;
 # `auth login` mostra o link, lê o código e grava a credencial.
@@ -28,19 +28,19 @@ fi
 
 
 @pytest.fixture
-def contas(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Contas:
+def contas(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Accounts:
     binario = tmp_path / "claude"
     binario.write_text(_FALSO)
     binario.chmod(binario.stat().st_mode | stat.S_IEXEC)
-    padrao = tmp_path / "padrao"
-    (padrao / "projects").mkdir(parents=True)
-    (padrao / ".credentials.json").touch()
-    monkeypatch.setenv("PADRAO", str(padrao))
+    default = tmp_path / "padrao"
+    (default / "projects").mkdir(parents=True)
+    (default / ".credentials.json").touch()
+    monkeypatch.setenv("PADRAO", str(default))
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
-    return Contas(str(tmp_path / "contas"), str(binario), str(padrao))
+    return Accounts(str(tmp_path / "contas"), str(binario), str(default))
 
 
-def test_entrar_ativar_e_remover(contas: Contas, tmp_path: Path) -> None:
+def test_entrar_ativar_e_remover(contas: Accounts, tmp_path: Path) -> None:
     async def fluxo() -> None:
         assert (await contas.listar())["contas"][0]["logado"] is True
         url = (await contas.entrar("trabalho"))["url"]
@@ -49,17 +49,17 @@ def test_entrar_ativar_e_remover(contas: Contas, tmp_path: Path) -> None:
         with pytest.raises(RuntimeError, match="não está logada"):
             await contas.ativar("trabalho")
         await contas.codigo("trabalho", "certo")
-        lista = await contas.ativar("trabalho")
-        assert lista["ativa"] == "trabalho"
+        items = await contas.ativar("trabalho")
+        assert items["ativa"] == "trabalho"
         assert os.environ["CLAUDE_CONFIG_DIR"] == str(tmp_path / "contas/trabalho")
-        lista = await contas.remover("trabalho")
-        assert lista["ativa"] == PRINCIPAL and "CLAUDE_CONFIG_DIR" not in os.environ
+        items = await contas.remover("trabalho")
+        assert items["ativa"] == MAIN and "CLAUDE_CONFIG_DIR" not in os.environ
         assert (tmp_path / "padrao/projects").is_dir()  # o link some, a pasta da principal fica
 
     asyncio.run(fluxo())
 
 
-def test_codigo_errado_e_nome_invalido(contas: Contas) -> None:
+def test_codigo_errado_e_nome_invalido(contas: Accounts) -> None:
     async def fluxo() -> None:
         await contas.entrar("outra")
         with pytest.raises(RuntimeError, match="não foi concluído"):
@@ -67,6 +67,6 @@ def test_codigo_errado_e_nome_invalido(contas: Contas) -> None:
         with pytest.raises(RuntimeError, match="inválido"):
             await contas.entrar("../fora")
         with pytest.raises(RuntimeError, match="principal"):
-            await contas.remover(PRINCIPAL)
+            await contas.remover(MAIN)
 
     asyncio.run(fluxo())

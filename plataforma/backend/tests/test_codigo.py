@@ -7,7 +7,7 @@ import pytest
 from conftest import AUTH_HEADERS, CLIENT_API_KEY
 from fastapi.testclient import TestClient
 
-from backend.auth.security import emitir_token
+from backend.auth.security import issue_token
 from backend.core.config import Settings
 from backend.main import create_app
 from codigo.api import Executor
@@ -22,16 +22,16 @@ def api(tmp_path: Path) -> TestClient:
         sessoes_geracao_arquivo=str(tmp_path / "geracao"),
     )
     app = create_app(settings=s)
-    pedidos: list[tuple[str, dict[str, Any]]] = []
+    requests: list[tuple[str, dict[str, Any]]] = []
 
     async def pedir(tarefa: str, payload: dict[str, Any]) -> dict[str, Any]:
-        pedidos.append((tarefa, payload))
+        requests.append((tarefa, payload))
         return {"ok": tarefa != "codigo.parar", "status": "## master"}
 
     app.state.executor_codigo = Executor(pedir, lambda: None)
-    app.state.pedidos = pedidos
+    app.state.pedidos = requests
     # O Código exige sessão do login com código do Authenticator recente (não basta a chave).
-    token, _ = emitir_token("eu", SEGREDO, 60, {"totp": int(time.time())})
+    token, _ = issue_token("eu", SEGREDO, 60, {"totp": int(time.time())})
     return TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
@@ -40,9 +40,9 @@ SEGREDO = "s" * 40
 
 def test_codigo_recusa_chave_e_sessao_sem_codigo_recente(api: TestClient) -> None:
     assert api.get("/api/codigo/sessoes", headers=AUTH_HEADERS).status_code == 403
-    velho, _ = emitir_token("eu", SEGREDO, 60, {"totp": int(time.time()) - 13 * 3600})
-    cab = {"Authorization": f"Bearer {velho}"}
-    r = api.get("/api/codigo/sessoes", headers=cab)
+    velho, _ = issue_token("eu", SEGREDO, 60, {"totp": int(time.time()) - 13 * 3600})
+    header = {"Authorization": f"Bearer {velho}"}
+    r = api.get("/api/codigo/sessoes", headers=header)
     assert r.status_code == 403 and r.json()["error"]["type"] == "totp_required"
 
 
@@ -54,8 +54,8 @@ def test_aba_recebe_pedido_etapas_e_continua_a_sessao(api: TestClient) -> None:
         json={"texto": "crie a tela", "imagens": [{"nome": "ref.png", "b64": png}]},
     )
     assert r.status_code == 200 and r.json()["estado"] == "rodando"
-    tarefa, payload = api.app.state.pedidos[-1]  # type: ignore[attr-defined]
-    assert tarefa == "codigo.enviar" and payload["claude_sessao"] is None
+    task, payload = api.app.state.pedidos[-1]  # type: ignore[attr-defined]
+    assert task == "codigo.enviar" and payload["claude_sessao"] is None
     # Segunda mensagem enquanto roda: recusada.
     assert api.post(
         f"/api/codigo/sessoes/{aba['id']}/mensagens", json={"texto": "x"}
@@ -68,11 +68,11 @@ def test_aba_recebe_pedido_etapas_e_continua_a_sessao(api: TestClient) -> None:
     ouvinte({"sessao_id": aba["id"], "tipo": "fim", "erro": False, "texto": "pronto"})
     ouvinte({"sessao_id": "0" * 32, "tipo": "fim"})  # aba inexistente: ignorada
 
-    dados = api.get(f"/api/codigo/sessoes/{aba['id']}", params={"desde": 1}).json()
-    assert [e["tipo"] for e in dados["eventos"]] == ["inicio", "ferramenta", "fim"]
-    assert dados["sessao"]["estado"] == "parada" and dados["sessao"]["claude_sessao"] == "abc"
-    nome = api.get(f"/api/codigo/sessoes/{aba['id']}").json()["eventos"][0]["imagens"][0]
-    assert api.get(f"/api/codigo/sessoes/{aba['id']}/imagens/{nome}").content == b"\x89PNG"
+    data = api.get(f"/api/codigo/sessoes/{aba['id']}", params={"desde": 1}).json()
+    assert [e["tipo"] for e in data["eventos"]] == ["inicio", "ferramenta", "fim"]
+    assert data["sessao"]["estado"] == "parada" and data["sessao"]["claude_sessao"] == "abc"
+    name = api.get(f"/api/codigo/sessoes/{aba['id']}").json()["eventos"][0]["imagens"][0]
+    assert api.get(f"/api/codigo/sessoes/{aba['id']}/imagens/{name}").content == b"\x89PNG"
 
     api.post(f"/api/codigo/sessoes/{aba['id']}/commit", json={"push": True, "publicar": True})
     _, payload = api.app.state.pedidos[-1]  # type: ignore[attr-defined]

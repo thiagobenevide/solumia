@@ -3,7 +3,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 # A API só devolve JSON/arquivos: nada de scripts, frames ou cache de respostas autenticadas.
-_CABECALHOS = {
+_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "no-referrer",
@@ -13,17 +13,17 @@ _CABECALHOS = {
 }
 
 
-class CabecalhosSegurancaMiddleware(BaseHTTPMiddleware):
+class HeadersSecurityMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: object, hsts: bool) -> None:
         super().__init__(app)  # type: ignore[arg-type]
         self.hsts = hsts
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        resposta = await call_next(request)
-        for nome, valor in _CABECALHOS.items():
-            resposta.headers.setdefault(nome, valor)
+        answer = await call_next(request)
+        for name, value in _HEADERS.items():
+            answer.headers.setdefault(name, value)
         if request.url.path.startswith("/api/") or request.url.path.startswith("/v1/"):
-            resposta.headers.setdefault("Cache-Control", "no-store")
+            answer.headers.setdefault("Cache-Control", "no-store")
         if self.hsts:
-            resposta.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
-        return resposta
+            answer.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+        return answer

@@ -5,10 +5,10 @@ conhecimento), horas estimadas e estratégia. O calendário de tarefas sai dessa
 
 from typing import Any
 
-LIMITE_EDITAL = 250_000
+LIMIT_NOTICE = 250_000
 """Caracteres do edital mandados ao Claude (editais da FGV/Cebraspe ficam bem abaixo)."""
 
-TIPOS_PRAZO = (
+KINDS_DEADLINE = (
     "inscricao",
     "pagamento",
     "isencao",
@@ -21,10 +21,10 @@ TIPOS_PRAZO = (
     "resultado",
     "outro",
 )
-MODULOS = ("gerais", "especificos", "discursiva")
-PRIORIDADES = ("alta", "media", "baixa")
+MODULES = ("gerais", "especificos", "discursiva")
+PRIORITIES = ("alta", "media", "baixa")
 
-SISTEMA = """Você é um planejador de estudos para concursos públicos brasileiros, com experiência \
+SYSTEM = """Você é um planejador de estudos para concursos públicos brasileiros, com experiência \
 nas bancas (FGV, Cebraspe, FCC, Vunesp) e no que elas mais cobram.
 
 Leia o edital e monte a estrutura do estudo SÓ para o cargo/especialidade informado:
@@ -47,53 +47,53 @@ incidência histórica da banca.
 - `estrategia`: até 8 orientações práticas para este edital e esta banca.
 Responda em português do Brasil."""
 
-_PRAZO = {
+_DEADLINE = {
     "type": "object",
     "properties": {
         "titulo": {"type": "string"},
         "data": {"type": "string"},
         "hora": {"type": "string"},
-        "tipo": {"type": "string", "enum": list(TIPOS_PRAZO)},
+        "tipo": {"type": "string", "enum": list(KINDS_DEADLINE)},
         "detalhe": {"type": "string"},
     },
     "required": ["titulo", "data", "hora", "tipo", "detalhe"],
     "additionalProperties": False,
 }
 
-_TOPICO = {
+_TOPIC = {
     "type": "object",
     "properties": {
         "titulo": {"type": "string"},
         "conteudo": {"type": "string"},
         "horas": {"type": "number"},
-        "prioridade": {"type": "string", "enum": list(PRIORIDADES)},
+        "prioridade": {"type": "string", "enum": list(PRIORITIES)},
     },
     "required": ["titulo", "conteudo", "horas", "prioridade"],
     "additionalProperties": False,
 }
 
-_DISCIPLINA = {
+_SUBJECT = {
     "type": "object",
     "properties": {
         "nome": {"type": "string"},
-        "modulo": {"type": "string", "enum": list(MODULOS)},
+        "modulo": {"type": "string", "enum": list(MODULES)},
         "questoes": {"type": "integer"},
         "prioridade": {"type": "integer"},
-        "topicos": {"type": "array", "items": _TOPICO},
+        "topicos": {"type": "array", "items": _TOPIC},
     },
     "required": ["nome", "modulo", "questoes", "prioridade", "topicos"],
     "additionalProperties": False,
 }
 
-ESQUEMA: dict[str, Any] = {
+SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "resumo": {"type": "string"},
         "data_prova": {"type": "string"},
         "horario_prova": {"type": "string"},
         "formato_prova": {"type": "string"},
-        "prazos": {"type": "array", "items": _PRAZO},
-        "disciplinas": {"type": "array", "items": _DISCIPLINA},
+        "prazos": {"type": "array", "items": _DEADLINE},
+        "disciplinas": {"type": "array", "items": _SUBJECT},
         "discursiva": {
             "type": "object",
             "properties": {
@@ -119,25 +119,25 @@ ESQUEMA: dict[str, Any] = {
 }
 
 
-def montar_prompt(concurso: dict[str, Any], edital: str, hoje: str) -> str:
-    partes = [
+def assemble_prompt(exam: dict[str, Any], notice: str, hoje: str) -> str:
+    parts = [
         f"Hoje: {hoje}.",
-        f"Concurso: {concurso['nome']}"
-        + (f" (banca {concurso['banca']})" if concurso.get("banca") else ""),
-        f"Cargo/especialidade do candidato: {concurso['cargo']}",
-        f"Disponibilidade: {concurso['minutos_util']} min por dia útil e "
-        f"{concurso['minutos_fds']} min por dia de fim de semana; o estudo de conteúdo vai até "
+        f"Concurso: {exam['nome']}"
+        + (f" (banca {exam['banca']})" if exam.get("banca") else ""),
+        f"Cargo/especialidade do candidato: {exam['cargo']}",
+        f"Disponibilidade: {exam['minutos_util']} min por dia útil e "
+        f"{exam['minutos_fds']} min por dia de fim de semana; o estudo de conteúdo vai até "
         "7 dias antes da prova.",
     ]
-    if concurso.get("observacoes"):
-        partes.append("Sobre o candidato: " + concurso["observacoes"])
-    partes.append("<edital>\n" + edital[:LIMITE_EDITAL] + "\n</edital>")
-    return "\n\n".join(partes)
+    if exam.get("observacoes"):
+        parts.append("Sobre o candidato: " + exam["observacoes"])
+    parts.append("<edital>\n" + notice[:LIMIT_NOTICE] + "\n</edital>")
+    return "\n\n".join(parts)
 
 
 # ---------- simulados ----------
 
-SISTEMA_SIMULADO = """Você é elaborador de questões de concursos públicos brasileiros e imita \
+SYSTEM_MOCK_EXAM = """Você é elaborador de questões de concursos públicos brasileiros e imita \
 o estilo da banca informada (FGV: enunciados contextualizados, casos práticos, alternativas \
 longas e plausíveis; Cebraspe: certo/errado vira 5 alternativas). Crie questões INÉDITAS de \
 múltipla escolha com 5 alternativas e só uma correta, no nível da prova do cargo, cobrindo o \
@@ -148,7 +148,7 @@ conceito); curto e didático.
 - Respeite exatamente a quantidade de questões por disciplina pedida.
 Responda em português do Brasil."""
 
-ESQUEMA_SIMULADO: dict[str, Any] = {
+SCHEMA_MOCK_EXAM: dict[str, Any] = {
     "type": "object",
     "properties": {
         "questoes": {
@@ -180,30 +180,30 @@ ESQUEMA_SIMULADO: dict[str, Any] = {
 }
 
 
-def distribuir(pesos: dict[str, int], n: int) -> dict[str, int]:
+def distribute(weights: dict[str, int], n: int) -> dict[str, int]:
     """Reparte [n] questões pelos pesos (maiores restos), sem disciplina com 0 se couber."""
-    total = sum(pesos.values()) or 1
-    cotas = {k: n * v / total for k, v in pesos.items()}
-    saida = {k: int(c) for k, c in cotas.items()}
-    for k in sorted(cotas, key=lambda k: cotas[k] - saida[k], reverse=True)[
-        : n - sum(saida.values())
+    total = sum(weights.values()) or 1
+    cotas = {k: n * v / total for k, v in weights.items()}
+    output = {k: int(c) for k, c in cotas.items()}
+    for k in sorted(cotas, key=lambda k: cotas[k] - output[k], reverse=True)[
+        : n - sum(output.values())
     ]:
-        saida[k] += 1
-    return {k: v for k, v in saida.items() if v}
+        output[k] += 1
+    return {k: v for k, v in output.items() if v}
 
 
-def prompt_simulado(concurso: dict[str, Any], cotas: dict[str, int], estudados: list[str]) -> str:
-    discs = {d["nome"]: d for d in concurso["estrutura"]["disciplinas"]}
-    linhas = [
-        f"Concurso: {concurso['nome']} — banca {concurso.get('banca') or 'não informada'}",
-        f"Cargo: {concurso['cargo']}",
+def prompt_mock_exam(exam: dict[str, Any], cotas: dict[str, int], estudados: list[str]) -> str:
+    discs = {d["nome"]: d for d in exam["estrutura"]["disciplinas"]}
+    lines = [
+        f"Concurso: {exam['nome']} — banca {exam.get('banca') or 'não informada'}",
+        f"Cargo: {exam['cargo']}",
         "Questões por disciplina (exatamente):",
     ]
-    for nome, q in cotas.items():
-        topicos = "; ".join(t["titulo"] for t in discs[nome]["topicos"])
-        linhas.append(f"- {nome}: {q} questão(ões). Tópicos do edital: {topicos}")
+    for name, q in cotas.items():
+        topicos = "; ".join(t["titulo"] for t in discs[name]["topicos"])
+        lines.append(f"- {name}: {q} questão(ões). Tópicos do edital: {topicos}")
     if estudados:
-        linhas.append(
+        lines.append(
             "Tópicos que o candidato já estudou (dê preferência a eles): " + "; ".join(estudados)
         )
-    return "\n".join(linhas)
+    return "\n".join(lines)

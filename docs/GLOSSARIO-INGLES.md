@@ -141,3 +141,28 @@ valores de `--mode`/`--intensity`, chaves próprias da API web (`processos`, `va
 (`comando`, `vaga`, `estado`), chaves do `config.toml`, os prompts de `ai/prompts/` e o nome do pacote `esteira`. O script `artigo` do vault ainda grava a barra externa com
 `rotulo`/`feito`/`unidade` (`grafo._tarefa_externa` converte). O serviço do painel instalado por
 `infra/scripts/conectar_vps` precisa ser reinstalado: o comando agora é `dark panel --port 8765`.
+
+## Plataforma e backends dos módulos
+
+Mesmo processo mecânico da esteira (arquivos → nomes de nível de módulo → parâmetros e variáveis locais), nos
+pacotes `backend`, `worker`, `shared`, `codigo`, `concursos`, `design`, `eletronica`, `estudos`, `financas`, `painel`,
+`rotinas`, `saude` e `youtube`. Os nomes dos pacotes dos módulos e as rotas (`/api/notas`, `/api/estudos/...`) não
+mudaram. Arquivos: `backend/notas` → `backend/notes` (cofre → vault, tipos → note_types), `backend/arquivos` →
+`backend/files` (biblioteca → library, mapeamento → mapping, reescrita → rewrite, baixar_referencias →
+download_references), `auth/seguranca` → `auth/security`, `core/modelo_llm` → `core/llm_model`,
+`internet/ferramentas` → `internet/tools`, `middleware/cabecalhos` → `middleware/headers`, `api/atualizacoes` →
+`api/updates`; worker: codigo → coding, contas_claude → claude_accounts, pronuncia → pronunciation, recursos →
+resources, voz → voice; módulos: sessoes → sessions, vagas → jobs, concursos → exams, cronograma → schedule,
+curriculos → resumes, estudo → study, plano_ia → ai_plan, rumores → rumors, cadernos → notebooks, fluxos → flows,
+imagens → images, quadros → boards, wireframe_ia → ai_wireframe, simulacao → simulation, biblioteca(s) →
+library/libraries, projetos → projects, linguagem → language, idiomas → languages, conhecimento → knowledge,
+catalogo_tecnologia → technology_catalog, analise → analysis, armazem → warehouse, cenarios → scenarios, extrato →
+statement, ia → ai, padroes → patterns, relatorios → reports, agente → agent, cobrador → nagger, desempenho →
+performance, medidor → meter, notificador → notifier, quadro → board, bem_estar → wellbeing, consumo → consumption,
+relogio → watch, treinos → workouts, catalogo → catalog, canais → channels, esquema → schema, importar → importer
+(`python -m youtube.importer`). `infra/scripts/instalar_vps` chama `backend.auth.security.generate_hash_password`
+e `generate_secret_totp`.
+
+Pendente em todo o repositório: métodos e campos de classes, parâmetros que são contrato (rotas, nomes passados por
+palavra-chave), chaves JSON/frontmatter/WebSocket, rotas, comentários, docstrings, mensagens, prompts, testes
+(nomes dos arquivos e das funções da plataforma), o configurador, `capture`, e os apps Flutter.

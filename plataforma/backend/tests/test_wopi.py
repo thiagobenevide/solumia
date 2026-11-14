@@ -7,7 +7,7 @@ from conftest import AUTH_HEADERS, CLIENT_API_KEY
 from fastapi.testclient import TestClient
 
 from backend.files import wopi
-from backend.files.library import Biblioteca
+from backend.files.library import Collection
 from backend.core.config import Settings
 from backend.main import create_app
 
@@ -26,9 +26,9 @@ DOCX = b"PK\x03\x04 docx de mentira"
 @pytest.fixture
 def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     # Sem LibreOffice nos testes: a reconversão agendada pelo PutFile não faz nada.
-    monkeypatch.setattr(Biblioteca, "converter", lambda self, id_: {})
+    monkeypatch.setattr(Collection, "converter", lambda self, id_: {})
     monkeypatch.setitem(
-        wopi._discovery, "http://collabora:9980", (time.time(), wopi._ler_discovery(DISCOVERY))
+        wopi._discovery, "http://collabora:9980", (time.time(), wopi._read_discovery(DISCOVERY))
     )
     s = Settings(
         client_api_keys=CLIENT_API_KEY,
@@ -63,8 +63,8 @@ def test_sessao_monta_action_url(api: TestClient) -> None:
     assert parse_qs(url.query)["WOPISrc"] == [f"http://gateway:48080/wopi/files/{id_}"]
     assert s["access_token_ttl"] > time.time() * 1000
     # sem a chave do app não abre sessão
-    sem_chave = TestClient(api.app).post(f"/api/arquivos/{id_}/collabora")
-    assert sem_chave.status_code == 401
+    without_key = TestClient(api.app).post(f"/api/arquivos/{id_}/collabora")
+    assert without_key.status_code == 401
 
 
 def test_check_get_put(api: TestClient) -> None:
@@ -76,13 +76,13 @@ def test_check_get_put(api: TestClient) -> None:
     assert info["UserCanWrite"] and info["SupportsLocks"] and info["SupportsUpdate"]
     assert wopi_cli.get(f"/wopi/files/{id_}/contents", params=q).content == DOCX
 
-    novo = b"PK\x03\x04 editado no collabora"
+    new = b"PK\x03\x04 editado no collabora"
     r = wopi_cli.post(
-        f"/wopi/files/{id_}/contents", params=q, content=novo, headers={"X-WOPI-Override": "PUT"}
+        f"/wopi/files/{id_}/contents", params=q, content=new, headers={"X-WOPI-Override": "PUT"}
     )
     assert r.status_code == 200, r.text
     assert r.headers["X-WOPI-ItemVersion"] != info["Version"]
-    assert api.get(f"/api/arquivos/{id_}/original").content == novo
+    assert api.get(f"/api/arquivos/{id_}/original").content == new
     assert api.get(f"/api/arquivos/{id_}").json()["status"] == "convertendo"
 
 
@@ -94,9 +94,9 @@ def test_token_invalido_ou_expirado(api: TestClient) -> None:
         cli.get(f"/wopi/files/{id_}", params={"access_token": s["access_token"] + "x"}).status_code
         == 401
     )
-    vencido, _ = wopi.gerar_token(b"segredo-de-teste", id_, -10)
+    vencido, _ = wopi.generate_token(b"segredo-de-teste", id_, -10)
     assert cli.get(f"/wopi/files/{id_}", params={"access_token": vencido}).status_code == 401
-    outro, _ = wopi.gerar_token(b"segredo-de-teste", "aaaaaaaaaaaa", 60)
+    outro, _ = wopi.generate_token(b"segredo-de-teste", "aaaaaaaaaaaa", 60)
     assert cli.get(f"/wopi/files/{id_}/contents", params={"access_token": outro}).status_code == 401
     # a chave do app não serve de token WOPI
     assert cli.get(f"/wopi/files/{id_}", params={"access_token": CLIENT_API_KEY}).status_code == 401

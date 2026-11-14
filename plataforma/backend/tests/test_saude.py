@@ -66,14 +66,14 @@ def test_agenda_marcar_editar_copiar(api: TestClient) -> None:
     assert r.json()["feito"] and r.json()["carga_kg"] == 10
     assert api.patch(f"/api/saude/agenda/{a['id']}", json={"data": "x"}).status_code == 422
 
-    copia = api.post(
+    copy = api.post(
         "/api/saude/agenda/copiar",
         json={"de": "2026-11-02", "ate": "2026-11-08", "destino": "2026-11-09"},
     ).json()
-    assert [(i["data"], i["feito"]) for i in copia] == [("2026-11-09", False)] * 2
+    assert [(i["data"], i["feito"]) for i in copy] == [("2026-11-09", False)] * 2
 
-    semana = api.get("/api/saude/agenda?de=2026-11-02&ate=2026-11-08").json()
-    assert [i["exercicio_id"] for i in semana] == ["flexao", "prancha"]
+    week = api.get("/api/saude/agenda?de=2026-11-02&ate=2026-11-08").json()
+    assert [i["exercicio_id"] for i in week] == ["flexao", "prancha"]
     assert api.delete(f"/api/saude/agenda/{b['id']}").status_code == 204
     assert api.post(
         "/api/saude/agenda", json={"data": "2026-11-02", "exercicio_id": "nao-existe"}

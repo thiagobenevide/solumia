@@ -18,68 +18,68 @@ from fastapi.responses import JSONResponse
 
 from backend import __version__
 from backend.api.updates import router as atualizacoes_router
-from backend.api.deps import exigir_totp_recente, require_client_api_key
+from backend.api.deps import require_totp_recent, require_client_api_key
 from backend.api.health import router as health_router
 from backend.api.llm import router as llm_router
 from backend.api.v1.router import router as v1_router
 from backend.api.ws.worker import router as ws_router
 from backend.files.api import router as arquivos_router
-from backend.files.library import Biblioteca
+from backend.files.library import Collection
 from backend.files.mapping import router as mapeamento_router
-from backend.files.rewrite import Reescrita, texto_do_documento
+from backend.files.rewrite import Rewrite, text_of_document
 from backend.files.rewrite import router as reescrita_router
 from backend.files.wopi import router as wopi_router
-from backend.auth.api import Tentativas
+from backend.auth.api import Attempts
 from backend.auth.api import router as auth_router
 from backend.core.config import Settings, get_settings
 from backend.core.logging import configure_logging
-from backend.core.llm_model import ModeloLLM
+from backend.core.llm_model import ModelLLM
 from backend.core.worker_registry import (
     WorkerDisconnected,
     WorkerRegistry,
     WorkerRespondedWithError,
 )
 from backend.internet import Internet
-from backend.middleware.headers import CabecalhosSegurancaMiddleware
+from backend.middleware.headers import HeadersSecurityMiddleware
 from backend.middleware.request_id import RequestIdMiddleware
 from backend.notes.api import router as notas_router
-from backend.notes.vault import Cofre
+from backend.notes.vault import Vault
 from codigo.api import Executor as ExecutorCodigo
 from codigo.api import router as codigo_router
-from codigo.sessions import SessaoNaoEncontrada, Sessoes
+from codigo.sessions import SessionNotFound, Sessions
 from concursos.api import IA as ConcursosIA
 from concursos.api import router as concursos_router
 from concursos.api_jobs import router as vagas_router
-from concursos.exams import Concursos
+from concursos.exams import Exams
 from concursos.radar import Radar
-from concursos.rumors import Rumores
-from concursos.jobs import Vagas
+from concursos.rumors import Rumors
+from concursos.jobs import Slots
 from design.api import router as design_router
 from design.notebooks import router as cadernos_router
-from design.images import Imagens
-from design.boards import Quadros
-from design.ai_wireframe import TIPOS as TIPOS_WIREFRAME
+from design.images import Images
+from design.boards import Frames
+from design.ai_wireframe import KINDS as TIPOS_WIREFRAME
 from eletronica.api import router as eletronica_router
 from eletronica.api_simulation import router as eletronica_simulacao_router
-from eletronica.libraries import Bibliotecas as BibliotecasEletronica
-from eletronica.projects import Projetos
-from eletronica.simulation import Simulacoes
+from eletronica.libraries import Libraries as BibliotecasEletronica
+from eletronica.projects import Projects
+from eletronica.simulation import Simulations
 from estudos.api import router as estudos_router
-from estudos.studies import Estudos, Invalido
-from estudos.language import Linguagem, extrair_json
+from estudos.studies import Studies, Invalid
+from estudos.language import Language, extract_json
 from financas.api import router as financas_router
-from financas.warehouse import Armazem
-from painel.api import Fontes, Voz
-from painel.api import LLMIndisponivel as PainelLLMIndisponivel
+from financas.warehouse import Warehouse
+from painel.api import Sources, Voice
+from painel.api import LLMUnavailable as PainelLLMIndisponivel
 from painel.api import router as painel_router
-from painel.nagger import Cobrador
-from painel.meter import Medidor
-from painel.notifier import Notificador
-from rotinas.api import LLMIndisponivel
+from painel.nagger import Nagger
+from painel.meter import Meter
+from painel.notifier import Notifier
+from rotinas.api import LLMUnavailable
 from rotinas.api import router as rotinas_router
-from rotinas.board import Quadro
+from rotinas.board import Frame
 from saude.api import router as saude_router
-from saude.workouts import Treinos
+from saude.workouts import Workouts
 from shared.claude_code import claude_json, rewrite
 from shared.ngspice import run_ngspice
 from youtube.api import router as youtube_router
@@ -105,33 +105,33 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             stale_after=settings.worker_stale_after_seconds,
         )
     )
-    tarefas = [sweeper_task]
+    tasks = [sweeper_task]
     if settings.painel_ntfy_url:
-        notificador = Notificador(
+        notifier = Notifier(
             app.state.cobrador,
             app.state.quadro.listar,
             settings.painel_ntfy_url,
             settings.painel_ntfy_token.get_secret_value(),
             extras=lambda: app.state.concursos.alertas() + app.state.concursos_rumores.alertas(),
         )
-        intervalo = 60 * settings.painel_cobranca_minutos
-        tarefas.append(asyncio.create_task(notificador.rodar(intervalo)))
+        interval = 60 * settings.painel_cobranca_minutos
+        tasks.append(asyncio.create_task(notifier.rodar(interval)))
     if settings.concursos_radar_horas > 0:
         radar = app.state.concursos_radar
-        tarefas.append(asyncio.create_task(radar.rodar(3600 * settings.concursos_radar_horas)))
+        tasks.append(asyncio.create_task(radar.rodar(3600 * settings.concursos_radar_horas)))
         # rumores acompanhados: o Claude procura novidades 1x por dia
-        rumores = app.state.concursos_rumores
-        tarefas.append(asyncio.create_task(rumores.rodar(app.state.concursos_ia.executar, 86400)))
+        rumors = app.state.concursos_rumores
+        tasks.append(asyncio.create_task(rumors.rodar(app.state.concursos_ia.executar, 86400)))
     yield
-    for tarefa in tarefas:
-        tarefa.cancel()
+    for task in tasks:
+        task.cancel()
     logger.info("%s finalizado", settings.app_name)
 
 
 def _chat_llm(
     registry: WorkerRegistry,
     settings: Settings,
-    modelo_llm: ModeloLLM,
+    model_llm: ModelLLM,
     origem: str,
     timeout: float | None = None,
     pensar: bool = True,
@@ -144,20 +144,20 @@ def _chat_llm(
     para ~2 s.
     """
 
-    async def chat(mensagens: list[dict[str, str]]) -> str:
-        modelo = modelo_llm.atual or None
-        worker = registry.pick_worker(modelo)
+    async def chat(messages: list[dict[str, str]]) -> str:
+        model = model_llm.atual or None
+        worker = registry.pick_worker(model)
         if worker is None:
-            raise LLMIndisponivel("Nenhum worker de LLM conectado. Ligue o Worker no PC.")
-        payload: dict[str, object] = {"messages": mensagens}
+            raise LLMUnavailable("Nenhum worker de LLM conectado. Ligue o Worker no PC.")
+        payload: dict[str, object] = {"messages": messages}
         if not pensar:
             payload["chat_template_kwargs"] = {"enable_thinking": False}
         if max_tokens:
             payload["max_tokens"] = max_tokens
-        if modelo:
-            payload["model"] = modelo
+        if model:
+            payload["model"] = model
         try:
-            resposta = await registry.send_chat_request(
+            answer = await registry.send_chat_request(
                 worker,
                 str(uuid4()),
                 payload,
@@ -165,56 +165,56 @@ def _chat_llm(
                 origem,
             )
         except TimeoutError as e:
-            raise LLMIndisponivel("O worker não respondeu a tempo.") from e
+            raise LLMUnavailable("O worker não respondeu a tempo.") from e
         except (WorkerDisconnected, WorkerRespondedWithError) as e:
-            raise LLMIndisponivel(str(e)) from e
-        return str(resposta["choices"][0]["message"]["content"]).strip()
+            raise LLMUnavailable(str(e)) from e
+        return str(answer["choices"][0]["message"]["content"]).strip()
 
     return chat
 
 
-def _contexto_saude(estado: Any) -> Callable[[date, date], str]:
+def _context_health(estado: Any) -> Callable[[date, date], str]:
     """Dados dos outros módulos no período, para a análise de saúde cruzar com sono e atividade."""
 
     def contexto(de: date, ate: date) -> str:
         d1, d2 = de.isoformat(), ate.isoformat()
-        partes: list[str] = []
+        parts: list[str] = []
         with contextlib.suppress(Exception):
             gastos: dict[str, float] = {}
             for t in estado.financas.todos("transacoes"):
-                dia = str(t.get("data") or "")[:10]
-                if d1 <= dia <= d2 and (t.get("valor") or 0) < 0:
-                    gastos[dia] = gastos.get(dia, 0) - t["valor"]
+                day = str(t.get("data") or "")[:10]
+                if d1 <= day <= d2 and (t.get("valor") or 0) < 0:
+                    gastos[day] = gastos.get(day, 0) - t["valor"]
             if gastos:
-                partes.append("## Gastos por dia (R$)")
-                partes += [f"- {d}: {v:.2f}" for d, v in sorted(gastos.items())]
+                parts.append("## Gastos por dia (R$)")
+                parts += [f"- {d}: {v:.2f}" for d, v in sorted(gastos.items())]
         with contextlib.suppress(Exception):
-            partes += ["## Rotinas (quadro de tarefas agora)", estado.quadro.contexto()[:2500]]
+            parts += ["## Rotinas (quadro de tarefas agora)", estado.quadro.contexto()[:2500]]
         with contextlib.suppress(Exception):
             lendo = estado.estudos.listar_leituras(status="lendo")
             if lendo:
-                partes.append("## Estudos: lendo agora")
-                partes += [f"- {x['titulo']}" for x in lendo[:10]]
-        return "\n".join(partes)
+                parts.append("## Estudos: lendo agora")
+                parts += [f"- {x['titulo']}" for x in lendo[:10]]
+        return "\n".join(parts)
 
     return contexto
 
 
-def _llms_painel(
-    local: Callable[[list[dict[str, str]]], Awaitable[str]], settings: Settings, medidor: Medidor
+def _llms_panel(
+    local: Callable[[list[dict[str, str]]], Awaitable[str]], settings: Settings, meter: Meter
 ) -> dict[str, Callable[[list[dict[str, str]]], Awaitable[str]]]:
     """Provedores do chat do cobrador: só o worker local (Claude só via `claude -p` no worker)."""
 
-    async def via_worker(mensagens: list[dict[str, str]]) -> str:
+    async def via_worker(messages: list[dict[str, str]]) -> str:
         try:
-            return await local(mensagens)
-        except LLMIndisponivel as e:
+            return await local(messages)
+        except LLMUnavailable as e:
             raise PainelLLMIndisponivel(str(e)) from e
 
     return {"local": via_worker}
 
 
-def _simulacoes_eletronica(registry: WorkerRegistry, settings: Settings) -> Simulacoes:
+def _simulations_electronics(registry: WorkerRegistry, settings: Settings) -> Simulations:
     """Simulação SPICE como tarefa do worker (`simular_spice`); sem worker, ngspice no backend."""
     timeout = settings.eletronica_simulacao_timeout_s
 
@@ -242,10 +242,10 @@ def _simulacoes_eletronica(registry: WorkerRegistry, settings: Settings) -> Simu
         except TimeoutError as e:
             raise RuntimeError("O worker não respondeu a tempo.") from e
 
-    return Simulacoes(executar, disponivel)
+    return Simulations(executar, disponivel)
 
 
-def _reescrita_arquivos(registry: WorkerRegistry) -> Reescrita:
+def _rewrite_files(registry: WorkerRegistry) -> Rewrite:
     """Reescrita pelo Claude Code (tarefa `reescrever` do worker, com a assinatura do PC); sem
     worker, o `claude` deste computador. Nunca a API da Anthropic."""
 
@@ -254,36 +254,36 @@ def _reescrita_arquivos(registry: WorkerRegistry) -> Reescrita:
             return "Nenhum worker conectado. Ligue o Worker no PC (com o Claude Code logado)."
         return None
 
-    async def executar(pedido: dict[str, object]) -> dict[str, object]:
+    async def executar(request: dict[str, object]) -> dict[str, object]:
         worker = registry.pick_worker(None)
         if worker is None:
-            return await rewrite(pedido)
+            return await rewrite(request)
         try:
             return await registry.send_chat_request(
-                worker, str(uuid4()), {**pedido, "task": "reescrever"}, 295, "Arquivos (reescrita)"
+                worker, str(uuid4()), {**request, "task": "reescrever"}, 295, "Arquivos (reescrita)"
             )
         except TimeoutError as e:
             raise RuntimeError("O worker não respondeu a tempo.") from e
         except (WorkerDisconnected, WorkerRespondedWithError) as e:
             raise RuntimeError(str(e)) from e
 
-    async def executar_json(pedido: dict[str, Any]) -> dict[str, Any]:
-        limite = float(pedido.get("limite_s", 280))
+    async def executar_json(request: dict[str, Any]) -> dict[str, Any]:
+        limit = float(request.get("limite_s", 280))
         worker = registry.pick_worker(None)
         if worker is None:
             return await claude_json(
-                str(pedido["prompt"]),
-                str(pedido["sistema"]),
-                pedido["esquema"],
-                timeout_s=limite,
-                effort=str(pedido.get("effort") or "high"),
+                str(request["prompt"]),
+                str(request["sistema"]),
+                request["esquema"],
+                timeout_s=limit,
+                effort=str(request.get("effort") or "high"),
             )
         try:
             return await registry.send_chat_request(
                 worker,
                 str(uuid4()),
-                {**pedido, "task": "claude_json"},
-                limite + 30,
+                {**request, "task": "claude_json"},
+                limit + 30,
                 "Arquivos (tradução)",
             )
         except TimeoutError as e:
@@ -291,10 +291,10 @@ def _reescrita_arquivos(registry: WorkerRegistry) -> Reescrita:
         except (WorkerDisconnected, WorkerRespondedWithError) as e:
             raise RuntimeError(str(e)) from e
 
-    return Reescrita(executar, disponivel, executar_json)
+    return Rewrite(executar, disponivel, executar_json)
 
 
-def _concursos_ia(registry: WorkerRegistry) -> ConcursosIA:
+def _exams_ai(registry: WorkerRegistry) -> ConcursosIA:
     """Plano de estudos pelo Claude Code (tarefa `claude_json` do worker, assinatura do PC); sem
     worker, o `claude` deste computador. Nunca a API da Anthropic."""
 
@@ -303,24 +303,24 @@ def _concursos_ia(registry: WorkerRegistry) -> ConcursosIA:
             return "Nenhum worker conectado. Ligue o Worker no PC (com o Claude Code logado)."
         return None
 
-    async def executar(pedido: dict[str, Any]) -> dict[str, Any]:
-        limite = float(pedido.get("limite_s", 280))
+    async def executar(request: dict[str, Any]) -> dict[str, Any]:
+        limit = float(request.get("limite_s", 280))
         worker = registry.pick_worker(None)
         if worker is None:
             return await claude_json(
-                str(pedido["prompt"]),
-                str(pedido["sistema"]),
-                pedido["esquema"],
-                timeout_s=limite,
-                effort=str(pedido.get("effort") or "high"),
-                tools=str(pedido.get("ferramentas") or ""),
+                str(request["prompt"]),
+                str(request["sistema"]),
+                request["esquema"],
+                timeout_s=limit,
+                effort=str(request.get("effort") or "high"),
+                tools=str(request.get("ferramentas") or ""),
             )
         try:
             return await registry.send_chat_request(
                 worker,
                 str(uuid4()),
-                {**pedido, "task": "claude_json"},
-                limite + 30,
+                {**request, "task": "claude_json"},
+                limit + 30,
                 "Concursos (plano)",
             )
         except TimeoutError as e:
@@ -331,15 +331,15 @@ def _concursos_ia(registry: WorkerRegistry) -> ConcursosIA:
     return ConcursosIA(executar, disponivel)
 
 
-def _executor_codigo(registry: WorkerRegistry, sessoes: Sessoes) -> ExecutorCodigo:
+def _executor_code(registry: WorkerRegistry, sessions: Sessions) -> ExecutorCodigo:
     """Tarefas `codigo.*` no worker do PC (Claude Code logado lá, dentro do repositório); as
     etapas voltam pelo canal `codigo` e entram na aba."""
 
     def ao_evento(dados: dict[str, Any]) -> None:
         dados = dict(dados)
         # Aba excluída enquanto o Claude terminava: a etapa é descartada.
-        with contextlib.suppress(SessaoNaoEncontrada):
-            sessoes.adicionar(str(dados.pop("sessao_id", "")), dados)
+        with contextlib.suppress(SessionNotFound):
+            sessions.adicionar(str(dados.pop("sessao_id", "")), dados)
 
     registry.ouvintes["codigo"] = ao_evento
 
@@ -348,13 +348,13 @@ def _executor_codigo(registry: WorkerRegistry, sessoes: Sessoes) -> ExecutorCodi
             return "Nenhum worker conectado. Ligue o Worker no PC (com o Claude Code logado)."
         return None
 
-    async def pedir(tarefa: str, payload: dict[str, Any]) -> dict[str, Any]:
+    async def pedir(task: str, payload: dict[str, Any]) -> dict[str, Any]:
         worker = registry.pick_worker(None)
         if worker is None:
             raise RuntimeError(disponivel() or "")
         try:
             return await registry.send_chat_request(
-                worker, str(uuid4()), {**payload, "task": tarefa}, 60, "Código"
+                worker, str(uuid4()), {**payload, "task": task}, 60, "Código"
             )
         except TimeoutError as e:
             raise RuntimeError("O worker não respondeu a tempo.") from e
@@ -364,17 +364,17 @@ def _executor_codigo(registry: WorkerRegistry, sessoes: Sessoes) -> ExecutorCodi
     return ExecutorCodigo(pedir, disponivel)
 
 
-def _buscar_no_pc(registry: WorkerRegistry) -> Any:
+def _fetch_on_pc(registry: WorkerRegistry) -> Any:
     """Busca na web pelo worker (IP de casa, que os buscadores não barram como o da VPS).
     None se não houver worker ou ele falhar: aí a VPS tenta sozinha."""
 
-    async def buscar(consulta: str) -> dict[str, Any] | None:
+    async def buscar(query: str) -> dict[str, Any] | None:
         worker = registry.pick_worker(None)
         if worker is None:
             return None
         try:
             r = await registry.send_chat_request(
-                worker, str(uuid4()), {"task": "buscar_web", "consulta": consulta}, 40, "Busca"
+                worker, str(uuid4()), {"task": "buscar_web", "consulta": query}, 40, "Busca"
             )
         except (TimeoutError, WorkerDisconnected, WorkerRespondedWithError) as e:
             logger.info("Busca pelo PC falhou (%s); tentando pela VPS", e)
@@ -384,7 +384,7 @@ def _buscar_no_pc(registry: WorkerRegistry) -> Any:
     return buscar
 
 
-def _acoes_modulos(estado: Any) -> dict[str, Any]:
+def _actions_modules(estado: Any) -> dict[str, Any]:
     """O que o Cobrador consegue criar nos outros módulos pelo chat (ver `painel.agent`)."""
     from design import flows
 
@@ -397,13 +397,13 @@ def _acoes_modulos(estado: Any) -> dict[str, Any]:
         return f"Quadro criado no Design: {q['titulo']}"
 
     async def fluxograma(a: dict[str, Any], llm: Any) -> str:
-        pedido = str(a.get("descricao") or a.get("titulo") or "")
-        fluxo = await flows.gerar(llm, pedido)
-        titulo = str(a.get("titulo") or fluxo.get("titulo") or "Fluxograma")[:200]
+        request = str(a.get("descricao") or a.get("titulo") or "")
+        flow = await flows.generate(llm, request)
+        title = str(a.get("titulo") or flow.get("titulo") or "Fluxograma")[:200]
         q = estado.quadros_design.criar(
-            {"titulo": titulo, "elementos": flows.elementos(fluxo, uuid4().hex[:8])}
+            {"titulo": title, "elementos": flows.elements(flow, uuid4().hex[:8])}
         )
-        return f"Fluxograma criado no Design: {q['titulo']} ({len(fluxo['nos'])} blocos)"
+        return f"Fluxograma criado no Design: {q['titulo']} ({len(flow['nos'])} blocos)"
 
     async def projeto(a: dict[str, Any], _llm: Any) -> str:
         secoes = [str(x)[:200] for x in a.get("secoes") or []][:30]
@@ -417,14 +417,14 @@ def _acoes_modulos(estado: Any) -> dict[str, Any]:
         return f"Projeto de estudo criado: {p['nome']}"
 
     async def leitura(a: dict[str, Any], _llm: Any) -> str:
-        dados = {
+        data = {
             "titulo": str(a["titulo"])[:300],
             "autor": str(a.get("autor") or "")[:200],
             "area": str(a.get("area") or "Geral")[:60],
             # `tipo` é o da ação; o do texto vem em `tipo_texto`
             "tipo": a.get("tipo_texto") if a.get("tipo_texto") in ("livro", "artigo") else "livro",
         }
-        x = estado.estudos.criar_leitura(dados)
+        x = estado.estudos.criar_leitura(data)
         return f"Leitura adicionada em Estudos: {x['titulo']}"
 
     return {
@@ -447,7 +447,7 @@ def _acoes_modulos(estado: Any) -> dict[str, Any]:
     }
 
 
-def _voz_painel(registry: WorkerRegistry, settings: Settings) -> Voz:
+def _voice_panel(registry: WorkerRegistry, settings: Settings) -> Voice:
     """Transcrição e fala do cobrador como tarefas do worker (`payload.task`)."""
 
     async def tarefa(payload: dict[str, object]) -> dict[str, object]:
@@ -467,25 +467,25 @@ def _voz_painel(registry: WorkerRegistry, settings: Settings) -> Voz:
         except (WorkerDisconnected, WorkerRespondedWithError) as e:
             raise PainelLLMIndisponivel(str(e)) from e
 
-    async def transcrever(audio: bytes, mime: str, idioma: str) -> str:
+    async def transcrever(audio: bytes, mime: str, language: str) -> str:
         r = await tarefa(
             {
                 "task": "transcrever",
                 "audio_b64": base64.b64encode(audio).decode(),
                 "mime": mime,
-                "idioma": idioma,
+                "idioma": language,
             }
         )
         return str(r["texto"])
 
-    async def falar(texto: str, trecho: int | None = None) -> bytes:
-        pedido: dict[str, Any] = {"task": "falar", "texto": texto}
-        if trecho is not None:
-            pedido["trecho"] = trecho
-        r = await tarefa(pedido)
+    async def falar(text: str, span: int | None = None) -> bytes:
+        request: dict[str, Any] = {"task": "falar", "texto": text}
+        if span is not None:
+            request["trecho"] = span
+        r = await tarefa(request)
         return base64.b64decode(str(r["audio_b64"]))
 
-    return Voz(transcrever, falar)
+    return Voice(transcrever, falar)
 
 
 def _json_local(
@@ -494,41 +494,41 @@ def _json_local(
     """O mesmo pedido do `claude_json` (prompt, sistema, esquema) pela LLM local: a tradução do
     leitor dos Arquivos não passa pelo Claude."""
 
-    async def executar(pedido: dict[str, Any]) -> dict[str, Any]:
-        sistema = (
-            f"{pedido['sistema']}\n\nResponda SOMENTE com um objeto JSON válido neste esquema:\n"
-            f"{json.dumps(pedido['esquema'], ensure_ascii=False)}"
+    async def executar(request: dict[str, Any]) -> dict[str, Any]:
+        system = (
+            f"{request['sistema']}\n\nResponda SOMENTE com um objeto JSON válido neste esquema:\n"
+            f"{json.dumps(request['esquema'], ensure_ascii=False)}"
         )
-        mensagens = [
-            {"role": "system", "content": sistema},
-            {"role": "user", "content": str(pedido["prompt"])},
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": str(request["prompt"])},
         ]
         try:
-            resposta = await chat(mensagens)
+            answer = await chat(messages)
             try:
-                return extrair_json(resposta)
-            except Invalido:
-                mensagens += [
-                    {"role": "assistant", "content": resposta[:3000]},
+                return extract_json(answer)
+            except Invalid:
+                messages += [
+                    {"role": "assistant", "content": answer[:3000]},
                     {"role": "user", "content": "Responda de novo SOMENTE com o JSON."},
                 ]
-                return extrair_json(await chat(mensagens))
-        except (LLMIndisponivel, Invalido) as e:
+                return extract_json(await chat(messages))
+        except (LLMUnavailable, Invalid) as e:
             raise RuntimeError(str(e)) from e
 
     return executar
 
 
-def _linguagem(app: FastAPI, settings: Settings) -> Linguagem:
+def _language(app: FastAPI, settings: Settings) -> Language:
     """Estudos › Linguagem: LLM local sem raciocínio (respostas em segundos) e a voz do worker
     (`falar_marcado`, `avaliar_leitura`). Nunca o Claude."""
     registry: WorkerRegistry = app.state.worker_registry
     local = _chat_llm(registry, settings, app.state.modelo_llm, "Estudos (idiomas)", 600, False)
 
-    async def chat(mensagens: list[dict[str, str]]) -> str:
+    async def chat(messages: list[dict[str, str]]) -> str:
         try:
-            return await local(mensagens)
-        except LLMIndisponivel as e:
+            return await local(messages)
+        except LLMUnavailable as e:
             raise RuntimeError(str(e)) from e
 
     async def tarefa(nome: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -544,44 +544,44 @@ def _linguagem(app: FastAPI, settings: Settings) -> Linguagem:
         except (WorkerDisconnected, WorkerRespondedWithError) as e:
             raise RuntimeError(str(e)) from e
 
-    return Linguagem(
+    return Language(
         settings.estudos_dir,
         chat=chat,
         worker=tarefa,
-        texto_do_arquivo=lambda id_: texto_do_documento(app.state.biblioteca, id_),
+        texto_do_arquivo=lambda id_: text_of_document(app.state.biblioteca, id_),
         somar_minutos=app.state.estudos.somar_minutos,
     )
 
 
-def _ligar_pc(settings: Settings) -> None:
+def _enable_pc(settings: Settings) -> None:
     """Wake-on-LAN pela internet: magic packet (6×FF + MAC 16×) em UDP para o DDNS de casa."""
-    destino = settings.wol_destino
-    if not destino:
-        arquivo = Path(settings.wol_ip_arquivo).expanduser()
-        destino = arquivo.read_text().strip() if arquivo.is_file() else ""
-    if not destino:
+    destination = settings.wol_destino
+    if not destination:
+        file = Path(settings.wol_ip_arquivo).expanduser()
+        destination = file.read_text().strip() if file.is_file() else ""
+    if not destination:
         raise RuntimeError("IP de casa desconhecido: ligue o PC uma vez para o worker registrá-lo.")
-    pacote = b"\xff" * 6 + bytes.fromhex(settings.wol_mac.replace(":", "")) * 16
+    package = b"\xff" * 6 + bytes.fromhex(settings.wol_mac.replace(":", "")) * 16
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        s.sendto(pacote, (destino, settings.wol_porta))
+        s.sendto(package, (destination, settings.wol_porta))
 
 
-def _pc_painel(
+def _pc_panel(
     registry: WorkerRegistry, settings: Settings
 ) -> Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]:
     """Comandos no PC (tarefa `pc` do worker): abrir site/programa, pesquisar, desligar; ligar vai
     por Wake-on-LAN, já que com o PC desligado não há worker."""
 
-    async def pc(pedido: dict[str, Any]) -> dict[str, Any]:
-        if pedido.get("acao") == "ligar":
-            await asyncio.to_thread(_ligar_pc, settings)
+    async def pc(request: dict[str, Any]) -> dict[str, Any]:
+        if request.get("acao") == "ligar":
+            await asyncio.to_thread(_enable_pc, settings)
             return {"detalhe": "Sinal de ligar enviado; o PC deve ligar em instantes."}
         worker = registry.pick_worker(None)
         if worker is None:
             raise RuntimeError("Nenhum worker conectado: o PC está desligado ou o Worker parado.")
         try:
             return await registry.send_chat_request(
-                worker, str(uuid4()), {**pedido, "task": "pc"}, 30, "Painel (PC)"
+                worker, str(uuid4()), {**request, "task": "pc"}, 30, "Painel (PC)"
             )
         except TimeoutError as e:
             raise RuntimeError("O worker não respondeu a tempo.") from e
@@ -612,34 +612,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.worker_registry = WorkerRegistry()
-    app.state.tentativas_login = Tentativas()
+    app.state.tentativas_login = Attempts()
     # jti da sessão → hora do último código do Authenticator confirmado (módulo Código).
     app.state.totp_confirmacoes = {}
-    app.state.cofre = Cofre(settings.notas_dir)
-    app.state.biblioteca = Biblioteca(
+    app.state.cofre = Vault(settings.notas_dir)
+    app.state.biblioteca = Collection(
         settings.arquivos_dir, settings.soffice_bin, settings.pdftoppm_bin
     )
-    app.state.concursos = Concursos(settings.concursos_dir)
-    app.state.concursos_ia = _concursos_ia(app.state.worker_registry)
-    app.state.vagas = Vagas(settings.concursos_dir)
-    app.state.quadro = Quadro(settings.rotinas_dir)
-    app.state.modelo_llm = ModeloLLM(settings.llm_config, settings.rotinas_modelo)
+    app.state.concursos = Exams(settings.concursos_dir)
+    app.state.concursos_ia = _exams_ai(app.state.worker_registry)
+    app.state.vagas = Slots(settings.concursos_dir)
+    app.state.quadro = Frame(settings.rotinas_dir)
+    app.state.modelo_llm = ModelLLM(settings.llm_config, settings.rotinas_modelo)
     app.state.rotinas_llm = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Rotinas"
     )
-    app.state.quadros_design = Quadros(settings.design_dir)
-    app.state.wireframes_design = Quadros(settings.design_dir, "wireframes", TIPOS_WIREFRAME)
-    app.state.cadernos_design = Quadros(settings.design_dir, "cadernos")
-    app.state.imagens_design = Imagens(
+    app.state.quadros_design = Frames(settings.design_dir)
+    app.state.wireframes_design = Frames(settings.design_dir, "wireframes", TIPOS_WIREFRAME)
+    app.state.cadernos_design = Frames(settings.design_dir, "cadernos")
+    app.state.imagens_design = Images(
         settings.design_dir, settings.google_busca_chave, settings.google_busca_cx
     )
     app.state.bibliotecas_eletronica = BibliotecasEletronica(settings.eletronica_dir)
-    app.state.projetos_eletronica = Projetos(
+    app.state.projetos_eletronica = Projects(
         settings.eletronica_dir, app.state.bibliotecas_eletronica.obter
     )
     app.state.eletronica_kicad_versao = settings.eletronica_kicad_versao
-    app.state.simulacoes_eletronica = _simulacoes_eletronica(app.state.worker_registry, settings)
-    app.state.reescrita = _reescrita_arquivos(app.state.worker_registry)
+    app.state.simulacoes_eletronica = _simulations_electronics(app.state.worker_registry, settings)
+    app.state.reescrita = _rewrite_files(app.state.worker_registry)
     app.state.reescrita.traducao_json = _json_local(
         _chat_llm(
             app.state.worker_registry,
@@ -650,24 +650,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             pensar=False,
         )
     )
-    app.state.sessoes_codigo = Sessoes(settings.codigo_dir)
-    app.state.executor_codigo = _executor_codigo(
+    app.state.sessoes_codigo = Sessions(settings.codigo_dir)
+    app.state.executor_codigo = _executor_code(
         app.state.worker_registry, app.state.sessoes_codigo
     )
-    app.state.treinos = Treinos(settings.saude_dir, settings.saude_baixar_imagens)
+    app.state.treinos = Workouts(settings.saude_dir, settings.saude_baixar_imagens)
     # dados de saúde são pessoais: só a LLM local, nunca o Claude
     app.state.saude_llm = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Saúde", timeout=600
     )
-    app.state.saude_contexto = _contexto_saude(app.state)
-    app.state.financas = Armazem(settings.financas_dir)
-    app.state.estudos = Estudos(
+    app.state.saude_contexto = _context_health(app.state)
+    app.state.financas = Warehouse(settings.financas_dir)
+    app.state.estudos = Studies(
         settings.estudos_dir, marcacoes=app.state.biblioteca.marcacoes_do_projeto
     )
-    app.state.linguagem = _linguagem(app, settings)
+    app.state.linguagem = _language(app, settings)
     app.state.youtube = Youtube(app.state.cofre, settings.youtube_vault)
-    app.state.cobrador = Cobrador(settings.painel_dir, settings.painel_fuso)
-    app.state.painel_fontes = Fontes(
+    app.state.cobrador = Nagger(settings.painel_dir, settings.painel_fuso)
+    app.state.painel_fontes = Sources(
         tarefas=app.state.quadro.listar,
         buscar_notas=lambda q: app.state.cofre.listar(q),
         ler_nota=app.state.cofre.obter,
@@ -675,12 +675,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         criar_tarefa=app.state.quadro.criar,
         mover_tarefa=app.state.quadro.mover,
     )
-    app.state.painel_fontes.modulos = _acoes_modulos(app.state)
-    app.state.medidor = Medidor(settings.painel_dir)
+    app.state.painel_fontes.modulos = _actions_modules(app.state)
+    app.state.medidor = Meter(settings.painel_dir)
     app.state.worker_registry.ao_medir = app.state.medidor.registrar
     app.state.painel_workers = app.state.worker_registry.descrever
     # Cobrador (texto e voz): sem raciocínio e com teto de tokens, para responder em segundos.
-    painel_local = _chat_llm(
+    panel_local = _chat_llm(
         app.state.worker_registry,
         settings,
         app.state.modelo_llm,
@@ -688,33 +688,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         pensar=False,
         max_tokens=2048,
     )
-    app.state.painel_llms = _llms_painel(painel_local, settings, app.state.medidor)
+    app.state.painel_llms = _llms_panel(panel_local, settings, app.state.medidor)
     # Fluxo a partir de código grande pode levar minutos no LLM local (a resposta é por tarefa).
     design_local = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Design", timeout=600
     )
-    app.state.design_llms = _llms_painel(design_local, settings, app.state.medidor)
+    app.state.design_llms = _llms_panel(design_local, settings, app.state.medidor)
     financas_local = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Finanças", timeout=600
     )
-    app.state.financas_llms = _llms_painel(financas_local, settings, app.state.medidor)
+    app.state.financas_llms = _llms_panel(financas_local, settings, app.state.medidor)
     # Conversa dos Cenários (texto/voz): sem raciocínio, para responder em segundos.
     financas_rapido = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Finanças", pensar=False
     )
-    app.state.financas_llms["local_rapido"] = _llms_painel(
+    app.state.financas_llms["local_rapido"] = _llms_panel(
         financas_rapido, settings, app.state.medidor
     )["local"]
     # Dados em tempo real (FIPE, moedas, ações, BC, busca) para a IA local dos módulos.
-    app.state.internet = Internet(buscar_no_pc=_buscar_no_pc(app.state.worker_registry))
+    app.state.internet = Internet(buscar_no_pc=_fetch_on_pc(app.state.worker_registry))
     # Concursos: LLM local sem raciocínio extrai dados do radar e classifica materiais
     app.state.concursos_llm = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Concursos", 600, pensar=False
     )
     internet = app.state.internet
 
-    async def concursos_busca(consulta: str) -> dict[str, Any]:
-        return await internet.usar("buscar_web", {"consulta": consulta})
+    async def concursos_busca(query: str) -> dict[str, Any]:
+        return await internet.usar("buscar_web", {"consulta": query})
 
     app.state.concursos_busca = concursos_busca
     app.state.concursos_radar = Radar(
@@ -722,14 +722,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.concursos_llm,
         (settings.concursos_origem_cidade, settings.concursos_origem_uf),
     )
-    app.state.concursos_rumores = Rumores(settings.concursos_dir)
+    app.state.concursos_rumores = Rumors(settings.concursos_dir)
     # o mapa das vagas usa os municípios (IBGE) já baixados pelo radar
     app.state.vagas.geo = app.state.concursos_radar.geo
-    app.state.painel_voz = _voz_painel(app.state.worker_registry, settings)
-    app.state.painel_pc = _pc_painel(app.state.worker_registry, settings)
+    app.state.painel_voz = _voice_panel(app.state.worker_registry, settings)
+    app.state.painel_pc = _pc_panel(app.state.worker_registry, settings)
 
     app.add_middleware(RequestIdMiddleware)
-    app.add_middleware(CabecalhosSegurancaMiddleware, hsts=settings.environment == "production")
+    app.add_middleware(HeadersSecurityMiddleware, hsts=settings.environment == "production")
     # Autenticação é por cabeçalho Bearer, não por cookie: sem credenciais no CORS.
     app.add_middleware(
         CORSMiddleware,
@@ -804,7 +804,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         codigo_router,
         prefix="/api/codigo",
         # Comandos no PC: além do token, um código do Authenticator recente (ver deps).
-        dependencies=[Depends(require_client_api_key), Depends(exigir_totp_recente)],
+        dependencies=[Depends(require_client_api_key), Depends(require_totp_recent)],
     )
     app.include_router(
         painel_router, prefix="/api/painel", dependencies=[Depends(require_client_api_key)]

@@ -6,7 +6,7 @@ from worker.providers.llamacpp import LlamaCppProvider
 from worker.ws_client import WorkerClient
 
 
-async def _rodar() -> None:
+async def _run() -> None:
     settings = get_settings()
     provider = LlamaCppProvider(
         binario=settings.llama_server_bin,
@@ -24,7 +24,7 @@ async def _rodar() -> None:
 def run() -> None:
     """Entrypoint usado por `python -m worker.main` / script de desenvolvimento."""
     configure_logging(get_settings())
-    asyncio.run(_rodar())
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

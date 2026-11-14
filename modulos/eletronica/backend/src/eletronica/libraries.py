@@ -14,11 +14,11 @@ from typing import Any
 
 from eletronica.library import POR_ID
 
-_NOME = re.compile(r"^[A-Za-z0-9_.+-]{1,80}$")
+_NAME = re.compile(r"^[A-Za-z0-9_.+-]{1,80}$")
 _CACHE = 6  # bibliotecas completas guardadas na memória
 
 # Bibliotecas oficiais do KiCad que mais servem para PC, celular, monitor/TV e som.
-SUGERIDAS = [
+SUGGESTED = [
     "Device",
     "power",
     "Connector",
@@ -71,20 +71,20 @@ SUGERIDAS = [
 ]
 
 
-class NaoEncontrada(Exception):
+class LibraryNotFound(Exception):
     pass
 
 
-class NomeInvalido(Exception):
+class NameInvalid(Exception):
     pass
 
 
-def _agora() -> str:
+def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def _entrada_indice(s: dict[str, Any]) -> dict[str, Any]:
-    texto = " ".join(
+def _input_index(s: dict[str, Any]) -> dict[str, Any]:
+    text = " ".join(
         [s["id"], s["nome"], s["valor"], s.get("descricao", ""), s.get("palavras", "")]
     )
     return {
@@ -92,26 +92,26 @@ def _entrada_indice(s: dict[str, Any]) -> dict[str, Any]:
         "nome": s["nome"],
         "valor": s["valor"],
         "descricao": s.get("descricao", ""),
-        "busca": texto.lower(),
+        "busca": text.lower(),
     }
 
 
-class Bibliotecas:
-    def __init__(self, raiz: str | Path) -> None:
-        self.raiz = Path(raiz).expanduser() / "bibliotecas"
+class Libraries:
+    def __init__(self, root: str | Path) -> None:
+        self.raiz = Path(root).expanduser() / "bibliotecas"
         self.raiz.mkdir(parents=True, exist_ok=True)
         self._trava = threading.RLock()
         self._indices: dict[str, dict[str, Any]] = {}
         self._cheias: OrderedDict[str, dict[str, dict[str, Any]]] = OrderedDict()
-        for arq in self.raiz.glob("*.indice.json"):
-            self._indices[arq.name.removesuffix(".indice.json")] = json.loads(
-                arq.read_text("utf-8")
+        for file in self.raiz.glob("*.indice.json"):
+            self._indices[file.name.removesuffix(".indice.json")] = json.loads(
+                file.read_text("utf-8")
             )
 
     @staticmethod
     def validar_nome(nome: str) -> str:
-        if not _NOME.match(nome):
-            raise NomeInvalido(f"Nome de biblioteca inválido: {nome!r}")
+        if not _NAME.match(nome):
+            raise NameInvalid(f"Nome de biblioteca inválido: {nome!r}")
         return nome
 
     def _gravar(self, caminho: Path, dados: Any) -> None:
@@ -119,22 +119,22 @@ class Bibliotecas:
         tmp.write_text(json.dumps(dados, ensure_ascii=False, separators=(",", ":")), "utf-8")
         os.replace(tmp, caminho)
 
-    def guardar(self, nome: str, simbolos: list[dict[str, Any]], origem: str) -> dict[str, Any]:
+    def guardar(self, nome: str, symbols: list[dict[str, Any]], origem: str) -> dict[str, Any]:
         """Cria ou troca a biblioteca [nome] (reimportar atualiza)."""
         self.validar_nome(nome)
-        indice = {
+        index = {
             "nome": nome,
             "origem": origem,
-            "importado": _agora(),
-            "total": len(simbolos),
-            "simbolos": [_entrada_indice(s) for s in simbolos],
+            "importado": _now(),
+            "total": len(symbols),
+            "simbolos": [_input_index(s) for s in symbols],
         }
         with self._trava:
-            self._gravar(self.raiz / f"{nome}.json", simbolos)
-            self._gravar(self.raiz / f"{nome}.indice.json", indice)
-            self._indices[nome] = indice
+            self._gravar(self.raiz / f"{nome}.json", symbols)
+            self._gravar(self.raiz / f"{nome}.indice.json", index)
+            self._indices[nome] = index
             self._cheias.pop(nome, None)
-        return self._resumo(indice)
+        return self._resumo(index)
 
     @staticmethod
     def _resumo(indice: dict[str, Any]) -> dict[str, Any]:
@@ -149,7 +149,7 @@ class Bibliotecas:
     def remover(self, nome: str) -> None:
         with self._trava:
             if nome not in self._indices:
-                raise NaoEncontrada(nome)
+                raise LibraryNotFound(nome)
             del self._indices[nome]
             self._cheias.pop(nome, None)
             (self.raiz / f"{nome}.json").unlink(missing_ok=True)
@@ -160,8 +160,8 @@ class Bibliotecas:
             if nome in self._cheias:
                 self._cheias.move_to_end(nome)
                 return self._cheias[nome]
-            simbolos = json.loads((self.raiz / f"{nome}.json").read_text("utf-8"))
-            cheia = {s["id"]: s for s in simbolos}
+            symbols = json.loads((self.raiz / f"{nome}.json").read_text("utf-8"))
+            cheia = {s["id"]: s for s in symbols}
             self._cheias[nome] = cheia
             while len(self._cheias) > _CACHE:
                 self._cheias.popitem(last=False)
@@ -180,22 +180,22 @@ class Bibliotecas:
         return [s for s in map(self.obter, dict.fromkeys(ids)) if s is not None]
 
     def buscar(
-        self, texto: str, biblioteca: str | None = None, limite: int = 60
+        self, text: str, collection: str | None = None, limite: int = 60
     ) -> list[dict[str, Any]]:
         """Símbolos importados com todas as palavras de [texto]; nome exato e começo do nome vêm
         antes."""
-        termos = texto.lower().split()
-        alvo = texto.strip().lower()
-        achados: list[tuple[int, str, str]] = []
+        terms = text.lower().split()
+        target = text.strip().lower()
+        found: list[tuple[int, str, str]] = []
         with self._trava:
-            indices = [self._indices[biblioteca]] if biblioteca in self._indices else []
-            if biblioteca is None:
-                indices = list(self._indices.values())
-            for indice in indices:
-                for e in indice["simbolos"]:
-                    if all(t in e["busca"] for t in termos):
-                        nome = e["nome"].lower()
-                        peso = 0 if nome == alvo else 1 if nome.startswith(alvo) else 2
-                        achados.append((peso, nome, e["id"]))
-        achados.sort()
-        return self.varios([i for _, _, i in achados[:limite]])
+            indexes = [self._indices[collection]] if collection in self._indices else []
+            if collection is None:
+                indexes = list(self._indices.values())
+            for index in indexes:
+                for e in index["simbolos"]:
+                    if all(t in e["busca"] for t in terms):
+                        name = e["nome"].lower()
+                        weight = 0 if name == target else 1 if name.startswith(target) else 2
+                        found.append((weight, name, e["id"]))
+        found.sort()
+        return self.varios([i for _, _, i in found[:limite]])
