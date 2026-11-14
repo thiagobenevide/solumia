@@ -1,5 +1,5 @@
 """Rotas do módulo Saúde. A plataforma monta o router em `/api/saude` com a autenticação e guarda
-os [Treinos] em `app.state.treinos`."""
+os [Treinos] em `app.state.workouts`."""
 
 import mimetypes
 from typing import Annotated, Any

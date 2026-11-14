@@ -1,5 +1,5 @@
 """Rotas do módulo Estudos. A plataforma monta o router em `/api/estudos` com a autenticação e
-guarda os [Estudos] em `app.state.estudos`. O grafo do conhecimento vem de `/api/notas/grafo`."""
+guarda os [Estudos] em `app.state.studies`. O grafo do conhecimento vem de `/api/notas/grafo`."""
 
 import unicodedata
 from typing import Annotated, Any
