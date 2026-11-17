@@ -7,6 +7,11 @@ import kotlin.math.ceil
 /** Session exercise, only with what the watch shows. */
 data class Exercise(
     val name: String,
+    /** Catalog id: the photo comes from `/api/saude/exercicios/{id}/imagem`. */
+    val exerciseId: String = "",
+    /** How to do it (catalog) and the coach's cue for this day (agenda item). */
+    val instructions: String = "",
+    val cue: String = "",
     val planned: Int,
     val doneSteps: Int,
     val repetitions: String,
@@ -93,6 +98,9 @@ data class Session(
                 }
                 Exercise(
                     name = e.getString("nome"),
+                    exerciseId = e.optString("exercicio_id"),
+                    instructions = e.optString("instrucoes"),
+                    cue = e.optString("observacao"),
                     planned = plan.getInt("series"),
                     doneSteps = series.length(),
                     repetitions = plan.getString("repeticoes"),

@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_text.dart';
 import '../core.dart';
 import '../plan.dart';
+import 'watch_install.dart';
 
 /// Solumia apps for phone/tablet, watch, PC and laptop (GitHub Releases, verified).
 class SolumiaAppsScreen extends StatefulWidget {
@@ -141,6 +142,12 @@ class _SolumiaAppsScreenState extends State<SolumiaAppsScreen> {
                 icon: const Icon(Icons.download),
                 label: Text(t.downloadToThisPc),
               ),
+              if (id == 'wear')
+                FilledButton.icon(
+                  onPressed: canInstall ? () => showWatchInstall(context, widget.core) : null,
+                  icon: const Icon(Icons.wifi),
+                  label: Text(t.watchInstallButton),
+                ),
               if (phone)
                 OutlinedButton.icon(
                   onPressed: url == null ? null : () => setState(() => _qr.contains(id) ? _qr.remove(id) : _qr.add(id)),

@@ -7,6 +7,8 @@
 #   - signs SHA256SUMS.txt with the release GPG key and creates the GitHub release.
 # Passwords are typed at a prompt (keystore) or in the gpg window: never in arguments or history.
 set -euo pipefail
+# Gradle client JVM: native-platform loads native code; Java 22+ warns (and will block) without this.
+export GRADLE_OPTS="${GRADLE_OPTS:-} --enable-native-access=ALL-UNNAMED"
 
 VERSION="${1:-}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "uso: $0 X.Y.Z" >&2; exit 2; }

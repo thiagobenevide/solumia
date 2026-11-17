@@ -70,6 +70,6 @@ def test_rejects_foreign_host_and_post_from_other_site():
 
 
 def test_accepts_local_origin_and_domain():
-    for origin in ("http://127.0.0.1:8765", "https://agent.thiagobenevide.com"):
+    for origin in ("http://127.0.0.1:8765", "https://solumialocal.thiagobenevide.com"):
         # Rota inexistente: 404 mostra que a trava deixou passar sem mexer na fila real.
         assert c.post("/nao-existe", headers={"origin": origin}).status_code == 404

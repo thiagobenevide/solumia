@@ -148,3 +148,14 @@ def test_proportional_bars_and_texts_stacked_in_layers():
     assert abs(alturas[1] / alturas[0] - 2) < 0.01  # a barra segue o valor
     y1, y2 = (float(re.search(rf'bloco\("{n}", "[xy]", [\d.]+, ([\d.]+)', js).group(1)) for n in ("T1", "T2"))
     assert y2 > y1  # textos da camada empilhados, não sobrepostos
+
+
+def test_number_keeps_its_unit_unless_another_text_shows_it():
+    doc = {"elementos": [{"tipo": "caixa", "nome": "palco", "filhos": [
+        {"tipo": "texto", "nome": "valor", "conteudo": "{{numero}}", "nivel": "numero"}]}],
+        "animacoes": [{"anim": "contar", "alvo": "valor", "t": 0.2}]}
+    js = N1.build(doc, _d(encaixes={"numero": "R$ 12 mil"}))
+    assert ".replace(/\\B(?=(\\d{3})+(?!\\d))/g, \".\") + n_e0.depois :" in js
+    assert re.search(r"contagem\(e0, .*n_e0\.antes, n_e0\.depois\);", js)
+    assert "contagem(e2, n_e2.n, n_e2.casas, 0.5, 1.44" in N1.build(DOC, _d())
+    assert re.search(r"contagem\(e2, .*n_e2\.antes, \"\"\);", N1.build(DOC, _d()))  # unit in its own text

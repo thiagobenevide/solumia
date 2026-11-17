@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Rect
+import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
@@ -13,11 +14,16 @@ import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
+import android.hardware.camera2.params.ColorSpaceTransform
 import android.hardware.camera2.params.DynamicRangeProfiles
+import android.hardware.camera2.params.MeteringRectangle
+import android.hardware.camera2.params.RggbChannelVector
 import android.hardware.camera2.params.OutputConfiguration
+import android.hardware.camera2.params.StreamConfigurationMap
 import android.media.MediaCodec
 import android.media.MediaCodecList
 import android.media.MediaFormat
+import android.media.MediaRecorder
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
@@ -25,6 +31,7 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Range
+import android.util.Size
 import android.view.Surface
 import android.view.WindowManager
 import io.flutter.plugin.common.EventChannel
@@ -61,6 +68,8 @@ class CameraProPlugin(
     private var fps = 60
     private var hlg = false
     private var settings: Map<String, Any?> = emptyMap()
+    @Volatile private var colorTransform: ColorSpaceTransform? = null
+    @Volatile private var autoGains: RggbChannelVector? = null
     private var streamer: Streamer? = null
     private var multicast: WifiManager.MulticastLock? = null
 
@@ -87,6 +96,10 @@ class CameraProPlugin(
                     @Suppress("UNCHECKED_CAST")
                     settings = (call.arguments as? Map<String, Any?>) ?: emptyMap()
                     handler.post { applyRequest() }
+                    result.success(null)
+                }
+                "publish" -> {
+                    streamer?.sendControl(call.argument<String>("json") ?: "{}")
                     result.success(null)
                 }
                 "start" -> start(call, result)
@@ -145,6 +158,36 @@ class CameraProPlugin(
         return list
     }
 
+    /**
+     * Preview buffer size: the video size (e.g. 4K) is usually not a valid SurfaceTexture size, and
+     * then the camera delivers another size and aspect that ends up stretched on screen. Picks the
+     * largest supported preview size (up to 1920 wide) with the same aspect as the video.
+     */
+    private fun previewSizeFor(c: CameraCharacteristics, videoWidth: Int, videoHeight: Int): Size {
+        val map = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            ?: return Size(videoWidth, videoHeight)
+        var best: Size? = null
+        for (size in map.getOutputSizes(SurfaceTexture::class.java)) {
+            if (size.width > 1920 || size.width.toLong() * videoHeight != size.height.toLong() * videoWidth) continue
+            if (best == null || size.width > best.width) best = size
+        }
+        return best ?: Size(videoWidth, videoHeight)
+    }
+
+    /** Shortest frame duration among the video surfaces: some phones only report 60 fps for one. */
+    private fun fastestFrame(map: StreamConfigurationMap, size: Size): Long {
+        var best = 0L
+        for (kind in listOf(MediaCodec::class.java, MediaRecorder::class.java)) {
+            val duration = try {
+                map.getOutputMinFrameDuration(kind, size)
+            } catch (_: IllegalArgumentException) {
+                0L
+            }
+            if (duration > 0 && (best == 0L || duration < best)) best = duration
+        }
+        return best
+    }
+
     private fun describe(id: String, c: CameraCharacteristics): Map<String, Any?>? {
         val map = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return null
         val capabilities = c.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)?.toList() ?: emptyList()
@@ -153,8 +196,9 @@ class CameraProPlugin(
         val ordered = map.getOutputSizes(MediaCodec::class.java).sortedByDescending { it.width }
         for (size in ordered) {
             if (size.width < 1280 || size.width * 9 != size.height * 16) continue
-            val minimum = map.getOutputMinFrameDuration(MediaCodec::class.java, size)
-            val maxFps = if (minimum > 0) (1_000_000_000L / minimum).toInt() else 30
+            val minimum = fastestFrame(map, size)
+            // rounded: 16 666 667 ns is 60 fps, and the integer division gave 59 (60 fps never offered)
+            val maxFps = if (minimum > 0) Math.round(1_000_000_000.0 / minimum).toInt() else 30
             sizes.add(mapOf("width" to size.width, "height" to size.height, "maxFps" to maxFps))
         }
         val fpsList = c.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
@@ -191,6 +235,10 @@ class CameraProPlugin(
             "ois" to ois,
             "eis" to eis,
             "hlg" to supportsHlg(c, capabilities),
+            // white balance by temperature needs the app to set the color gains itself
+            "kelvin" to capabilities.contains(CameraMetadata.REQUEST_AVAILABLE_CAPABILITIES_MANUAL_POST_PROCESSING),
+            "point" to ((c.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF) ?: 0) > 0 ||
+                (c.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE) ?: 0) > 0),
             "hevc" to hasEncoder(MediaFormat.MIMETYPE_VIDEO_HEVC),
             "orientation" to (c.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90),
         )
@@ -234,7 +282,8 @@ class CameraProPlugin(
         characteristics = manager.getCameraCharacteristics(id)
 
         val entry = textures.createSurfaceTexture()
-        entry.surfaceTexture().setDefaultBufferSize(width, height)
+        val previewSize = previewSizeFor(characteristics!!, width, height)
+        entry.surfaceTexture().setDefaultBufferSize(previewSize.width, previewSize.height)
         texture = entry
         preview = Surface(entry.surfaceTexture())
 
@@ -326,6 +375,11 @@ class CameraProPlugin(
             frames++
             currentIso = result.get(CaptureResult.SENSOR_SENSITIVITY) ?: currentIso
             currentExposure = result.get(CaptureResult.SENSOR_EXPOSURE_TIME) ?: currentExposure
+            // the camera's own color matrix, kept for manual white balance (only the gains change)
+            if (settings["awb"] != "manual") {
+                result.get(CaptureResult.COLOR_CORRECTION_TRANSFORM)?.let { colorTransform = it }
+                result.get(CaptureResult.COLOR_CORRECTION_GAINS)?.let { autoGains = it }
+            }
             currentFocus = (result.get(CaptureResult.LENS_FOCUS_DISTANCE) ?: currentFocus.toFloat()).toDouble()
         }
     }
@@ -342,16 +396,32 @@ class CameraProPlugin(
             request.addTarget(previewSurface)
             active?.surface?.let { request.addTarget(it) }
             request.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
-            request.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(fps, fps))
+            request.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange(c))
             applyExposure(request)
             applyWhiteBalance(request)
-            applyFocus(request)
+            applyFocus(request, c)
             applyZoom(request, c)
             applyImage(request, c)
             s.setRepeatingRequest(request.build(), captureCallback, handler)
         } catch (e: Exception) {
             emit(mapOf("type" to "error", "message" to "Setting refused: ${e.message}"))
         }
+    }
+
+    /**
+     * AE range for the chosen fps: a range the camera does not list is ignored (it falls back to 30).
+     * Prefers the fixed one ([60,60]), then the narrowest that tops at the fps ([30,60]).
+     */
+    private fun fpsRange(c: CameraCharacteristics): Range<Int> {
+        val ranges = c.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
+        var best: Range<Int>? = null
+        if (ranges != null) {
+            for (range in ranges) {
+                if (range.upper != fps) continue
+                if (best == null || range.lower > best.lower) best = range
+            }
+        }
+        return best ?: Range(fps, fps)
     }
 
     private fun applyExposure(request: CaptureRequest.Builder) {
@@ -370,6 +440,10 @@ class CameraProPlugin(
     }
 
     private fun applyWhiteBalance(request: CaptureRequest.Builder) {
+        if (settings["awb"] == "manual") {
+            applyKelvin(request, characteristics ?: return, int("kelvin", 5000))
+            return
+        }
         val mode = when (settings["awb"]) {
             "incandescent" -> CameraMetadata.CONTROL_AWB_MODE_INCANDESCENT
             "fluorescent" -> CameraMetadata.CONTROL_AWB_MODE_FLUORESCENT
@@ -382,12 +456,99 @@ class CameraProPlugin(
         request.set(CaptureRequest.CONTROL_AWB_LOCK, bool("lockAwb"))
     }
 
-    private fun applyFocus(request: CaptureRequest.Builder) {
+    /**
+     * White balance by color temperature: AWB off and channel gains that turn light of [kelvin] neutral.
+     * The color matrix stays the one the camera was using, so only the white point changes.
+     */
+    private fun applyKelvin(request: CaptureRequest.Builder, c: CameraCharacteristics, kelvin: Int) {
+        val gains = calibratedGains(c, kelvin) ?: relativeGains(kelvin)
+        request.set(CaptureRequest.CONTROL_AWB_MODE, CameraMetadata.CONTROL_AWB_MODE_OFF)
+        request.set(CaptureRequest.COLOR_CORRECTION_MODE, CameraMetadata.COLOR_CORRECTION_MODE_TRANSFORM_MATRIX)
+        request.set(CaptureRequest.COLOR_CORRECTION_GAINS, gains)
+        request.set(CaptureRequest.COLOR_CORRECTION_TRANSFORM, colorTransform ?: IDENTITY)
+    }
+
+    /**
+     * Gains from the sensor calibration (the DNG way): the XYZ -> camera matrices the camera reports for
+     * two reference lights are interpolated in mireds for [kelvin], the black-body white at [kelvin] goes
+     * through it and the gains make that camera color neutral. The gains act on raw sensor values, so a
+     * plain RGB formula would come out green.
+     */
+    private fun calibratedGains(c: CameraCharacteristics, kelvin: Int): RggbChannelVector? {
+        val transform1 = c.get(CameraCharacteristics.SENSOR_COLOR_TRANSFORM1) ?: return null
+        val transform2 = c.get(CameraCharacteristics.SENSOR_COLOR_TRANSFORM2) ?: return null
+        val kelvin1 = illuminantKelvin(c.get(CameraCharacteristics.SENSOR_REFERENCE_ILLUMINANT1)?.toInt(), 2856.0)
+        val kelvin2 = illuminantKelvin(c.get(CameraCharacteristics.SENSOR_REFERENCE_ILLUMINANT2)?.toInt(), 6504.0)
+        val m1 = multiply(matrix(c.get(CameraCharacteristics.SENSOR_CALIBRATION_TRANSFORM1)), matrix(transform1))
+        val m2 = multiply(matrix(c.get(CameraCharacteristics.SENSOR_CALIBRATION_TRANSFORM2)), matrix(transform2))
+        val inverse = 1.0 / kelvin
+        val span = 1.0 / kelvin1 - 1.0 / kelvin2
+        val weight = if (span == 0.0) 0.5 else ((inverse - 1.0 / kelvin2) / span).coerceIn(0.0, 1.0)
+        val xyz = planckXyz(kelvin.toDouble())
+        val camera = DoubleArray(3)
+        for (row in 0 until 3) {
+            var sum = 0.0
+            for (col in 0 until 3) {
+                sum += (weight * m1[row * 3 + col] + (1 - weight) * m2[row * 3 + col]) * xyz[col]
+            }
+            camera[row] = sum
+        }
+        if (camera[0] <= 0 || camera[1] <= 0 || camera[2] <= 0) return null
+        val red = (camera[1] / camera[0]).coerceIn(0.25, 8.0).toFloat()
+        val blue = (camera[1] / camera[2]).coerceIn(0.25, 8.0).toFloat()
+        return RggbChannelVector(red, 1f, 1f, blue)
+    }
+
+    /** No calibration data: the last automatic gains taken as 5500 K, shifted by the black-body ratio. */
+    private fun relativeGains(kelvin: Int): RggbChannelVector {
+        val base = autoGains ?: RggbChannelVector(2f, 1f, 1f, 1.6f)
+        val (r0, g0, b0) = kelvinToRgb(5500)
+        val (r, g, b) = kelvinToRgb(kelvin)
+        val red = (base.red * (r0 / g0) / (r / g)).coerceIn(0.25, 8.0).toFloat()
+        val blue = (base.blue * (b0 / g0) / (b / g)).coerceIn(0.25, 8.0).toFloat()
+        return RggbChannelVector(red, base.greenEven, base.greenOdd, blue)
+    }
+
+    private fun applyFocus(request: CaptureRequest.Builder, c: CameraCharacteristics) {
         if (bool("manualFocus")) {
             request.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_OFF)
             request.set(CaptureRequest.LENS_FOCUS_DISTANCE, double("focus", 0.0).toFloat())
         } else {
             request.set(CaptureRequest.CONTROL_AF_MODE, CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
+        }
+        applyPoint(request, c)
+    }
+
+    /** Focus and metering on the chosen point (video coordinates 0..1), 1/8 of the frame wide. */
+    private fun applyPoint(request: CaptureRequest.Builder, c: CameraCharacteristics) {
+        val x = double("pointX", -1.0)
+        val y = double("pointY", -1.0)
+        if (x < 0 || y < 0) return
+        val area = c.get(CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE) ?: return
+        // before Android 11 the zoom is a crop of the full array and the regions use full-array pixels;
+        // with CONTROL_ZOOM_RATIO they are already relative to the zoomed view
+        var left = area.left.toDouble()
+        var top = area.top.toDouble()
+        var width = area.width().toDouble()
+        var height = area.height().toDouble()
+        val zoom = double("zoom", 1.0)
+        if (Build.VERSION.SDK_INT < 30 && zoom > 1) {
+            left += width * (1 - 1 / zoom) / 2
+            top += height * (1 - 1 / zoom) / 2
+            width /= zoom
+            height /= zoom
+        }
+        val side = (width / 8).toInt()
+        val cx = (left + x.coerceIn(0.0, 1.0) * width).toInt()
+        val cy = (top + y.coerceIn(0.0, 1.0) * height).toInt()
+        val rx = (cx - side / 2).coerceIn(area.left, area.right - side)
+        val ry = (cy - side / 2).coerceIn(area.top, area.bottom - side)
+        val region = arrayOf(MeteringRectangle(rx, ry, side, side, MeteringRectangle.METERING_WEIGHT_MAX))
+        if ((c.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AF) ?: 0) > 0 && !bool("manualFocus")) {
+            request.set(CaptureRequest.CONTROL_AF_REGIONS, region)
+        }
+        if ((c.get(CameraCharacteristics.CONTROL_MAX_REGIONS_AE) ?: 0) > 0 && !bool("manualExposure")) {
+            request.set(CaptureRequest.CONTROL_AE_REGIONS, region)
         }
     }
 
@@ -460,6 +621,7 @@ class CameraProPlugin(
             withAudio = call.argument<Boolean>("audio") ?: true,
             realtimeClock = timestampSource == CameraMetadata.SENSOR_INFO_TIMESTAMP_SOURCE_REALTIME,
             onWarning = { emit(mapOf("type" to "warning", "message" to it)) },
+            onRemote = { emit(mapOf("type" to "remote", "json" to it)) },
         )
         handler.post { configureSession() }
         result.success(null)
@@ -550,4 +712,80 @@ class CameraProPlugin(
     companion object {
         const val PERMISSION_CODE = 7301
     }
+}
+
+private val IDENTITY = ColorSpaceTransform(intArrayOf(1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1))
+
+/**
+ * RGB (0..1) of a black body at [kelvin] (Tanner Helland's fit of the Planckian locus, 1000-40000 K):
+ * good enough for camera white balance, which is what Samsung's Kelvin slider does as well.
+ */
+internal fun kelvinToRgb(kelvin: Int): Triple<Double, Double, Double> {
+    val t = kelvin.coerceIn(1000, 40000) / 100.0
+    val r = if (t <= 66) 255.0 else 329.698727446 * Math.pow(t - 60, -0.1332047592)
+    val g = if (t <= 66) 99.4708025861 * Math.log(t) - 161.1195681661 else 288.1221695283 * Math.pow(t - 60, -0.0755148492)
+    val b = when {
+        t >= 66 -> 255.0
+        t <= 19 -> 0.0
+        else -> 138.5177312231 * Math.log(t - 10) - 305.0447927307
+    }
+    return Triple(r.coerceIn(1.0, 255.0) / 255, g.coerceIn(1.0, 255.0) / 255, b.coerceIn(1.0, 255.0) / 255)
+}
+
+/** Color temperature of the EXIF light sources the sensor calibration uses. */
+internal fun illuminantKelvin(code: Int?, fallback: Double): Double = when (code) {
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_STANDARD_A, CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_TUNGSTEN -> 2856.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_D50 -> 5003.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_D55, CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_DAYLIGHT -> 5503.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_D65 -> 6504.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_D75, CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_SHADE -> 7504.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_STANDARD_B -> 4874.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_STANDARD_C -> 6774.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_CLOUDY_WEATHER -> 6500.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_FLUORESCENT, CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_COOL_WHITE_FLUORESCENT -> 4150.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_DAYLIGHT_FLUORESCENT -> 6430.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_DAY_WHITE_FLUORESCENT -> 5000.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_WHITE_FLUORESCENT -> 3525.0
+    CameraMetadata.SENSOR_REFERENCE_ILLUMINANT1_ISO_STUDIO_TUNGSTEN -> 3200.0
+    else -> fallback
+}
+
+/** Row-major 3x3 (identity when the camera does not report the matrix). */
+internal fun matrix(transform: ColorSpaceTransform?): DoubleArray {
+    val result = doubleArrayOf(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    if (transform == null) return result
+    for (row in 0 until 3) {
+        for (col in 0 until 3) {
+            result[row * 3 + col] = transform.getElement(col, row).toDouble()
+        }
+    }
+    return result
+}
+
+internal fun multiply(a: DoubleArray, b: DoubleArray): DoubleArray {
+    val result = DoubleArray(9)
+    for (row in 0 until 3) {
+        for (col in 0 until 3) {
+            var sum = 0.0
+            for (k in 0 until 3) sum += a[row * 3 + k] * b[k * 3 + col]
+            result[row * 3 + col] = sum
+        }
+    }
+    return result
+}
+
+/** XYZ (Y = 1) of the black body at [kelvin], from the Planckian locus fit of Kim et al. (1667-25000 K). */
+internal fun planckXyz(kelvin: Double): DoubleArray {
+    val t = kelvin.coerceIn(1667.0, 25000.0)
+    val x = if (t <= 4000) {
+        -0.2661239e9 / (t * t * t) - 0.2343589e6 / (t * t) + 0.8776956e3 / t + 0.179910
+    } else {
+        -3.0258469e9 / (t * t * t) + 2.1070379e6 / (t * t) + 0.2226347e3 / t + 0.240390
+    }
+    val y = when {
+        t <= 2222 -> -1.1063814 * x * x * x - 1.34811020 * x * x + 2.18555832 * x - 0.20219683
+        t <= 4000 -> -0.9549476 * x * x * x - 1.37418593 * x * x + 2.09137015 * x - 0.16748867
+        else -> 3.0817580 * x * x * x - 5.87338670 * x * x + 3.75112997 * x - 0.37001483
+    }
+    return doubleArrayOf(x / y, 1.0, (1 - x - y) / y)
 }

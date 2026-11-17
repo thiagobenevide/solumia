@@ -72,11 +72,18 @@ class _Today extends StatelessWidget {
     construir: (context, data, reload) {
       final (d, ag) = data;
       return ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
         children: [
+          const _Greeting(),
+          const SizedBox(height: 16),
           _Scoreboard(d: d),
-          for (final a in d.alerts) _AlertCard(alert: a),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
+          const _QuickActions(),
+          if (d.alerts.isNotEmpty) ...[
+            const _SectionTitle(icon: Icons.notifications_active_outlined, text: 'Alertas'),
+            for (final a in d.alerts) _AlertCard(alert: a),
+          ],
+          const _SectionTitle(icon: Icons.event_note_outlined, text: 'Agenda de hoje'),
           _DaySchedule(api: api, agenda: ag, aoMudar: reload),
         ],
       );
@@ -84,29 +91,190 @@ class _Today extends StatelessWidget {
   );
 }
 
+const _weekdays = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo'];
+const _months = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
+/// "Bom dia" and today's date, at the top of the home page.
+class _Greeting extends StatelessWidget {
+  const _Greeting();
+
+  String _salutation(int hour) {
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final text = Theme.of(context).textTheme;
+    final colors = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(_salutation(now.hour), style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 2),
+        Text(
+          '${_weekdays[now.weekday - 1]}, ${now.day} de ${_months[now.month - 1]}',
+          style: text.titleMedium?.copyWith(color: colors.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+/// Discipline of the day: score ring, state and counters.
 class _Scoreboard extends StatelessWidget {
   const _Scoreboard({required this.d});
 
   final Discipline d;
 
+  String _title() {
+    if (d.score == null) return 'Dia ainda sem medição';
+    if (d.inside) return 'Dentro da disciplina';
+    return 'Fora da disciplina';
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final color = d.score == null ? colors.outline : (d.inside ? colors.primary : colors.error);
+    final text = Theme.of(context).textTheme;
+    final good = d.score == null || d.inside;
+    final background = good ? colors.primaryContainer : colors.errorContainer;
+    final foreground = good ? colors.onPrimaryContainer : colors.onErrorContainer;
+    final ring = good ? colors.primary : colors.error;
     return Card(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: color,
-          foregroundColor: colors.onPrimary,
-          child: Text(d.score == null ? '–' : '${d.score}'),
+      color: background,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            SizedBox.square(
+              dimension: 84,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  CircularProgressIndicator(
+                    value: (d.score ?? 0) / 100,
+                    strokeWidth: 8,
+                    color: ring,
+                    backgroundColor: foreground.withValues(alpha: 0.15),
+                  ),
+                  Center(
+                    child: Text(
+                      d.score == null ? '–' : '${d.score}',
+                      style: text.headlineSmall?.copyWith(color: foreground, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_title(), style: text.titleLarge?.copyWith(color: foreground, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _Pill(icon: Icons.check_circle_outline, text: 'Blocos ${d.blocksDone}/${d.blocksOverdue}', color: foreground),
+                      _Pill(icon: Icons.flag_outlined, text: 'Metas ${d.goalsOnTrack}/${d.goalsTotal}', color: foreground),
+                    ],
+                  ),
+                  if (d.currentBlock != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Agora: ${d.currentBlock!.title} (até ${d.currentBlock!.end})',
+                      style: text.bodyMedium?.copyWith(color: foreground),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ),
-        title: Text(
-          d.score == null ? 'Dia ainda sem medição' : (d.inside ? 'Dentro da disciplina' : 'Fora da disciplina'),
+      ),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({required this.icon, required this.text, required this.color});
+
+  final IconData icon;
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 4),
+        Text(text, style: TextStyle(color: color)),
+      ],
+    ),
+  );
+}
+
+/// Shortcuts to the other tabs of the home page.
+class _QuickActions extends StatelessWidget {
+  const _QuickActions();
+
+  @override
+  Widget build(BuildContext context) {
+    final tabs = DefaultTabController.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: FilledButton.tonalIcon(
+            onPressed: () => tabs.animateTo(1),
+            icon: const Icon(Icons.forum_outlined),
+            label: const Text('Falar com o cobrador'),
+          ),
         ),
-        subtitle: Text(
-          'Blocos ${d.blocksDone}/${d.blocksOverdue} cumpridos · metas no ritmo ${d.goalsOnTrack}/${d.goalsTotal}'
-          '${d.currentBlock == null ? '' : '\nAgora: ${d.currentBlock!.title} (até ${d.currentBlock!.end})'}',
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => tabs.animateTo(2),
+            icon: const Icon(Icons.flag_outlined),
+            label: const Text('Ver metas'),
+          ),
         ),
+      ],
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 24, 4, 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: colors.primary),
+          const SizedBox(width: 8),
+          Text(text, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        ],
       ),
     );
   }

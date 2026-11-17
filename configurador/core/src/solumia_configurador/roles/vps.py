@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import shlex
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from .. import generate, names, secret_store
@@ -41,6 +42,35 @@ def _gateway_node(m: Manifest) -> tuple[str, Node]:
     if found is None or found[1].endereco != "ssh" or found[1].ssh is None:
         raise ValueError("o gateway não está num nó remoto (VPS)")
     return found
+
+
+def push_gateway_env(m: Manifest, vault: Vault, log: Callable[[str], None],
+                     mask: Callable[[str], str] = lambda s: s) -> None:
+    """Sends a fresh gateway.env (e.g. with a new client key) to an installed VPS and recreates only
+    the gateway, with the configurator key: no password and no full reinstall."""
+    name_node, no = _gateway_node(m)
+    access = no.ssh
+    assert access is not None
+    private = vault.obter(secret_store.SSH_PRIVATE_KEY.format(no=name_node))
+    if not private:
+        raise SSHError("a VPS ainda não foi instalada pelo configurador: faça a instalação em VPS primeiro")
+    cred = Credentials(usuario=access.usuario, host=access.host, porta=access.porta,
+                       impressao_host=access.impressao_host, chave_privada=private)
+    s = Session(cred, mask).conectar()
+    try:
+        s.send(generate.env_gateway(m, vault).encode(), f"{D}/gateway.env", 0o600)
+        compose = (f"docker compose -p {names.COMPOSE_PROJECT} --project-directory {D} "
+                   f"-f {D}/compose.yml --env-file {D}/.env")
+        s.rodar(f"{compose} up -d --force-recreate gateway", sudo=True, log=log)
+        url = f"http://127.0.0.1:{names.GATEWAY_HOST_PORT}/health"
+        for _ in range(30):
+            if s.rodar(f"curl -fsS {url} >/dev/null", sudo=True, checar=False)[0] == 0:
+                log("Gateway da VPS reiniciado com as chaves atualizadas")
+                return
+            time.sleep(2)
+        raise SSHError("o gateway não voltou a responder depois da atualização")
+    finally:
+        s.fechar()
 
 
 def plan(m: Manifest, vault: Vault, options: VPSOptions) -> Plan:

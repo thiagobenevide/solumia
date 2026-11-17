@@ -171,9 +171,10 @@ def env_gateway(m: Manifest, vault: Vault) -> str:
         "GATEWAY_LOG_FORMAT": "json",
         "GATEWAY_LOG_LEVEL": "info",
         "GATEWAY_CORS_ORIGINS": f"https://{domain}",
+        # The full-access client key plus the watch one (`relogio:` scope, only the watch routes).
         "GATEWAY_CLIENT_API_KEYS": vault.get_or_generate(
             secret_store.CLIENT_KEY, lambda: secret_store.token("sk_live_")
-        ),
+        ) + ",relogio:" + watch_key(vault),
         "GATEWAY_WORKER_API_KEYS": vault.get_or_generate(
             secret_store.WORKER_KEY, lambda: secret_store.token("worker_")
         ),
@@ -276,6 +277,10 @@ RestartSec=10
 [Install]
 WantedBy=default.target
 """
+
+
+def watch_key(vault: Vault) -> str:
+    return vault.get_or_generate(secret_store.WATCH_KEY, lambda: secret_store.token("relogio_"))
 
 
 # Where llama.cpp is usually built; systemd --user services do not see the shell's PATH.

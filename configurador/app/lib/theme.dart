@@ -1,26 +1,12 @@
-// Solumia visual identity (sun, sea and night) and the person's theme and language preferences.
+// Solumia visual identity (the same blue-violet palette as the Solumia app, light and dark) and the
+// person's theme and language preferences.
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _sun = Color(0xFFE8772E); // primary: sunrise orange
-const _teal = Color(0xFF1F7A80); // secondary: teal
-const _night = Color(0xFF4B4FA8); // tertiary: indigo
+/// Accent blue, the seed of the Solumia app palette (plataforma/app_core/lib/src/tema.dart).
+const accentColor = Color(0xFF2F6FED);
 
-ColorScheme solumiaScheme(Brightness b) {
-  ColorScheme schemeFor(Color c) => ColorScheme.fromSeed(
-      seedColor: c, brightness: b, dynamicSchemeVariant: DynamicSchemeVariant.fidelity);
-  final base = schemeFor(_sun), teal = schemeFor(_teal), night = schemeFor(_night);
-  return base.copyWith(
-    secondary: teal.primary,
-    onSecondary: teal.onPrimary,
-    secondaryContainer: teal.primaryContainer,
-    onSecondaryContainer: teal.onPrimaryContainer,
-    tertiary: night.primary,
-    onTertiary: night.onPrimary,
-    tertiaryContainer: night.primaryContainer,
-    onTertiaryContainer: night.onPrimaryContainer,
-  );
-}
+ColorScheme solumiaScheme(Brightness b) => ColorScheme.fromSeed(seedColor: accentColor, brightness: b);
 
 ThemeData solumiaTheme(Brightness b) {
   final c = solumiaScheme(b);

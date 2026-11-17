@@ -52,6 +52,8 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "Solumia");
   }
 
+  // Logo installed by configurador/empacotar_deb (hicolor theme): the window and taskbar icon.
+  gtk_window_set_icon_name(window, "solumia-configurador");
   gtk_window_set_default_size(window, 1280, 720);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();

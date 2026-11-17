@@ -27,6 +27,9 @@ const _whiteBalances = [
   ('incandescent', 'Incandescente'),
 ];
 
+/// Last IP typed by hand, kept while the app is open.
+String? _lastManualAddress;
+
 class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
   final _camera = CameraPro();
   final _settings = CameraSettings();
@@ -39,11 +42,13 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
   int _fps = 60;
   bool _hlg = false;
   String _codec = 'hevc';
-  int _bitrate = 100;
-  bool _recordLocal = true;
+  /// Ceiling for the VBR encoder (Mb/s): it spends less on calm scenes and has room for motion.
+  int _bitrate = 200;
+  /// `record` only on the phone, `stream` only to the PC, `both` records and streams.
+  String _mode = 'both';
   bool _audio = true;
 
-  /// ip -> announcement of the PCs heard; `usb` uses 127.0.0.1; null records only on the phone.
+  /// ip -> announcement of the PCs heard; `usb` uses 127.0.0.1; null while no PC was chosen.
   final _pcs = <String, PcAnnouncement>{};
   String? _target;
 
@@ -135,6 +140,78 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
   void _adjust(VoidCallback change) {
     setState(change);
     _camera.adjust(_settings);
+    _publish();
+  }
+
+  // ================================================================== remote control (PC)
+
+  /// Camera state for the PC panel: lenses, ranges, current settings and the live exposure.
+  void _publish() {
+    final camera = _info;
+    if (camera == null || !_streaming) return;
+    final lenses = <Map<String, Object?>>[];
+    for (final c in _cameras) {
+      lenses.add({'id': c.id, 'label': c.label});
+    }
+    final state = {
+      'camera': camera.raw,
+      'lens': camera.id,
+      'lenses': lenses,
+      'fps': _fps,
+      'settings': _settings.toMap(),
+      'live': {'iso': _state['iso'], 'exposureNs': _state['exposureNs'], 'focus': _state['focus']},
+    };
+    _camera.publish(jsonEncode(state));
+  }
+
+  /// Command from the PC: settings change right away; a lens change restarts the stream on the new
+  /// lens keeping the size and fps when it has them.
+  void _onRemote(String json) {
+    Map<String, dynamic> command;
+    try {
+      command = Map<String, dynamic>.from(jsonDecode(json) as Map);
+    } on FormatException {
+      return;
+    } on TypeError {
+      return;
+    }
+    final settings = command['settings'];
+    if (settings is Map) {
+      _settings.apply(Map<String, dynamic>.from(settings));
+      _camera.adjust(_settings);
+    }
+    final lens = command['lens'];
+    if (lens is String && lens != _info?.id) {
+      _remoteLens(lens);
+      return;
+    }
+    _publish();
+  }
+
+  Future<void> _remoteLens(String id) async {
+    CameraInfo? target;
+    for (final c in _cameras) {
+      if (c.id == id) target = c;
+    }
+    if (target == null) return;
+    final width = _size?.width;
+    final height = _size?.height;
+    final fps = _fps;
+    final wasStreaming = _streaming;
+    if (wasStreaming) await _toggle();
+    setState(() {
+      _chooseCamera(target!);
+      _keepFormat(target, width, height, fps);
+    });
+    await _reopen();
+    if (wasStreaming) await _toggle();
+  }
+
+  void _keepFormat(CameraInfo camera, int? width, int? height, int fps) {
+    for (final size in camera.sizes) {
+      if (size.width == width && size.height == height) _size = size;
+    }
+    if (camera.fps.contains(fps)) _fps = fps;
   }
 
   Future<void> _listenAnnouncements() async {
@@ -146,6 +223,10 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
       setState(() => _message = 'Não consegui ouvir a rede: ${e.message}');
     }
   }
+
+  bool get _recordLocal => _mode != 'stream';
+
+  bool get _sends => _mode != 'record';
 
   void _onDatagram(RawSocketEvent event) {
     if (event != RawSocketEvent.read) return;
@@ -167,12 +248,33 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
       switch (event['type']) {
         case 'state':
           _state = event;
+          _checkFps(event['fps'] as int? ?? 0);
+          // live ISO/shutter/focus for the PC panel, once a second while streaming
+          if (_streaming) _publish();
+        case 'remote':
+          _onRemote(event['json'] as String? ?? '');
         case 'warning':
           _message = event['message'] as String?;
         case 'error':
           _error = event['message'] as String?;
       }
     });
+  }
+
+  int _slowSeconds = 0;
+
+  /// The sensor may report a size as limited to 30 fps and still deliver 60 (or the other way round):
+  /// the badge shows the measured value and, if it stays well below the chosen one, say so once.
+  void _checkFps(int measured) {
+    if (measured <= 0 || measured >= _fps * 0.85) {
+      _slowSeconds = 0;
+      return;
+    }
+    _slowSeconds++;
+    if (_slowSeconds == 4) {
+      _message = 'A câmera entrega $measured fps neste tamanho, não $_fps. '
+          'Para $_fps fps use um tamanho menor (ex.: 1080p).';
+    }
   }
 
   Future<void> _toggle() async {
@@ -185,7 +287,7 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
         });
         return;
       }
-      final target = _target;
+      final target = _sends ? _target : null;
       String? host = target;
       var port = videoPort;
       if (target == 'usb') {
@@ -193,8 +295,8 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
       } else if (target != null) {
         port = _pcs[target]?.port ?? videoPort;
       }
-      if (host == null && !_recordLocal) {
-        setState(() => _message = 'Escolha um PC ou ligue "gravar no aparelho".');
+      if (host == null && _sends) {
+        setState(() => _message = 'Escolha o PC (ou USB) para transmitir.');
         return;
       }
       await _camera.start(
@@ -210,6 +312,7 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
         _message = null;
         _error = null;
       });
+      _publish();
     } on PlatformException catch (e) {
       setState(() => _error = e.message);
     }
@@ -238,12 +341,48 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
 
   // ================================================================== preview
 
+  /// Texture plus touch-to-focus: tap sets the focus/metering point, long press goes back to auto.
+  Widget _focusablePreview(BuildContext context, BoxConstraints box) {
+    final children = <Widget>[RotatedBox(quarterTurns: 3, child: Texture(textureId: _texture!))];
+    if (_settings.pointX >= 0) {
+      children.add(Positioned(
+        left: _settings.pointX * box.maxWidth - 28,
+        top: _settings.pointY * box.maxHeight - 28,
+        child: IgnorePointer(
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(border: Border.all(color: Colors.amber, width: 2)),
+          ),
+        ),
+      ));
+    }
+    return GestureDetector(
+      onTapUp: (d) => _setPoint(d.localPosition.dx / box.maxWidth, d.localPosition.dy / box.maxHeight),
+      onLongPress: () => _setPoint(-1, -1),
+      child: Stack(fit: StackFit.expand, children: children),
+    );
+  }
+
+  void _setPoint(double x, double y) {
+    if (_info?.point != true) return;
+    _adjust(() {
+      _settings.pointX = x < 0 ? -1 : x.clamp(0.0, 1.0);
+      _settings.pointY = y < 0 ? -1 : y.clamp(0.0, 1.0);
+    });
+  }
+
   Widget _preview() {
     final size = _size;
     final id = _texture;
     Widget center = Text(_error ?? 'Abrindo câmera…', style: const TextStyle(color: Colors.white70));
     if (id != null && size != null) {
-      center = AspectRatio(aspectRatio: size.width / size.height, child: Texture(textureId: id));
+      // Camera2 rotates SurfaceTexture output upright for the phone's natural (portrait) orientation;
+      // the screen is locked in landscapeLeft (display rotation 90°), so undo it with a quarter turn back.
+      center = AspectRatio(
+        aspectRatio: size.width / size.height,
+        child: LayoutBuilder(builder: _focusablePreview),
+      );
     }
     final children = <Widget>[
       Center(child: center),
@@ -266,7 +405,7 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
       result.add(_badge(Icons.fiber_manual_record, _clock(_state['seconds'] as int? ?? 0), Colors.red));
     }
     result.add(_badge(Icons.speed, '${_state['fps'] ?? 0} fps', Colors.black54));
-    if (_streaming && _target != null) {
+    if (_streaming && _sends && _target != null) {
       final mbps = (_state['mbps'] as num? ?? 0).toStringAsFixed(0);
       final color = connected ? Colors.green.shade800 : Colors.orange.shade800;
       result.add(_badge(connected ? Icons.link : Icons.link_off, connected ? '$mbps Mb/s' : 'conectando…', color));
@@ -325,16 +464,21 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
         ),
         onPressed: _texture == null ? null : _toggle,
         icon: Icon(_streaming ? Icons.stop : Icons.fiber_manual_record),
-        label: Text(_streaming ? 'Parar' : 'Gravar / transmitir'),
+        label: Text(_streaming ? 'Parar' : _modeLabels[_mode]!),
       ),
       const SizedBox(height: 12),
-      _title('Destino'),
-      Wrap(spacing: 6, runSpacing: 6, children: _targetChips()),
+      _title('Modo'),
+      _modePicker(),
     ];
-    if (_pcs.isEmpty) {
+    if (_sends) {
+      children.add(const SizedBox(height: 12));
+      children.add(_title('Destino'));
+      children.add(Wrap(spacing: 6, runSpacing: 6, children: _targetChips()));
+    }
+    if (_sends && _pcs.isEmpty) {
       children.add(const Padding(
         padding: EdgeInsets.only(top: 4),
-        child: Text('Procurando o PC na rede… abra Gravação › Câmera no PC.',
+        child: Text('Procurando o PC na rede… abra Gravação › Câmera no PC. Se não aparecer, use Wi‑Fi (IP do PC).',
             style: TextStyle(fontSize: 12, color: Colors.white60)),
       ));
     }
@@ -353,9 +497,70 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
     for (final entry in _pcs.entries) {
       result.add(_targetChip('${entry.value.name} (${entry.key})', entry.key));
     }
+    result.add(ActionChip(
+      avatar: const Icon(Icons.wifi, size: 18),
+      label: const Text('Wi‑Fi (IP do PC)'),
+      onPressed: _streaming ? null : _askPcAddress,
+    ));
     result.add(_targetChip('USB', 'usb'));
-    result.add(_targetChip('Só no celular', null));
     return result;
+  }
+
+  static const _modeLabels = {'record': 'Gravar', 'stream': 'Transmitir', 'both': 'Gravar e transmitir'};
+
+  Widget _modePicker() {
+    final segments = <ButtonSegment<String>>[];
+    for (final entry in _modeLabels.entries) {
+      segments.add(ButtonSegment(value: entry.key, label: Text(entry.value, textAlign: TextAlign.center)));
+    }
+    return SegmentedButton<String>(
+      segments: segments,
+      selected: {_mode},
+      showSelectedIcon: false,
+      onSelectionChanged: _streaming ? null : (v) => setState(() => _mode = v.first),
+    );
+  }
+
+  /// For networks where the PC announcement does not arrive (PC on cable, phone on Wi-Fi with a
+  /// router that does not carry broadcasts): the IP shown in Gravação › Câmera on the PC.
+  Future<void> _askPcAddress() async {
+    final field = TextEditingController(text: _lastManualAddress ?? '');
+    final typed = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Conectar pelo Wi‑Fi'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Digite o IP do PC que aparece em Gravação › Câmera, no PC (ex.: 192.168.3.251).'),
+            TextField(
+              controller: field,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'IP do PC'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(context, field.text.trim()), child: const Text('Usar')),
+        ],
+      ),
+    );
+    field.dispose();
+    if (typed == null || typed.isEmpty || !mounted) return;
+    final address = InternetAddress.tryParse(typed);
+    if (address == null || address.type != InternetAddressType.IPv4) {
+      setState(() => _message = 'IP inválido: $typed');
+      return;
+    }
+    _lastManualAddress = typed;
+    setState(() {
+      _pcs[typed] = const PcAnnouncement(videoPort, 'PC');
+      _target = typed;
+      _message = null;
+    });
   }
 
   Widget _targetChip(String label, String? value) {
@@ -450,8 +655,26 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
         onSelected: (_) => _adjust(() => _settings.awb = key),
       ));
     }
+    if (_info?.kelvin == true) {
+      chips.add(ChoiceChip(
+        label: const Text('Manual (K)'),
+        selected: _settings.awb == 'manual',
+        onSelected: (_) => _adjust(() => _settings.awb = 'manual'),
+      ));
+    }
+    final result = <Widget>[Wrap(spacing: 6, runSpacing: 6, children: chips)];
+    if (_settings.awb == 'manual') {
+      result.add(_labelValue('Temperatura', '${_settings.kelvin} K'));
+      result.add(Slider(
+        min: 2000,
+        max: 10000,
+        divisions: 80,
+        value: _settings.kelvin.toDouble().clamp(2000, 10000),
+        onChanged: (v) => _adjust(() => _settings.kelvin = v.round()),
+      ));
+    }
     return [
-      Wrap(spacing: 6, runSpacing: 6, children: chips),
+      ...result,
       SwitchListTile(
         dense: true,
         title: const Text('Travar branco'),
@@ -540,16 +763,10 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
     ));
     result.add(SwitchListTile(
       dense: true,
-      title: const Text('Gravar original no aparelho'),
-      subtitle: const Text('MP4 com áudio em Movies/Solumia'),
-      value: _recordLocal,
-      onChanged: _streaming ? null : (v) => setState(() => _recordLocal = v),
-    ));
-    result.add(SwitchListTile(
-      dense: true,
-      title: const Text('Áudio do celular no MP4'),
+      title: const Text('Áudio do celular'),
+      subtitle: const Text('No MP4 (AAC 320k) e para o PC sem compressão (48 kHz)'),
       value: _audio,
-      onChanged: _streaming || !_recordLocal ? null : (v) => setState(() => _audio = v),
+      onChanged: _streaming ? null : (v) => setState(() => _audio = v),
     ));
     return result;
   }
@@ -575,7 +792,9 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
   void _setSize(CameraInfo camera, VideoSize size) {
     setState(() {
       _size = size;
-      if (_fps > size.maxFps) _fps = _pickFps(camera, size.maxFps);
+      // each size at its best rate: 60 where the sensor delivers it (1080p/1440p), 30 in 4K
+      _fps = _pickFps(camera, size.maxFps);
+      _slowSeconds = 0;
     });
     _reopen();
   }
@@ -584,9 +803,10 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
     final result = <Widget>[];
     final maxFps = _size?.maxFps ?? 30;
     for (final f in camera.fps) {
-      if (f < 24 || f > maxFps) continue;
+      if (f < 24) continue;
+      // above the reported limit it may still work (Samsung under-reports 4K60): try and measure
       result.add(ChoiceChip(
-        label: Text('$f fps'),
+        label: Text(f > maxFps ? '$f fps (testar)' : '$f fps'),
         selected: _fps == f,
         onSelected: _streaming ? null : (_) => _setFps(f),
       ));
@@ -595,7 +815,10 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
   }
 
   void _setFps(int fps) {
-    setState(() => _fps = fps);
+    setState(() {
+      _fps = fps;
+      _slowSeconds = 0;
+    });
     _reopen();
   }
 

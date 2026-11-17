@@ -20,6 +20,7 @@ PASSWORD_HASH = "conta.senha_hash"  # noqa: S105 - vault entry name, not a secre
 TOTP = "conta.totp"
 JWT = "gateway.jwt"
 CLIENT_KEY = "gateway.chave_cliente"
+WATCH_KEY = "gateway.chave_relogio"  # scope relogio: only the watch routes
 WORKER_KEY = "gateway.chave_worker"
 COLLABORA_PASSWORD = "collabora.senha_admin"  # noqa: S105 - vault entry name, not a secret
 WOPI = "gateway.wopi"

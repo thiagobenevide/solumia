@@ -148,3 +148,20 @@ def test_retake_without_other_take_is_not_retake():
     t = {"ini": pal[0]["ini"], "fim": pal[6]["fim"], "texto": "Eles olharam para onde ia o dinheiro."}
     assert C._other_take(t, pal)
     assert not C._other_take(t, pal[:12])
+
+
+def _seg(i, j, ini, fim, text, keep, kind):
+    return {"i": i, "j": j, "ini": ini, "fim": fim, "texto": text, "manter": keep, "tipo": kind,
+            "motivo": "x", "confianca": 0.5}
+
+
+def test_fragment_glued_to_kept_take_stays():
+    segs = [_seg(0, 3, 0.0, 1.0, "Isso é aritmética", True, "tomada"),
+            _seg(3, 4, 1.0, 1.4, "básica.", True, "continuacao"),
+            _seg(4, 5, 3.0, 3.3, "Já", False, "improviso"),
+            _seg(5, 8, 3.3, 4.5, "a avalanche vence.", True, "tomada"),
+            _seg(8, 9, 6.0, 6.3, "Então", False, "improviso"),
+            _seg(9, 12, 6.3, 7.5, "Outra frase inteira.", True, "tomada")]
+    C._glued_fragments(segs)
+    assert segs[1].get("garantida") and segs[2]["manter"] and segs[2].get("garantida")
+    assert not segs[4]["manter"]          # the next take starts a new sentence: the LLM still decides

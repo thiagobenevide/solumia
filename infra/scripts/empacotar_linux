@@ -2,11 +2,11 @@
 # Builds the Linux app (release) pointed at the VPS and packs it into plataforma/app/build/agent-linux.tar.gz,
 # with instalar.sh (no sudo: ~/.local/opt/agent + menu shortcut). Needs libmpv-dev to compile.
 #
-#   infra/scripts/empacotar_linux [API_URL]          # default: https://agent.thiagobenevide.com
+#   infra/scripts/empacotar_linux [API_URL]          # default: https://solumialocal.thiagobenevide.com
 #   tar -xzf agent-linux.tar.gz && agent/instalar.sh  # on the target PC
 set -euo pipefail
 
-url="${1:-https://agent.thiagobenevide.com}"
+url="${1:-https://solumialocal.thiagobenevide.com}"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 app="$root/plataforma/app"
 flutter="$(command -v flutter || echo "$HOME/development/flutter/bin/flutter")"

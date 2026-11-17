@@ -55,6 +55,8 @@ class FaceTracker:
         self.sink = sink
         return [
             make("queue", leaky="downstream", max_size_buffers=1),
+            # the thread reads 5 frames/s: scaling every camera frame was wasted CPU
+            make("videorate", drop_only=True, max_rate=round(1 / INTERVAL)),
             make("videoscale", add_borders=False),
             make("videoconvert"),
             caps(f"video/x-raw,format=GRAY8,width={WIDTH},height={HEIGHT}"),

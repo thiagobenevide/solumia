@@ -14,7 +14,7 @@ dependencies:
   agent_core:
     path: ../../../plataforma/app_core
   file_picker: ^13.3.0
-  pasteboard: ^0.4.0
+  pasteboard: ^0.6.1
   url_launcher: ^6.3.3
 
 dev_dependencies:

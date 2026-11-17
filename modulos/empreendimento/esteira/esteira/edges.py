@@ -23,6 +23,10 @@ VOICE_DB, FRIC_DB, STRONG_DB, SOUND_DB = 10.0, 9.0, 22.0, 6.0  # dB acima do pis
 NEIGHBOR_VOICE = 0.15                        # s: fricção só é fala se estiver colada a voz (respiração isolada não é)
 EXTENDS = 0.25                            # s: o núcleo pode passar isto do tempo do Whisper
 NEIGHBOR_CUT = 0.05                    # s: quanto o núcleo pode entrar no tempo de uma vizinha que sai
+NEIGHBOR_CUT_MAX = 0.15                # s: teto disso quando a vizinha que sai é longa (até metade dela)
+CLOSURE = 0.12                         # s: silêncio da oclusiva (p, t, k, b, d, g) dentro da palavra: o núcleo o atravessa
+EXTENDS_LONG = 0.3                     # palavra longa: o núcleo pode passar esta fração da duração dela (teto 0,5 s)
+HEAD, HEAD_GAP = 0.08, 0.15           # s: som no começo da palavra que para logo e a pausa que o separa dela
 LOSS_MAX = 0.25                          # fração do núcleo que pode sumir antes de virar alerta
 DIGITAL = -90.0                           # dB: silêncio digital do noise gate fica fora do piso
 
@@ -74,14 +78,16 @@ def analysis(x):
     return {"fala": speech, "som": (db > p_db + SOUND_DB) & valid, "db": db}
 
 
-def core(start, end, sound, lo=None, hi=None):
+def core(start, end, sound, lo=None, hi=None, head=False):
     """Trecho com som da palavra [ini, fim]: o som dentro da zona dela, estendido enquanto o som continua (o fim
     fraco de "casa" que o Whisper deu como pausa), até ESTENDE s e nunca além de [lo, hi] (meio das vizinhas).
     None se não há som nenhum (palavra que o Whisper inventou sobre a pausa)."""
     if sound is None:
         return start, end
-    lo = max(start - EXTENDS, 0.0 if lo is None else lo)
-    hi = min(end + EXTENDS, len(sound) * Q if hi is None else hi)
+    # o Whisper erra mais o fim da palavra longa ("paralelepípedo" dado como "paralelep"): a folga cresce com ela
+    extends = max(EXTENDS, min(0.5, EXTENDS_LONG * (end - start)))
+    lo = max(start - extends, 0.0 if lo is None else lo)
+    hi = min(end + extends, len(sound) * Q if hi is None else hi)
     a, b = max(0, int(lo / Q)), min(len(sound), int(np.ceil(hi / Q)))
     s = sound[a:b]
     i0 = min(len(s), max(0, int((start - BEFORE) / Q) - a))
@@ -90,11 +96,41 @@ def core(start, end, sound, lo=None, hi=None):
     if not len(idx):
         return None
     p, u = i0 + idx[0], i0 + idx[-1]
-    while p > 0 and s[p - 1]:
+    late = _after_head(s, p, i0, i1) if head else None
+    if late is not None:
+        p = late
+    while late is None and p > 0 and s[p - 1]:
         p -= 1
-    while u < len(s) - 1 and s[u + 1]:
-        u += 1
+    u = _extend_end(s, u)
     return (a + p) * Q, (a + u + 1) * Q
+
+
+def _after_head(s, p, i0, i1):
+    """The Whisper time of a kept word that follows a cut one starts over the tail of the cut word: the sound at
+    the start stops within HEAD and a real pause (longer than the closure of a stop) comes before the rest.
+    → first frame of the rest, or None when the word really starts at `p`."""
+    if p - i0 > int(BEFORE / Q) + 1:
+        return None
+    stop = p
+    while stop < i1 and s[stop]:
+        stop += 1
+    rest = np.flatnonzero(s[stop:i1])
+    if stop - i0 > int((BEFORE + HEAD) / Q) or not len(rest) or rest[0] < int(HEAD_GAP / Q):
+        return None
+    return stop + rest[0]
+
+
+def _extend_end(s, u):
+    """Último quadro com som da palavra: segue o som e atravessa o silêncio curto da oclusiva (a sílaba final
+    de "paralelepípedo" vem depois do fechamento do "p" e do "d"); uma pausa maior que OCLUSAO encerra."""
+    gap = int(CLOSURE / Q)
+    while True:
+        while u < len(s) - 1 and s[u + 1]:
+            u += 1
+        ahead = np.flatnonzero(s[u + 1:u + 1 + gap])
+        if not len(ahead):
+            return u
+        u = u + 1 + ahead[0]
 
 
 def cores(kept, sound, all_items=()):
@@ -110,11 +146,17 @@ def cores(kept, sound, all_items=()):
         ant = all_items[k - 1] if k > 0 else None
         prox = next((all_items[j] for j in range(k, len(all_items)) if all_items[j][0] > a), None)
         lo = None if not ant else (ant[0] + ant[1]) / 2 if ant in stays else ant[1] - NEIGHBOR_CUT
-        hi = None if not prox else (prox[0] + prox[1]) / 2 if prox in stays else prox[0] + NEIGHBOR_CUT
-        n = core(a, b, sound, lo, hi)
+        hi = None if not prox else (prox[0] + prox[1]) / 2 if prox in stays else prox[0] + _into_cut(prox)
+        n = core(a, b, sound, lo, hi, head=ant is not None and ant not in stays)
         if n:
             out.append(n)
     return out
+
+
+def _into_cut(word):
+    """Quanto o núcleo da palavra mantida pode entrar na vizinha seguinte que sai: o Whisper põe o começo dela
+    por cima do fim da mantida, e cortar ali come a sílaba final (sobra som, nunca come sílaba)."""
+    return max(NEIGHBOR_CUT, min(NEIGHBOR_CUT_MAX, (word[1] - word[0]) / 2))
 
 
 def zones(words):

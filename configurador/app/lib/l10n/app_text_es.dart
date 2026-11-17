@@ -420,7 +420,7 @@ class AppTextEs extends AppText {
 
   @override
   String get watchInstruction =>
-      'Descarga el APK aquí y envíalo al reloj desde la app del celular, o instálalo en el propio reloj.';
+      'Instálalo directo en el reloj por Wi‑Fi, o descarga el APK aquí.';
 
   @override
   String get planNothingChanged =>
@@ -534,4 +534,33 @@ class AppTextEs extends AppText {
 
   @override
   String get updateButton => 'Actualizar';
+
+  @override
+  String get watchInstallButton => 'Instalar en el reloj (Wi‑Fi)';
+
+  @override
+  String get watchInstallTitle => 'Instalar en el reloj por la red';
+
+  @override
+  String get watchSteps =>
+      '1. En el reloj: Ajustes › Acerca de › Software, toca 7 veces \"Versión de software\" para activar las Opciones de desarrollador.\n2. En Opciones de desarrollador, activa \"Depuración ADB\" y \"Depuración por Wi‑Fi\". Deja el reloj en el cargador con la pantalla encendida para que el Wi‑Fi no se duerma.\n3. La primera vez: en Depuración por Wi‑Fi › \"Vincular nuevo dispositivo\", completa la IP, el puerto y el código que muestra.\n4. Toca Instalar. Las próximas veces solo hace falta la IP: deja el puerto y el código vacíos.';
+
+  @override
+  String get watchIp => 'IP del reloj';
+
+  @override
+  String get watchPairPort => 'Puerto de vinculación (solo la 1.ª vez)';
+
+  @override
+  String get watchPairCode => 'Código (solo la 1.ª vez)';
+
+  @override
+  String get watchPaired => 'Reloj vinculado. Instalando…';
+
+  @override
+  String get watchInstall => 'Instalar';
+
+  @override
+  String get watchFillFields =>
+      'Completa la IP del reloj; la primera vez, también el puerto de vinculación y el código.';
 }

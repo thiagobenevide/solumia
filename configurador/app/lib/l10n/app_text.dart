@@ -845,7 +845,7 @@ abstract class AppText {
   /// No description provided for @watchInstruction.
   ///
   /// In pt, this message translates to:
-  /// **'Baixe o APK aqui e envie ao relógio pelo app do celular ou instale no próprio relógio.'**
+  /// **'Instale direto no relógio pela rede Wi‑Fi, ou baixe o APK aqui.'**
   String get watchInstruction;
 
   /// No description provided for @planNothingChanged.
@@ -1045,6 +1045,60 @@ abstract class AppText {
   /// In pt, this message translates to:
   /// **'Atualizar'**
   String get updateButton;
+
+  /// No description provided for @watchInstallButton.
+  ///
+  /// In pt, this message translates to:
+  /// **'Instalar no relógio (Wi‑Fi)'**
+  String get watchInstallButton;
+
+  /// No description provided for @watchInstallTitle.
+  ///
+  /// In pt, this message translates to:
+  /// **'Instalar no relógio pela rede'**
+  String get watchInstallTitle;
+
+  /// No description provided for @watchSteps.
+  ///
+  /// In pt, this message translates to:
+  /// **'1. No relógio: Configurações › Sobre › Software, toque 7 vezes em \"Versão do software\" para liberar as Opções do desenvolvedor.\n2. Em Opções do desenvolvedor, ligue \"Depuração ADB\" e \"Depuração por Wi‑Fi\". Deixe o relógio no carregador, com a tela ligada, para o Wi‑Fi não dormir.\n3. Primeira vez: em Depuração por Wi‑Fi › \"Parear novo dispositivo\", preencha o IP, a porta e o código mostrados.\n4. Toque em Instalar. Das próximas vezes basta o IP: deixe a porta e o código em branco.'**
+  String get watchSteps;
+
+  /// No description provided for @watchIp.
+  ///
+  /// In pt, this message translates to:
+  /// **'IP do relógio'**
+  String get watchIp;
+
+  /// No description provided for @watchPairPort.
+  ///
+  /// In pt, this message translates to:
+  /// **'Porta de pareamento (só na 1ª vez)'**
+  String get watchPairPort;
+
+  /// No description provided for @watchPairCode.
+  ///
+  /// In pt, this message translates to:
+  /// **'Código (só na 1ª vez)'**
+  String get watchPairCode;
+
+  /// No description provided for @watchPaired.
+  ///
+  /// In pt, this message translates to:
+  /// **'Relógio pareado. Instalando…'**
+  String get watchPaired;
+
+  /// No description provided for @watchInstall.
+  ///
+  /// In pt, this message translates to:
+  /// **'Instalar'**
+  String get watchInstall;
+
+  /// No description provided for @watchFillFields.
+  ///
+  /// In pt, this message translates to:
+  /// **'Preencha o IP do relógio; na primeira vez, também a porta de pareamento e o código.'**
+  String get watchFillFields;
 }
 
 class _AppTextDelegate extends LocalizationsDelegate<AppText> {

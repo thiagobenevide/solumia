@@ -45,7 +45,7 @@ app = FastAPI(title="Esteira dark")
 _HOSTS_LOCALS = re.compile(r"(localhost|127\.0\.0\.1|\[::1\])(:\d+)?")
 _ORIGINS = re.compile(
     r"https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?|https://"
-    + re.escape(os.environ.get("ESTEIRA_DOMINIO", "agent.thiagobenevide.com"))
+    + re.escape(os.environ.get("ESTEIRA_DOMINIO", "solumialocal.thiagobenevide.com"))
 )
 
 
