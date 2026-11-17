@@ -261,6 +261,9 @@ def _num(x: float) -> str:
     return repr(round(float(x), 3))
 
 
+HEADROOM = 0.06  # fração do corpo do texto livre acima e abaixo dele na célula
+
+
 class Compiler:
     """N1 + DADOS do script (`estudio/ec.data`) → corpo da peça em script do EffectCraft."""
 
@@ -278,6 +281,7 @@ class Compiler:
         self.x_px: dict[str, float] = {}
         self.numeros: set[str] = set()
         self.names: set[str] = set()
+        self.unit_shown: set[str] = set()
         self.texts: list[str] = []
         self.limites: dict[str, tuple[float, float, float, float]] = {}  # célula (px) de cada texto de caixa
         self.small: list[str] = []  # textos de caixa que a célula espremeu a menos de 60% do nível
@@ -378,12 +382,15 @@ class Compiler:
             # várias linhas invadir a célula de baixo. Estima as linhas e encolhe até caber na célula.
             n = self._lines(e, size, w)
             # a palavra mais longa também cabe na largura: o bloco não quebra no meio dela ("1.234,5" vazava do anel)
-            while (n * size * 1.25 > h or self._word(e, size) > w * 0.95) and size > LEVELS["rotulo"] * self.U:
+            # folga de HEADROOM do corpo em cima: o topo do glifo passa um pouco da âncora, e com a âncora colada na
+            # borda da célula o `caber` do núcleo lia "saiu por cima" e encolhia o texto até 30% (número minúsculo)
+            while ((n * size * 1.25 + 2 * HEADROOM * size > h or self._word(e, size) > w * 0.95)
+                   and size > LEVELS["rotulo"] * self.U):
                 size *= 0.92
                 n = self._lines(e, size, w)
             if size < 0.6 * (e.tam or LEVELS[e.nivel or "corpo"]) * self.U and size < 0.026 * self.U:  # < 28 px no 1080
                 self.small.append(e.nome)
-            ty = y + max(0.0, (h - n * size * 1.25) / 2)
+            ty = y + max(HEADROOM * size, (h - n * size * 1.25) / 2)
             self.limites[e.nome] = (x, y, x + w, y + h)
             return e.model_copy(update={
                 "x": x / self.W, "y": ty / self.H, "largura": w / self.W, "tam": size / self.U, "apos": None,
@@ -583,6 +590,8 @@ class Compiler:
         plans = _sort(plans)
         doc = doc.model_copy(update={"elementos": plans, "animacoes": [*doc.animacoes, *extras]})
         self.names = {e.nome for e in plans}
+        # a number whose unit another text shows (`unidade_de`) leaves it out; the others keep it ("R$ 12 mil")
+        self.unit_shown = {e.unidade_de for e in plans if isinstance(e, Text) and e.unidade_de}
         background = doc.fundo_tela_cheia if self.d.get("tela_cheia") else doc.fundo
         if background == "tela":
             lines.append("fundoTela();")
@@ -671,7 +680,7 @@ class Compiler:
             self.numeros.add(e.nome)
             out += [f"var n_{v} = numero({_js(s)});",
                     f"var s_{v} = n_{v} ? n_{v}.antes + String(n_{v}.n.toFixed(n_{v}.casas)).replace(\".\", \",\")"
-                    f".replace(/\\B(?=(\\d{{3}})+(?!\\d))/g, \".\") : {_js(s)};"]
+                    f".replace(/\\B(?=(\\d{{3}})+(?!\\d))/g, \".\"){self._unit(e.nome, v)} : {_js(s)};"]
             s_js = f"s_{v}"
         else:
             s_js = _js(s)
@@ -715,8 +724,15 @@ class Compiler:
     def _count(self, a: Count, v):
         if a.alvo not in self.numeros:
             raise ErrorN1(f"`contar` só em texto com numero=true: {a.alvo}")
+        after = '""' if a.alvo in self.unit_shown else f"n_{v}.depois"
         return [f"if (n_{v}) contagem({v}, n_{v}.n, n_{v}.casas, {_num(self.time_of(a.t))}, {_num(self.duration_of(a.dur))}, "
-                f"n_{v}.antes, \"\");"]
+                f"n_{v}.antes, {after});"]
+
+    def _unit(self, name, v):
+        """JS that appends the unit of the number (`+ n_v.depois`), or "" when another text shows it."""
+        if name in self.unit_shown:
+            return ""
+        return f" + n_{v}.depois"
 
     def _value(self, prop, val, everything):
         """Normaliza o que modelos escrevem de jeitos diferentes: escala como fator ou número, opacidade 0–1,

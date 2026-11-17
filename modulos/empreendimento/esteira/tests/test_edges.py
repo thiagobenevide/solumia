@@ -158,3 +158,13 @@ def test_core_enters_long_cut_neighbor_placed_over_its_end():
     sound[100:138] = True    # kept word really ends at 1.38; Whisper starts the cut neighbor at 1.25
     n = B.cores([(1.0, 1.3)], sound, [(1.0, 1.3), (1.25, 1.65)])[0]
     assert abs(n[1] - 1.38) < 1e-6
+
+
+def test_core_of_kept_word_skips_tail_of_cut_word_before_it():
+    sound = np.zeros(400, bool)
+    sound[80:104] = True     # cut word "dado." really ends at 1.04; Whisper starts the kept "Mas" at 1.0
+    sound[130:160] = True    # the kept word, after a real pause
+    n = B.cores([(1.0, 1.6)], sound, [(0.8, 1.0), (1.0, 1.6)])[0]
+    assert abs(n[0] - 1.3) < 1e-6
+    sound[104:130] = True    # no pause: the word really starts there
+    assert B.cores([(1.0, 1.6)], sound, [(0.8, 1.0), (1.0, 1.6)])[0][0] < 1.0

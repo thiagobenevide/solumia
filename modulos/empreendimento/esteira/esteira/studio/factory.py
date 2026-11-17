@@ -692,19 +692,31 @@ def _intro_patch(fixing):
                 "the ops that fix what the errors and the causes point out.")
     return ("You adapt an EffectCraft motion graphics piece in N1 (JSON). You do NOT rewrite the document: respond "
             "with `ops`, a short list (at most 12) of edits that the code applies to the BASE, and comunica (in "
-            f"Brazilian Portuguese). Everything you do not mention stays exactly as it is. {base}\n"
+            "Brazilian Portuguese, one sentence, at most 180 characters). Everything you do not mention stays "
+            f"exactly as it is. {base}\n"
             "Ops:\n"
             '- {"op": "style", "nome": <element>, ...only the fields that change}: nivel, peso, fonte, cor, '
-            "alinhar, caps, italico (texts); cor, opacidade, raio (rectangles); cor, contorno (ellipses). Fonts "
-            "and colors by role only.\n"
+            "alinhar, caps, italico, tam (texts); cor, opacidade, raio (rectangles); cor, contorno (ellipses). "
+            "Fonts and colors by role only. `tam` = text size as a fraction of the short side of the screen "
+            "(numero level is 0.15, titulo 0.065, corpo 0.045; a hero number may go up to 0.35); give its cell "
+            "more weight with a weights op so it fits.\n"
             '- {"op": "motion", "alvo": <element>, "de": entrance type, "t": start, "dur": duration}: changes '
-            "(or creates) the entrance of an element. Stagger `t` so the eye follows one thing at a time.\n"
-            '- {"op": "add", "caixa": <existing box>, "elemento": {rectangle or ellipse, new `nome`, no '
-            'x/y/w/h/d}, "de": ..., "t": ...}: adds a shape INSIDE an existing box.\n'
-            'Button variant: `"se": {"botao": <button of the ficha>, "igual": <one of its values>}` in a style op or '
-            "in the `elemento` of an add makes that element show only for that value (each value must change "
-            "something visible; never on an element that shows a slot). A button with no variant is removed from "
-            "the ficha.\n"
+            "(or creates) the entrance of an element. Stagger `t` between 0 and 1.8 s so the eye follows one thing "
+            "at a time and the piece is complete by 2 s (later is clamped).\n"
+            '- {"op": "add", "caixa": <existing box>, "elemento": {rectangle or ellipse, new `nome`}, "de": ..., '
+            '"t": ...}: adds an ACCENT inside an existing box, after its last child: a thin rule (retangulo with '
+            "`h` up to 0.03 and `w` up to 0.9) or a dot/ring (elipse with `d` up to 0.12; `contorno` > 0 makes a "
+            "ring). The code clamps the size. At most 3 adds; never a panel, a grid, a bar or a background.\n"
+            '- {"op": "weights", "caixa": <existing box or repetir>, "pesos": [one number per child]}: relative '
+            "size of the children of a box, or of the elements inside one item of a repetir (a text reported as "
+            "tiny needs a bigger weight than its neighbors; \"Item 2\" is item 2 of the repetir whose element is "
+            "named \"Item\").\n"
+            "The idea may describe more than N1 draws (curves, icons, trajectories): keep the structure of the BASE "
+            "and express the idea through hierarchy (nivel, peso, caps), color roles, the order and rhythm of the "
+            "entrances and a few accents.\n"
+            'Button variant: `"se": {"botao": <button of the ficha>, "igual": <one of its values>}` inside the '
+            "`elemento` of an add makes that accent show only for that value. The elements of the BASE always "
+            "show: a button never hides content. A button with no variant is removed from the ficha.\n"
             "Use only `nome`s that exist in the BASE. An op the code refuses comes back in the errors. The guide "
             "below is in Portuguese.")
 
@@ -728,7 +740,7 @@ def _query_n1_local(text, base=None):
             if not r:
                 return None
             doc, refused = N1P.apply(base, r)
-            return PieceN1Local(peca_n1=doc, comunica=r.comunica, recusadas=refused)
+            return PieceN1Local(peca_n1=doc, comunica=r.comunica[:200], recusadas=refused)
         r = local.ask(f"{text}\n\n(attempt {time.time_ns()})", Answer, model=MODEL_LOCAL, temperature=0.4,
                             max_tokens=7000, operation="fabrica_n1")
         # só o que a LLM escreveu: o que ela omite vem do molde (travar_molde), não do padrão do esquema (peso 400…)

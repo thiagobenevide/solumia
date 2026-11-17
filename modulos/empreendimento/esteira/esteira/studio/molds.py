@@ -26,7 +26,7 @@ CANNOT_DRAW = (
     (r"perspectiva|horizonte|ponto de fuga|\bpiso\b|estrada|t[úu]nel|c[âa]mera (avan|atravess)", "perspectiva"),
     (r"\b3d\b|extrus|\bcubos?\b|prisma|paralaxe|isom[ée]tric", "3D ou paralaxe"),
     (r"\bmapas?\b|\bglobo\b|planeta|[óo]rbita", "mapa ou órbita"),
-    (r"[íi]cone|silhueta|logotipo|\blogo\b", "ícone ou desenho"),
+    (r"[íi]cone|silhueta|logotipo|logomarca", "ícone ou desenho"),
     (r"trajet[óo]ria|\brotas?\b|caminho (que|entre)", "trajetória livre"),
 )
 

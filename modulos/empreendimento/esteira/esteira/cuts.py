@@ -387,6 +387,33 @@ def _starts_abandoned(segments):
                      "fala interrompida (...)" if cut else "seguida de bastidor (\"droga\")")
 
 
+GLUED = 0.1       # s: no pause between the fragment and the kept take (Whisper time)
+GLUED_END = 2     # words: fragment that closes the kept sentence ("... aritmética" + "básica.")
+GLUED_START = 6   # words: lead-in of a kept take that starts in lowercase ("nós temos um" + "estudo do México")
+RE_SENTENCE_END = re.compile(r"[.?!:…]$")
+
+
+def _glued_fragments(segments):
+    """Short speech said in the same breath as a kept take is part of its sentence and stays, without asking the
+    LLM: judged alone ("aqui.", "básica.", "Já") it looks like a loose word, and cutting it leaves a splice inside
+    continuous sound (the neighbor word comes out eaten)."""
+    for k, t in enumerate(segments):
+        if t["tipo"] not in ("improviso", "continuacao") or t.get("por") or t.get("garantida"):
+            continue
+        size = t["j"] - t["i"]
+        closed = bool(RE_SENTENCE_END.search(t["texto"].strip()))
+        before = segments[k - 1] if k else None
+        after = segments[k + 1] if k + 1 < len(segments) else None
+        ends = (before is not None and before["manter"] and size <= GLUED_END and closed
+                and t["ini"] - before["fim"] <= GLUED
+                and not RE_SENTENCE_END.search(before["texto"].strip()))
+        starts = (after is not None and after["manter"] and size <= GLUED_START and not closed
+                  and after["ini"] - t["fim"] <= GLUED and after["texto"].strip()[:1].islower())
+        if ends or starts:
+            t.update(manter=True, por="regra", garantida=True, confianca=0.9,
+                     motivo=t["motivo"] + " → sem pausa da frase mantida: fica")
+
+
 DOUBT = 0.7  # trechos com confiança abaixo disto (fora tomadas e bastidor) vão para o LLM local
 
 
@@ -453,9 +480,10 @@ def review_with_llm(segments, sentences):
             # vezes junta falas sem relação ("Ter parcela a pagar…" × "Que você ganha ali líquido…")
             a.update(por="llm", motivo=a["motivo"] + f" → LLM (par): {r.motivo}")
             t.update(manter=r.fica in ("B", "ambos"), por="llm", confianca=round(r.confianca, 2),
-                     reason=t["motivo"] + f" → LLM (par): fica {r.fica}, {r.motivo}")
+                     motivo=t["motivo"] + f" → LLM (par): fica {r.fica}, {r.motivo}")
             t.pop("par")
     _starts_abandoned(segments)
+    _glued_fragments(segments)
     doubts = [t for t in segments if t["tipo"] in ("improviso", "continuacao", "reformulada", "retake")
                and t["confianca"] < DOUBT and t.get("por") != "llm"]
     for n, t in enumerate(doubts, 1):
@@ -476,7 +504,7 @@ def review_with_llm(segments, sentences):
             t.update(por="regra", motivo=f"{t['motivo']} → LLM queria manter ({d.motivo}), sem certeza: sai")
             continue
         t.update(manter=d.manter, confianca=round(d.confianca, 2), por="llm",
-                 reason=f"{t['motivo']} → LLM: {d.motivo}")
+                 motivo=f"{t['motivo']} → LLM: {d.motivo}")
     _reading_single(segments)
     return doubts
 
@@ -521,7 +549,7 @@ def escalate_to_claude(segments, project):
     for d in r.decisoes:
         if 0 <= d.id < len(doubts):
             doubts[d.id].update(manter=d.manter, por="claude", confianca=0.9,
-                                 reason=doubts[d.id]["motivo"] + f" → Claude: {d.motivo}")
+                                 motivo=doubts[d.id]["motivo"] + f" → Claude: {d.motivo}")
     return len(r.decisoes)
 
 
@@ -656,10 +684,22 @@ def _edge_end(env, end_w, prox_start, slack):
     return s[0] + min(slack, s[1] - s[0]) if s else _applies(env, end_w, limit)
 
 
-def _edge_start(env, start_w, ant_end, slack):
+def _edge_start(env, start_w, ant_end, slack, end_w=None):
     limit = max(start_w - EXTENDS_START, min(ant_end, start_w - 0.05))
     s = _silence(env, start_w, limit)  # começar dentro da palavra lia um "s" inicial fraco como pausa
+    if not s and end_w is not None:
+        s = _head_silence(env, start_w, end_w)
     return s[1] - min(slack, s[1] - s[0]) if s else _applies(env, limit, start_w)
+
+
+def _head_silence(env, start_w, end_w):
+    """No pause before the word, but the sound at its start stops at once and a real pause follows inside its
+    time: that sound is the tail of the cut word before it (`edges._after_head`); the word comes after the pause."""
+    from esteira import edges
+    s = _silence(env, start_w, min(end_w, start_w + edges.HEAD + SILENCE_MIN + 0.02))
+    if s and s[0] - start_w <= edges.HEAD and s[1] - s[0] >= edges.HEAD_GAP and s[1] < end_w:
+        return s
+    return None
 
 
 def _intervals(segments, words, exclude=(), env=None):
@@ -682,7 +722,7 @@ def _intervals(segments, words, exclude=(), env=None):
         prox = words[kf + 1]["ini"] if kf + 1 < len(words) else words[kf]["fim"] + 2
         ant = words[ki - 1]["fim"] if ki else 0.0
         pause_ant = _pause(words[blocks[n - 1][1]]["p"]) if n else PAUSES["frase"]
-        a = _edge_start(env, words[ki]["ini"], ant, pause_ant * 0.4)
+        a = _edge_start(env, words[ki]["ini"], ant, pause_ant * 0.4, words[ki]["fim"])
         b = _edge_end(env, words[kf]["fim"], prox, _pause(words[kf]["p"]) * 0.6)
         output.append([max(a, 0.0), max(b, a + 0.05)])
     for x, y in zip(output, output[1:]):
