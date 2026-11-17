@@ -193,7 +193,7 @@ def test_hybrid_port_by_local_llm_without_spending_claude(environment, monkeypat
     _barras(environment)
     n1 = _in_box(json.loads((REF_EC / "peca.n1.json").read_text()))
     local_names = []
-    monkeypatch.setattr(F, "_query_n1_local", lambda text: local_names.append(text) or F.PieceN1Local(peca_n1=n1))
+    monkeypatch.setattr(F, "_query_n1_local", lambda text, base=None: local_names.append(text) or F.PieceN1Local(peca_n1=n1))
     monkeypatch.setattr(F, "_query", lambda *a, **k: pytest.fail("o Claude não devia ser chamado"))
     p = F.request_hybrid("porte")
     r = F.run(p.id, visual=False)
@@ -205,7 +205,7 @@ def test_hybrid_port_without_fallback_and_idea_with_fallback(environment, monkey
     _barras(environment)
     n1 = json.loads((REF_EC / "peca.n1.json").read_text())
     card_ec = json.loads((REF_EC / "ficha.json").read_text())
-    monkeypatch.setattr(F, "_query_n1_local", lambda text: None)  # o local não responde em nenhuma rodada
+    monkeypatch.setattr(F, "_query_n1_local", lambda text, base=None: None)  # o local não responde em nenhuma rodada
     monkeypatch.setattr(F, "_query", lambda p, text, image=None: (
         F.PieceGenerated.model_validate({"id": "x", "peca_n1": n1, "ficha": card_ec, "resumo": "socorro"}), 0.3))
     r = F.run(F.request_hybrid("porte").id, visual=False)  # a última rodada é o rascunho do molde: a peça sai
@@ -228,7 +228,7 @@ def test_hybrid_batch_ideas_from_claude_expanded_by_local_llm(environment, monke
     ideas = [{"ficha": {**card, "id": f"ideia_{k}"}, "conceito": f"conceito {k}"} for k in range(3)]
     calls = []
     monkeypatch.setattr(F, "_query_ideas", lambda p, n: calls.append(n) or (ideas[:n], 0.4))
-    monkeypatch.setattr(F, "_query_n1_local", lambda text: F.PieceN1Local(peca_n1=n1))
+    monkeypatch.setattr(F, "_query_n1_local", lambda text, base=None: F.PieceN1Local(peca_n1=n1))
     p = F.request_hybrid("ideias", quantidade=3)
     r = F.run(p.id, visual=False)
     assert calls == [3] and r.estado == "concluido" and r.locais == 3 and r.gasto_usd == 0.4

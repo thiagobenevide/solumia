@@ -134,3 +134,27 @@ def test_combine_alignment_discards_absurd_time():
     ws = [[1.0, 1.4, "casa"], [1.5, 1.9, "mais"], [2.0, 2.3, "fez"]]
     out = A.combine(ws, [[1.05, 1.38], None, [5.0, 5.3]])
     assert out[0][:2] == [1.05, 1.38] and out[1][:2] == [1.5, 1.9] and out[2][:2] == [2.0, 2.3]
+
+
+def test_core_crosses_stop_closure_but_not_a_pause():
+    sound = np.zeros(400, bool)
+    sound[100:130] = True
+    sound[138:150] = True    # last syllable after the closure of the stop (80 ms of silence)
+    assert abs(B.core(1.0, 1.3, sound)[1] - 1.5) < 1e-6
+    sound[:] = False
+    sound[100:130] = True
+    sound[150:160] = True    # 200 ms: a pause, another sound
+    assert abs(B.core(1.0, 1.3, sound)[1] - 1.3) < 1e-6
+
+
+def test_long_word_gets_more_slack_at_the_end():
+    sound = np.zeros(400, bool)
+    sound[100:228] = True    # Whisper ended the 1 s word at 2.0; the sound goes on to 2.28
+    assert abs(B.core(1.0, 2.0, sound)[1] - 2.28) < 1e-6
+
+
+def test_core_enters_long_cut_neighbor_placed_over_its_end():
+    sound = np.zeros(400, bool)
+    sound[100:138] = True    # kept word really ends at 1.38; Whisper starts the cut neighbor at 1.25
+    n = B.cores([(1.0, 1.3)], sound, [(1.0, 1.3), (1.25, 1.65)])[0]
+    assert abs(n[1] - 1.38) < 1e-6

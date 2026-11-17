@@ -110,6 +110,7 @@ class PieceN1Local(BaseModel):
     Claude). O esquema N1 vira gramática: a resposta sempre é um documento válido."""
     peca_n1: Any = Field(description="documento N1 da peça (GUIA_N1_EC)")
     comunica: str = Field("", description="uma frase: o que a peça comunica, se o visual mudou")
+    recusadas: list[str] = Field(default_factory=list, description="ops do patch que o código recusou")
 
 
 class Idea(BaseModel):
@@ -634,7 +635,8 @@ def _compact(x):
     return [_compact(v) for v in x] if isinstance(x, list) else x
 
 
-def _dossier_local(mode, card, target="", idea=None, errors=(), draft=None, previous=None, already_seen=()):
+def _dossier_local(mode, card, target="", idea=None, errors=(), draft=None, previous=None, already_seen=(),
+                   patch=False):
     """Prompt compacto para a LLM local (cabe em 16k com a resposta): guia N1, a ficha, a origem e o RASCUNHO do
     molde (N1 que já compila e passa no portão). A LLM adapta o rascunho; não monta a peça do zero. Depois de uma
     reprovação, a base é a VERSÃO ANTERIOR dela com os erros e as causas: corrige o que foi apontado, não refaz."""
@@ -655,6 +657,8 @@ def _dossier_local(mode, card, target="", idea=None, errors=(), draft=None, prev
               "guide below is in Portuguese.",
               f"=== N1 GUIDE ===\n{GUIDE_N1_EC.read_text()}",
               f"=== FICHA (contract: slots, buttons, intents) ===\n{json.dumps(card, ensure_ascii=False)}"]
+    if patch:
+        parts[0] = _intro_patch(previous is not None)
     if previous is not None:
         parts.append(f"=== YOUR PREVIOUS VERSION (rejected; fix only what was pointed out) ===\n"
                       f"{json.dumps(_compact(previous), ensure_ascii=False)}")
@@ -680,16 +684,51 @@ def _dossier_local(mode, card, target="", idea=None, errors=(), draft=None, prev
     return "\n\n".join(parts)
 
 
-def _query_n1_local(text):
+def _intro_patch(fixing):
+    """Patch mode: the local LLM edits the base with a few small ops instead of rewriting the document."""
+    base = "The BASE is the DRAFT below: it is already right and only needs to take on the look of the idea."
+    if fixing:
+        base = ("The BASE is YOUR PREVIOUS VERSION below, rejected for the errors listed at the end: send only "
+                "the ops that fix what the errors and the causes point out.")
+    return ("You adapt an EffectCraft motion graphics piece in N1 (JSON). You do NOT rewrite the document: respond "
+            "with `ops`, a short list (at most 12) of edits that the code applies to the BASE, and comunica (in "
+            f"Brazilian Portuguese). Everything you do not mention stays exactly as it is. {base}\n"
+            "Ops:\n"
+            '- {"op": "style", "nome": <element>, ...only the fields that change}: nivel, peso, fonte, cor, '
+            "alinhar, caps, italico (texts); cor, opacidade, raio (rectangles); cor, contorno (ellipses). Fonts "
+            "and colors by role only.\n"
+            '- {"op": "motion", "alvo": <element>, "de": entrance type, "t": start, "dur": duration}: changes '
+            "(or creates) the entrance of an element. Stagger `t` so the eye follows one thing at a time.\n"
+            '- {"op": "add", "caixa": <existing box>, "elemento": {rectangle or ellipse, new `nome`, no '
+            'x/y/w/h/d}, "de": ..., "t": ...}: adds a shape INSIDE an existing box.\n'
+            'Button variant: `"se": {"botao": <button of the ficha>, "igual": <one of its values>}` in a style op or '
+            "in the `elemento` of an add makes that element show only for that value (each value must change "
+            "something visible; never on an element that shows a slot). A button with no variant is removed from "
+            "the ficha.\n"
+            "Use only `nome`s that exist in the BASE. An op the code refuses comes back in the errors. The guide "
+            "below is in Portuguese.")
+
+
+def _query_n1_local(text, base=None):
+    """With `base` (draft or previous version) the model answers a patch (few tokens, each op validated alone)
+    and the code applies it; without it, the complete document."""
     from esteira.ai import local
     from esteira.n1 import effectcraft as N1EC
+    from esteira.n1 import patch as N1P
 
     class Answer(BaseModel):
-        piece_n1: N1EC.Piece
+        peca_n1: N1EC.Piece
         comunica: str = ""
     before = {k: os.environ.get(k) for k in ("ESTEIRA_ENGINE", "ESTEIRA_ENGINE_FIXED")}
     os.environ.update(ESTEIRA_ENGINE="local", ESTEIRA_ENGINE_FIXED="1")
     try:
+        if base is not None:
+            r = local.ask(f"{text}\n\n(attempt {time.time_ns()})", N1P.Patch, model=MODEL_LOCAL, temperature=0.4,
+                          max_tokens=1800, operation="fabrica_n1")
+            if not r:
+                return None
+            doc, refused = N1P.apply(base, r)
+            return PieceN1Local(peca_n1=doc, comunica=r.comunica, recusadas=refused)
         r = local.ask(f"{text}\n\n(attempt {time.time_ns()})", Answer, model=MODEL_LOCAL, temperature=0.4,
                             max_tokens=7000, operation="fabrica_n1")
         # só o que a LLM escreveu: o que ela omite vem do molde (travar_molde), não do padrão do esquema (peso 400…)
@@ -1006,14 +1045,23 @@ def _generate_local_n1(p: Request, mode, target, idea, visual):
     cost, reviews, passou = 0.0, 0, False
     for rounded in range(1, ROUNDS_LOCALS + 1):
         _change(p.id, etapa=_stage("n1", id_, rounded))
-        text = _dossier_local(mode, card, target, idea, errors, draft, previous, already_seen)
+        base = previous if previous is not None else draft  # with a base the LLM sends a patch, not the document
+        text = _dossier_local(mode, card, target, idea, errors, draft, previous, already_seen,
+                              patch=base is not None)
         if rounded == ROUNDS_LOCALS and not passou:
             # nenhuma versão da LLM chegou à revisão: a última rodada é o próprio rascunho do molde (já testado)
             g = PieceN1Local(peca_n1=draft, comunica=card.get("comunica", ""))
+            from_llm = False
         else:
-            g = _query_n1_local(text)
+            from_llm = True
+            g = _query_n1_local(text, base)
         if not g:
             r = {"ok": False, "erros": ["a LLM local não respondeu (contexto, tempo ou JSON)"]}
+            continue
+        if from_llm and base is not None and g.peca_n1 == base:
+            # empty patch (or every op refused): nothing new to render or review
+            r = {"ok": False, "erros": ["the patch changed nothing: send ops that change the BASE"]}
+            errors = [*r["erros"], *g.recusadas[:6]]
             continue
         if draft is not None:
             g = g.model_copy(update={"peca_n1": lock_mold(g.peca_n1, draft)})
@@ -1036,7 +1084,7 @@ def _generate_local_n1(p: Request, mode, target, idea, visual):
                           r, id_, group, "effectcraft", parent=rg)
             already_seen = _seen(errors, already_seen, r["erros"])
             previous, warning = _base_next(g.peca_n1, previous, draft, r["erros"], errors)
-            errors = [*r["erros"], *([warning] if warning else [])]
+            errors = [*r["erros"], *g.recusadas[:4], *([warning] if warning else [])]
             continue
         try:
             _compose(pg, id_, None, "effectcraft")
@@ -1077,7 +1125,7 @@ def _generate_local_n1(p: Request, mode, target, idea, visual):
         # a próxima rodada corrige esta versão (não o molde); os erros de antes ficam como "não volte a eles"
         already_seen = _seen(errors, already_seen, r.get("erros", []))
         previous, warning = _base_next(g.peca_n1, previous, draft, r.get("erros", []), errors)
-        errors = [*r.get("erros", [])[:12], *([warning] if warning else [])]
+        errors = [*r.get("erros", [])[:12], *g.recusadas[:4], *([warning] if warning else [])]
     reason = "; ".join(r.get("erros", [])[:4])
     if (P.folder(id_) / "ficha.json").exists():
         _discard(id_, f"local: {reason}")
