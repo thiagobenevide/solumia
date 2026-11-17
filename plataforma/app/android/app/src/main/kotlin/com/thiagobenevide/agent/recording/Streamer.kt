@@ -58,13 +58,21 @@ class Streamer(
     private val startedAt = SystemClock.elapsedRealtime()
     private val drain: Thread
 
+    private val realtime = realtimeClock
+    @Volatile private var capturing = true
+    private var audioThread: Thread? = null
+
     val connected get() = network?.connected ?: false
     val fileName get() = recorder?.name
 
     init {
         val mime = if (hevc) MediaFormat.MIMETYPE_VIDEO_HEVC else MediaFormat.MIMETYPE_VIDEO_AVC
         encoder = MediaCodec.createEncoderByType(mime)
-        val range = encoder.codecInfo.getCapabilitiesForType(mime).videoCapabilities.bitrateRange
+        val video = encoder.codecInfo.getCapabilitiesForType(mime).videoCapabilities
+        val range = video.bitrateRange
+        if (!video.areSizeAndRateSupported(width, height, fps.toDouble())) {
+            onWarning("The encoder does not guarantee ${width}x$height at $fps fps: frames may drop")
+        }
         val format = MediaFormat.createVideoFormat(mime, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
             setInteger(MediaFormat.KEY_BIT_RATE, bitrate.coerceIn(range.lower, range.upper))
@@ -74,7 +82,12 @@ class Streamer(
             setInteger(MediaFormat.KEY_PRIORITY, 0)
             // one keyframe per second: the PC can join or come back mid-stream
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-            if (Build.VERSION.SDK_INT >= 29) setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1)
+            if (Build.VERSION.SDK_INT >= 29) {
+                setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1)
+                // live preview: each frame leaves the encoder as soon as it is ready (no reordering)
+                setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
+            }
+            if (Build.VERSION.SDK_INT >= 30) setInteger(MediaFormat.KEY_LATENCY, 1)
             if (hlg && hevc) {
                 setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain10)
                 setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT2020)
@@ -87,10 +100,54 @@ class Streamer(
         encoder.start()
 
         val codec = if (hevc) "hevc" else "avc"
-        val header = "SOLUMIA-CAM 1 $codec ${width}x$height $fps ${if (hlg) 1 else 0}\n"
-        network = host?.let { NetworkSink(it, port, header.toByteArray(), ::requestKeyFrame, onWarning) }
-        recorder = if (recordLocal) LocalRecorder(context, withAudio, realtimeClock, ::requestKeyFrame, onWarning) else null
+        // the audio token turns on the framed stream (video + lossless PCM), see protocol.dart
+        val audioToken = if (withAudio) " pcm${AUDIO_RATE}x$AUDIO_CHANNELS" else ""
+        val header = "SOLUMIA-CAM 1 $codec ${width}x$height $fps ${if (hlg) 1 else 0}$audioToken\n"
+        network = host?.let { NetworkSink(it, port, header.toByteArray(), withAudio, ::requestKeyFrame, onWarning) }
+        recorder = if (recordLocal) LocalRecorder(context, withAudio, ::requestKeyFrame, onWarning) else null
         drain = Thread(::drainEncoder, "camera-encoder").apply { start() }
+        if (withAudio) audioThread = Thread(::captureAudio, "camera-audio").apply { start() }
+    }
+
+    /** Camera clock (realtime or monotonic), so audio and video share one timeline. */
+    private fun nowUs() =
+        if (realtime) SystemClock.elapsedRealtimeNanos() / 1000 else System.nanoTime() / 1000
+
+    /** One microphone read feeds both the phone MP4 (AAC) and the PC (raw PCM, no quality loss). */
+    @SuppressLint("MissingPermission") // the screen only starts after asking for camera + microphone
+    private fun captureAudio() {
+        val channels = AudioFormat.CHANNEL_IN_STEREO
+        val minimum = AudioRecord.getMinBufferSize(AUDIO_RATE, channels, AudioFormat.ENCODING_PCM_16BIT)
+        val record = try {
+            AudioRecord(MediaRecorder.AudioSource.CAMCORDER, AUDIO_RATE, channels, AudioFormat.ENCODING_PCM_16BIT, minimum * 4)
+        } catch (e: Exception) {
+            onWarning("Microphone unavailable: ${e.message}")
+            recorder?.endAudio()
+            return
+        }
+        if (record.state != AudioRecord.STATE_INITIALIZED) {
+            // another app holds the microphone: the constructor does not throw, it just stays unusable
+            onWarning("Microphone unavailable (in use by another app?)")
+            record.release()
+            recorder?.endAudio()
+            return
+        }
+        val pcm = ByteArray(minimum)
+        record.startRecording()
+        try {
+            while (capturing) {
+                val read = record.read(pcm, 0, pcm.size)
+                if (read <= 0) continue
+                // pts of the block start: now minus the duration just read (16 bits, 2 channels)
+                val pts = nowUs() - (read / 4) * 1_000_000L / AUDIO_RATE
+                recorder?.audio(pcm, read, pts)
+                network?.sendAudio(pcm.copyOf(read))
+            }
+        } finally {
+            record.stop()
+            record.release()
+            recorder?.endAudio()
+        }
     }
 
     private fun drainEncoder() {
@@ -151,6 +208,8 @@ class Streamer(
         }
         encoder.release()
         surface.release()
+        capturing = false
+        audioThread?.join(3000)
         network?.stop()
         return recorder?.stop()
     }
@@ -161,10 +220,14 @@ private class NetworkSink(
     private val host: String,
     private val port: Int,
     private val header: ByteArray,
+    private val framed: Boolean,
     private val requestKeyFrame: () -> Unit,
     private val onWarning: (String) -> Unit,
 ) {
-    private val queue = LinkedBlockingQueue<ByteArray>(90)
+    private class Packet(val type: Byte, val data: ByteArray, val at: Long = SystemClock.elapsedRealtime())
+
+    // ~3 s of video plus the audio blocks (~50/s) in between
+    private val queue = LinkedBlockingQueue<Packet>(400)
     @Volatile var connected = false
     @Volatile var codecHeader: ByteArray? = null
     @Volatile private var running = true
@@ -178,10 +241,10 @@ private class NetworkSink(
         if (!connected) return
         if (needsKeyFrame) {
             if (!key) return
-            codecHeader?.let { queue.offer(it) }
+            codecHeader?.let { queue.offer(Packet(VIDEO, it)) }
             needsKeyFrame = false
         }
-        if (!queue.offer(data)) {
+        if (!queue.offer(Packet(VIDEO, data))) {
             // the network fell behind: drop the backlog and restart from the next keyframe
             queue.clear()
             needsKeyFrame = true
@@ -190,15 +253,24 @@ private class NetworkSink(
         }
     }
 
+    /** Audio is tiny (1.5 Mb/s): sent only once video is flowing, never the reason for a drop. */
+    fun sendAudio(data: ByteArray) {
+        if (!connected || needsKeyFrame) return
+        queue.offer(Packet(AUDIO, data))
+    }
+
     private fun loop() {
         var warned = false
         while (running) {
             var socket: Socket? = null
             try {
+                // built outside apply: inside it `port` would be Socket.getPort(), 0 before connecting
+                val address = InetSocketAddress(host, port)
                 socket = Socket().apply {
                     tcpNoDelay = true
-                    sendBufferSize = 4 * 1024 * 1024
-                    connect(InetSocketAddress(host, port), 3000)
+                    // ~80 ms at 100 Mb/s: a bigger buffer only hides a slow network as delay
+                    sendBufferSize = 1024 * 1024
+                    connect(address, 3000)
                 }
                 val output = BufferedOutputStream(socket.getOutputStream(), 1 shl 20)
                 output.write(header)
@@ -232,11 +304,29 @@ private class NetworkSink(
 
     private fun pump(output: BufferedOutputStream) {
         while (running) {
-            val data = queue.poll(500, TimeUnit.MILLISECONDS) ?: continue
-            output.write(data)
+            val packet = queue.poll(500, TimeUnit.MILLISECONDS) ?: continue
+            if (SystemClock.elapsedRealtime() - packet.at > MAX_LAG_MS) {
+                // the network fell behind: skip to the next keyframe instead of keeping the delay forever
+                queue.clear()
+                needsKeyFrame = true
+                requestKeyFrame()
+                onWarning("Slow network: skipped ahead to stay live (lower the bitrate or use USB)")
+                continue
+            }
+            if (framed) writeFrameHeader(output, packet)
+            output.write(packet.data)
             if (queue.isEmpty()) output.flush()
-            sent.addAndGet(data.size.toLong())
+            sent.addAndGet(packet.data.size.toLong())
         }
+    }
+
+    private fun writeFrameHeader(output: BufferedOutputStream, packet: Packet) {
+        val size = packet.data.size
+        output.write(packet.type.toInt())
+        output.write(size ushr 24)
+        output.write(size ushr 16)
+        output.write(size ushr 8)
+        output.write(size)
     }
 
     fun mbpsLastSecond(): Double {
@@ -263,7 +353,6 @@ private class NetworkSink(
 private class LocalRecorder(
     context: Context,
     private val withAudio: Boolean,
-    private val realtimeClock: Boolean,
     private val requestKeyFrame: () -> Unit,
     private val onWarning: (String) -> Unit,
 ) {
@@ -278,8 +367,6 @@ private class LocalRecorder(
     private var started = false
     private var videoBegun = false
     private var lastAudioUs = 0L
-    @Volatile private var running = true
-    private var audioThread: Thread? = null
 
     init {
         if (Build.VERSION.SDK_INT >= 29) {
@@ -297,7 +384,6 @@ private class LocalRecorder(
             descriptor = null
             muxer = MediaMuxer(File(folder, name).absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         }
-        if (withAudio) audioThread = Thread(::recordAudio, "camera-audio").apply { start() }
     }
 
     fun videoFormat(format: MediaFormat) = synchronized(lock) {
@@ -333,55 +419,59 @@ private class LocalRecorder(
         muxer.writeSampleData(videoTrack, ByteBuffer.wrap(data), info)
     }
 
-    private fun nowUs() =
-        if (realtimeClock) SystemClock.elapsedRealtimeNanos() / 1000 else System.nanoTime() / 1000
+    private val aac: MediaCodec? = if (withAudio) createAac() else null
+    private val aacInfo = MediaCodec.BufferInfo()
 
-    @SuppressLint("MissingPermission") // the screen only starts after asking for camera + microphone
-    private fun recordAudio() {
-        val rate = 48_000
-        val channels = AudioFormat.CHANNEL_IN_STEREO
-        val minimum = AudioRecord.getMinBufferSize(rate, channels, AudioFormat.ENCODING_PCM_16BIT)
-        val record = try {
-            AudioRecord(MediaRecorder.AudioSource.CAMCORDER, rate, channels, AudioFormat.ENCODING_PCM_16BIT, minimum * 4)
-        } catch (e: Exception) {
-            onWarning("Microphone unavailable: ${e.message}")
-            return
-        }
-        val aac = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
-        val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, rate, 2).apply {
+    private fun createAac(): MediaCodec {
+        val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
+        val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, AUDIO_RATE, AUDIO_CHANNELS).apply {
             setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-            setInteger(MediaFormat.KEY_BIT_RATE, 256_000)
-            setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, minimum * 4)
+            setInteger(MediaFormat.KEY_BIT_RATE, 320_000)
+            setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 64 * 1024)
         }
-        aac.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-        aac.start()
-        record.startRecording()
-        try {
-            pumpAudio(record, aac, ByteArray(minimum), rate)
-        } finally {
-            record.stop()
-            record.release()
-            aac.stop()
-            aac.release()
-        }
+        codec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+        codec.start()
+        return codec
     }
 
-    private fun pumpAudio(record: AudioRecord, aac: MediaCodec, pcm: ByteArray, rate: Int) {
-        val info = MediaCodec.BufferInfo()
-        var finished = false
-        while (!finished) {
-            val input = aac.dequeueInputBuffer(10_000)
-            if (input >= 0) {
-                val read = record.read(pcm, 0, pcm.size)
-                // pts of the block start: now minus the duration just read (16 bits, 2 channels)
-                val pts = nowUs() - (read.coerceAtLeast(0) / 4) * 1_000_000L / rate
-                val buffer = aac.getInputBuffer(input)!!
-                buffer.clear()
-                if (read > 0) buffer.put(pcm, 0, read)
-                val flags = if (running) 0 else MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                aac.queueInputBuffer(input, 0, read.coerceAtLeast(0), pts, flags)
+    /** PCM block from the shared capture (audio thread). */
+    fun audio(pcm: ByteArray, size: Int, ptsUs: Long) {
+        val codec = aac ?: return
+        var offset = 0
+        while (offset < size) {
+            val input = codec.dequeueInputBuffer(10_000)
+            if (input < 0) {
+                drainAudio(codec, aacInfo)
+                continue
             }
-            finished = drainAudio(aac, info)
+            val buffer = codec.getInputBuffer(input)!!
+            buffer.clear()
+            val chunk = minOf(buffer.remaining(), size - offset)
+            buffer.put(pcm, offset, chunk)
+            val pts = ptsUs + (offset / 4) * 1_000_000L / AUDIO_RATE
+            codec.queueInputBuffer(input, 0, chunk, pts, 0)
+            offset += chunk
+        }
+        drainAudio(codec, aacInfo)
+    }
+
+    /** End of the microphone (audio thread): flushes and releases the AAC encoder. */
+    fun endAudio() {
+        val codec = aac ?: return
+        try {
+            val input = codec.dequeueInputBuffer(100_000)
+            if (input >= 0) codec.queueInputBuffer(input, 0, 0, lastAudioUs + 1, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+            var finished = false
+            var tries = 0
+            while (!finished && tries < 100) {
+                finished = drainAudio(codec, aacInfo)
+                tries++
+                if (!finished) Thread.sleep(10)
+            }
+        } catch (_: Exception) {
+        } finally {
+            codec.stop()
+            codec.release()
         }
     }
 
@@ -413,8 +503,6 @@ private class LocalRecorder(
     }
 
     fun stop(): String? {
-        running = false
-        audioThread?.join(3000)
         synchronized(lock) {
             try {
                 if (started) muxer.stop()
@@ -434,3 +522,10 @@ private class LocalRecorder(
         return if (started) name else null
     }
 }
+
+private const val AUDIO_RATE = 48_000
+private const val AUDIO_CHANNELS = 2
+private const val VIDEO: Byte = 0x56 // 'V'
+private const val AUDIO: Byte = 0x41 // 'A'
+/** Oldest a packet may be when it leaves: above this the preview would lag behind the speaker. */
+private const val MAX_LAG_MS = 400L

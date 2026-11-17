@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:agent_empreendimento/src/recording/capture_api.dart';
 import 'package:agent_empreendimento/src/recording/protocol.dart';
 import 'package:agent_empreendimento/src/recording/studio_item_panel.dart';
@@ -20,14 +22,41 @@ void main() {
     expect(StreamHeader.parse('SOLUMIA-CAM 1 hevc 1920 60 0'), isNull);
   });
 
-  test('ffmpeg records without re-encoding and feeds preview and studio', () {
+  test('live process feeds preview and studio without delay, take records without re-encoding', () {
     final h = StreamHeader.parse('SOLUMIA-CAM 1 hevc 1920x1080 60 0')!;
-    final args = ffmpegArguments(h, file: '/tmp/x.mkv', previewPort: 5601).join(' ');
-    expect(args, contains('-f hevc -framerate 60 -i pipe:0'));
-    expect(args, contains('-c copy -f matroska /tmp/x.mkv'));
-    expect(args, contains('udp://127.0.0.1:5602'));
-    expect(args, isNot(contains('v4l2')));
+    final live = ffmpegArguments(h, previewPort: 5601).join(' ');
+    expect(live, contains('-r 60 -f hevc -framerate 60 -i pipe:0'));
+    expect(live, contains('-muxdelay 0 -muxpreload 0 -flush_packets 1 -f mpegts udp://127.0.0.1:5601'));
+    expect(live, contains('udp://127.0.0.1:5602'));
+    expect(live, isNot(contains('matroska')));
+    expect(live, isNot(contains('v4l2')));
     expect(ffmpegArguments(h, previewPort: 5601, webcam: '/dev/video9').join(' '), contains('-f v4l2 /dev/video9'));
+    final take = takeArguments(h, file: '/tmp/x.mkv').join(' ');
+    expect(take, contains('-map 0:v -c copy -f matroska /tmp/x.mkv'));
+    expect(take, isNot(contains('udp://')));
+  });
+
+  test('audio token turns on the framed stream and the audio input of the take', () {
+    final h = StreamHeader.parse('SOLUMIA-CAM 1 hevc 3840x2160 30 0 pcm48000x2')!;
+    expect((h.hasAudio, h.audioRate, h.audioChannels), (true, 48000, 2));
+    expect(StreamHeader.parse('SOLUMIA-CAM 1 hevc 3840x2160 30 0')!.hasAudio, false);
+    final args = takeArguments(h, file: '/tmp/x.mkv', audioPort: 4000).join(' ');
+    expect(args, contains('-f s16le -ar 48000 -ac 2 -i tcp://127.0.0.1:4000'));
+    expect(args, contains('-map 0:v -map 1:a -c copy -f matroska /tmp/x.mkv'));
+    expect(ffmpegArguments(h, previewPort: 5601).join(' '), isNot(contains('s16le')));
+  });
+
+  test('frame splitter survives any chunk boundary', () {
+    final video = <int>[];
+    final audio = <int>[];
+    final splitter = FrameSplitter(onVideo: video.addAll, onAudio: audio.addAll);
+    final stream = <int>[0x56, 0, 0, 0, 3, 1, 2, 3, 0x41, 0, 0, 0, 2, 9, 8, 0x56, 0, 0, 0, 1, 4];
+    for (final byte in stream) {
+      expect(splitter.add(Uint8List.fromList([byte])), true);
+    }
+    expect(video, [1, 2, 3, 4]);
+    expect(audio, [9, 8]);
+    expect(splitter.add(Uint8List.fromList([0x58, 0, 0, 0, 0])), false);
   });
 
   test('remux copies every track and tags HEVC for MOV', () {

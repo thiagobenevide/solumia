@@ -1,8 +1,8 @@
 """Studio engine: one always-on GStreamer pipeline, like OBS.
 
     black background ─┐
-    screen/phone/     ├─ [GL shader: framing, zoom, mask] ─ compositor (AYUV) ─ tee ─┬─ preview
-    webcam/image      │                                                              └─ [rec]
+    screen/phone/     ├─ [GL shader: framing, zoom, mask] ─ glvideomixer ─ NV12 ─ tee ─┬─ preview
+    webcam/image      │   (all on the GPU, one download)                             └─ [rec]
     text/color ───────┘
     mic/output ─ tee(raw) ─ volume ─ level ─ audiomixer ─ tee ─┬─ fakesink
                     └──────────── [rec: one track per source] └─ [rec: mix track]
@@ -69,6 +69,7 @@ AUDIO_CAPS = "audio/x-raw,format=S16LE,rate=48000,channels=2,layout=interleaved"
 LIVE_KEYS = {"text", "font", "color", "shadow", "volume", "muted", "follow_mouse", "auto_zoom",
              "dead_zone"}
 TICK_MS = 33
+PREVIEW_FPS = 30
 
 
 class Engine:
@@ -140,22 +141,21 @@ class Engine:
     def build_video_output(self, pipeline: Gst.Pipeline) -> Gst.Element:
         config = self.studio.config
         video = f"width={config.width},height={config.height},framerate={config.fps}/1"
-        compositor = make_live("compositor", "comp", background="black",
-                               ignore_inactive_pads=True, latency=40 * Gst.MSECOND)
-        background = make("videotestsrc", "background", is_live=True, pattern="black")
-        background_caps = caps(f"video/x-raw,{video}")
-        # the compositor only accepts inputs with alpha (shader, text) if its output has alpha
-        mix_caps = caps(f"video/x-raw,format=AYUV,{video},pixel-aspect-ratio=1/1")
-        convert = make("videoconvert")
-        out_caps = caps(f"video/x-raw,format=I420,{video},pixel-aspect-ratio=1/1")
+        # mixing on the GPU: the framed sources stay in GL memory (the CPU compositor blended every
+        # full-canvas layer per frame and pinned the CPU) and only the final frame is downloaded
+        compositor = make_live("glvideomixer", "comp", background="black",
+                               latency=40 * Gst.MSECOND)
+        mix_caps = caps(f"video/x-raw(memory:GLMemory),format=RGBA,{video},"
+                        "pixel-aspect-ratio=1/1")
+        to_nv12 = make("glcolorconvert")
+        nv12_caps = caps("video/x-raw(memory:GLMemory),format=NV12")
+        download = make("gldownload")
+        out_caps = caps(f"video/x-raw,format=NV12,{video},pixel-aspect-ratio=1/1")
         self.tee_video = make("tee", "tee_video", allow_not_linked=True)
-        elements = [compositor, background, background_caps, mix_caps, convert, out_caps,
-                    self.tee_video]
+        elements = [compositor, mix_caps, to_nv12, nv12_caps, download, out_caps, self.tee_video]
         for element in elements:
             pipeline.add(element)
-        link_all([background, background_caps])
-        background_caps.get_static_pad("src").link(compositor.request_pad_simple("sink_%u"))
-        link_all([compositor, mix_caps, convert, out_caps, self.tee_video])
+        link_all(elements)
         self.build_preview(pipeline)
         self.build_counter(pipeline)
         return compositor
@@ -170,11 +170,13 @@ class Engine:
             width = round(height * config.width / config.height / 2) * 2
         preview = [
             make("queue", "preview_queue", leaky="downstream", max_size_buffers=2),
+            # the screen preview does not need the canvas rate: half the CPU of the x264 encode
+            make("videorate", drop_only=True, max_rate=PREVIEW_FPS),
             make("videoscale"),
             make("videoconvert"),
             caps(f"video/x-raw,format=I420,width={width},height={height}"),
-            make("x264enc", tune="zerolatency", speed_preset="ultrafast", bitrate=4000,
-                 key_int_max=config.fps),
+            make("x264enc", tune="zerolatency", speed_preset="ultrafast", bitrate=3000,
+                 key_int_max=PREVIEW_FPS, threads=2),
             make("h264parse", config_interval=-1),
             make("mpegtsmux", alignment=7),
             make("udpsink", host="127.0.0.1", port=PREVIEW_PORT, sync=False, async_=False),
@@ -384,7 +386,6 @@ class Engine:
             shader,
             caps(f"video/x-raw(memory:GLMemory),format=RGBA,width={config.width},"
                  f"height={config.height}"),
-            make("gldownload"),
         ]
 
     def attach_tracker(self, source, prefix: str) -> None:

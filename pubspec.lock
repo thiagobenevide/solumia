@@ -905,10 +905,10 @@ packages:
     dependency: transitive
     description:
       name: pasteboard
-      sha256: "9ff73ada33f79a59ff91f6c01881fd4ed0a0031cfc4ae2d86c0384471525fca1"
+      sha256: aa9c08dbe836eb04d1fd4d5d5fe9d7f27515b185a612b965bce26e1b32135f3a
       url: "https://pub.dev"
     source: hosted
-    version: "0.4.0"
+    version: "0.6.1"
   path:
     dependency: transitive
     description:

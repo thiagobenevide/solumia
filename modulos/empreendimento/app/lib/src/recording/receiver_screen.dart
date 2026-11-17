@@ -32,6 +32,8 @@ class _ReceiverScreenState extends State<ReceiverScreen> {
     _receiver.listen();
     Receiver.addresses().then(_setAddresses);
     _webcams = Receiver.virtualWebcams();
+    // First use: ask for the system password right away so the phone can connect.
+    if (!Receiver.firewallAllowed) WidgetsBinding.instance.addPostFrameCallback((_) => _allowFirewall());
   }
 
   @override
@@ -47,7 +49,7 @@ class _ReceiverScreenState extends State<ReceiverScreen> {
 
   void _onChange() {
     if (!mounted) return;
-    if (_receiver.connected && !_playing) {
+    if (_receiver.connected && (!_playing || _previewStalled())) {
       _playing = true;
       _openPreview();
     } else if (!_receiver.connected && _playing) {
@@ -57,26 +59,60 @@ class _ReceiverScreenState extends State<ReceiverScreen> {
     setState(() {});
   }
 
+  DateTime _openedAt = DateTime(0);
+
+  /// mpv gave up (error or end of the UDP stream) while the phone is still sending: reopen, at most
+  /// every 3 s. Without this the preview stays black for the whole take.
+  bool _previewStalled() {
+    final player = _player;
+    if (player == null) return true;
+    if (DateTime.now().difference(_openedAt) < const Duration(seconds: 3)) return false;
+    return player.state.completed || !player.state.playing;
+  }
+
+  void _onPlayerError(String error) {
+    if (mounted) setState(() => _notice = 'Preview: $error');
+  }
+
   Future<void> _openPreview() async {
-    var player = _player;
-    if (player == null) {
-      player = Player();
-      _player = player;
-      _video = VideoController(player);
-      final native = player.platform;
-      if (native is NativePlayer) {
-        // monitor preview: as little buffering as possible
-        await native.setProperty('profile', 'low-latency');
-        await native.setProperty('untimed', 'yes');
-        await native.setProperty('cache', 'no');
+    _openedAt = DateTime.now();
+    try {
+      var player = _player;
+      if (player == null) {
+        player = Player();
+        _player = player;
+        _video = VideoController(player);
+        player.stream.error.listen(_onPlayerError);
+        final native = player.platform;
+        if (native is NativePlayer) {
+          // monitor preview: as little buffering as possible
+          await native.setProperty('profile', 'low-latency');
+          // media_kit opens through a playlist and mpv refuses udp:// there without this:
+          // the preview stayed black with no error on screen
+          await native.setProperty('load-unsafe-playlists', 'yes');
+          await native.setProperty('untimed', 'yes');
+          await native.setProperty('cache', 'no');
+          // low-latency decodes on 1 thread: too slow for 4K HEVC in software
+          await native.setProperty('vd-lavc-threads', '0');
+        }
+        await player.setVolume(0);
       }
-      await player.setVolume(0);
+      // big socket buffer + overrun_nonfatal: a 4K burst must not drop packets or kill the preview
+      await player.open(Media('udp://127.0.0.1:${_receiver.previewPort}'
+          '?buffer_size=33554432&fifo_size=1000000&overrun_nonfatal=1'));
+    } on Exception catch (e) {
+      _onPlayerError('$e');
     }
-    await player.open(Media('udp://127.0.0.1:${_receiver.previewPort}'));
   }
 
   Future<void> _prepareUsb() async {
     final message = await _receiver.prepareUsb();
+    if (mounted) setState(() => _notice = message);
+  }
+
+  Future<void> _allowFirewall() async {
+    setState(() => _notice = 'Aguardando a senha do sistema…');
+    final message = await _receiver.allowFirewall();
     if (mounted) setState(() => _notice = message);
   }
 
@@ -189,6 +225,12 @@ class _ReceiverScreenState extends State<ReceiverScreen> {
       result.add(SelectableText('  $address'));
     }
     result.add(const SizedBox(height: 8));
+    result.add(FilledButton.tonalIcon(
+      icon: const Icon(Icons.shield_outlined),
+      label: const Text('Liberar conexão no firewall'),
+      onPressed: _allowFirewall,
+    ));
+    result.add(const SizedBox(height: 6));
     result.add(OutlinedButton.icon(
       icon: const Icon(Icons.usb),
       label: const Text('Preparar USB (adb reverse)'),

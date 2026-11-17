@@ -212,9 +212,17 @@ class DrawingOverlay:
     # ------------------------------------------------------------------ input
 
     def pressure(self, event) -> float:
-        ok, value = event.get_axis(self.Gdk.AxisUse.PRESSURE)
-        if ok and value > 0:
-            return value
+        # a mouse has no pressure axis: get_axis then returns None (or a bare float on some
+        # PyGObject versions) instead of (ok, value), and unpacking it killed every stroke
+        axis = event.get_axis(self.Gdk.AxisUse.PRESSURE)
+        value = None
+        if isinstance(axis, tuple):
+            if len(axis) == 2 and axis[0]:
+                value = axis[1]
+        elif isinstance(axis, (int, float)):
+            value = axis
+        if value is not None and value > 0:
+            return float(value)
         return 0.6
 
     def on_press(self, _area, event) -> bool:

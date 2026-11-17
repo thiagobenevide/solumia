@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Rect
+import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
@@ -15,9 +16,11 @@ import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
 import android.hardware.camera2.params.DynamicRangeProfiles
 import android.hardware.camera2.params.OutputConfiguration
+import android.hardware.camera2.params.StreamConfigurationMap
 import android.media.MediaCodec
 import android.media.MediaCodecList
 import android.media.MediaFormat
+import android.media.MediaRecorder
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
@@ -25,6 +28,7 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Range
+import android.util.Size
 import android.view.Surface
 import android.view.WindowManager
 import io.flutter.plugin.common.EventChannel
@@ -145,6 +149,36 @@ class CameraProPlugin(
         return list
     }
 
+    /**
+     * Preview buffer size: the video size (e.g. 4K) is usually not a valid SurfaceTexture size, and
+     * then the camera delivers another size and aspect that ends up stretched on screen. Picks the
+     * largest supported preview size (up to 1920 wide) with the same aspect as the video.
+     */
+    private fun previewSizeFor(c: CameraCharacteristics, videoWidth: Int, videoHeight: Int): Size {
+        val map = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            ?: return Size(videoWidth, videoHeight)
+        var best: Size? = null
+        for (size in map.getOutputSizes(SurfaceTexture::class.java)) {
+            if (size.width > 1920 || size.width.toLong() * videoHeight != size.height.toLong() * videoWidth) continue
+            if (best == null || size.width > best.width) best = size
+        }
+        return best ?: Size(videoWidth, videoHeight)
+    }
+
+    /** Shortest frame duration among the video surfaces: some phones only report 60 fps for one. */
+    private fun fastestFrame(map: StreamConfigurationMap, size: Size): Long {
+        var best = 0L
+        for (kind in listOf(MediaCodec::class.java, MediaRecorder::class.java)) {
+            val duration = try {
+                map.getOutputMinFrameDuration(kind, size)
+            } catch (_: IllegalArgumentException) {
+                0L
+            }
+            if (duration > 0 && (best == 0L || duration < best)) best = duration
+        }
+        return best
+    }
+
     private fun describe(id: String, c: CameraCharacteristics): Map<String, Any?>? {
         val map = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return null
         val capabilities = c.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES)?.toList() ?: emptyList()
@@ -153,8 +187,9 @@ class CameraProPlugin(
         val ordered = map.getOutputSizes(MediaCodec::class.java).sortedByDescending { it.width }
         for (size in ordered) {
             if (size.width < 1280 || size.width * 9 != size.height * 16) continue
-            val minimum = map.getOutputMinFrameDuration(MediaCodec::class.java, size)
-            val maxFps = if (minimum > 0) (1_000_000_000L / minimum).toInt() else 30
+            val minimum = fastestFrame(map, size)
+            // rounded: 16 666 667 ns is 60 fps, and the integer division gave 59 (60 fps never offered)
+            val maxFps = if (minimum > 0) Math.round(1_000_000_000.0 / minimum).toInt() else 30
             sizes.add(mapOf("width" to size.width, "height" to size.height, "maxFps" to maxFps))
         }
         val fpsList = c.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
@@ -234,7 +269,8 @@ class CameraProPlugin(
         characteristics = manager.getCameraCharacteristics(id)
 
         val entry = textures.createSurfaceTexture()
-        entry.surfaceTexture().setDefaultBufferSize(width, height)
+        val previewSize = previewSizeFor(characteristics!!, width, height)
+        entry.surfaceTexture().setDefaultBufferSize(previewSize.width, previewSize.height)
         texture = entry
         preview = Surface(entry.surfaceTexture())
 
@@ -342,7 +378,7 @@ class CameraProPlugin(
             request.addTarget(previewSurface)
             active?.surface?.let { request.addTarget(it) }
             request.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO)
-            request.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(fps, fps))
+            request.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange(c))
             applyExposure(request)
             applyWhiteBalance(request)
             applyFocus(request)
@@ -352,6 +388,22 @@ class CameraProPlugin(
         } catch (e: Exception) {
             emit(mapOf("type" to "error", "message" to "Setting refused: ${e.message}"))
         }
+    }
+
+    /**
+     * AE range for the chosen fps: a range the camera does not list is ignored (it falls back to 30).
+     * Prefers the fixed one ([60,60]), then the narrowest that tops at the fps ([30,60]).
+     */
+    private fun fpsRange(c: CameraCharacteristics): Range<Int> {
+        val ranges = c.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES)
+        var best: Range<Int>? = null
+        if (ranges != null) {
+            for (range in ranges) {
+                if (range.upper != fps) continue
+                if (best == null || range.lower > best.lower) best = range
+            }
+        }
+        return best ?: Range(fps, fps)
     }
 
     private fun applyExposure(request: CaptureRequest.Builder) {

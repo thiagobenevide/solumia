@@ -11,8 +11,11 @@ class CaptureApi {
   Future<dynamic> _request(String method, String path, [Object? body]) async {
     final request = await _http.openUrl(method, Uri.parse('http://127.0.0.1:$port$path'));
     if (body != null) {
+      // explicit length: without it the body goes chunked and the engine (http.server) reads nothing
+      final bytes = utf8.encode(jsonEncode(body));
       request.headers.contentType = ContentType.json;
-      request.write(jsonEncode(body));
+      request.contentLength = bytes.length;
+      request.add(bytes);
     }
     final response = await request.close().timeout(const Duration(seconds: 20));
     final text = await response.transform(utf8.decoder).join();

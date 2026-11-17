@@ -37,6 +37,8 @@ class _CaptureStudioScreenState extends State<CaptureStudioScreen> {
   CaptureState? _state;
   bool _offline = false;
   bool _starting = false;
+  bool _polling = false; // one state request at a time: a busy engine must not pile them up
+  bool _launched = false; // the app launches the engine once; after that it only waits for it
   String? _notice;
   String _transition = 'move';
   int _ms = 500;
@@ -65,6 +67,16 @@ class _CaptureStudioScreenState extends State<CaptureStudioScreen> {
   void _onTick(Timer _) => _refresh();
 
   Future<void> _refresh() async {
+    if (_polling) return;
+    _polling = true;
+    try {
+      await _poll();
+    } finally {
+      _polling = false;
+    }
+  }
+
+  Future<void> _poll() async {
     try {
       final state = CaptureState(await _api.state());
       if (!mounted) return;
@@ -77,7 +89,7 @@ class _CaptureStudioScreenState extends State<CaptureStudioScreen> {
     } on Exception {
       if (!mounted) return;
       setState(() => _offline = true);
-      if (!_starting && _state == null) _startEngine();
+      if (!_starting && !_launched && _state == null) _startEngine();
     }
   }
 
@@ -95,9 +107,11 @@ class _CaptureStudioScreenState extends State<CaptureStudioScreen> {
     setState(() => _starting = true);
     final error = await CaptureApi.startEngine();
     if (!mounted) return;
+    // a second engine would fight the first for the GPU and the ports; it is retried only when
+    // launching failed (the engine takes a while to build the GL pipeline)
+    _launched = error == null;
     setState(() => _notice = error);
-    // gives it time to come up before the clock tries again
-    await Future<void>.delayed(const Duration(seconds: 4));
+    await Future<void>.delayed(const Duration(seconds: 15));
     if (mounted) setState(() => _starting = false);
   }
 
@@ -110,6 +124,9 @@ class _CaptureStudioScreenState extends State<CaptureStudioScreen> {
       final native = player.platform;
       if (native is NativePlayer) {
         await native.setProperty('profile', 'low-latency');
+        // media_kit opens through a playlist and mpv refuses udp:// there without this:
+        // the preview stayed black with no error on screen
+        await native.setProperty('load-unsafe-playlists', 'yes');
         await native.setProperty('untimed', 'yes');
         await native.setProperty('cache', 'no');
       }
@@ -344,7 +361,15 @@ class _CaptureStudioScreenState extends State<CaptureStudioScreen> {
     items ??= scene?.items ?? const <SceneItem>[];
     Widget video = const SizedBox();
     if (_video != null) video = Video(controller: _video!, controls: NoVideoControls);
-    final children = <Widget>[Positioned.fill(child: ColoredBox(color: Colors.black, child: video))];
+    // tap outside every item: clears the selection (no outline left on the preview)
+    final children = <Widget>[
+      Positioned.fill(
+        child: GestureDetector(
+          onTap: () => setState(() => _selected = null),
+          child: ColoredBox(color: Colors.black, child: video),
+        ),
+      ),
+    ];
     if (scene != null) {
       for (final item in items) {
         if (!item.visible) continue;
@@ -357,6 +382,7 @@ class _CaptureStudioScreenState extends State<CaptureStudioScreen> {
             name: state.source(item.source)?.name ?? '?',
             selected: _selected == item.source,
             circle: item.circle,
+            radius: item.radius * scale,
             onTap: () => setState(() => _selected = item.source),
             onMoveStart: () => _beginDrag(scene, item.source),
             onMove: (delta) => _moveItem(item.source, delta, scale),
@@ -646,6 +672,7 @@ class _ItemBox extends StatelessWidget {
     required this.name,
     required this.selected,
     required this.circle,
+    required this.radius,
     required this.onTap,
     required this.onMoveStart,
     required this.onMove,
@@ -656,6 +683,9 @@ class _ItemBox extends StatelessWidget {
   final String name;
   final bool selected;
   final bool circle;
+
+  /// Corner radius in screen pixels: the outline follows the rounded item instead of hiding it.
+  final double radius;
   final VoidCallback onTap;
   final VoidCallback onMoveStart;
   final ValueChanged<Offset> onMove;
@@ -664,15 +694,16 @@ class _ItemBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? Colors.redAccent : Colors.white24;
-    final children = <Widget>[
-      Positioned(
+    // only the selected item shows its name and outline: the preview stays as clean as the recording
+    // (these marks are drawn by the app, they never go into the recorded video)
+    const color = Colors.redAccent;
+    final children = <Widget>[];
+    if (selected) {
+      children.add(Positioned(
         left: 2,
         top: 2,
-        child: Text(name, style: TextStyle(color: color, fontSize: 11, shadows: const [Shadow(blurRadius: 2)])),
-      ),
-    ];
-    if (selected) {
+        child: Text(name, style: const TextStyle(color: color, fontSize: 11, shadows: [Shadow(blurRadius: 2)])),
+      ));
       children.add(Positioned(
         right: 0,
         bottom: 0,
@@ -691,8 +722,10 @@ class _ItemBox extends StatelessWidget {
       onPanEnd: (_) => onEnd(),
       child: Container(
         decoration: BoxDecoration(
-          border: Border.all(color: color, width: selected ? 2 : 1),
+          color: Colors.transparent,
+          border: selected ? Border.all(color: color, width: 2) : null,
           shape: circle ? BoxShape.circle : BoxShape.rectangle,
+          borderRadius: circle ? null : BorderRadius.circular(radius),
         ),
         child: Stack(children: children),
       ),

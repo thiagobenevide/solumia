@@ -4,17 +4,46 @@
 #
 #   infra/scripts/publicar_app [user@vps]
 set -euo pipefail
+# Gradle client JVM: native-platform loads native code; Java 22+ warns (and will block) without this.
+export GRADLE_OPTS="${GRADLE_OPTS:-} --enable-native-access=ALL-UNNAMED"
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 app="$root/plataforma/app"
 flutter="$(command -v flutter || echo "$HOME/development/flutter/bin/flutter")"
-read_env() { grep -E "^$1=" "$root/.env.prd" 2>/dev/null | tail -n1 | cut -d= -f2-; }
-domain="$(read_env DOMINIO)"; domain="${domain:-agent.thiagobenevide.com}"
+# without .env.prd grep exits 2 and pipefail would end the script silently: fall back to the defaults
+read_env() { { grep -E "^$1=" "$root/.env.prd" 2>/dev/null || true; } | tail -n1 | cut -d= -f2-; }
+domain="$(read_env DOMINIO)"; domain="${domain:-solumialocal.thiagobenevide.com}"
 host="$(read_env TUNEL_HOST)"; vps="${1:-root@${host:-$domain}}"
 url="https://$domain"
 # Minutes since 1970: always grows and fits Android's versionCode (< 2.1 billion).
 build=$(( $(date +%s) / 60 ))
 version="$(sed -n 's/^version: *\([^+]*\).*/\1/p' "$app/pubspec.yaml")"
+
+# Release key (same as release_local): the installed app is signed with it and Android refuses an
+# update signed with another key ("App não instalado"). Without key.properties Gradle falls back to
+# the debug key, so the properties are written here for the build and removed at the end.
+keystore="$HOME/solumia-release.jks"
+props_app="$app/android/key.properties"
+props_wear="$root/modulos/saude/wear/key.properties"
+apksigner=$(ls -d "${ANDROID_HOME:-$HOME/Android/Sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n 1)
+[[ -f "$keystore" ]] || { echo "release keystore not found: $keystore" >&2; exit 1; }
+[[ -n "$apksigner" ]] || { echo "apksigner not found in the Android SDK" >&2; exit 1; }
+remove_props() { rm -f "$props_app" "$props_wear"; }
+check_signer() {
+    local signer
+    signer=$("$apksigner" verify --print-certs "$1" | awk -F': ' '/Signer #1 certificate DN/{print $2; exit}')
+    [[ "$signer" == "CN=Solumia, C=BR" ]] || { echo "$1 signed by '$signer', not the release key: not publishing" >&2; exit 1; }
+}
+read -rsp "Senha da keystore: " KS_PASS; echo
+export KS_PASS
+keytool -list -keystore "$keystore" -storepass:env KS_PASS -alias solumia >/dev/null 2>&1 \
+    || { echo "senha da keystore incorreta" >&2; exit 1; }
+trap remove_props EXIT
+for props in "$props_app" "$props_wear"; do
+    (umask 077; printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=solumia\nkeyPassword=%s\n' \
+        "$keystore" "$KS_PASS" "$KS_PASS" > "$props")
+done
+unset KS_PASS
 
 echo "▶ Build $build ($version) for $url"
 BUILD=$build "$root/infra/scripts/empacotar_linux" "$url"
@@ -24,9 +53,15 @@ BUILD=$build "$root/infra/scripts/empacotar_linux" "$url"
 wear="$root/modulos/saude/wear"
 [[ -f "$wear/local.properties" ]] || echo "sdk.dir=${ANDROID_HOME:-$HOME/Android/Sdk}" > "$wear/local.properties"
 (cd "$wear" && ./gradlew -q assembleRelease -Pbuild=$build)
+remove_props
+check_signer "$app/build/app/outputs/flutter-apk/app-release.apk"
+check_signer "$wear/app/build/outputs/apk/release/app-release.apk"
 
 echo "▶ Publishing to $vps"
-volume="$(ssh "$vps" "docker volume inspect -f '{{.Mountpoint}}' \$(docker volume ls -q | grep agent-data)")"
+# the data volume of the gateway that serves the domain (the old agent install has its own volume)
+gateway="${GATEWAY_CONTAINER:-solumia-gateway-1}"
+volume="$(ssh "$vps" "docker inspect -f '{{range .Mounts}}{{if eq .Destination \"/home/gateway/agent-data\"}}{{.Source}}{{end}}{{end}}' $gateway")"
+[[ -n "$volume" ]] || { echo "data volume of $gateway not found on $vps" >&2; exit 1; }
 target="$volume/atualizacoes"
 ssh "$vps" "mkdir -p '$target'"
 scp -q "$app/build/app/outputs/flutter-apk/app-release.apk" "$vps:$target/agent.apk.new"

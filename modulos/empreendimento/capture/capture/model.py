@@ -23,9 +23,10 @@ TRANSITIONS = {"cut", "fade", "move", "slide", "zoom"}
 FITS = {"cover", "contain", "stretch"}
 
 API_PORT = 5620
-PREVIEW_PORT = 5610
+# the env overrides let a second engine run beside the real one (test bench), never colliding
+PREVIEW_PORT = int(os.environ.get("CAPTURE_PREVIEW_PORT", 5610))
 # copy of the phone stream that the app receiver (ffmpeg) sends to the studio
-PHONE_PORT = 5602
+PHONE_PORT = int(os.environ.get("CAPTURE_PHONE_PORT", 5602))
 
 
 def studio_dir() -> Path:
