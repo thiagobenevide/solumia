@@ -42,7 +42,8 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
   int _fps = 60;
   bool _hlg = false;
   String _codec = 'hevc';
-  int _bitrate = 100;
+  /// Ceiling for the VBR encoder (Mb/s): it spends less on calm scenes and has room for motion.
+  int _bitrate = 200;
   /// `record` only on the phone, `stream` only to the PC, `both` records and streams.
   String _mode = 'both';
   bool _audio = true;
