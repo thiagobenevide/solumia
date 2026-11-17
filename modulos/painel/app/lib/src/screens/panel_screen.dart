@@ -71,24 +71,72 @@ class _Today extends StatelessWidget {
     intervalo: const Duration(seconds: 60),
     construir: (context, data, reload) {
       final (d, ag) = data;
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-        children: [
-          const _Greeting(),
-          const SizedBox(height: 16),
-          _Scoreboard(d: d),
-          const SizedBox(height: 12),
-          const _QuickActions(),
-          if (d.alerts.isNotEmpty) ...[
-            const _SectionTitle(icon: Icons.notifications_active_outlined, text: 'Alertas'),
-            for (final a in d.alerts) _AlertCard(alert: a),
-          ],
-          const _SectionTitle(icon: Icons.event_note_outlined, text: 'Agenda de hoje'),
-          _DaySchedule(api: api, agenda: ag, aoMudar: reload),
+      final summary = [
+        const _Entrance(order: 0, child: _Greeting()),
+        const SizedBox(height: 16),
+        _Entrance(order: 1, child: _Scoreboard(d: d)),
+        const SizedBox(height: 12),
+        const _Entrance(order: 2, child: _QuickActions()),
+      ];
+      final day = [
+        if (d.alerts.isNotEmpty) ...[
+          const _SectionTitle(icon: Icons.notifications_active_outlined, text: 'Alertas'),
+          for (var i = 0; i < d.alerts.length; i++) _Entrance(order: 3 + i, child: _AlertCard(alert: d.alerts[i])),
         ],
-      );
+        const _SectionTitle(icon: Icons.event_note_outlined, text: 'Agenda de hoje'),
+        _Entrance(order: 3 + d.alerts.length, child: _DaySchedule(api: api, agenda: ag, aoMudar: reload)),
+      ];
+      return LayoutBuilder(builder: (context, box) => _layout(box.maxWidth, summary, day));
     },
   );
+
+  /// PC (wide): summary on the left, alerts and agenda on the right; phone: one column.
+  Widget _layout(double width, List<Widget> summary, List<Widget> day) {
+    final side = width < 600 ? 16.0 : 28.0;
+    if (width < 980) {
+      return ListView(padding: EdgeInsets.fromLTRB(side, 20, side, 24), children: [...summary, ...day]);
+    }
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(side, 24, side, 32),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1280),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 5, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: summary)),
+              const SizedBox(width: 28),
+              Expanded(flex: 6, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: day)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Fades and slides the card in once, in cascade by [order] (60 s reloads do not replay it).
+class _Entrance extends StatelessWidget {
+  const _Entrance({required this.order, required this.child});
+
+  final int order;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final delay = 80 * order.clamp(0, 8);
+    final total = 380 + delay;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: total),
+      curve: Interval(delay / total, 1, curve: Curves.easeOutCubic),
+      child: child,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(offset: Offset(0, 18 * (1 - t)), child: child),
+      ),
+    );
+  }
 }
 
 const _weekdays = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo'];
@@ -107,21 +155,51 @@ class _Greeting extends StatelessWidget {
     return 'Boa noite';
   }
 
+  IconData _icon(int hour) {
+    if (hour >= 6 && hour < 12) return Icons.wb_sunny_rounded;
+    if (hour >= 12 && hour < 18) return Icons.wb_twilight_rounded;
+    return Icons.nights_stay_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final text = Theme.of(context).textTheme;
     final colors = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(_salutation(now.hour), style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 2),
-        Text(
-          '${_weekdays[now.weekday - 1]}, ${now.day} de ${_months[now.month - 1]}',
-          style: text.titleMedium?.copyWith(color: colors.onSurfaceVariant),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [colors.primary, Color.lerp(colors.primary, colors.tertiary, 0.75)!],
         ),
-      ],
+        boxShadow: [
+          BoxShadow(color: colors.primary.withValues(alpha: 0.25), blurRadius: 24, offset: const Offset(0, 10)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _salutation(now.hour),
+                  style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w700, color: colors.onPrimary),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${_weekdays[now.weekday - 1]}, ${now.day} de ${_months[now.month - 1]}',
+                  style: text.titleMedium?.copyWith(color: colors.onPrimary.withValues(alpha: 0.85)),
+                ),
+              ],
+            ),
+          ),
+          Icon(_icon(now.hour), size: 52, color: colors.onPrimary.withValues(alpha: 0.9)),
+        ],
+      ),
     );
   }
 }
@@ -146,8 +224,10 @@ class _Scoreboard extends StatelessWidget {
     final background = good ? colors.primaryContainer : colors.errorContainer;
     final foreground = good ? colors.onPrimaryContainer : colors.onErrorContainer;
     final ring = good ? colors.primary : colors.error;
-    return Card(
-      color: background,
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Row(
@@ -157,16 +237,28 @@ class _Scoreboard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  CircularProgressIndicator(
-                    value: (d.score ?? 0) / 100,
-                    strokeWidth: 8,
-                    color: ring,
-                    backgroundColor: foreground.withValues(alpha: 0.15),
-                  ),
-                  Center(
-                    child: Text(
-                      d.score == null ? '–' : '${d.score}',
-                      style: text.headlineSmall?.copyWith(color: foreground, fontWeight: FontWeight.w700),
+                  // fills from where it was to the new score (and counts up the first time)
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: (d.score ?? 0).toDouble()),
+                    duration: const Duration(milliseconds: 1100),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) => Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CircularProgressIndicator(
+                          value: value / 100,
+                          strokeWidth: 8,
+                          strokeCap: StrokeCap.round,
+                          color: ring,
+                          backgroundColor: foreground.withValues(alpha: 0.15),
+                        ),
+                        Center(
+                          child: Text(
+                            d.score == null ? '–' : '${value.round()}',
+                            style: text.headlineSmall?.copyWith(color: foreground, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -236,24 +328,110 @@ class _QuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tabs = DefaultTabController.of(context);
+    final colors = Theme.of(context).colorScheme;
     return Row(
       children: [
         Expanded(
-          child: FilledButton.tonalIcon(
-            onPressed: () => tabs.animateTo(1),
-            icon: const Icon(Icons.forum_outlined),
-            label: const Text('Falar com o cobrador'),
+          child: _ActionTile(
+            icon: Icons.forum_rounded,
+            title: 'Falar com o cobrador',
+            subtitle: 'Conversa e cobrança do dia',
+            color: colors.secondary,
+            onTap: () => tabs.animateTo(1),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () => tabs.animateTo(2),
-            icon: const Icon(Icons.flag_outlined),
-            label: const Text('Ver metas'),
+          child: _ActionTile(
+            icon: Icons.flag_rounded,
+            title: 'Ver metas',
+            subtitle: 'Progresso da semana',
+            color: colors.tertiary,
+            onTap: () => tabs.animateTo(2),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Shortcut card: lifts and lights up under the mouse (PC) and shrinks a bit when pressed.
+class _ActionTile extends StatefulWidget {
+  const _ActionTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  State<_ActionTile> createState() => _ActionTileState();
+}
+
+class _ActionTileState extends State<_ActionTile> {
+  bool _hover = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final lifted = _hover && !_pressed;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.97 : 1,
+          duration: const Duration(milliseconds: 120),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            transform: Matrix4.translationValues(0, lifted ? -3 : 0, 0),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Color.lerp(colors.surfaceContainerLow, widget.color, lifted ? 0.14 : 0.07),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: widget.color.withValues(alpha: lifted ? 0.6 : 0.25)),
+              boxShadow: [
+                if (lifted)
+                  BoxShadow(color: widget.color.withValues(alpha: 0.2), blurRadius: 16, offset: const Offset(0, 6)),
+              ],
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: widget.color.withValues(alpha: 0.18),
+                  child: Icon(widget.icon, color: widget.color, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.title, style: text.titleSmall?.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(widget.subtitle, style: text.bodySmall?.copyWith(color: colors.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -289,12 +467,16 @@ class _AlertCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final critical = alert.level == 'critico';
+    final accent = critical ? colors.error : colors.tertiary;
     return Card(
-      color: critical ? colors.errorContainer : colors.tertiaryContainer,
-      child: ListTile(
-        dense: true,
-        leading: Icon(critical ? Icons.priority_high : Icons.notifications_active_outlined),
-        title: Text(alert.text),
+      color: Color.lerp(colors.surfaceContainerLow, accent, 0.12),
+      child: Container(
+        decoration: BoxDecoration(border: Border(left: BorderSide(color: accent, width: 4))),
+        child: ListTile(
+          dense: true,
+          leading: Icon(critical ? Icons.priority_high_rounded : Icons.notifications_active_rounded, color: accent),
+          title: Text(alert.text),
+        ),
       ),
     );
   }
