@@ -9,8 +9,10 @@ Runs on the worker (PC) or on the backend when it is on the same PC; no tools, n
 no project CLAUDE.md/settings are loaded."""
 
 import asyncio
+import base64
 import json
 import tempfile
+from pathlib import Path
 from typing import Any
 
 # Rewrite goal -> instruction. The keys are part of the API contract with the app.
@@ -139,6 +141,22 @@ async def rewrite(
     )
 
 
+def _save_images(folder: Path, images: list[dict[str, Any]], prompt: str) -> str:
+    names = []
+    for n, image in enumerate(images, start=1):
+        name = f"imagem-{n}{Path(str(image.get('nome') or '.jpg')).suffix or '.jpg'}"
+        (folder / name).write_bytes(base64.b64decode(str(image["base64"])))
+        names.append(str(folder / name))
+    if not names:
+        return prompt
+    return (
+        "Attached images (open each one with the Read tool before answering):\n"
+        + "\n".join(names)
+        + "\n\n"
+        + prompt
+    )
+
+
 def _build_command(
     system_prompt: str,
     schema: dict[str, Any],
@@ -175,14 +193,20 @@ async def claude_json(
     model: str | None = None,
     effort: str = "high",
     tools: str = "",
+    images: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Runs `claude -p` with the prompt on stdin (long documents do not fit on the command line)
     and returns the JSON in the shape of [schema]. On failure raises a readable RuntimeError.
-    [tools] (e.g. "WebSearch,WebFetch") enables and pre-approves those tools."""
+    [tools] (e.g. "WebSearch,WebFetch") enables and pre-approves those tools.
+    [images] (`{nome, base64}`, e.g. a meal photo) are saved in the working folder and read by
+    Claude with the Read tool."""
+    if images and "Read" not in tools.split(","):
+        tools = f"{tools},Read" if tools else "Read"
     command = _build_command(system_prompt, schema, binary, model, effort, tools)
 
     # Empty folder: Claude Code does not load CLAUDE.md or any repository file.
     with tempfile.TemporaryDirectory() as empty_folder:
+        prompt = _save_images(Path(empty_folder), images or [], prompt)
         try:
             process = await asyncio.create_subprocess_exec(
                 *command,

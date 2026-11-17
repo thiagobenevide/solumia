@@ -211,4 +211,64 @@ class HealthApi {
   Future<List<NoteSummary>> notesWithTag(String tag) async => [
     for (final j in await _api.get('api/notas?tag=${Uri.encodeQueryComponent(tag)}') as List) NoteSummary.fromJson(j),
   ]..sort((a, b) => (b.updated ?? DateTime(0)).compareTo(a.updated ?? DateTime(0)));
+
+  // --- AI coach (`/coach`): profile, equipment, weight, meals and the week's workout ---
+
+  Future<Map<String, dynamic>> coachProfile() async =>
+      await _api.get('api/saude/coach/perfil') as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> saveCoachProfile(Map<String, dynamic> data) async =>
+      await _api.patch('api/saude/coach/perfil', data) as Map<String, dynamic>;
+
+  Future<List<Map<String, dynamic>>> weights(DateTime de, DateTime ate) async =>
+      (await _api.get('api/saude/coach/peso?de=${iso(de)}&ate=${iso(ate)}') as List).cast<Map<String, dynamic>>();
+
+  Future<void> saveWeight(DateTime day, double kg) => _api.put('api/saude/coach/peso/${iso(day)}', {'peso_kg': kg});
+
+  Future<void> deleteWeight(String day) => _api.delete('api/saude/coach/peso/$day');
+
+  Future<Map<String, dynamic>> foodDay(DateTime day) async =>
+      await _api.get('api/saude/coach/dia/${iso(day)}') as Map<String, dynamic>;
+
+  Future<List<Map<String, dynamic>>> meals(DateTime day) async =>
+      (await _api.get('api/saude/coach/refeicoes?de=${iso(day)}&ate=${iso(day)}') as List)
+          .cast<Map<String, dynamic>>();
+
+  /// Sends the meal (photo and/or description); the server estimates calories with the chosen AI.
+  Future<Map<String, dynamic>> sendMeal(
+    DateTime day,
+    String type,
+    String description,
+    String ai, {
+    ({String name, List<int> bytes})? photo,
+  }) async {
+    final fields = {'data': iso(day), 'tipo': type, 'descricao': description, 'ia': ai, 'hora': _hourNow()};
+    if (photo == null) {
+      return await _api.enviarArquivo('api/saude/coach/refeicoes', 'sem_foto', 'x.txt', const [], campos: fields)
+          as Map<String, dynamic>;
+    }
+    return await _api.enviarArquivo('api/saude/coach/refeicoes', 'foto', photo.name, photo.bytes, campos: fields)
+        as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> reanalyzeMeal(String id, String correction, String ai) async =>
+      await _api.post('api/saude/coach/refeicoes/$id/analisar', {'correcao': correction, 'ia': ai})
+          as Map<String, dynamic>;
+
+  Future<void> deleteMeal(String id) => _api.delete('api/saude/coach/refeicoes/$id');
+
+  Uri mealPhotoUrl(String id) => _api.url('api/saude/coach/refeicoes/$id/foto');
+
+  Future<List<Map<String, dynamic>>> workoutPlans() async =>
+      (await _api.get('api/saude/coach/planos') as List).cast<Map<String, dynamic>>();
+
+  /// Builds the workout from today to Sunday with the AI and writes it into the agenda.
+  Future<Map<String, dynamic>> generateWorkoutPlan(String request, String ai, {bool replace = true}) async =>
+      await _api.post('api/saude/coach/planos', {'pedido': request, 'ia': ai, 'substituir': replace})
+          as Map<String, dynamic>;
+}
+
+String _hourNow() {
+  final now = DateTime.now();
+  return '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 }

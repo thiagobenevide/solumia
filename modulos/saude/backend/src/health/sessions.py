@@ -197,6 +197,7 @@ class Sessions:
                 exercises.append({
                     "item_id": i["id"], "exercicio_id": ex["id"], "nome": ex["nome"],
                     "instrucoes": ex.get("instrucoes", ""),
+                    "observacao": i.get("observacao", ""),
                     "equipamento": ex.get("equipamento", ""),
                     "planejado": planejado, "meta": meta(i["repeticoes"]),
                     "anterior": previous[0] if previous else None,

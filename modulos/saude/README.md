@@ -58,6 +58,30 @@ changes through commands; the app rereads it every 5 s. That way the watch can c
 | `POST …/{id}/concluir` | closes, stores the summary (duration, sets, volume) and marks the agenda |
 | `POST …/{id}/fc` (`amostras: [{em, bpm}]`) | live heartbeats from the watch (empty batch = sign of life); returns `estado`, `frequencia`, `fc_atual`, `controle`, `atual` |
 
+## AI coach (implemented)
+
+**Treinador IA** section (`app/lib/src/screens/coach_screen.dart`, backend `coach.py` + `api_coach.py`,
+data in `$AGENT_DATA/saude/coach/`): profile (height, age, goals, minutes per session, restrictions), home
+equipment (editable list; the AI uses only it), daily weight, the week's workout and meals by photo.
+The AI is chosen in the screen: **Claude** (Claude Code headless, worker task `claude_json`; photos go as
+`imagens` and Claude opens them with the Read tool) or the **local LLM** (`_json_local`, photos as OpenAI
+`image_url` parts: needs a vision model). By the user's choice this part uses Claude; the watch analysis
+and Usage stay local-only. Platform wiring: `_health_coach` in `backend/main.py` (`app.state.saude_coach_ia`).
+
+| Route | What |
+|---|---|
+| `GET/PATCH /api/saude/coach/perfil` | profile, `materiais`, `ia` (`claude`/`local`), targets |
+| `GET /api/saude/coach/peso?de=&ate=` · `PUT/DELETE …/peso/{data}` | weight log (`peso_kg`, `gordura_pct`, `cintura_cm`) |
+| `GET /api/saude/coach/dia/{data}` | the day's kcal/macros vs targets (Mifflin-St Jeor × 1.55 − 15%, protein 2 g/kg) |
+| `GET/POST /api/saude/coach/refeicoes` (multipart `foto`, `descricao`, `tipo`, `ia`) | meals; analyzes on create |
+| `POST …/refeicoes/{id}/analisar` (`correcao`) · `PATCH/DELETE …/{id}` · `GET …/{id}/foto` | recompute with a correction; edit; delete; photo |
+| `GET/POST /api/saude/coach/planos` (`inicio`, `fim`, `pedido`, `ia`, `substituir`) | builds today → Sunday and writes it into the agenda (pending items of the period are replaced) |
+
+Photos of new exercises: the AI does not make images; it picks the `ref` of the same movement in
+free-exercise-db (index downloaded once to `imagens/ref/indice.json`, only bar/dumbbell/bodyweight
+entries) and the server keeps it only if it exists. The plan context also carries the daily weigh-ins
+and the last 14 days of logged meals (kcal/protein vs targets); the screen has a "Hoje" checklist.
+
 ## Watch app (Galaxy Watch, Wear OS)
 
 `wear/`: its own Gradle project (Kotlin + Compose for Wear, minSdk 30, no store; Kotlin package
@@ -78,6 +102,8 @@ Update: `publicar_app` also publishes `relogio.apk` (same build); the watch Home
   stage, countdown and ♥ in the notification and on the watch face (ongoing activity) and stops on its own when the
   workout ends (also when finished on the phone). `BODY_SENSORS` permission, or `health.READ_HEART_RATE`
   on Wear OS 6. With the watch app closed and a workout started on the phone, the watcher tells you to open it.
+- **Exercise photo**: tapping the exercise name (dumbbell icon) opens the movement photos (start ↔ end,
+  alternating), the coach's cue for the day (`observacao` of the agenda item) and the instructions (`ExercisePhoto.kt`).
 - **Live heart rate**: shows on the watch and on the phone guide (`fc_atual`). Batches every 10 s to `POST …/sessoes/{id}/fc`;
   the server keeps the peak of every 5 s, computes `frequencia` (`origem: relogio`, which Health Connect does not
   overwrite) and, when finishing, the peak of each set (`fc_max`).

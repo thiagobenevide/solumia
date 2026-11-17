@@ -159,6 +159,7 @@ class WorkerClient:
                     model=str(p.get("modelo") or "") or None,
                     effort=str(p.get("effort") or "high"),
                     tools=str(p.get("ferramentas") or ""),
+                    images=p.get("imagens"),
                 )
             elif task == "buscar_web":
                 # from the home IP: search engines block the VPS one (see shared.web_search)

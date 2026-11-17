@@ -14,7 +14,8 @@ class SessionTest {
          "controle": {"fase": "descanso", "indice": 0, "inicio_serie": "2026-11-10T18:09:00Z",
            "descanso_ate": "2026-11-10T18:10:45Z", "descanso_restante_s": 20, "pausado": $paused,
            "pausado_em": ${if (paused) "\"2026-11-10T18:08:00Z\"" else "null"}, "pausa_total_s": 120},
-         "exercicios": [{"nome": "Supino", "planejado": {"series": 3, "repeticoes": "8-12", "carga_kg": 40},
+         "exercicios": [{"nome": "Supino", "exercicio_id": "supino-barra", "instrucoes": "Desça a barra",
+           "observacao": "2 s na descida", "planejado": {"series": 3, "repeticoes": "8-12", "carga_kg": 40},
            "meta": {"tempo_s": null, "min": 8, "max": 12}, "pulado": false,
            "sugestao": {"carga_kg": 42.5, "repeticoes": 8, "motivo": "x"},
            "series": [{"repeticoes": 11, "carga_kg": 40.0}]}]}
@@ -32,6 +33,8 @@ class SessionTest {
         assertEquals(8 * 60, s.activeS(local))
         assertEquals(11, s.current!!.repsIniciais)
         assertEquals(40.0, s.current!!.load!!, 0.0)
+        assertEquals("supino-barra", s.current!!.exerciseId)
+        assertEquals("2 s na descida", s.current!!.cue)
     }
 
     @Test

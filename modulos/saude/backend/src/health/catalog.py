@@ -6,6 +6,7 @@ the punching-bag ones have no image there and get the user's."""
 from typing import Any
 
 URL_IMAGES = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/{ref}/{n}.jpg"
+URL_INDEX = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json"
 
 AREAS = ["Peito", "Costas", "Ombros", "Braços", "Abdômen", "Pernas", "Glúteos", "Cardio e luta"]
 

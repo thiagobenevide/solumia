@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'health_api.dart';
 import 'sync.dart';
 import 'screens/analysis_screen.dart';
+import 'screens/coach_screen.dart';
 import 'screens/usage_screen.dart';
 import 'screens/spiritual_screen.dart';
 import 'screens/mental_screen.dart';
@@ -40,6 +41,7 @@ class HealthModule extends Modulo {
   @override
   List<SecaoModulo> get secoes => const [
     SecaoModulo('Treinos', Icons.fitness_center),
+    SecaoModulo('Treinador IA', Icons.auto_awesome),
     SecaoModulo('Espiritual', Icons.menu_book_outlined),
     SecaoModulo('Sono e corpo', Icons.watch_outlined),
     SecaoModulo('Análise', Icons.auto_awesome_outlined),
@@ -60,6 +62,7 @@ class HealthModule extends Modulo {
       index: section,
       children: [
         WorkoutsScreen(api: api),
+        CoachScreen(api: api),
         SpiritualScreen(api: api),
         WatchScreen(api: api),
         AnalysisScreen(api: api),

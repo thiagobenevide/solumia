@@ -1,5 +1,7 @@
 package com.thiagobenevide.agent.watch
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -15,8 +17,20 @@ import java.time.LocalDate
 
 class ApiError(message: String) : Exception(message)
 
+/** Decodes with the largest power-of-2 sampling that keeps the long side >= [maxSide]. */
+fun decodeSmall(bytes: ByteArray, maxSide: Int): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+}
+
 /** Backend routes used on the wrist: workout guide (`/api/saude/sessoes`) and coach (`/api/painel`). */
 class Api(private val base: String, private val key: String) {
+
+    /** Exercise photos already downloaded in this run (a workout uses few). */
+    private val images = java.util.concurrent.ConcurrentHashMap<String, Bitmap>()
 
     private suspend fun send(
         metodo: String,
@@ -77,6 +91,20 @@ class Api(private val base: String, private val key: String) {
         val list = JSONArray()
         samples.forEach { (t, bpm) -> list.put(JSONObject().put("em", t.toString()).put("bpm", bpm)) }
         return JSONObject(json("POST", "api/saude/sessoes/$id/fc", JSONObject().put("amostras", list)))
+    }
+
+    /** Photo [n] (0 = start, 1 = end of the movement) scaled down for the wrist; null without one. */
+    suspend fun exerciseImage(id: String, n: Int): Bitmap? {
+        val key = "$id:$n"
+        images[key]?.let { return it }
+        val bytes = try {
+            send("GET", "api/saude/exercicios/$id/imagem?n=$n", waitS = 20)
+        } catch (e: ApiError) {
+            return null
+        }
+        val bitmap = withContext(Dispatchers.Default) { decodeSmall(bytes, 360) } ?: return null
+        images[key] = bitmap
+        return bitmap
     }
 
     suspend fun finish(id: String): Session = session("POST", "api/saude/sessoes/$id/concluir", JSONObject())

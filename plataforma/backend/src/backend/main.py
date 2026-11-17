@@ -67,6 +67,7 @@ from exams.rumors import Rumors
 from finance.api import router as financas_router
 from finance.warehouse import Warehouse
 from health.api import router as saude_router
+from health.coach import Ai as HealthCoachAi
 from health.workouts import Workouts
 from panel.api import LLMUnavailable as PainelLLMIndisponivel
 from panel.api import Sources, Voice
@@ -491,6 +492,63 @@ def _voice_panel(registry: WorkerRegistry, settings: Settings) -> Voice:
     return Voice(transcrever, falar)
 
 
+def _content_with_images(request: dict[str, Any]) -> Any:
+    """Plain prompt, or OpenAI-style parts with the images (`imagens`) for a vision model."""
+    images = request.get("imagens") or []
+    if not images:
+        return str(request["prompt"])
+    parts: list[dict[str, Any]] = [{"type": "text", "text": str(request["prompt"])}]
+    for image in images:
+        url = f"data:{image.get('tipo') or 'image/jpeg'};base64,{image['base64']}"
+        parts.append({"type": "image_url", "image_url": {"url": url}})
+    return parts
+
+
+def _health_coach(
+    registry: WorkerRegistry, local_chat: Callable[[list[dict[str, str]]], Awaitable[str]]
+) -> HealthCoachAi:
+    """Health coach (week workout, meal photos): the user chose Claude Code (worker task
+    `claude_json`, PC subscription; without a worker, this computer's `claude`), with the local
+    LLM as an option. Never the Anthropic API."""
+    local = _json_local(local_chat)
+
+    def disponivel(provider: str) -> str | None:
+        if registry.pick_worker(None) is not None:
+            return None
+        if provider == "claude" and shutil.which("claude") is not None:
+            return None
+        return "Nenhum worker conectado. Ligue o Worker no PC."
+
+    async def executar(request: dict[str, Any], provider: str) -> dict[str, Any]:
+        if provider == "local":
+            return await local(request)
+        limit = float(request.get("limite_s", 280))
+        worker = registry.pick_worker(None)
+        if worker is None:
+            return await claude_json(
+                str(request["prompt"]),
+                str(request["sistema"]),
+                request["esquema"],
+                timeout_s=limit,
+                effort=str(request.get("effort") or "high"),
+                images=request.get("imagens"),
+            )
+        try:
+            return await registry.send_chat_request(
+                worker,
+                str(uuid4()),
+                {**request, "task": "claude_json"},
+                limit + 30,
+                "Saúde (treinador)",
+            )
+        except TimeoutError as e:
+            raise RuntimeError("O worker não respondeu a tempo.") from e
+        except (WorkerDisconnected, WorkerRespondedWithError) as e:
+            raise RuntimeError(str(e)) from e
+
+    return HealthCoachAi(executar, disponivel)
+
+
 def _json_local(
     chat: Callable[[list[dict[str, str]]], Awaitable[str]],
 ) -> Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]:
@@ -502,9 +560,9 @@ def _json_local(
             f"{request['sistema']}\n\nRespond ONLY with a valid JSON object in this schema:\n"
             f"{json.dumps(request['esquema'], ensure_ascii=False)}"
         )
-        messages = [
+        messages: list[dict[str, Any]] = [
             {"role": "system", "content": system},
-            {"role": "user", "content": str(request["prompt"])},
+            {"role": "user", "content": _content_with_images(request)},
         ]
         try:
             answer = await chat(messages)
@@ -658,11 +716,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.worker_registry, app.state.sessoes_codigo
     )
     app.state.workouts = Workouts(settings.saude_dir, settings.saude_baixar_imagens)
-    # health data is personal: only the local LLM, never Claude
+    # health data is personal: the analyses use only the local LLM; the coach (workout and meals)
+    # uses Claude Code by the user's choice (`_health_coach`)
     app.state.saude_llm = _chat_llm(
         app.state.worker_registry, settings, app.state.modelo_llm, "Saúde", timeout=600
     )
     app.state.saude_contexto = _context_health(app.state)
+    app.state.saude_coach_ia = _health_coach(app.state.worker_registry, app.state.saude_llm)
     app.state.financas = Warehouse(settings.financas_dir)
     app.state.studies = Studies(
         settings.estudos_dir, marcacoes=app.state.collection.markings_of_project

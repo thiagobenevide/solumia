@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from health.api_coach import router as coach_router
 from health.api_consumption import router as consumo_router
 from health.api_sessions import router as sessoes_router
 from health.api_watch import router as relogio_router
@@ -180,3 +181,4 @@ router.include_router(bem_estar_router)
 router.include_router(relogio_router)
 router.include_router(consumo_router)
 router.include_router(sessoes_router)
+router.include_router(coach_router)

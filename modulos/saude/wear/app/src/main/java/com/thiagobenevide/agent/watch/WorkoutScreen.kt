@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableFloatStateOf
@@ -70,6 +71,7 @@ fun WorkoutScreen(api: Api, active: Boolean, screenOn: (Boolean) -> Unit) {
     var reps by remember { mutableIntStateOf(10) }
     var seriesKey by remember { mutableStateOf("") }
     var warned by remember { mutableStateOf<Long?>(null) }
+    var photoOpen by remember { mutableStateOf(false) }
 
     fun set(s: Session?) {
         session = s
@@ -159,7 +161,8 @@ fun WorkoutScreen(api: Api, active: Boolean, screenOn: (Boolean) -> Unit) {
             s.state == "concluida" -> Message("Treino concluído\n${s.seriesDone} séries")
             s.phase(now) == "fim" || s.current == null ->
                 Action("Tudo feito!\n${watch(s.activeS(now))}", "Concluir") { act { api.finish(s.id) } }
-            else -> Player(s, now, reps, { reps = (reps + it).coerceAtLeast(0) }, ::cmd) {
+            photoOpen && s.current != null -> ExercisePhoto(api, s.current!!) { photoOpen = false }
+            else -> Player(s, now, reps, { reps = (reps + it).coerceAtLeast(0) }, ::cmd, { photoOpen = true }) {
                 val e = s.current!!
                 if (e.goalTime != null) cmd("concluir_serie", mapOf("tempo_s" to s.seriesTime(now)))
                 else cmd("concluir_serie", mapOf("repeticoes" to reps))
@@ -206,7 +209,7 @@ fun Action(text: String, button: String, onTap: () -> Unit) {
 @Composable
 private fun Player(
     s: Session, now: Long, reps: Int, adjust: (Int) -> Unit,
-    cmd: (String, Map<String, Any?>) -> Unit, feita: () -> Unit,
+    cmd: (String, Map<String, Any?>) -> Unit, openPhoto: () -> Unit, feita: () -> Unit,
 ) {
     val e = s.current!!
     val rest = s.phase(now) == "descanso"
@@ -261,10 +264,18 @@ private fun Player(
                 transitionSpec = { (slideInHorizontally { it / 3 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 3 } + fadeOut()) },
                 label = "nome",
             ) { name ->
-                Text(
-                    name, fontWeight = FontWeight.Bold, fontSize = 15.sp,
-                    textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
+                // tap on the name: photo of the movement and how to do it
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.clickable(onClick = openPhoto),
+                ) {
+                    Icon(Symbol.HALTER, 13.dp, MaterialTheme.colorScheme.primary)
+                    Text(
+                        name, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+                        textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Text(
                 "Série ${e.doneSteps + 1} de ${e.planned} · ${load(e.load)}", fontSize = 11.sp, color = off,

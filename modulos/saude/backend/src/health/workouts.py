@@ -16,7 +16,7 @@ from typing import Any
 from health.catalog import URL_IMAGES, exercises_base
 
 FIELDS_EXERCISE = {"nome", "area", "grupo", "equipamento", "series", "repeticoes", "carga_kg",
-                    "instrucoes"}
+                    "instrucoes", "ref"}
 FIELDS_ITEM = {"data", "ordem", "series", "repeticoes", "carga_kg", "observacao", "feito"}
 KINDS_IMAGE = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 
