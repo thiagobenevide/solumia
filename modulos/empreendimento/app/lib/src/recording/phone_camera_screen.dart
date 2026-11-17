@@ -140,6 +140,78 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
   void _adjust(VoidCallback change) {
     setState(change);
     _camera.adjust(_settings);
+    _publish();
+  }
+
+  // ================================================================== remote control (PC)
+
+  /// Camera state for the PC panel: lenses, ranges, current settings and the live exposure.
+  void _publish() {
+    final camera = _info;
+    if (camera == null || !_streaming) return;
+    final lenses = <Map<String, Object?>>[];
+    for (final c in _cameras) {
+      lenses.add({'id': c.id, 'label': c.label});
+    }
+    final state = {
+      'camera': camera.raw,
+      'lens': camera.id,
+      'lenses': lenses,
+      'fps': _fps,
+      'settings': _settings.toMap(),
+      'live': {'iso': _state['iso'], 'exposureNs': _state['exposureNs'], 'focus': _state['focus']},
+    };
+    _camera.publish(jsonEncode(state));
+  }
+
+  /// Command from the PC: settings change right away; a lens change restarts the stream on the new
+  /// lens keeping the size and fps when it has them.
+  void _onRemote(String json) {
+    Map<String, dynamic> command;
+    try {
+      command = Map<String, dynamic>.from(jsonDecode(json) as Map);
+    } on FormatException {
+      return;
+    } on TypeError {
+      return;
+    }
+    final settings = command['settings'];
+    if (settings is Map) {
+      _settings.apply(Map<String, dynamic>.from(settings));
+      _camera.adjust(_settings);
+    }
+    final lens = command['lens'];
+    if (lens is String && lens != _info?.id) {
+      _remoteLens(lens);
+      return;
+    }
+    _publish();
+  }
+
+  Future<void> _remoteLens(String id) async {
+    CameraInfo? target;
+    for (final c in _cameras) {
+      if (c.id == id) target = c;
+    }
+    if (target == null) return;
+    final width = _size?.width;
+    final height = _size?.height;
+    final fps = _fps;
+    final wasStreaming = _streaming;
+    if (wasStreaming) await _toggle();
+    setState(() {
+      _chooseCamera(target!);
+      _keepFormat(target, width, height, fps);
+    });
+    await _reopen();
+    if (wasStreaming) await _toggle();
+  }
+
+  void _keepFormat(CameraInfo camera, int? width, int? height, int fps) {
+    for (final size in camera.sizes) {
+      if (size.width == width && size.height == height) _size = size;
+    }
+    if (camera.fps.contains(fps)) _fps = fps;
   }
 
   Future<void> _listenAnnouncements() async {
@@ -177,6 +249,10 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
         case 'state':
           _state = event;
           _checkFps(event['fps'] as int? ?? 0);
+          // live ISO/shutter/focus for the PC panel, once a second while streaming
+          if (_streaming) _publish();
+        case 'remote':
+          _onRemote(event['json'] as String? ?? '');
         case 'warning':
           _message = event['message'] as String?;
         case 'error':
@@ -236,6 +312,7 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
         _message = null;
         _error = null;
       });
+      _publish();
     } on PlatformException catch (e) {
       setState(() => _error = e.message);
     }
@@ -264,6 +341,37 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
 
   // ================================================================== preview
 
+  /// Texture plus touch-to-focus: tap sets the focus/metering point, long press goes back to auto.
+  Widget _focusablePreview(BuildContext context, BoxConstraints box) {
+    final children = <Widget>[RotatedBox(quarterTurns: 3, child: Texture(textureId: _texture!))];
+    if (_settings.pointX >= 0) {
+      children.add(Positioned(
+        left: _settings.pointX * box.maxWidth - 28,
+        top: _settings.pointY * box.maxHeight - 28,
+        child: IgnorePointer(
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(border: Border.all(color: Colors.amber, width: 2)),
+          ),
+        ),
+      ));
+    }
+    return GestureDetector(
+      onTapUp: (d) => _setPoint(d.localPosition.dx / box.maxWidth, d.localPosition.dy / box.maxHeight),
+      onLongPress: () => _setPoint(-1, -1),
+      child: Stack(fit: StackFit.expand, children: children),
+    );
+  }
+
+  void _setPoint(double x, double y) {
+    if (_info?.point != true) return;
+    _adjust(() {
+      _settings.pointX = x < 0 ? -1 : x.clamp(0.0, 1.0);
+      _settings.pointY = y < 0 ? -1 : y.clamp(0.0, 1.0);
+    });
+  }
+
   Widget _preview() {
     final size = _size;
     final id = _texture;
@@ -273,7 +381,7 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
       // the screen is locked in landscapeLeft (display rotation 90°), so undo it with a quarter turn back.
       center = AspectRatio(
         aspectRatio: size.width / size.height,
-        child: RotatedBox(quarterTurns: 3, child: Texture(textureId: id)),
+        child: LayoutBuilder(builder: _focusablePreview),
       );
     }
     final children = <Widget>[
@@ -547,8 +655,26 @@ class _PhoneCameraScreenState extends State<PhoneCameraScreen> {
         onSelected: (_) => _adjust(() => _settings.awb = key),
       ));
     }
+    if (_info?.kelvin == true) {
+      chips.add(ChoiceChip(
+        label: const Text('Manual (K)'),
+        selected: _settings.awb == 'manual',
+        onSelected: (_) => _adjust(() => _settings.awb = 'manual'),
+      ));
+    }
+    final result = <Widget>[Wrap(spacing: 6, runSpacing: 6, children: chips)];
+    if (_settings.awb == 'manual') {
+      result.add(_labelValue('Temperatura', '${_settings.kelvin} K'));
+      result.add(Slider(
+        min: 2000,
+        max: 10000,
+        divisions: 80,
+        value: _settings.kelvin.toDouble().clamp(2000, 10000),
+        onChanged: (v) => _adjust(() => _settings.kelvin = v.round()),
+      ));
+    }
     return [
-      Wrap(spacing: 6, runSpacing: 6, children: chips),
+      ...result,
       SwitchListTile(
         dense: true,
         title: const Text('Travar branco'),

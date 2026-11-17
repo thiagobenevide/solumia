@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:agent_empreendimento/src/recording/camera_pro.dart';
 import 'package:agent_empreendimento/src/recording/capture_api.dart';
 import 'package:agent_empreendimento/src/recording/protocol.dart';
 import 'package:agent_empreendimento/src/recording/studio_item_panel.dart';
@@ -57,6 +58,40 @@ void main() {
     expect(video, [1, 2, 3, 4]);
     expect(audio, [9, 8]);
     expect(splitter.add(Uint8List.fromList([0x58, 0, 0, 0, 0])), false);
+  });
+
+  test('control token turns on the framed stream even without audio', () {
+    final h = StreamHeader.parse('SOLUMIA-CAM 1 hevc 1920x1080 60 0 ctl')!;
+    expect((h.control, h.hasAudio, h.framed), (true, false, true));
+    final both = StreamHeader.parse('SOLUMIA-CAM 1 hevc 1920x1080 60 0 pcm48000x2 ctl')!;
+    expect((both.control, both.hasAudio, both.audioRate), (true, true, 48000));
+    expect(StreamHeader.parse('SOLUMIA-CAM 1 hevc 1920x1080 60 0')!.framed, false);
+  });
+
+  test('frame splitter hands control frames apart', () {
+    final video = <int>[];
+    final control = <int>[];
+    final splitter = FrameSplitter(onVideo: video.addAll, onAudio: (_) {}, onControl: control.addAll);
+    final stream = <int>[0x43, 0, 0, 0, 2, 123, 125, 0x56, 0, 0, 0, 1, 7];
+    expect(splitter.add(Uint8List.fromList(stream)), true);
+    expect(control, [123, 125]);
+    expect(video, [7]);
+  });
+
+  test('remote settings change only the keys sent, with the right types', () {
+    final s = CameraSettings();
+    s.apply({'iso': 800.0, 'manualExposure': true, 'awb': 'manual', 'kelvin': 99999, 'pointX': 0.25, 'bogus': 1});
+    expect((s.iso, s.manualExposure, s.awb, s.kelvin, s.pointX), (800, true, 'manual', 10000, 0.25));
+    expect(s.zoom, 1);
+    s.apply({'iso': 'not a number'});
+    expect(s.iso, 800);
+    expect(s.toMap()['kelvin'], 10000);
+  });
+
+  test('camera info keeps the map it came from for the PC', () {
+    final info = CameraInfo.fromJson({'id': '0', 'kelvin': true, 'point': true, 'isoMax': 3200});
+    expect((info.kelvin, info.point, info.isoMax), (true, true, 3200));
+    expect(CameraInfo.fromJson(info.raw).isoMax, 3200);
   });
 
   test('remux copies every track and tags HEVC for MOV', () {

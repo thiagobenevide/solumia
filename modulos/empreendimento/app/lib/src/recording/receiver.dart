@@ -50,6 +50,47 @@ class Receiver extends ChangeNotifier {
   double mbps = 0;
   int _bytesThisSecond = 0;
 
+  /// Camera state reported by the phone (lenses, ranges, settings, live exposure); null when the
+  /// phone does not take remote commands.
+  Map<String, dynamic>? phone;
+
+  bool get remote => _connection?.header?.control == true && phone != null;
+
+  /// Changes camera settings on the phone. Applied here at once so the PC sliders do not jump back
+  /// while the phone confirms.
+  void setPhone(Map<String, Object?> settings) {
+    final state = phone;
+    final current = state?['settings'];
+    if (state != null && current is Map) {
+      // a fresh map: the decoded one may not take every value type
+      final merged = <String, dynamic>{};
+      merged.addAll(Map<String, dynamic>.from(current));
+      merged.addAll(settings);
+      state['settings'] = merged;
+    }
+    _sendToPhone({'settings': settings});
+    notifyListeners();
+  }
+
+  void setLens(String id) {
+    _sendToPhone({'lens': id});
+  }
+
+  void _sendToPhone(Map<String, Object?> command) {
+    final connection = _connection;
+    if (connection == null || connection.header?.control != true) return;
+    try {
+      connection.socket.write('${jsonEncode(command)}\n');
+    } on Exception {
+      // the socket is closing: the phone reconnects and reports its state again
+    }
+  }
+
+  void _onPhoneState(Map<String, dynamic> state) {
+    phone = state;
+    notifyListeners();
+  }
+
   bool record = true;
   String? webcam;
   String? error;
@@ -152,7 +193,10 @@ class Receiver extends ChangeNotifier {
       takes.insert(0, take);
       _remux(take, connection.header?.codec == 'hevc');
     }
-    if (_connection == connection) _connection = null;
+    if (_connection == connection) {
+      _connection = null;
+      phone = null;
+    }
     notifyListeners();
   }
 
@@ -398,6 +442,15 @@ class _Connection {
     _writeAudio(Uint8List(fill));
   }
 
+  void _onControl(Uint8List data) {
+    try {
+      final state = jsonDecode(utf8.decode(data));
+      if (state is Map) receiver._onPhoneState(Map<String, dynamic>.from(state));
+    } on FormatException {
+      // a broken state is skipped: the phone sends a new one every second
+    }
+  }
+
   void _writeAudio(Uint8List data) {
     // no take being recorded: the audio has nowhere to go
     if (_audioServer == null) return;
@@ -452,8 +505,10 @@ class _Connection {
       _file = receiver.takeName(parsed);
     }
     try {
-      // framed stream (video + audio) whenever the phone sends audio, recording or not
-      if (parsed.hasAudio) _splitter = FrameSplitter(onVideo: _writeFrame, onAudio: _writeAudio);
+      // framed stream (video + audio + camera state) whenever the phone sends one, recording or not
+      if (parsed.framed) {
+        _splitter = FrameSplitter(onVideo: _writeFrame, onAudio: _writeAudio, onControl: _onControl);
+      }
       final args = ffmpegArguments(
         parsed,
         previewPort: receiver.previewPort,

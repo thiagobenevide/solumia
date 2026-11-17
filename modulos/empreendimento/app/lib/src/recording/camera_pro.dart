@@ -38,6 +38,9 @@ class CameraPro {
 
   Future<void> adjust(CameraSettings settings) => _channel.invokeMethod('adjust', settings.toMap());
 
+  /// Camera state for the PC (control channel); ignored when nothing is streaming.
+  Future<void> publish(String json) => _channel.invokeMethod('publish', {'json': json});
+
   Future<void> start({
     String? host,
     int port = videoPort,
@@ -110,6 +113,9 @@ class CameraInfo {
     required this.eis,
     required this.hlg,
     required this.hevc,
+    this.kelvin = false,
+    this.point = false,
+    this.raw = const {},
   });
 
   factory CameraInfo.fromJson(Map<String, dynamic> j) {
@@ -143,6 +149,9 @@ class CameraInfo {
       eis: j['eis'] as bool? ?? false,
       hlg: j['hlg'] as bool? ?? false,
       hevc: j['hevc'] as bool? ?? true,
+      kelvin: j['kelvin'] as bool? ?? false,
+      point: j['point'] as bool? ?? false,
+      raw: j,
     );
   }
 
@@ -166,6 +175,13 @@ class CameraInfo {
   final bool eis;
   final bool hlg;
   final bool hevc;
+
+  /// White balance by temperature (manual color gains) and focus/metering on a chosen point.
+  final bool kelvin;
+  final bool point;
+
+  /// The map it came from: sent as is to the PC, which rebuilds the same object.
+  final Map<String, dynamic> raw;
 
   String get label => '${external ? 'Externa' : 'Traseira'} $id · ${focal.toStringAsFixed(1)} mm';
 
@@ -191,10 +207,16 @@ class CameraSettings {
   int exposureNs = 1000000000 ~/ 120;
   int compensation = 0;
   bool lockAe = false;
+  /// `auto`, a preset (`daylight`, `cloudy`, ...) or `manual` (uses [kelvin]).
   String awb = 'auto';
+  int kelvin = 5000;
   bool lockAwb = false;
   bool manualFocus = false;
   double focus = 0;
+
+  /// Where to focus and meter, normalized in the video (0..1); negative = the camera decides.
+  double pointX = -1;
+  double pointY = -1;
   double zoom = 1;
   bool stabilization = false;
   bool torch = false;
@@ -208,13 +230,57 @@ class CameraSettings {
         'compensation': compensation,
         'lockAe': lockAe,
         'awb': awb,
+        'kelvin': kelvin,
         'lockAwb': lockAwb,
         'manualFocus': manualFocus,
         'focus': focus,
+        'pointX': pointX,
+        'pointY': pointY,
         'zoom': zoom,
         'stabilization': stabilization,
         'torch': torch,
         'noise': noise,
         'edge': edge,
       };
+
+  /// Applies the keys present in [m] (remote command from the PC); unknown keys are ignored.
+  void apply(Map<String, dynamic> m) {
+    manualExposure = _bool(m, 'manualExposure', manualExposure);
+    iso = _int(m, 'iso', iso);
+    exposureNs = _int(m, 'exposureNs', exposureNs);
+    compensation = _int(m, 'compensation', compensation);
+    lockAe = _bool(m, 'lockAe', lockAe);
+    awb = _string(m, 'awb', awb);
+    kelvin = _int(m, 'kelvin', kelvin).clamp(2000, 10000);
+    lockAwb = _bool(m, 'lockAwb', lockAwb);
+    manualFocus = _bool(m, 'manualFocus', manualFocus);
+    focus = _double(m, 'focus', focus);
+    pointX = _double(m, 'pointX', pointX);
+    pointY = _double(m, 'pointY', pointY);
+    zoom = _double(m, 'zoom', zoom);
+    stabilization = _bool(m, 'stabilization', stabilization);
+    torch = _bool(m, 'torch', torch);
+    noise = _string(m, 'noise', noise);
+    edge = _string(m, 'edge', edge);
+  }
+
+  static bool _bool(Map<String, dynamic> m, String key, bool current) {
+    final value = m[key];
+    return value is bool ? value : current;
+  }
+
+  static int _int(Map<String, dynamic> m, String key, int current) {
+    final value = m[key];
+    return value is num ? value.round() : current;
+  }
+
+  static double _double(Map<String, dynamic> m, String key, double current) {
+    final value = m[key];
+    return value is num ? value.toDouble() : current;
+  }
+
+  static String _string(Map<String, dynamic> m, String key, String current) {
+    final value = m[key];
+    return value is String ? value : current;
+  }
 }

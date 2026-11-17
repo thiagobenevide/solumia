@@ -1,10 +1,14 @@
 /// Protocol between the phone (camera) and the PC (receiver), platform independent.
 ///
 /// - PC UDP announcement, every second, broadcast on [announcePort]: `SOLUMIA-CAM-PC 1 <port> <name>`.
-/// - Phone TCP connection: one line `SOLUMIA-CAM 1 <hevc|avc> <W>x<H> <fps> <hlg 0|1> [pcm<rate>x<channels>]`.
-///   Without the audio token, the raw Annex-B stream follows (the same one written to the phone MP4).
-///   With it, the stream is framed: `V|A` byte + 4-byte big-endian length + payload, where `V` is Annex-B
-///   video and `A` is PCM s16le audio from the phone microphone.
+/// - Phone TCP connection: one line `SOLUMIA-CAM 1 <hevc|avc> <W>x<H> <fps> <hlg 0|1> [pcm<rate>x<channels>] [ctl]`.
+///   Without extra tokens, the raw Annex-B stream follows (the same one written to the phone MP4).
+///   With `pcm…` or `ctl`, the stream is framed: `V|A|C` byte + 4-byte big-endian length + payload, where
+///   `V` is Annex-B video, `A` is PCM s16le audio from the phone microphone and `C` is the camera state
+///   as JSON (lenses, ranges, current settings), sent again whenever it changes.
+/// - With `ctl`, the PC sends commands back on the same socket, one JSON per line:
+///   `{"settings": {...}}` changes camera settings (same keys as `CameraSettings`), `{"lens": "<id>"}`
+///   switches the lens.
 library;
 
 import 'dart:typed_data';
@@ -35,6 +39,7 @@ class StreamHeader {
     required this.hlg,
     this.audioRate,
     this.audioChannels,
+    this.control = false,
   });
 
   final String codec;
@@ -48,6 +53,12 @@ class StreamHeader {
   final int? audioChannels;
 
   bool get hasAudio => audioRate != null && audioChannels != null;
+
+  /// The phone takes remote commands and reports its camera state (`ctl` token).
+  final bool control;
+
+  /// Framed stream (`V|A|C` packets) instead of the raw Annex-B.
+  bool get framed => hasAudio || control;
 
   /// ffmpeg demuxer for the raw stream.
   String get ffmpegFormat => codec == 'avc' ? 'h264' : 'hevc';
@@ -69,8 +80,11 @@ class StreamHeader {
     if (width == null || height == null || fps == null || fps <= 0) return null;
     int? rate;
     int? channels;
-    if (p.length > 6 && p[6].startsWith('pcm')) {
-      final audio = p[6].substring(3).split('x');
+    var control = false;
+    for (final token in p.skip(6)) {
+      if (token == 'ctl') control = true;
+      if (!token.startsWith('pcm')) continue;
+      final audio = token.substring(3).split('x');
       if (audio.length == 2) {
         rate = int.tryParse(audio[0]);
         channels = int.tryParse(audio[1]);
@@ -84,17 +98,19 @@ class StreamHeader {
       hlg: p[5] == '1',
       audioRate: rate,
       audioChannels: channels,
+      control: control,
     );
   }
 }
 
-/// Splits the framed stream (`V|A` + length + payload) into video and audio chunks, whatever the TCP
-/// chunk boundaries are.
+/// Splits the framed stream (`V|A|C` + length + payload) into video, audio and control chunks, whatever
+/// the TCP chunk boundaries are.
 class FrameSplitter {
-  FrameSplitter({required this.onVideo, required this.onAudio});
+  FrameSplitter({required this.onVideo, required this.onAudio, this.onControl});
 
   final void Function(Uint8List) onVideo;
   final void Function(Uint8List) onAudio;
+  final void Function(Uint8List)? onControl;
 
   static const _headerSize = 5;
   static const _maxFrame = 64 * 1024 * 1024;
@@ -114,14 +130,16 @@ class FrameSplitter {
     while (buffer.length - offset >= _headerSize) {
       final type = buffer[offset];
       final length = ByteData.sublistView(buffer, offset + 1, offset + _headerSize).getUint32(0);
-      if ((type != 0x56 && type != 0x41) || length > _maxFrame) return false;
+      if ((type != 0x56 && type != 0x41 && type != 0x43) || length > _maxFrame) return false;
       final end = offset + _headerSize + length;
       if (end > buffer.length) break;
       final payload = Uint8List.sublistView(buffer, offset + _headerSize, end);
       if (type == 0x56) {
         onVideo(payload);
-      } else {
+      } else if (type == 0x41) {
         onAudio(payload);
+      } else {
+        onControl?.call(payload);
       }
       offset = end;
     }

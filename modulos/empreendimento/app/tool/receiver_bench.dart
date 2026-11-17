@@ -11,8 +11,20 @@ void main() {
     final receiver = Receiver(port: 5700, previewPort: 5701, studioPort: null, announce: false);
     await receiver.listen();
     expect(receiver.error, isNull);
+    var commanded = false;
     for (var i = 0; i < seconds; i++) {
       await Future<void>.delayed(const Duration(seconds: 1));
+      if (Platform.environment['REMOTE'] == '1' && receiver.remote && !commanded) {
+        commanded = true;
+        receiver.setPhone({'manualExposure': true, 'iso': 800});
+        receiver.setPhone({'awb': 'manual', 'kelvin': 3200});
+        receiver.setPhone({'pointX': 0.25, 'pointY': 0.75});
+        receiver.setLens('2');
+      }
+      if (receiver.phone != null) {
+        // ignore: avoid_print
+        print('PHONE lens=${receiver.phone!['lens']} settings=${receiver.phone!['settings']}');
+      }
       // ignore: avoid_print
       print('t=$i connected=${receiver.connected} ${receiver.header?.description ?? ''} '
           '${receiver.mbps.toStringAsFixed(0)} Mb/s rss=${ProcessInfo.currentRss ~/ (1 << 20)} MB');

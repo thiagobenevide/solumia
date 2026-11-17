@@ -50,6 +50,7 @@ class Streamer(
     withAudio: Boolean,
     realtimeClock: Boolean,
     private val onWarning: (String) -> Unit,
+    onRemote: (String) -> Unit = {},
 ) {
     private val encoder: MediaCodec
     val surface: Surface
@@ -100,10 +101,10 @@ class Streamer(
         encoder.start()
 
         val codec = if (hevc) "hevc" else "avc"
-        // the audio token turns on the framed stream (video + lossless PCM), see protocol.dart
+        // framed stream (video + lossless PCM + camera state) and remote control, see protocol.dart
         val audioToken = if (withAudio) " pcm${AUDIO_RATE}x$AUDIO_CHANNELS" else ""
-        val header = "SOLUMIA-CAM 1 $codec ${width}x$height $fps ${if (hlg) 1 else 0}$audioToken\n"
-        network = host?.let { NetworkSink(it, port, header.toByteArray(), withAudio, ::requestKeyFrame, onWarning) }
+        val header = "SOLUMIA-CAM 1 $codec ${width}x$height $fps ${if (hlg) 1 else 0}$audioToken ctl\n"
+        network = host?.let { NetworkSink(it, port, header.toByteArray(), ::requestKeyFrame, onWarning, onRemote) }
         recorder = if (recordLocal) LocalRecorder(context, withAudio, ::requestKeyFrame, onWarning) else null
         drain = Thread(::drainEncoder, "camera-encoder").apply { start() }
         if (withAudio) audioThread = Thread(::captureAudio, "camera-audio").apply { start() }
@@ -193,6 +194,11 @@ class Streamer(
 
     fun mbpsLastSecond() = network?.mbpsLastSecond() ?: 0.0
 
+    /** Camera state (JSON) for the PC; sent now and again after every reconnection. */
+    fun sendControl(json: String) {
+        network?.sendControl(json.toByteArray())
+    }
+
     fun seconds() = ((SystemClock.elapsedRealtime() - startedAt) / 1000).toInt()
 
     /** Closes everything and returns the local MP4 name (or null). Blocks: call off the main thread. */
@@ -220,9 +226,9 @@ private class NetworkSink(
     private val host: String,
     private val port: Int,
     private val header: ByteArray,
-    private val framed: Boolean,
     private val requestKeyFrame: () -> Unit,
     private val onWarning: (String) -> Unit,
+    private val onRemote: (String) -> Unit,
 ) {
     private class Packet(val type: Byte, val data: ByteArray, val at: Long = SystemClock.elapsedRealtime())
 
@@ -247,9 +253,31 @@ private class NetworkSink(
         if (!queue.offer(Packet(VIDEO, data))) {
             // the network fell behind: drop the backlog and restart from the next keyframe
             queue.clear()
+            control?.let { queue.offer(Packet(CONTROL, it)) }
             needsKeyFrame = true
             requestKeyFrame()
             onWarning("Slow network: frames dropped (lower the bitrate or use USB)")
+        }
+    }
+
+    /** Last camera state: the PC gets it right after connecting, before any video. */
+    @Volatile private var control: ByteArray? = null
+
+    fun sendControl(data: ByteArray) {
+        control = data
+        if (connected) queue.offer(Packet(CONTROL, data))
+    }
+
+    /** Commands from the PC (one JSON per line) on the same socket; ends when the socket closes. */
+    private fun readCommands(socket: Socket) {
+        try {
+            val reader = socket.getInputStream().bufferedReader()
+            while (running) {
+                val line = reader.readLine() ?: break
+                if (line.isNotBlank()) onRemote(line)
+            }
+        } catch (_: Exception) {
+            // socket closed: the main loop reconnects
         }
     }
 
@@ -274,7 +302,13 @@ private class NetworkSink(
                 }
                 val output = BufferedOutputStream(socket.getOutputStream(), 1 shl 20)
                 output.write(header)
+                control?.let {
+                    writeFrameHeader(output, Packet(CONTROL, it))
+                    output.write(it)
+                }
                 output.flush()
+                val opened = socket
+                Thread({ readCommands(opened) }, "camera-commands").start()
                 queue.clear()
                 needsKeyFrame = true
                 connected = true
@@ -305,15 +339,16 @@ private class NetworkSink(
     private fun pump(output: BufferedOutputStream) {
         while (running) {
             val packet = queue.poll(500, TimeUnit.MILLISECONDS) ?: continue
-            if (SystemClock.elapsedRealtime() - packet.at > MAX_LAG_MS) {
+            if (packet.type == VIDEO && SystemClock.elapsedRealtime() - packet.at > MAX_LAG_MS) {
                 // the network fell behind: skip to the next keyframe instead of keeping the delay forever
                 queue.clear()
+                control?.let { queue.offer(Packet(CONTROL, it)) }
                 needsKeyFrame = true
                 requestKeyFrame()
                 onWarning("Slow network: skipped ahead to stay live (lower the bitrate or use USB)")
                 continue
             }
-            if (framed) writeFrameHeader(output, packet)
+            writeFrameHeader(output, packet)
             output.write(packet.data)
             if (queue.isEmpty()) output.flush()
             sent.addAndGet(packet.data.size.toLong())
@@ -527,5 +562,6 @@ private const val AUDIO_RATE = 48_000
 private const val AUDIO_CHANNELS = 2
 private const val VIDEO: Byte = 0x56 // 'V'
 private const val AUDIO: Byte = 0x41 // 'A'
+private const val CONTROL: Byte = 0x43 // 'C'
 /** Oldest a packet may be when it leaves: above this the preview would lag behind the speaker. */
 private const val MAX_LAG_MS = 400L
