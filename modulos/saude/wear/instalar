@@ -15,7 +15,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../../.." && pwd)"
 target="${1:?usage: instalar <watch ip:port> [url]}"
 domain="$(grep -E '^DOMINIO=' "$root/.env.prd" 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
-url="${2:-https://${domain:-agent.thiagobenevide.com}}"
+url="${2:-https://${domain:-solumialocal.thiagobenevide.com}}"
 key="${CHAVE:-}"
 if [[ -z "$key" ]]; then read -rsp "Client key (CLIENT_API_KEYS): " key; echo; fi
 
