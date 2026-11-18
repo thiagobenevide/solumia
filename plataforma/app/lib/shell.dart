@@ -257,7 +257,10 @@ class _ShellState extends State<Shell> {
         child: LayoutBuilder(
           builder: (context, area) => MediaQuery(
             data: MediaQuery.of(context).copyWith(size: area.biggest),
-            child: m.larguraMaxima == null ? tela : LarguraMaxima(largura: m.larguraMaxima!, child: tela),
+            // fundo de vidro na largura toda (a tela fica limitada à largura máxima do módulo)
+            child: FundoVidro(
+              child: m.larguraMaxima == null ? tela : LarguraMaxima(largura: m.larguraMaxima!, child: tela),
+            ),
           ),
         ),
       ),
@@ -808,6 +811,13 @@ class _CabecalhoUsuario extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return ValueListenableBuilder(
+      valueListenable: NomeUsuario.nome,
+      builder: (context, escolhido, _) => _conteudo(context, escolhido.isNotEmpty ? escolhido : usuario),
+    );
+  }
+
+  Widget _conteudo(BuildContext context, String usuario) {
     final cores = Theme.of(context).colorScheme;
     final nome = usuario.isEmpty ? 'Solumia' : usuario;
     return ColoredBox(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:agent_core/agent_core.dart';
 import 'package:flutter/material.dart';
 
@@ -72,7 +74,7 @@ class _Today extends StatelessWidget {
     construir: (context, data, reload) {
       final (d, ag) = data;
       final summary = [
-        const _Entrance(order: 0, child: _Greeting()),
+        _Entrance(order: 0, child: _Greeting(d: d, agenda: ag)),
         const SizedBox(height: 16),
         _Entrance(order: 1, child: _Scoreboard(d: d)),
         const SizedBox(height: 12),
@@ -174,13 +176,17 @@ const _months = [
   'dezembro',
 ];
 
-/// "Bom dia" and today's date, at the top of the home page.
+/// "Boa noite, Thiago", today's date and, below, questions that take turns about what is still open
+/// (blocks not done, goals behind, late tasks). Tapping the name changes how the person is called.
 class _Greeting extends StatelessWidget {
-  const _Greeting();
+  const _Greeting({required this.d, required this.agenda});
+
+  final Discipline d;
+  final Agenda agenda;
 
   String _salutation(int hour) {
-    if (hour < 12) return 'Bom dia';
-    if (hour < 18) return 'Boa tarde';
+    if (hour >= 5 && hour < 12) return 'Bom dia';
+    if (hour >= 12 && hour < 18) return 'Boa tarde';
     return 'Boa noite';
   }
 
@@ -195,39 +201,178 @@ class _Greeting extends StatelessWidget {
     final now = DateTime.now();
     final text = Theme.of(context).textTheme;
     final colors = Theme.of(context).colorScheme;
+    final onCard = colors.onPrimary;
     return Container(
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [colors.primary, Color.lerp(colors.primary, colors.tertiary, 0.75)!],
         ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
         boxShadow: [
-          BoxShadow(color: colors.primary.withValues(alpha: 0.25), blurRadius: 24, offset: const Offset(0, 10)),
+          BoxShadow(color: colors.primary.withValues(alpha: 0.28), blurRadius: 28, offset: const Offset(0, 12)),
         ],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _salutation(now.hour),
-                  style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w700, color: colors.onPrimary),
+      child: ValueListenableBuilder(
+        valueListenable: NomeUsuario.nome,
+        builder: (context, name, _) {
+          final first = NomeUsuario.primeiro;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => perguntarNome(context),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            first.isEmpty ? '${_salutation(now.hour)}!' : '${_salutation(now.hour)}, $first',
+                            style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w800, color: onCard),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            first.isEmpty
+                                ? 'Toque aqui e diga como quer ser chamado'
+                                : '${_weekdays[now.weekday - 1]}, ${now.day} de ${_months[now.month - 1]}',
+                            style: text.titleMedium?.copyWith(color: onCard.withValues(alpha: 0.85)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Icon(_icon(now.hour), size: 48, color: onCard.withValues(alpha: 0.9)),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _Nudges(messages: _messages(first), color: onCard),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  static final _goal = RegExp(r'^Meta [“"](.+?)[”"]: (\d+) de (\d+)');
+  static final _late = RegExp(r'^[“"](.+?)[”"] vence atrasada');
+
+  /// What to ask about, from the day's data (the names come from the blocks, goals and tasks).
+  List<String> _messages(String first) {
+    final who = first.isEmpty ? '' : ', $first';
+    final messages = <String>[];
+    final current = d.currentBlock;
+    if (current != null) messages.add('Agora é hora de “${current.title}”$who. Bora?');
+    for (final b in agenda.blocks) {
+      if (!b.done && b.title != current?.title) messages.add('Já fez “${b.title}”$who? (${b.start}–${b.end})');
+    }
+    for (final a in d.alerts) {
+      messages.add(_question(a.text, who));
+    }
+    if (messages.isEmpty) messages.add('Tudo em dia$who. Mandou bem!');
+    return messages;
+  }
+
+  String _question(String alert, String who) {
+    final goal = _goal.firstMatch(alert);
+    if (goal != null) return 'Já fez “${goal[1]}” hoje$who? Está em ${goal[2]} de ${goal[3]}.';
+    final late = _late.firstMatch(alert);
+    if (late != null) return '“${late[1]}” está atrasada$who. Que tal encaixar hoje?';
+    if (alert.startsWith('Sem agenda para hoje')) return 'Ainda não tem agenda hoje$who. Peça a sugestão do dia.';
+    return who.isEmpty ? alert : '${who.substring(2)}, ${alert[0].toLowerCase()}${alert.substring(1)}';
+  }
+}
+
+/// One question at a time, changing every 5 s with a slide from below (not a running ticker).
+class _Nudges extends StatefulWidget {
+  const _Nudges({required this.messages, required this.color});
+
+  final List<String> messages;
+  final Color color;
+
+  @override
+  State<_Nudges> createState() => _NudgesState();
+}
+
+class _NudgesState extends State<_Nudges> {
+  int _index = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _next());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _next() {
+    if (!mounted || widget.messages.length < 2) return;
+    setState(() => _index = (_index + 1) % widget.messages.length);
+  }
+
+  static Widget _transition(Widget child, Animation<double> a) => FadeTransition(
+    opacity: a,
+    child: SlideTransition(
+      position: Tween(begin: const Offset(0, 0.6), end: Offset.zero).animate(a),
+      child: child,
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final messages = widget.messages;
+    final message = messages[_index % messages.length];
+    return GestureDetector(
+      onTap: _next,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.chat_bubble_rounded, size: 18, color: widget.color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ClipRect(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 450),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: _transition,
+                  layoutBuilder: (current, previous) => Stack(alignment: Alignment.centerLeft, children: [...previous, ?current]),
+                  child: Text(
+                    message,
+                    key: ValueKey(message),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: widget.color, fontWeight: FontWeight.w600),
+                  ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${_weekdays[now.weekday - 1]}, ${now.day} de ${_months[now.month - 1]}',
-                  style: text.titleMedium?.copyWith(color: colors.onPrimary.withValues(alpha: 0.85)),
-                ),
-              ],
+              ),
             ),
-          ),
-          Icon(_icon(now.hour), size: 52, color: colors.onPrimary.withValues(alpha: 0.9)),
-        ],
+            if (messages.length > 1) ...[
+              const SizedBox(width: 8),
+              Text(
+                '${_index % messages.length + 1}/${messages.length}',
+                style: TextStyle(color: widget.color.withValues(alpha: 0.7), fontSize: 12),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
