@@ -164,6 +164,7 @@ class _WorkoutGuideScreenState extends State<WorkoutGuideScreen> with WidgetsBin
     setState(() => _busy = true);
     try {
       _assign(await api.finishSession(_s.id, {'esforco': r.$1, if (r.$2.isNotEmpty) 'notas': r.$2}));
+      if (mounted) comemorar(context, mensagem: 'Treino concluído!');
     } on ApiErro catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {

@@ -72,8 +72,28 @@ fun WorkoutScreen(api: Api, active: Boolean, screenOn: (Boolean) -> Unit) {
     var seriesKey by remember { mutableStateOf("") }
     var warned by remember { mutableStateOf<Long?>(null) }
     var photoOpen by remember { mutableStateOf(false) }
+    // (message, big): check after each set; confetti when the workout ends
+    var celebration by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+
+    fun celebrate(previous: Session?, next: Session?) {
+        if (previous == null || next == null || previous.id != next.id) return
+        val finished = next.state == "concluida" && previous.state != "concluida"
+        when {
+            finished -> {
+                celebration = "Treino concluído!" to true
+                context.getSystemService(Vibrator::class.java)?.vibrate(
+                    VibrationEffect.createWaveform(longArrayOf(0, 120, 80, 120, 80, 300), -1),
+                )
+            }
+            next.seriesDone > previous.seriesDone -> {
+                val left = next.plannedSeries - next.seriesDone
+                celebration = (if (left <= 0) "Tudo feito!" else "Série ✓") to (left <= 0)
+            }
+        }
+    }
 
     fun set(s: Session?) {
+        celebrate(session, s)
         session = s
         carregou = true
         error = null
@@ -167,6 +187,9 @@ fun WorkoutScreen(api: Api, active: Boolean, screenOn: (Boolean) -> Unit) {
                 if (e.goalTime != null) cmd("concluir_serie", mapOf("tempo_s" to s.seriesTime(now)))
                 else cmd("concluir_serie", mapOf("repeticoes" to reps))
             }
+        }
+        celebration?.let { (message, big) ->
+            Celebration(message, big) { celebration = null }
         }
         if (error != null && s != null) {
             Text(

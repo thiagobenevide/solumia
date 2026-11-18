@@ -86,6 +86,18 @@ def test_plan_goes_to_agenda(api: TestClient, tmp_path: Path) -> None:
     agenda = api.get("/api/saude/agenda?de=2026-11-17&ate=2026-11-22").json()
     assert [i["exercicio_id"] for i in agenda] == ["flexao", "bulgaro-na-cadeira"]
     assert api.get("/api/saude/coach/planos").json()[0]["resumo"] == "semana"
+    # only Tuesday: Wednesday keeps what was there, today comes from the app (not the UTC clock)
+    api.post("/api/saude/agenda", json={"data": "2026-11-19", "exercicio_id": "prancha"})
+    plano = api.post(
+        "/api/saude/coach/planos", json={"datas": ["2026-11-17"], "hoje": "2026-11-17"}
+    ).json()
+    assert plano["datas"] == ["2026-11-17"] and plano["agendados"] == 1
+    prompt = CALLS[-1][0]["prompt"]
+    assert "today is 2026-11-17" in prompt and "Prancha (Abdômen)" in prompt
+    assert "- 2026-11-18 (qua)" not in prompt.split("# Days to plan")[1]
+    agenda = api.get("/api/saude/agenda?de=2026-11-17&ate=2026-11-22").json()
+    assert [i["exercicio_id"] for i in agenda] == [
+        "flexao", "bulgaro-na-cadeira", "prancha"]
     assert "dumbbell / quadriceps: Split_Squat_with_Dumbbells" in request["prompt"]
     exercicios = {e["id"]: e for e in api.get("/api/saude/exercicios").json()["exercicios"]}
     assert exercicios["bulgaro-na-cadeira"]["ref"] == "Split_Squat_with_Dumbbells"

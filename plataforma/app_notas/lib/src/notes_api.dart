@@ -41,14 +41,13 @@ class NotesApi {
     }
   }
 
-  /// Uploads pending changes before reading from the server; refreshes the mirror from time to time.
+  Future<bool> _hasPending() async => (await (await _mirror.queue).itens()).isNotEmpty;
+
+  /// Uploads pending changes and refreshes the mirror in the background: reading never waits for
+  /// the full sync (it downloads every note).
   Future<void> _beforeRead() async {
-    if ((await (await _mirror.queue).itens()).isNotEmpty) {
-      try {
-        await sync();
-      } on ApiErro catch (e) {
-        if (semConexao(e)) rethrow; // any other error (e.g. old backend without /espelho) does not block reading
-      }
+    if (await _hasPending()) {
+      unawaited(sync().then<void>((_) {}, onError: (_) {}));
     } else if (_mirroredAt == null || DateTime.now().difference(_mirroredAt!) > const Duration(minutes: 10)) {
       _mirroredAt = DateTime.now();
       unawaited(sync().then<void>((_) {}, onError: (_) => _mirroredAt = null));
@@ -94,8 +93,26 @@ class NotesApi {
     ].take(10).toList(),
   );
 
+  /// The device copy of the note, to show it at once while [fetch] asks the server; null if absent.
+  Future<Note?> cached(String id) async {
+    try {
+      final j = await _mirror.fetch(await _mirror.realId(id));
+      return j == null ? null : Note.fromJson(j);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Note> fetch(String id) async {
     id = await _mirror.realId(id);
+    // an edit made offline is still waiting to upload: the device copy is the newest one
+    if (await _hasPending()) {
+      final local = await _mirror.fetch(id);
+      if (local != null) {
+        await _beforeRead();
+        return Note.fromJson(local);
+      }
+    }
     return _orLocal(
       () async {
         await _beforeRead();

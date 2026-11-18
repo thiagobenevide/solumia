@@ -3,7 +3,7 @@ the week's workout built by the AI (Claude or local). The platform puts the [Ai]
 `app.state.saude_coach_ia`."""
 
 import mimetypes
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -225,6 +225,10 @@ def meal_photo(id_: str, coach: CoachDep) -> FileResponse:
 class PlanRequest(BaseModel):
     inicio: str | None = None
     fim: str | None = None
+    # chosen days (e.g. only today, or one Thursday); without them, `inicio`..`fim`
+    datas: list[str] | None = Field(None, min_length=1, max_length=14)
+    # the user's local date: the server clock (UTC) is already "tomorrow" at night in Brazil
+    hoje: str | None = None
     pedido: str = Field("", max_length=4000)
     ia: str | None = None
     substituir: bool = True
@@ -237,14 +241,33 @@ def plans(coach: CoachDep) -> Any:
 
 @router.post("/planos")
 async def generate_plan(pedido: PlanRequest, request: Request, coach: CoachDep) -> Any:
-    """Builds the workout from `inicio` (today) to `fim` (Sunday) and writes it into the agenda."""
+    """Builds the workout of the chosen days (default: today to Sunday) and writes it into the
+    agenda; the other days stay as they are."""
     try:
-        inicio = date.fromisoformat(pedido.inicio) if pedido.inicio else date.today()
-        fim = date.fromisoformat(pedido.fim) if pedido.fim else week_end(inicio)
+        hoje = date.fromisoformat(pedido.hoje) if pedido.hoje else date.today()
+        dias = _plan_days(pedido, hoje)
     except ValueError as e:
         raise HTTPException(400, "Data inválida") from e
-    if fim < inicio or (fim - inicio).days > 13:
-        raise HTTPException(400, "Período deve ter de 1 a 14 dias")
+    if (dias[-1] - dias[0]).days > 13:
+        raise HTTPException(400, "Escolha dias dentro de 14 dias")
     ai, provider = _ai(request, coach, pedido.ia)
-    plan = await _run(ai, coach.plan_request(inicio, fim, pedido.pedido), provider)
-    return coach.apply_plan(plan, inicio, fim, pedido.substituir, provider)
+    plan = await _run(ai, coach.plan_request(dias, pedido.pedido, hoje), provider)
+    return coach.apply_plan(plan, dias, pedido.substituir, provider)
+
+
+def _plan_days(pedido: PlanRequest, hoje: date) -> list[date]:
+    if pedido.datas:
+        unique = set()
+        for d in pedido.datas:
+            unique.add(date.fromisoformat(d))
+        return sorted(unique)
+    inicio = date.fromisoformat(pedido.inicio) if pedido.inicio else hoje
+    fim = date.fromisoformat(pedido.fim) if pedido.fim else week_end(inicio)
+    if fim < inicio:
+        raise ValueError("fim before inicio")
+    dias = []
+    current = inicio
+    while current <= fim:
+        dias.append(current)
+        current += timedelta(days=1)
+    return dias
