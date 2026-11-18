@@ -513,8 +513,11 @@ class _Card extends StatelessWidget {
   final Color color;
   final (int, int)? progress;
 
+  /// Rises into view as the screen scrolls to it.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => RevelarAoRolar(distancia: 24, child: Builder(builder: _card));
+
+  Widget _card(BuildContext context) {
     final topic = Theme.of(context);
     final p = progress;
     return Card(

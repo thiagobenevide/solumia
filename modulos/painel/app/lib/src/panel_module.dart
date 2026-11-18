@@ -18,6 +18,9 @@ class PanelModule extends Modulo {
   String get id => 'painel';
 
   @override
+  TemaCena get cena => TemaCena.painel;
+
+  @override
   String get nome => 'Cobrador';
 
   @override
@@ -28,6 +31,9 @@ class PanelModule extends Modulo {
 
   @override
   double? get larguraMaxima => 1600;
+
+  @override
+  bool get fundoVidro => true;
 
   @override
   Widget construir(BuildContext context) => PanelScreen(api: api);

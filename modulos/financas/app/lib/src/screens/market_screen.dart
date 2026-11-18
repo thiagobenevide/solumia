@@ -271,7 +271,7 @@ class _HighlightsList extends StatelessWidget {
 
 /// Asset sheet: stock (quote, dividends, CVM income statement/balance sheet/cash flow and the linked documents)
 /// or FII (monthly report: P/VP, DY, equity, composition and management reports).
-class AssetScreen extends StatefulWidget {
+class AssetScreen extends StatelessWidget {
   const AssetScreen({super.key, required this.api, required this.query, this.files});
 
   final FinanceApi api;
@@ -279,10 +279,32 @@ class AssetScreen extends StatefulWidget {
   final String query;
 
   @override
-  State<AssetScreen> createState() => _AssetScreenState();
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(query.toUpperCase())),
+    body: MarketSheet(api: api, files: files, query: query),
+  );
 }
 
-class _AssetScreenState extends State<AssetScreen> {
+/// The market sheet of a ticker or name (quote, indicators, valuation, dividends, CVM documents),
+/// building up in parts while the server reads CVM. Also the "Mercado" tab of a followed company
+/// ([canFollow] false: it is already followed).
+class MarketSheet extends StatefulWidget {
+  const MarketSheet({super.key, required this.api, required this.query, this.files, this.canFollow = true});
+
+  final FinanceApi api;
+  final FilesApi? files;
+  final String query;
+  final bool canFollow;
+
+  @override
+  State<MarketSheet> createState() => _MarketSheetState();
+}
+
+class _MarketSheetState extends State<MarketSheet> with AutomaticKeepAliveClientMixin {
+  /// Inside the company tabs: switching tabs does not fetch the sheet again.
+  @override
+  bool get wantKeepAlive => true;
+
   late Future<Doc> _dados = _runSearch();
 
   /// Incomplete sheet while the server reads CVM: the screen builds up in parts.
@@ -292,9 +314,9 @@ class _AssetScreenState extends State<AssetScreen> {
       isCancelled: () => !mounted, onPartial: (p) => mounted ? setState(() => _partial = p) : null);
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.query.toUpperCase())),
-    body: FutureBuilder<Doc>(
+  Widget build(BuildContext context) {
+    super.build(context);
+    return FutureBuilder<Doc>(
       future: _dados,
       builder: (context, s) {
         if (s.hasError) {
@@ -319,7 +341,7 @@ class _AssetScreenState extends State<AssetScreen> {
           );
         }
         if (!s.hasData && _partial?['tipo'] == 'acao') {
-          return _StockSheet(api: widget.api, files: widget.files, d: _partial!);
+          return _StockSheet(api: widget.api, files: widget.files, d: _partial!, canFollow: widget.canFollow);
         }
         if (!s.hasData) {
           return const Center(
@@ -335,10 +357,10 @@ class _AssetScreenState extends State<AssetScreen> {
           );
         }
         final d = s.data!;
-        return d['tipo'] == 'fii' ? _FiiSheet(d) : _StockSheet(api: widget.api, files: widget.files, d: d);
+        return d['tipo'] == 'fii' ? _FiiSheet(d) : _StockSheet(api: widget.api, files: widget.files, d: d, canFollow: widget.canFollow);
       },
-    ),
-  );
+    );
+  }
 }
 
 /// Two columns from landscape tablet up; one column on the phone.
@@ -414,7 +436,9 @@ Widget _link(BuildContext context, IconData icone, String title, String url, {St
 );
 
 class _StockSheet extends StatelessWidget {
-  const _StockSheet({required this.api, required this.d, this.files});
+  const _StockSheet({required this.api, required this.d, this.files, this.canFollow = true});
+
+  final bool canFollow;
 
   final FinanceApi api;
   final FilesApi? files;
@@ -493,11 +517,12 @@ class _StockSheet extends StatelessWidget {
               ? 'Banco/seguradora: EBITDA, ROIC e dívida não se aplicam; olhe ROE, P/L, P/VP e dividendos.'
               : 'Demonstrações consolidadas entregues à CVM e cotação do dia.',
           stocks: [
-            TextButton.icon(
-              onPressed: years.isEmpty ? null : () => _follow(context),
-              icon: const Icon(Icons.add_chart),
-              label: const Text('Acompanhar'),
-            ),
+            if (canFollow)
+              TextButton.icon(
+                onPressed: years.isEmpty ? null : () => _follow(context),
+                icon: const Icon(Icons.add_chart),
+                label: const Text('Acompanhar'),
+              ),
           ],
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -591,6 +616,8 @@ class _StockSheet extends StatelessWidget {
               'site': d['site'],
               'setor': d['setor'] ?? '',
               'descricao': d['atividade'] ?? '',
+              // the sheet already has today's quote: without it the valuation cards stay empty
+              if ((d['cotacao'] as Doc?)?['preco'] case final num preco) 'cotacao': preco,
             });
       id = e['id'] as String;
       await api.importCvm(id!);

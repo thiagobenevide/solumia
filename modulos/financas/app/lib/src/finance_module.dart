@@ -30,6 +30,9 @@ class FinanceModule extends Modulo {
   String get id => 'financas';
 
   @override
+  TemaCena get cena => TemaCena.financas;
+
+  @override
   String get nome => 'Finanças';
 
   @override

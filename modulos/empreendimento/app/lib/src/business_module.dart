@@ -22,6 +22,9 @@ class BusinessModule extends Modulo {
   String get id => 'empreendimento';
 
   @override
+  TemaCena get cena => TemaCena.empreendimento;
+
+  @override
   String get nome => 'Empreendimento';
 
   @override

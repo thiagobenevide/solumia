@@ -26,6 +26,9 @@ class StudiesModule extends Modulo {
   String get id => 'estudos';
 
   @override
+  TemaCena get cena => TemaCena.estudos;
+
+  @override
   String get nome => 'Estudos';
 
   @override

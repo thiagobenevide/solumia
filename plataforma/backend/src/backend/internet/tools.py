@@ -236,10 +236,36 @@ THEMES_NEWS = {
 }
 
 
+# Publisher feeds that carry a photo per article (Google News RSS has none). Their items are
+# filtered by the topic words and merged with Google's; a headline in both keeps Google's link
+# and gains the photo.
+PUBLISHER_FEEDS = {
+    "InfoMoney": "https://www.infomoney.com.br/feed/",
+    "Suno": "https://www.suno.com.br/noticias/feed/",
+    "InvestNews": "https://investnews.com.br/feed/",
+    "Seu Dinheiro": "https://www.seudinheiro.com/feed/",
+    "Money Times": "https://www.moneytimes.com.br/feed/",
+}
+THEME_WORDS = {
+    "economia": ["economia", "ibovespa", "dolar", "mercado", "pib", "fiscal", "bolsa"],
+    "acoes": ["ibovespa", "acoes", "acao", "b3", "bolsa", "dividendo", "lucro", "balanco"],
+    "fiis": ["fundo imobiliario", "fundos imobiliarios", "fii", "fiis", "ifix"],
+    "impostos": ["imposto", "receita federal", "tributaria", "tributacao", "irpf"],
+    "juros": ["selic", "copom", "ipca", "inflacao", "tesouro", "juros"],
+}
+_MEDIA = "{http://search.yahoo.com/mrss/}"
+_CONTENT = "{http://purl.org/rss/1.0/modules/content/}encoded"
+_OG_IMAGE = re.compile(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', re.I)
+# article url → photo (og:image); the page does not change, so it is fetched once per process
+_PHOTO_CACHE: dict[str, str] = {}
+_IMG = re.compile(r"<img[^>]+src=[\"']([^\"']+)[\"']", re.I)
+
+
 async def news(
     cliente: httpx.AsyncClient, tema: str = "economia", n: int = 30
 ) -> dict[str, Any]:
-    """Headlines of the last 24 h on Google News (Portuguese RSS, no key), newest first."""
+    """Headlines of the last 24 h, newest first: Google News (Portuguese RSS, no key) plus the
+    publisher feeds, which bring a photo (`imagem`), a section (`categoria`) and a summary."""
     query = THEMES_NEWS.get(tema, THEMES_NEWS["economia"])
     try:
         r = await cliente.get(
@@ -252,35 +278,163 @@ async def news(
         root = ElementTree.fromstring(r.content)
     except (httpx.HTTPError, ElementTree.ParseError) as e:
         raise ToolFailed(f"notícias: {e.__class__.__name__}") from e
-    items, seen = [], set()
+    items: list[dict[str, Any]] = []
+    by_title: dict[str, dict[str, Any]] = {}
     for it in root.iter("item"):
-        source = it.findtext("source") or ""
-        title = (it.findtext("title") or "").strip()
-        # Google puts " - Source" at the end of the title
-        if source and title.endswith(f" - {source}"):
-            title = title[: -len(source) - 3]
-        if not title or _norm(title) in seen:
-            continue
-        seen.add(_norm(title))
-        try:
-            data = parsedate_to_datetime(it.findtext("pubDate") or "").astimezone()
-        except (TypeError, ValueError):
-            data = None
-        items.append(
-            {
-                "titulo": html.unescape(title),
-                "fonte": source,
-                "url": it.findtext("link") or "",
-                "data": data.isoformat(timespec="minutes") if data else None,
-            }
-        )
-    items.sort(key=lambda x: x["data"] or "", reverse=True)
+        item = _google_item(it)
+        if item and _norm(item["titulo"]) not in by_title:
+            by_title[_norm(item["titulo"])] = item
+            items.append(item)
+    feeds = await asyncio.gather(
+        *[_publisher_feed(cliente, name, url) for name, url in PUBLISHER_FEEDS.items()]
+    )
+    words = THEME_WORDS.get(tema, THEME_WORDS["economia"])
+    limit = (datetime.now(BRASILIA).timestamp() - 24 * 3600) if items else 0
+    for feed in feeds:
+        for item in feed:
+            _merge_publisher(item, by_title, items, words, limit)
+    await _fill_photos(cliente, items)
     return {
         "fonte": "Google Notícias",
         "tema": tema,
         "atualizado": datetime.now(BRASILIA).isoformat(timespec="minutes"),
-        "noticias": items[:n],
+        "noticias": _keep_photos(items, n),
     }
+
+
+async def _fill_photos(cliente: httpx.AsyncClient, items: list[dict[str, Any]]) -> None:
+    """Publisher articles whose feed has no photo get the page's og:image (Google links are
+    redirects and are left as they are)."""
+    missing = [i for i in items if not i.get("imagem") and "news.google." not in i["url"]]
+    gate = asyncio.Semaphore(8)
+    photos = await asyncio.gather(*[_og_image(cliente, i["url"], gate) for i in missing[:40]])
+    for item, photo in zip(missing, photos, strict=False):
+        if photo:
+            item["imagem"] = photo
+
+
+async def _og_image(cliente: httpx.AsyncClient, url: str, gate: asyncio.Semaphore) -> str:
+    if url in _PHOTO_CACHE:
+        return _PHOTO_CACHE[url]
+    async with gate:
+        try:
+            r = await cliente.get(
+                url, headers={"User-Agent": AGENT}, timeout=6, follow_redirects=True
+            )
+            found = _OG_IMAGE.search(r.text[:200_000])
+        except httpx.HTTPError:
+            return ""
+    photo = html.unescape(found.group(1)) if found else ""
+    _PHOTO_CACHE[url] = photo
+    return photo
+
+
+def _keep_photos(items: list[dict[str, Any]], n: int) -> list[dict[str, Any]]:
+    """The newest [n], but every article with a photo stays in (they open the screen as cards)."""
+    with_photo = [i for i in items if i.get("imagem")]
+    rest = [i for i in items if not i.get("imagem")]
+    rest.sort(key=lambda x: x["data"] or "", reverse=True)
+    chosen = with_photo + rest[: max(n - len(with_photo), 0)]
+    chosen.sort(key=lambda x: x["data"] or "", reverse=True)
+    return chosen
+
+
+def _google_item(it: ElementTree.Element) -> dict[str, Any] | None:
+    source = it.findtext("source") or ""
+    title = (it.findtext("title") or "").strip()
+    # Google puts " - Source" at the end of the title
+    if source and title.endswith(f" - {source}"):
+        title = title[: -len(source) - 3]
+    if not title:
+        return None
+    return {
+        "titulo": html.unescape(title),
+        "fonte": source,
+        "url": it.findtext("link") or "",
+        "data": _rss_date(it.findtext("pubDate")),
+    }
+
+
+def _rss_date(text: str | None) -> str | None:
+    try:
+        return parsedate_to_datetime(text or "").astimezone().isoformat(timespec="minutes")
+    except (TypeError, ValueError):
+        return None
+
+
+async def _publisher_feed(cliente: httpx.AsyncClient, name: str, url: str) -> list[dict[str, Any]]:
+    """One publisher's items; a feed that fails is just left out."""
+    try:
+        r = await cliente.get(url, headers={"User-Agent": AGENT}, timeout=10, follow_redirects=True)
+        r.raise_for_status()
+        root = ElementTree.fromstring(r.content)
+    except (httpx.HTTPError, ElementTree.ParseError):
+        return []
+    result = []
+    for it in root.iter("item"):
+        title = html.unescape((it.findtext("title") or "").strip())
+        if not title:
+            continue
+        description = it.findtext("description") or ""
+        categories = [c.text.strip() for c in it.findall("category") if c.text]
+        result.append(
+            {
+                "titulo": title,
+                "fonte": name,
+                "url": it.findtext("link") or "",
+                "data": _rss_date(it.findtext("pubDate")),
+                "imagem": _image(it, description),
+                "categoria": categories[0] if categories else "",
+                "resumo": _plain(description)[:280],
+                "_busca": _norm(" ".join([title, *categories])),
+            }
+        )
+    return result
+
+
+def _image(it: ElementTree.Element, description: str) -> str:
+    """Photo of the article: media:content/thumbnail, an image enclosure or the first <img>."""
+    for tag in (f"{_MEDIA}content", f"{_MEDIA}thumbnail"):
+        node = it.find(tag)
+        if node is not None and node.get("url"):
+            return node.get("url") or ""
+    enclosure = it.find("enclosure")
+    if enclosure is not None and (enclosure.get("type") or "").startswith("image"):
+        return enclosure.get("url") or ""
+    for text in (description, it.findtext(_CONTENT) or ""):
+        for found in _IMG.finditer(text):
+            src = html.unescape(found.group(1))
+            if "/themes/" not in src and not src.endswith(".svg"):  # site logo, not a photo
+                return src
+    return ""
+
+
+def _plain(text: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", html.unescape(text))
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _merge_publisher(
+    item: dict[str, Any],
+    by_title: dict[str, dict[str, Any]],
+    items: list[dict[str, Any]],
+    words: list[str],
+    limit: float,
+) -> None:
+    search = item.pop("_busca")
+    key = _norm(item["titulo"])
+    same = by_title.get(key)
+    if same is not None:
+        for field in ("imagem", "categoria", "resumo"):
+            if item[field] and not same.get(field):
+                same[field] = item[field]
+        return
+    if not any(f" {w} " in f" {search} " for w in words):
+        return
+    if limit and item["data"] and datetime.fromisoformat(item["data"]).timestamp() < limit:
+        return
+    by_title[key] = item
+    items.append(item)
 
 
 # ---------- Central Bank indicators ----------

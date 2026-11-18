@@ -13,6 +13,9 @@ class NotesModule extends Modulo {
   String get id => 'notas';
 
   @override
+  TemaCena get cena => TemaCena.notas;
+
+  @override
   String get nome => 'Notas';
 
   @override

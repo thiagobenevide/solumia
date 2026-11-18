@@ -701,11 +701,35 @@ def ranking(arm: ArmDep) -> Any:
 
 
 @router.get("/empresas/{id_}/analise")
-def analyze(arm: ArmDep, id_: str) -> Any:
+async def analyze(request: Request, arm: ArmDep, id_: str) -> Any:
+    """Analysis with today's quote: without a quote, P/E, P/B, EV, yield and market value stay
+    empty, so opening the company refreshes it (keeps the stored one if the quote source fails)."""
     try:
-        return analysis.analyze(arm, arm.obter("empresas", id_))
-    except (NotFound, Invalid) as e:
+        company = arm.obter("empresas", id_)
+    except NotFound as e:
         raise _error(e) from e
+    preco = await _quote(request, company["ticker"])
+    if preco and preco != company["cotacao"]:
+        company = arm.edit("empresas", id_, {"cotacao": preco})
+    try:
+        return analysis.analyze(arm, company)
+    except Invalid as e:
+        raise _error(e) from e
+
+
+async def _quote(request: Request, ticker: str) -> float | None:
+    import asyncio
+
+    if not ticker:
+        return None
+    try:
+        r = await asyncio.wait_for(
+            _internet(request).use("acoes", {"tickers": [ticker.upper()]}), timeout=8
+        )
+    except Exception:  # the quote is a bonus: the analysis opens with the stored one
+        return None
+    preco = ((r or {}).get("cotacoes", {}).get(ticker.upper()) or {}).get("preco")
+    return float(preco) if isinstance(preco, int | float) and preco > 0 else None
 
 
 @router.get("/setores/{id_}/analise")

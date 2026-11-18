@@ -1,3 +1,4 @@
+import 'package:agent_core/agent_core.dart';
 import 'package:flutter/material.dart';
 
 import '../finance_api.dart';
@@ -107,8 +108,11 @@ class Section extends StatelessWidget {
   final Widget child;
   final List<Widget> stocks;
 
+  /// Each section rises into view as the screen scrolls to it.
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) => RevelarAoRolar(child: _card(context));
+
+  Widget _card(BuildContext context) => Card(
     margin: const EdgeInsets.all(6),
     child: Padding(
       padding: const EdgeInsets.all(14),
@@ -152,6 +156,10 @@ class Indicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
+    return RevelarAoRolar(distancia: 20, child: _card(context, t));
+  }
+
+  Widget _card(BuildContext context, TextTheme t) {
     return SizedBox(
       width: width,
       child: Card(

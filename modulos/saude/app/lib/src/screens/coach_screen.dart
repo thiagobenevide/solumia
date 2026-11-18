@@ -1048,8 +1048,11 @@ class _StatTile extends StatelessWidget {
   final String detail;
   final double progress;
 
+  /// Rises into view as the screen scrolls to it.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => RevelarAoRolar(distancia: 24, child: Builder(builder: _card));
+
+  Widget _card(BuildContext context) {
     final text = Theme.of(context).textTheme;
     return Vidro(
       cor: color,

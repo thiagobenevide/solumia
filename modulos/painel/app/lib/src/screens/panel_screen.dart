@@ -74,7 +74,7 @@ class _Today extends StatelessWidget {
     construir: (context, data, reload) {
       final (d, ag) = data;
       final summary = [
-        _Entrance(order: 0, child: _Greeting(d: d, agenda: ag)),
+        _Entrance(order: 0, child: ZoomAoRolar(child: _Greeting(d: d, agenda: ag))),
         const SizedBox(height: 16),
         _Entrance(order: 1, child: _Scoreboard(d: d)),
         const SizedBox(height: 12),
@@ -86,13 +86,13 @@ class _Today extends StatelessWidget {
           for (var i = 0; i < d.alerts.length; i++)
             _Entrance(
               order: 3 + i,
-              child: _AlertCard(alert: d.alerts[i]),
+              child: RevelarAoRolar(child: _AlertCard(alert: d.alerts[i])),
             ),
         ],
         const _SectionTitle(icon: Icons.event_note_outlined, text: 'Agenda de hoje'),
         _Entrance(
           order: 3 + d.alerts.length,
-          child: _DaySchedule(api: api, agenda: ag, aoMudar: reload),
+          child: RevelarAoRolar(child: _DaySchedule(api: api, agenda: ag, aoMudar: reload)),
         ),
       ];
       return LayoutBuilder(builder: (context, box) => _layout(box.maxWidth, summary, day));

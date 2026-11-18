@@ -27,6 +27,9 @@ class HealthModule extends Modulo {
   String get id => 'saude';
 
   @override
+  TemaCena get cena => TemaCena.saude;
+
+  @override
   String get nome => 'Saúde';
 
   @override

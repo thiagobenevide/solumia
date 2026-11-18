@@ -243,7 +243,19 @@ class _ShellState extends State<Shell> {
     _foco = 0;
   });
 
-  Widget _tela(_Aba aba) {
+  /// Cena de entrada do módulo na aba raiz dele; telas abertas por cima (aba.tela) entram direto.
+  Widget _comCena(Modulo m, _Aba aba, bool ativa, Widget tela) {
+    if (aba.tela != null) return tela;
+    return CenaEntrada(tema: m.cena, titulo: m.nome, icone: m.icone, ativa: ativa, child: tela);
+  }
+
+  /// Fundo de vidro na largura toda, só nos módulos que pedem (a tela segue na largura máxima).
+  Widget _comFundo(Modulo m, Widget tela) {
+    if (!m.fundoVidro) return tela;
+    return FundoVidro(child: tela);
+  }
+
+  Widget _tela(_Aba aba, {required bool ativa}) {
     final m = widget.modulos[aba.modulo];
     final tela = aba.tela == null
         ? Builder(builder: m.construir)
@@ -257,9 +269,11 @@ class _ShellState extends State<Shell> {
         child: LayoutBuilder(
           builder: (context, area) => MediaQuery(
             data: MediaQuery.of(context).copyWith(size: area.biggest),
-            // fundo de vidro na largura toda (a tela fica limitada à largura máxima do módulo)
-            child: FundoVidro(
-              child: m.larguraMaxima == null ? tela : LarguraMaxima(largura: m.larguraMaxima!, child: tela),
+            child: _comCena(
+              m,
+              aba,
+              ativa,
+              _comFundo(m, m.larguraMaxima == null ? tela : LarguraMaxima(largura: m.larguraMaxima!, child: tela)),
             ),
           ),
         ),
@@ -268,7 +282,13 @@ class _ShellState extends State<Shell> {
   }
 
   /// IndexedStack mantém o estado de cada aba ao trocar de uma para outra.
-  Widget _corpo(_Painel p) => IndexedStack(index: p.ativa, children: [for (final a in p.abas) _tela(a)]);
+  Widget _corpo(_Painel p) {
+    final telas = <Widget>[];
+    for (var i = 0; i < p.abas.length; i++) {
+      telas.add(_tela(p.abas[i], ativa: i == p.ativa));
+    }
+    return IndexedStack(index: p.ativa, children: telas);
+  }
 
   @override
   Widget build(BuildContext context) {

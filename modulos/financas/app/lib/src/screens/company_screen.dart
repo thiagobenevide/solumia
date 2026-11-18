@@ -6,6 +6,7 @@ import '../finance_api.dart';
 import '../format.dart';
 import 'common.dart';
 import 'investments_screen.dart';
+import 'market_screen.dart';
 
 const accountLabel = {
   'receita_liquida': 'Receita líquida',
@@ -87,7 +88,7 @@ class _CompanyScreenState extends State<CompanyScreen> {
       final (a, questions) = d;
       final e = a['empresa'] as Doc;
       return DefaultTabController(
-        length: 6,
+        length: 7,
         child: Scaffold(
           appBar: AppBar(
             title: Text('${e['ticker']} · ${e['nome']}'),
@@ -122,7 +123,8 @@ class _CompanyScreenState extends State<CompanyScreen> {
               isScrollable: true,
               tabAlignment: TabAlignment.start,
               tabs: [
-                Tab(text: 'Resumo'),
+                Tab(text: 'Mercado'),
+                Tab(text: 'Análise'),
                 Tab(text: 'Demonstrativos'),
                 Tab(text: 'Indicadores'),
                 Tab(text: 'Questionário'),
@@ -133,6 +135,9 @@ class _CompanyScreenState extends State<CompanyScreen> {
           ),
           body: TabBarView(
             children: [
+              '${e['ticker']}'.isEmpty
+                  ? const Center(child: Text('Cadastre o ticker para ver cotação, proventos e documentos.'))
+                  : MarketSheet(api: widget.api, files: widget.files, query: '${e['ticker']}', canFollow: false),
               _Summary(a: a, onEdit: _edit),
               _Statements(a: a, onEdit: _edit),
               _Indicators(a: a),

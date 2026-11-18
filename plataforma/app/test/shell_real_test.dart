@@ -21,6 +21,10 @@ class _SemIniciar extends Modulo {
   @override
   double? get larguraMaxima => m.larguraMaxima;
   @override
+  bool get fundoVidro => m.fundoVidro;
+  @override
+  TemaCena get cena => m.cena;
+  @override
   Widget construir(BuildContext context) => m.construir(context);
 }
 

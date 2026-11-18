@@ -14,6 +14,9 @@ class CodeModule extends Modulo {
   String get id => 'codigo';
 
   @override
+  TemaCena get cena => TemaCena.codigo;
+
+  @override
   String get nome => 'Código';
 
   @override

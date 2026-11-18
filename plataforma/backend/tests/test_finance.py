@@ -150,6 +150,7 @@ def test_goal_with_contributions(api: TestClient) -> None:
 
 
 def test_company_analysis_and_portfolio(api: TestClient) -> None:
+    api.app.state.internet = None  # no live quote: the analysis uses the stored one
     api.post("/api/financas/setores", json={"nome": "Energia", "respostas": {"s1": 5, "s2": 5}})
     e = api.post(
         "/api/financas/empresas",
@@ -280,3 +281,17 @@ def test_study_track(api: TestClient) -> None:
     t = api.get("/api/financas/estudo").json()
     have = {x["id"] for x in t["livros"] if x["tenho"]}
     assert {"fisher", new["id"]} <= have
+
+
+class _QuoteSource:
+    async def use(self, tool: str, args: dict) -> dict:
+        assert tool == "acoes"
+        return {"cotacoes": {args["tickers"][0]: {"preco": 42.5}}}
+
+
+def test_opening_the_company_refreshes_a_missing_quote(api: TestClient) -> None:
+    api.app.state.internet = _QuoteSource()
+    e = api.post("/api/financas/empresas", json={"ticker": "WEGE3", "nome": "WEG"}).json()
+    a = api.get(f"/api/financas/empresas/{e['id']}/analise").json()
+    assert a["valuation"]["cotacao"] == 42.5
+    assert api.get(f"/api/financas/empresas/{e['id']}").json()["cotacao"] == 42.5

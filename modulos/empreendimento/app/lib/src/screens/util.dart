@@ -180,6 +180,10 @@ class Indicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
+    return RevelarAoRolar(distancia: 20, child: _card(t));
+  }
+
+  Widget _card(TextTheme t) {
     return SizedBox(
       width: 180,
       child: Card(
