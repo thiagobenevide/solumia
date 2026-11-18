@@ -78,6 +78,7 @@ class _AgentAppState extends State<AgentApp> {
   @override
   void initState() {
     super.initState();
+    NomeUsuario.carregar();
     ApiCliente.aoNaoAutorizado = () {
       if (_sessao != null) _sair('Sessão expirada. Entre de novo.');
     };

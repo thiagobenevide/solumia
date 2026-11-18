@@ -17,6 +17,7 @@ export 'src/microfone_web.dart' if (dart.library.io) 'src/microfone_io.dart';
 export 'src/leitura_voz.dart';
 export 'src/tocador.dart';
 export 'src/modulo.dart';
+export 'src/nome_usuario.dart';
 export 'src/responsivo.dart';
 export 'src/seletor_cor.dart';
 export 'src/sondagem.dart';

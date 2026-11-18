@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 /// translúcidos que desfocam o que está atrás. Leve: as manchas são estáticas e o desfoque só
 /// existe dentro de cada cartão.
 
-/// Fundo com degradê e manchas de cor (primária, terciária e secundária) atrás do [child].
+/// Fundo com degradê e manchas de cor (primária, terciária e secundária) atrás do [child]. As
+/// manchas crescem com a área. Dentro de outro [FundoVidro] (o shell já põe um na largura toda)
+/// só devolve o [child], para a luz não ficar cortada na largura máxima do módulo.
 class FundoVidro extends StatelessWidget {
   const FundoVidro({super.key, required this.child});
 
@@ -15,17 +17,24 @@ class FundoVidro extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (context.findAncestorWidgetOfExactType<FundoVidro>() != null) return child;
     final c = Theme.of(context).colorScheme;
     final escuro = Theme.of(context).brightness == Brightness.dark;
-    final forca = escuro ? 0.30 : 0.22;
-    return Stack(
-      children: [
-        Positioned.fill(child: ColoredBox(color: c.surface)),
-        _Mancha(alinhamento: const Alignment(-1.1, -1.0), cor: c.primary.withValues(alpha: forca), tamanho: 520),
-        _Mancha(alinhamento: const Alignment(1.2, -0.4), cor: c.tertiary.withValues(alpha: forca * 0.8), tamanho: 460),
-        _Mancha(alinhamento: const Alignment(-0.2, 1.3), cor: c.secondary.withValues(alpha: forca * 0.7), tamanho: 480),
-        Positioned.fill(child: child),
-      ],
+    final forca = escuro ? 0.26 : 0.20;
+    return LayoutBuilder(
+      builder: (context, area) {
+        final lado = math.max(area.maxWidth, area.maxHeight);
+        final base = (lado.isFinite ? lado : 1200) * 0.62;
+        return Stack(
+          children: [
+            Positioned.fill(child: ColoredBox(color: c.surface)),
+            _Mancha(alinhamento: const Alignment(-0.95, -1.05), cor: c.primary.withValues(alpha: forca), tamanho: base),
+            _Mancha(alinhamento: const Alignment(1.0, -0.35), cor: c.tertiary.withValues(alpha: forca * 0.8), tamanho: base * 0.9),
+            _Mancha(alinhamento: const Alignment(-0.1, 1.15), cor: c.secondary.withValues(alpha: forca * 0.7), tamanho: base * 0.85),
+            Positioned.fill(child: child),
+          ],
+        );
+      },
     );
   }
 }
@@ -42,12 +51,16 @@ class _Mancha extends StatelessWidget {
     child: IgnorePointer(
       child: Align(
         alignment: alinhamento,
-        child: Container(
-          width: tamanho,
-          height: tamanho,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(colors: [cor, cor.withValues(alpha: 0)]),
+        child: OverflowBox(
+          maxWidth: tamanho,
+          maxHeight: tamanho,
+          child: Container(
+            width: tamanho,
+            height: tamanho,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(colors: [cor, cor.withValues(alpha: 0)]),
+            ),
           ),
         ),
       ),
