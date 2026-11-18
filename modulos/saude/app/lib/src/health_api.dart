@@ -262,9 +262,16 @@ class HealthApi {
   Future<List<Map<String, dynamic>>> workoutPlans() async =>
       (await _api.get('api/saude/coach/planos') as List).cast<Map<String, dynamic>>();
 
-  /// Builds the workout from today to Sunday with the AI and writes it into the agenda.
-  Future<Map<String, dynamic>> generateWorkoutPlan(String request, String ai, {bool replace = true}) async =>
-      await _api.post('api/saude/coach/planos', {'pedido': request, 'ia': ai, 'substituir': replace})
+  /// Builds the workout of the chosen [days] with the AI and writes it into the agenda (the other
+  /// days stay). `hoje` goes from the phone: the server clock is UTC.
+  Future<Map<String, dynamic>> generateWorkoutPlan(String request, String ai, List<DateTime> days) async =>
+      await _api.post('api/saude/coach/planos', {
+            'pedido': request,
+            'ia': ai,
+            'substituir': true,
+            'datas': [for (final d in days) iso(d)],
+            'hoje': iso(today()),
+          })
           as Map<String, dynamic>;
 }
 

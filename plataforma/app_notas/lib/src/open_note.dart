@@ -17,13 +17,25 @@ class OpenNote extends ChangeNotifier {
   /// The editor registers here how to save unsaved changes; it runs before switching notes.
   Future<void> Function()? pending;
 
+  /// The last note came from [create]: the editor opens it already in edit mode.
+  bool created = false;
+
+  /// Shows the device copy at once (when there is one) and then the server's.
   Future<void> open(String id) async {
     await pending?.call();
+    created = false;
+    final cached = await api.cached(id);
+    if (cached != null) {
+      note = cached;
+      error = null;
+      notifyListeners();
+    }
     return _run(() => api.fetch(id));
   }
 
   Future<void> create(Map<String, dynamic> data) async {
     await pending?.call();
+    created = true;
     return _run(() => api.create(data), changed: true);
   }
 

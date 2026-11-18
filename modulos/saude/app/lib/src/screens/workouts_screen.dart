@@ -120,8 +120,10 @@ class _WorkoutsScreenState extends State<WorkoutsScreen> {
     }),
   };
 
-  Future<void> _toggleDone(ItemAgenda i) =>
-      _retry(() async => _swapItem(await api.editItem(i.id, {'feito': !i.done})));
+  Future<void> _toggleDone(ItemAgenda i) {
+    if (!i.done) comemorar(context, mensagem: 'Exercício feito');
+    return _retry(() async => _swapItem(await api.editItem(i.id, {'feito': !i.done})));
+  }
 
   Future<void> _reorder(List<String> ids) => _retry(() async {
     final newItems = await Future.wait([for (final (n, id) in ids.indexed) api.editItem(id, {'ordem': n})]);

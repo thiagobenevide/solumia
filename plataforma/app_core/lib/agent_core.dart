@@ -23,3 +23,4 @@ export 'src/sondagem.dart';
 export 'src/tarefas.dart';
 export 'src/tema.dart';
 export 'src/titulo_aba.dart';
+export 'src/vidro.dart';

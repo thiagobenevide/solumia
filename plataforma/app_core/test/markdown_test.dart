@@ -58,4 +58,32 @@ void main() {
     c.envolver('**');
     expect(c.text, 'x');
   });
+
+  testWidgets('leitura de nota do Obsidian não mostra as marcas', (tester) async {
+    const nota = """## Seção **forte**
+Parágrafo com [[Outra nota|apelido]], [[Nota#Parte]], _ênfase_ e snake_case_nome.
+Segunda linha do mesmo parágrafo.
+
+- nível 1
+  - nível 2 com `código`
+    - nível 3
+1) primeiro
+2) segundo
+> [!tip] Dica
+> texto da dica
+| Coluna | Valor |
+|:--|--:|
+| **a** | 1 |
+```python
+print("oi")
+```""";
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SingleChildScrollView(child: VisualizadorMarkdown(texto: nota)))));
+    final all = tester.widgetList<RichText>(find.byType(RichText)).map((t) => t.text.toPlainText()).join('\n');
+    for (final mark in ['## ', '**', '[[', ']]', '> ']) {
+      expect(all.contains(mark), isFalse, reason: 'vazou "$mark" em: $all');
+    }
+    expect(all, contains('apelido'));
+    expect(all, contains('snake_case_nome'));
+    expect(all, contains('print("oi")'));
+  });
 }

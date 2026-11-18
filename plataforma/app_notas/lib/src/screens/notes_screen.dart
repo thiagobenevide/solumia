@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:agent_core/agent_core.dart';
 import 'package:flutter/material.dart';
 
@@ -24,6 +26,7 @@ class NotesScreen extends StatefulWidget {
 class _NotesScreenState extends State<NotesScreen> {
   late final _openNote = OpenNote(widget.api);
   bool _analysis = false;
+  bool _focus = false;
 
   @override
   void initState() {
@@ -59,10 +62,11 @@ class _NotesScreenState extends State<NotesScreen> {
     return creating;
   }
 
+  /// Phone: the note on its own page, with a thin bar (the title is already in the page).
   Future<void> _notePage() => Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => Scaffold(
-        appBar: AppBar(title: const Text('Nota')),
+        appBar: AppBar(toolbarHeight: 44, scrolledUnderElevation: 0),
         body: NoteEditor(openNote: _openNote, withTabs: true),
       ),
     ),
@@ -98,21 +102,50 @@ class _NotesScreenState extends State<NotesScreen> {
         onAnalyze: () => _showAnalysis(compact),
       );
       if (compact) return items;
+      final focus = _focus && !_analysis;
       final center = _analysis
           ? AnalysisPanel(key: ValueKey(_openNote.version), api: widget.api, onOpen: (id) => _open(id, false))
-          : NoteEditor(openNote: _openNote, withTabs: c.maxWidth < 1100);
+          : NoteEditor(
+              openNote: _openNote,
+              withTabs: c.maxWidth < 1100 && !focus,
+              focused: focus,
+              onFocus: () => setState(() => _focus = !_focus),
+            );
+      final listWidth = c.maxWidth < 1100 ? 300.0 : 340.0;
+      final relations = c.maxWidth >= 1100 && !_analysis && !focus;
       return Row(
         children: [
-          SizedBox(width: c.maxWidth < 1100 ? 280 : 320, child: items),
-          const VerticalDivider(width: 1),
-          Expanded(child: LarguraMaxima(largura: 1100, child: center)),
-          if (c.maxWidth >= 1100 && !_analysis) ...[
-            const VerticalDivider(width: 1),
-            SizedBox(width: 340, child: RelationsPanel(openNote: _openNote)),
-          ],
+          _SidePanel(width: focus ? 0 : listWidth, child: items),
+          if (!focus) const VerticalDivider(width: 1),
+          Expanded(child: center),
+          if (relations) const VerticalDivider(width: 1),
+          _SidePanel(width: relations ? 320 : 0, child: RelationsPanel(openNote: _openNote)),
         ],
       );
     },
+  );
+}
+
+/// Side column that slides closed (focus mode) instead of disappearing at once.
+class _SidePanel extends StatelessWidget {
+  const _SidePanel({required this.width, required this.child});
+
+  final double width;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 260),
+    curve: Curves.easeOutCubic,
+    width: width,
+    child: ClipRect(
+      child: OverflowBox(
+        alignment: Alignment.topLeft,
+        minWidth: 0,
+        maxWidth: width == 0 ? 340 : width,
+        child: width == 0 ? const SizedBox() : child,
+      ),
+    ),
   );
 }
 
@@ -137,6 +170,8 @@ class _NoteList extends StatefulWidget {
 class _NoteListState extends State<_NoteList> {
   String _q = '';
   String? _type;
+  bool _byType = false;
+  Timer? _debounce;
   int _version = -1;
   late Future<List<NoteSummary>> _notes;
   List<NoteType> _types = [];
@@ -155,7 +190,17 @@ class _NoteListState extends State<_NoteList> {
   @override
   void dispose() {
     widget.openNote.removeListener(_maybeReload);
+    _debounce?.cancel();
     super.dispose();
+  }
+
+  /// Searches 300 ms after the last key, not on every key.
+  void _search(String q) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      _q = q.trim();
+      _maybeReload(force: true);
+    });
   }
 
   void _maybeReload({bool force = false}) {
@@ -165,6 +210,42 @@ class _NoteListState extends State<_NoteList> {
       _notes = _api.list(q: _q, type: _type);
     });
   }
+
+  List<Object> _recent(List<NoteSummary> notes) => _recentOrder(notes, _q.isNotEmpty);
+
+  /// Groups by type, in chip order; header = String, note = NoteSummary.
+  List<Object> _grouped(List<NoteSummary> notes, Map<String, String> names) {
+    final order = [for (final t in _types) t.id];
+    final groups = <String, List<NoteSummary>>{};
+    for (final n in notes) {
+      // vault types the app does not know (roteiro, moc...) go under Nota
+      (groups[names.containsKey(n.type) ? n.type : 'nota'] ??= []).add(n);
+    }
+    final keys = groups.keys.toList()..sort((a, b) => (order.indexOf(a) % 999).compareTo(order.indexOf(b) % 999));
+    final rows = <Object>[];
+    for (final k in keys) {
+      if (_type == null) rows.add(k);
+      rows.addAll(groups[k]!);
+    }
+    _groupSizes = {for (final k in keys) k: groups[k]!.length};
+    return rows;
+  }
+
+  Map<String, int> _groupSizes = {};
+
+  Widget _groupHeader(BuildContext context, String type, Map<String, String> names) => Padding(
+    padding: const EdgeInsets.fromLTRB(18, 14, 16, 4),
+    child: Row(
+      spacing: 8,
+      children: [
+        Icon(iconForType(type), size: 16, color: Theme.of(context).colorScheme.primary),
+        Text(
+          '${names[type] ?? type} (${_groupSizes[type] ?? 0})',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.primary),
+        ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -182,12 +263,18 @@ class _NoteListState extends State<_NoteList> {
             children: [
               Expanded(
                 child: TextField(
-                  decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Buscar', isDense: true),
-                  onChanged: (q) {
-                    _q = q;
-                    _maybeReload(force: true);
-                  },
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search_rounded),
+                    hintText: 'Buscar no título e no texto',
+                    isDense: true,
+                  ),
+                  onChanged: _search,
                 ),
+              ),
+              IconButton(
+                tooltip: _byType ? 'Ordenar por recentes' : 'Agrupar por tipo',
+                icon: Icon(_byType ? Icons.category_rounded : Icons.schedule_rounded),
+                onPressed: () => setState(() => _byType = !_byType),
               ),
               IconButton(
                 tooltip: 'Análise',
@@ -264,56 +351,20 @@ class _NoteListState extends State<_NoteList> {
               final notes = snap.data;
               if (notes == null) return const Center(child: CircularProgressIndicator());
               if (notes.isEmpty) return const Center(child: Text('Nenhuma nota'));
-              // groups by type, in chip order (Tarefa, Meta...); header = String, note = NoteSummary
-              final order = [for (final t in _types) t.id];
               final names = {for (final t in _types) t.id: t.name};
-              final groups = <String, List<NoteSummary>>{};
-              for (final n in notes) {
-                // vault types the app does not know (roteiro, moc...) go under Nota
-                (groups[names.containsKey(n.type) ? n.type : 'nota'] ??= []).add(n);
-              }
-              final groupKeys = groups.keys.toList()
-                ..sort((a, b) => (order.indexOf(a) % 999).compareTo(order.indexOf(b) % 999));
-              final rows = <Object>[
-                for (final k in groupKeys) ...[
-                  if (_type == null) k,
-                  ...groups[k]!,
-                ],
-              ];
+              final rows = _byType && _q.isEmpty ? _grouped(notes, names) : _recent(notes);
               return RefreshIndicator(
                 onRefresh: () async => _maybeReload(force: true),
                 child: ListView.builder(
                   itemCount: rows.length,
                   itemBuilder: (context, i) {
                     final n = rows[i];
-                    if (n is String) {
-                      return Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                        child: Row(
-                          spacing: 8,
-                          children: [
-                            Icon(iconForType(n), size: 16, color: Theme.of(context).colorScheme.primary),
-                            Text(
-                              '${names[n] ?? n} (${groups[n]!.length})',
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(color: Theme.of(context).colorScheme.primary),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                    n as NoteSummary;
-                    final isOverdue = n.due != null && n.due!.isBefore(DateTime.now()) && n.status != null;
-                    return ListTile(
+                    if (n is String) return _groupHeader(context, n, names);
+                    return _NoteRow(
+                      note: n as NoteSummary,
+                      typeName: names[n.type] ?? n.type,
+                      query: _q,
                       selected: n.id == selectedId,
-                      leading: Icon(iconForType(n.type)),
-                      title: Text(n.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(
-                        [n.status, if (n.due != null) shortDate(n.due), if (n.incoming > 0) '${n.incoming} ←']
-                            .nonNulls
-                            .join(' · '),
-                        style: isOverdue ? TextStyle(color: Theme.of(context).colorScheme.error) : null,
-                      ),
                       onTap: () => widget.onOpen(n.id),
                     );
                   },
@@ -323,6 +374,104 @@ class _NoteListState extends State<_NoteList> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Most recently updated first (with a search, the server's relevance order is kept).
+List<Object> _recentOrder(List<NoteSummary> notes, bool searching) {
+  if (searching) return [...notes];
+  final sorted = [...notes]..sort((a, b) => (b.updated ?? DateTime(0)).compareTo(a.updated ?? DateTime(0)));
+  return sorted;
+}
+
+/// One note in the list: type icon, title (the searched part highlighted), type, date and status.
+class _NoteRow extends StatelessWidget {
+  const _NoteRow({
+    required this.note,
+    required this.typeName,
+    required this.query,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final NoteSummary note;
+  final String typeName;
+  final String query;
+  final bool selected;
+  final VoidCallback onTap;
+
+  List<TextSpan> _highlight(String title, TextStyle? strong) {
+    final i = query.isEmpty ? -1 : title.toLowerCase().indexOf(query.toLowerCase());
+    if (i < 0) return [TextSpan(text: title)];
+    return [
+      TextSpan(text: title.substring(0, i)),
+      TextSpan(text: title.substring(i, i + query.length), style: strong),
+      TextSpan(text: title.substring(i + query.length)),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final n = note;
+    final overdue = n.due != null && n.due!.isBefore(DateTime.now()) && n.status != null;
+    final details = [
+      typeName,
+      if (n.updated != null) shortDate(n.updated),
+      ?n.status,
+      if (n.due != null) 'prazo ${shortDate(n.due)}',
+      if (n.incoming > 0) '${n.incoming} ←',
+    ].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Material(
+        color: selected ? colors.primary.withValues(alpha: 0.14) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(
+                    color: colors.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(iconForType(n.type), size: 18, color: colors.primary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text.rich(
+                        TextSpan(
+                          children: _highlight(n.title, TextStyle(color: colors.primary, fontWeight: FontWeight.w800)),
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        details,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodySmall?.copyWith(color: overdue ? colors.error : colors.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

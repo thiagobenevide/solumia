@@ -13,10 +13,14 @@ import 'relations_panel.dart';
 /// autocomplete. Saves on its own 1.5 s after the last change (and with Ctrl+S).
 /// [withTabs]: tablet/phone, with the relations in a second tab.
 class NoteEditor extends StatefulWidget {
-  const NoteEditor({super.key, required this.openNote, this.withTabs = false});
+  const NoteEditor({super.key, required this.openNote, this.withTabs = false, this.focused = false, this.onFocus});
 
   final OpenNote openNote;
   final bool withTabs;
+
+  /// PC: the list and the relations are hidden ([onFocus] switches it; null = no button).
+  final bool focused;
+  final VoidCallback? onFocus;
 
   @override
   State<NoteEditor> createState() => _NoteEditorState();
@@ -33,6 +37,8 @@ class _NoteEditorState extends State<NoteEditor> {
   Timer? _autoSave, _debounce;
   List<String> _suggestions = [];
   List<NoteType> _types = [];
+  bool _editing = false;
+  bool _details = false;
 
   OpenNote get _openNote => widget.openNote;
   NotesApi get _api => _openNote.api;
@@ -63,18 +69,25 @@ class _NoteEditorState extends State<NoteEditor> {
   /// Only resets the fields when the note changes: saving must not move the cursor of whoever is typing.
   void _reload() {
     final n = _openNote.note;
-    if (n?.id == _id) return setState(() {});
+    if (n?.id == _id) {
+      // the server version arrived after the device copy: refresh while nothing is being edited
+      if (n != null && !_dirty && !_editing && n.body != _body.text) _fill(n);
+      return setState(() {});
+    }
     _id = n?.id;
     _dirty = false;
     _suggestions = [];
-    if (n != null) {
-      _title.text = n.title;
-      _body.text = n.body;
-      _tags.text = n.tags.join(', ');
-      _props = Map.of(n.properties);
-      _type = n.type;
-    }
+    _editing = _openNote.created;
+    if (n != null) _fill(n);
     setState(() {});
+  }
+
+  void _fill(Note n) {
+    _title.text = n.title;
+    _body.text = n.body;
+    _tags.text = n.tags.join(', ');
+    _props = Map.of(n.properties);
+    _type = n.type;
   }
 
   void _changed() {
@@ -179,108 +192,273 @@ class _NoteEditorState extends State<NoteEditor> {
             : Text(_openNote.error ?? 'Escolha uma nota ou crie uma nova', textAlign: TextAlign.center),
       );
     }
-    final editor = CallbackShortcuts(
+    final page = CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyS, control: true): _savePending,
+        const SingleActivator(LogicalKeyboardKey.keyE, control: true): _toggleEditing,
+        const SingleActivator(LogicalKeyboardKey.escape): _finishEditing,
       },
-      child: _editor(context),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: KeyedSubtree(key: ValueKey(_editing), child: _page(context)),
+      ),
     );
-    if (!widget.withTabs) return editor;
+    if (!widget.withTabs) return page;
     return DefaultTabController(
       length: 2,
       child: Column(
         children: [
           TabBar(
             tabs: [
-              const Tab(text: 'Escrever'),
+              const Tab(text: 'Nota'),
               Tab(text: 'Relações (${n.outgoing.length + n.incoming.length})'),
             ],
           ),
           Expanded(
-            child: TabBarView(children: [editor, RelationsPanel(openNote: _openNote)]),
+            child: TabBarView(children: [page, RelationsPanel(openNote: _openNote)]),
           ),
         ],
       ),
     );
   }
 
-  Widget _editor(BuildContext context) {
-    final theme = Theme.of(context);
-    final type = _types.where((t) => t.id == _type).firstOrNull;
+  void _toggleEditing() {
+    if (_editing) return _finishEditing();
+    setState(() => _editing = true);
+  }
+
+  void _finishEditing() {
+    if (!_editing) return;
+    _savePending();
+    setState(() => _editing = false);
+  }
+
+  /// Reading (default): only the title and the rendered text, in a comfortable column.
+  /// Editing: the title, the Markdown field with its toolbar and, under "Detalhes", type fields and tags.
+  Widget _page(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final side = width < 600 ? 16.0 : 32.0;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      padding: EdgeInsets.fromLTRB(side, 8, side, 48),
       children: [
-        Row(
-          children: [
-            PopupMenuButton<String>(
-              tooltip: 'Tipo da nota',
-              icon: Icon(iconForType(_type)),
-              initialValue: _type,
-              onSelected: (t) {
-                _type = t;
-                _changed();
-              },
-              itemBuilder: (_) => [
-                for (final t in _types)
-                  PopupMenuItem(value: t.id, child: ListTile(leading: Icon(iconForType(t.id)), title: Text(t.name))),
-              ],
-            ),
-            Expanded(
-              child: TextField(
-                controller: _title,
-                style: theme.textTheme.headlineSmall,
-                decoration: const InputDecoration(border: InputBorder.none, hintText: 'Título'),
-                onChanged: (_) => _changed(),
-              ),
-            ),
-            _status(theme),
-            PopupMenuButton<String>(
-              onSelected: (_) => _excluir(),
-              itemBuilder: (_) => const [PopupMenuItem(value: 'excluir', child: Text('Excluir nota'))],
-            ),
-          ],
-        ),
-        if (type != null && type.fields.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [for (final c in type.fields) SizedBox(width: 200, child: _field(c))],
-            ),
-          ),
-        TextField(
-          controller: _tags,
-          decoration: const InputDecoration(prefixIcon: Icon(Icons.sell_outlined), hintText: 'tags, separadas por vírgula'),
-          onChanged: (_) => _changed(),
-        ),
-        const SizedBox(height: 8),
-        if (_suggestions.isNotEmpty)
-          SizedBox(
-            height: 48,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 820),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final s in _suggestions)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: ActionChip(avatar: const Icon(Icons.link, size: 16), label: Text(s), onPressed: () => _completeLink(s)),
-                  ),
+                _topBar(context),
+                const SizedBox(height: 4),
+                if (_editing) _titleField(context) else _titleText(context),
+                if (!_editing && _tagList().isNotEmpty) ...[const SizedBox(height: 8), _tagChips(context)],
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
+                  child: _details ? _detailsPanel() : const SizedBox(width: double.infinity),
+                ),
+                const SizedBox(height: 16),
+                if (_editing) _bodyEditor() else _bodyReader(context),
               ],
             ),
           ),
-        CampoMarkdown(
-          controle: _body,
-          aoMudar: _changed,
-          dica: 'Escreva… [[ cria um link',
-          extras: [
-            _button(Icons.link, 'Link', () => _insert('[[')),
-            _button(Icons.hub_outlined, 'Relação', _newRelation),
-          ],
         ),
       ],
     );
   }
+
+  Widget _topBar(BuildContext context) {
+    final theme = Theme.of(context);
+    final type = _types.where((t) => t.id == _type).firstOrNull;
+    return Row(
+      children: [
+        Chip(
+          avatar: Icon(iconForType(_type), size: 16),
+          label: Text(type?.name ?? _type),
+          visualDensity: VisualDensity.compact,
+        ),
+        _status(theme),
+        const Spacer(),
+        if (widget.onFocus != null)
+          IconButton(
+            tooltip: widget.focused ? 'Mostrar painéis' : 'Modo foco (mais tela)',
+            icon: Icon(widget.focused ? Icons.close_fullscreen_rounded : Icons.open_in_full_rounded),
+            onPressed: widget.onFocus,
+          ),
+        IconButton(
+          tooltip: _details ? 'Esconder detalhes' : 'Detalhes (tipo, campos, tags)',
+          isSelected: _details,
+          icon: const Icon(Icons.tune_rounded),
+          onPressed: () => setState(() => _details = !_details),
+        ),
+        const SizedBox(width: 4),
+        _editing
+            ? FilledButton.icon(
+                onPressed: _finishEditing,
+                icon: const Icon(Icons.check_rounded, size: 18),
+                label: const Text('Concluir'),
+              )
+            : FilledButton.tonalIcon(
+                onPressed: _toggleEditing,
+                icon: const Icon(Icons.edit_rounded, size: 18),
+                label: const Text('Editar'),
+              ),
+        PopupMenuButton<String>(
+          onSelected: (_) => _excluir(),
+          itemBuilder: (_) => const [PopupMenuItem(value: 'excluir', child: Text('Excluir nota'))],
+        ),
+      ],
+    );
+  }
+
+  Widget _titleText(BuildContext context) => GestureDetector(
+    onDoubleTap: _toggleEditing,
+    child: Text(
+      _title.text,
+      style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800, height: 1.25),
+    ),
+  );
+
+  Widget _titleField(BuildContext context) => TextField(
+    controller: _title,
+    style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
+    maxLines: null,
+    decoration: const InputDecoration(
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      filled: false,
+      hintText: 'Título',
+    ),
+    onChanged: (_) => _changed(),
+  );
+
+  List<String> _tagList() => [for (final t in _tags.text.split(',')) if (t.trim().isNotEmpty) t.trim()];
+
+  Widget _tagChips(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final t in _tagList())
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(color: colors.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+            child: Text('#$t', style: TextStyle(color: colors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
+      ],
+    );
+  }
+
+  Widget _detailsPanel() {
+    final type = _types.where((t) => t.id == _type).firstOrNull;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Text('Tipo'),
+              const SizedBox(width: 8),
+              DropdownButton<String>(
+                value: _types.any((t) => t.id == _type) ? _type : null,
+                hint: Text(_type),
+                items: [
+                  for (final t in _types)
+                    DropdownMenuItem(
+                      value: t.id,
+                      child: Row(children: [Icon(iconForType(t.id), size: 18), const SizedBox(width: 8), Text(t.name)]),
+                    ),
+                ],
+                onChanged: (t) {
+                  if (t == null) return;
+                  _type = t;
+                  _changed();
+                },
+              ),
+            ],
+          ),
+          if (type != null && type.fields.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [for (final c in type.fields) SizedBox(width: 200, child: _field(c))],
+              ),
+            ),
+          TextField(
+            controller: _tags,
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.sell_outlined), hintText: 'tags, separadas por vírgula'),
+            onChanged: (_) => _changed(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Obsidian notes usually start with `# <title>`: the reader does not repeat it under the title.
+  (String, int) _readableBody() {
+    final lines = _body.text.split('\n');
+    var skip = 0;
+    while (skip < lines.length && lines[skip].trim().isEmpty) {
+      skip++;
+    }
+    if (skip < lines.length) {
+      final m = RegExp(r'^#\s+(.*)$').firstMatch(lines[skip].trim());
+      if (m != null && m[1]!.trim().toLowerCase() == _title.text.trim().toLowerCase()) {
+        return (lines.sublist(skip + 1).join('\n'), skip + 1);
+      }
+    }
+    return (_body.text, 0);
+  }
+
+  Widget _bodyReader(BuildContext context) {
+    final theme = Theme.of(context);
+    final (text, offset) = _readableBody();
+    return GestureDetector(
+      onDoubleTap: _toggleEditing,
+      child: VisualizadorMarkdown(
+        texto: text,
+        estilo: theme.textTheme.bodyLarge?.copyWith(fontSize: 16.5, height: 1.7),
+        aoAlternarTarefa: (i) {
+          setState(() => _body.alternarTarefa(i + offset));
+          _changed();
+        },
+      ),
+    );
+  }
+
+  Widget _bodyEditor() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      if (_suggestions.isNotEmpty)
+        SizedBox(
+          height: 48,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final s in _suggestions)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ActionChip(avatar: const Icon(Icons.link, size: 16), label: Text(s), onPressed: () => _completeLink(s)),
+                ),
+            ],
+          ),
+        ),
+      CampoMarkdown(
+        controle: _body,
+        aoMudar: _changed,
+        dica: 'Escreva… [[ cria um link',
+        extras: [
+          _button(Icons.link, 'Link', () => _insert('[[')),
+          _button(Icons.hub_outlined, 'Relação', _newRelation),
+        ],
+      ),
+    ],
+  );
 
   Widget _status(ThemeData theme) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 8),

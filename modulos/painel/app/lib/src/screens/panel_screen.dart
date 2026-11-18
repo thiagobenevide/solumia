@@ -81,10 +81,17 @@ class _Today extends StatelessWidget {
       final day = [
         if (d.alerts.isNotEmpty) ...[
           const _SectionTitle(icon: Icons.notifications_active_outlined, text: 'Alertas'),
-          for (var i = 0; i < d.alerts.length; i++) _Entrance(order: 3 + i, child: _AlertCard(alert: d.alerts[i])),
+          for (var i = 0; i < d.alerts.length; i++)
+            _Entrance(
+              order: 3 + i,
+              child: _AlertCard(alert: d.alerts[i]),
+            ),
         ],
         const _SectionTitle(icon: Icons.event_note_outlined, text: 'Agenda de hoje'),
-        _Entrance(order: 3 + d.alerts.length, child: _DaySchedule(api: api, agenda: ag, aoMudar: reload)),
+        _Entrance(
+          order: 3 + d.alerts.length,
+          child: _DaySchedule(api: api, agenda: ag, aoMudar: reload),
+        ),
       ];
       return LayoutBuilder(builder: (context, box) => _layout(box.maxWidth, summary, day));
     },
@@ -94,8 +101,14 @@ class _Today extends StatelessWidget {
   Widget _layout(double width, List<Widget> summary, List<Widget> day) {
     final side = width < 600 ? 16.0 : 28.0;
     if (width < 980) {
-      return ListView(padding: EdgeInsets.fromLTRB(side, 20, side, 24), children: [...summary, ...day]);
+      return FundoVidro(
+        child: ListView(padding: EdgeInsets.fromLTRB(side, 20, side, 24), children: [...summary, ...day]),
+      );
     }
+    return FundoVidro(child: _wide(side, summary, day));
+  }
+
+  Widget _wide(double side, List<Widget> summary, List<Widget> day) {
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(side, 24, side, 32),
       child: Center(
@@ -104,9 +117,15 @@ class _Today extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(flex: 5, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: summary)),
+              Expanded(
+                flex: 5,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: summary),
+              ),
               const SizedBox(width: 28),
-              Expanded(flex: 6, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: day)),
+              Expanded(
+                flex: 6,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: day),
+              ),
             ],
           ),
         ),
@@ -141,8 +160,18 @@ class _Entrance extends StatelessWidget {
 
 const _weekdays = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo'];
 const _months = [
-  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
 ];
 
 /// "Bom dia" and today's date, at the top of the home page.
@@ -224,10 +253,20 @@ class _Scoreboard extends StatelessWidget {
     final background = good ? colors.primaryContainer : colors.errorContainer;
     final foreground = good ? colors.onPrimaryContainer : colors.onErrorContainer;
     final ring = good ? colors.primary : colors.error;
+    // glass tinted by the state (blue inside the discipline, red outside)
     return AnimatedContainer(
       duration: const Duration(milliseconds: 500),
       curve: Curves.easeOutCubic,
-      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [background.withValues(alpha: 0.75), background.withValues(alpha: 0.45)],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        boxShadow: [BoxShadow(color: ring.withValues(alpha: 0.18), blurRadius: 26, offset: const Offset(0, 10))],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Row(
@@ -269,14 +308,25 @@ class _Scoreboard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_title(), style: text.titleLarge?.copyWith(color: foreground, fontWeight: FontWeight.w600)),
+                  Text(
+                    _title(),
+                    style: text.titleLarge?.copyWith(color: foreground, fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 6,
                     children: [
-                      _Pill(icon: Icons.check_circle_outline, text: 'Blocos ${d.blocksDone}/${d.blocksOverdue}', color: foreground),
-                      _Pill(icon: Icons.flag_outlined, text: 'Metas ${d.goalsOnTrack}/${d.goalsTotal}', color: foreground),
+                      _Pill(
+                        icon: Icons.check_circle_outline,
+                        text: 'Blocos ${d.blocksDone}/${d.blocksOverdue}',
+                        color: foreground,
+                      ),
+                      _Pill(
+                        icon: Icons.flag_outlined,
+                        text: 'Metas ${d.goalsOnTrack}/${d.goalsTotal}',
+                        color: foreground,
+                      ),
                     ],
                   ),
                   if (d.currentBlock != null) ...[
@@ -306,10 +356,7 @@ class _Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(20),
-    ),
+    decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -422,8 +469,18 @@ class _ActionTileState extends State<_ActionTile> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.title, style: text.titleSmall?.copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      Text(widget.subtitle, style: text.bodySmall?.copyWith(color: colors.onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(
+                        widget.title,
+                        style: text.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        widget.subtitle,
+                        style: text.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
@@ -468,15 +525,17 @@ class _AlertCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final critical = alert.level == 'critico';
     final accent = critical ? colors.error : colors.tertiary;
-    return Card(
-      color: Color.lerp(colors.surfaceContainerLow, accent, 0.12),
-      child: Container(
-        decoration: BoxDecoration(border: Border(left: BorderSide(color: accent, width: 4))),
-        child: ListTile(
-          dense: true,
-          leading: Icon(critical ? Icons.priority_high_rounded : Icons.notifications_active_rounded, color: accent),
-          title: Text(alert.text),
-        ),
+    return Vidro(
+      cor: accent,
+      raio: 16,
+      margem: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Icon(critical ? Icons.priority_high_rounded : Icons.notifications_active_rounded, color: accent),
+          const SizedBox(width: 12),
+          Expanded(child: Text(alert.text)),
+        ],
       ),
     );
   }
@@ -500,7 +559,10 @@ class _DaySchedule extends StatelessWidget {
 
   /// Edits (or creates, with a null [block]) and saves the whole schedule; shows the coach's objections.
   Future<void> _edit(BuildContext context, ScheduleBlock? block) async {
-    final result = await showDialog<_Editing>(context: context, builder: (_) => _BlockEditor(block: block));
+    final result = await showDialog<_Editing>(
+      context: context,
+      builder: (_) => _BlockEditor(block: block),
+    );
     if (result == null || !context.mounted) return;
     final blocks = [...agenda.blocks];
     if (block != null) blocks.remove(block);
@@ -539,41 +601,71 @@ class _DaySchedule extends StatelessWidget {
     await _retry(context, () => api.suggest(agenda.data));
   }
 
+  Future<void> _mark(BuildContext context, ScheduleBlock b, bool done) async {
+    if (done) comemorar(context, mensagem: 'Bloco concluído');
+    await _retry(context, () => api.mark(agenda.data, b.id!, done));
+  }
+
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Row(
-        children: [
-          Expanded(child: Text('Agenda de hoje', style: Theme.of(context).textTheme.titleMedium)),
-          TextButton.icon(
-            icon: const Icon(Icons.auto_fix_high_outlined),
-            label: const Text('Sugerir'),
-            onPressed: () => _suggest(context),
-          ),
-          IconButton(tooltip: 'Novo bloco', icon: const Icon(Icons.add), onPressed: () => _edit(context, null)),
-        ],
-      ),
-      if (agenda.blocks.isEmpty)
-        const Padding(
-          padding: EdgeInsets.all(24),
-          child: Text('Nenhum bloco. Use “Sugerir” para montar o dia com as tarefas do Kanban.'),
+  Widget build(BuildContext context) => Vidro(
+    padding: const EdgeInsets.fromLTRB(14, 10, 10, 14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Blocos do dia',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.auto_fix_high_outlined),
+              label: const Text('Sugerir'),
+              onPressed: () => _suggest(context),
+            ),
+            IconButton(tooltip: 'Novo bloco', icon: const Icon(Icons.add), onPressed: () => _edit(context, null)),
+          ],
         ),
-      for (final b in agenda.blocks)
-        Card(
-          child: CheckboxListTile(
-            value: b.done,
-            onChanged: (v) => _retry(context, () => api.mark(agenda.data, b.id!, v ?? false)),
-            title: Text(b.title, style: TextStyle(decoration: b.done ? TextDecoration.lineThrough : null)),
-            subtitle: Text('${b.start}–${b.end} · prioridade ${b.priority}${b.due == null ? '' : ' · prazo ${b.due}'}'),
-            secondary: IconButton(
-              tooltip: 'Editar',
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: () => _edit(context, b),
+        if (agenda.blocks.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Text('Nenhum bloco. Use “Sugerir” para montar o dia com as tarefas do Kanban.'),
+          ),
+        for (final b in agenda.blocks)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            margin: const EdgeInsets.only(top: 8),
+            decoration: BoxDecoration(
+              color: b.done
+                  ? Colors.green.withValues(alpha: 0.12)
+                  : Theme.of(context).colorScheme.surfaceContainerHigh.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: CheckboxListTile(
+              value: b.done,
+              onChanged: (v) => _mark(context, b, v ?? false),
+              title: AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 250),
+                style: DefaultTextStyle.of(context).style.copyWith(
+                  decoration: b.done ? TextDecoration.lineThrough : null,
+                  color: b.done ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+                ),
+                child: Text(b.title),
+              ),
+              subtitle: Text(
+                '${b.start}–${b.end} · prioridade ${b.priority}${b.due == null ? '' : ' · prazo ${b.due}'}',
+              ),
+              secondary: IconButton(
+                tooltip: 'Editar',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => _edit(context, b),
+              ),
             ),
           ),
-        ),
-    ],
+      ],
+    ),
   );
 }
 
@@ -640,15 +732,25 @@ class _BlockEditorState extends State<_BlockEditor> {
         mainAxisSize: MainAxisSize.min,
         spacing: 12,
         children: [
-          TextField(controller: _title, autofocus: true, decoration: const InputDecoration(labelText: 'Título')),
+          TextField(
+            controller: _title,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Título'),
+          ),
           Row(
             spacing: 12,
             children: [
               Expanded(
-                child: TextField(controller: _start, decoration: const InputDecoration(labelText: 'Início (HH:MM)')),
+                child: TextField(
+                  controller: _start,
+                  decoration: const InputDecoration(labelText: 'Início (HH:MM)'),
+                ),
               ),
               Expanded(
-                child: TextField(controller: _end, decoration: const InputDecoration(labelText: 'Fim (HH:MM)')),
+                child: TextField(
+                  controller: _end,
+                  decoration: const InputDecoration(labelText: 'Fim (HH:MM)'),
+                ),
               ),
             ],
           ),
@@ -701,7 +803,11 @@ class _Goals extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             spacing: 12,
             children: [
-              TextField(controller: title, autofocus: true, decoration: const InputDecoration(labelText: 'Meta')),
+              TextField(
+                controller: title,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Meta'),
+              ),
               Row(
                 spacing: 12,
                 children: [
@@ -713,7 +819,10 @@ class _Goals extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: TextField(controller: unit, decoration: const InputDecoration(labelText: 'Unidade')),
+                    child: TextField(
+                      controller: unit,
+                      decoration: const InputDecoration(labelText: 'Unidade'),
+                    ),
                   ),
                 ],
               ),

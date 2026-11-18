@@ -436,7 +436,8 @@ class Coach:
             items: list[dict[str, Any]] = _read(self._plans, [])
         return list(reversed(items))
 
-    def plan_context(self, inicio: date, fim: date, pedido: str) -> str:
+    def plan_context(self, dias: list[date], pedido: str, hoje: date | None = None) -> str:
+        inicio, fim = dias[0], dias[-1]
         perfil = self.perfil()
         last = self.last_weight()
         peso = last["peso_kg"] if last else None
@@ -464,10 +465,10 @@ class Coach:
         lines += ["", "# Image reference list (free-exercise-db `ref` by equipment)"]
         lines += image_ref_lines(self.image_refs())
         lines += self._history_lines(inicio)
-        lines += ["", f"# Week to plan: {inicio.isoformat()} to {fim.isoformat()}",
-                  "One entry in `dias` for each date, today included."]
-        for n in range((fim - inicio).days + 1):
-            d = inicio + timedelta(days=n)
+        lines += self._week_lines(dias)
+        lines += ["", f"# Days to plan (today is {(hoje or date.today()).isoformat()})",
+                  "One entry in `dias` for each of these dates and only them:"]
+        for d in dias:
             lines.append(f"- {d.isoformat()} ({WEEKDAYS[d.weekday()]})")
         if pedido.strip():
             lines += ["", f"# User's request\n{pedido.strip()}"]
@@ -493,6 +494,28 @@ class Coach:
             lines.append("- (no meals logged yet)")
         return lines
 
+    def _week_lines(self, dias: list[date]) -> list[str]:
+        """What is already on the other days of the same weeks (kept), to balance the groups."""
+        start = dias[0] - timedelta(days=dias[0].weekday())
+        end = week_end(dias[-1])
+        chosen = set()
+        for d in dias:
+            chosen.add(d.isoformat())
+        names = {}
+        for e in self.workouts.list_exercises():
+            names[e["id"]] = f"{e['nome']} ({e['area']})"
+        lines = ["", "# Already scheduled on the other days of the week (kept as is)"]
+        count = 0
+        for i in self.workouts.agenda(start.isoformat(), end.isoformat()):
+            if i["data"] in chosen:
+                continue
+            done = " done" if i.get("feito") else ""
+            lines.append(f"- {i['data']}: {names.get(i['exercicio_id'], i['exercicio_id'])}{done}")
+            count += 1
+        if count == 0:
+            lines.append("- (nothing)")
+        return lines
+
     def _history_lines(self, inicio: date) -> list[str]:
         de = (inicio - timedelta(days=21)).isoformat()
         ate = (inicio - timedelta(days=1)).isoformat()
@@ -516,9 +539,11 @@ class Coach:
                              f"effort {s.get('esforco') or '?'}/10")
         return lines
 
-    def plan_request(self, inicio: date, fim: date, pedido: str) -> dict[str, Any]:
+    def plan_request(
+        self, dias: list[date], pedido: str, hoje: date | None = None
+    ) -> dict[str, Any]:
         return {
-            "prompt": self.plan_context(inicio, fim, pedido),
+            "prompt": self.plan_context(dias, pedido, hoje),
             "sistema": PLAN_SYSTEM,
             "esquema": PLAN_SCHEMA,
             "limite_s": 420,
@@ -526,11 +551,14 @@ class Coach:
         }
 
     def apply_plan(
-        self, plan: dict[str, Any], inicio: date, fim: date, substituir: bool, ia: str
+        self, plan: dict[str, Any], dias: list[date], substituir: bool, ia: str
     ) -> dict[str, Any]:
-        """Creates the new exercises, clears the pending items of the period (when `substituir`)
-        and schedules the plan. Unknown exercise ids and dates out of the period are skipped."""
-        d1, d2 = inicio.isoformat(), fim.isoformat()
+        """Creates the new exercises, clears the pending items of the chosen days (when
+        `substituir`) and schedules the plan. Unknown exercise ids and other dates are skipped."""
+        d1, d2 = dias[0].isoformat(), dias[-1].isoformat()
+        chosen = set()
+        for d in dias:
+            chosen.add(d.isoformat())
         ids: dict[str, str] = {}
         for e in self.workouts.list_exercises():
             ids[e["id"]] = e["id"]
@@ -544,12 +572,12 @@ class Coach:
             ids[novo["id"]] = created["id"]
         if substituir:
             for i in self.workouts.agenda(d1, d2):
-                if not i.get("feito"):
+                if i["data"] in chosen and not i.get("feito"):
                     self.workouts.unmark(i["id"])
         scheduled = 0
         skipped = []
         for day in plan.get("dias", []):
-            if not d1 <= day["data"] <= d2:
+            if day["data"] not in chosen:
                 skipped.append(day["data"])
                 continue
             for item in day["itens"]:
@@ -565,6 +593,7 @@ class Coach:
                 scheduled += 1
         stored = {
             "id": uuid.uuid4().hex[:12], "criado_em": _now(), "ia": ia, "de": d1, "ate": d2,
+            "datas": sorted(chosen),
             "resumo": plan.get("resumo", ""), "nutricao": plan.get("nutricao", ""),
             "dias": _day_focus(plan),
             "agendados": scheduled, "ignorados": skipped,
