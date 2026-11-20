@@ -2,7 +2,8 @@
 # configurator downloads (configurador/core/src/solumia_configurador/solumia_apps.py):
 #   solumia-X.Y.Z-android.apk, solumia-X.Y.Z-wear.apk, solumia-X.Y.Z-linux-x86_64.AppImage,
 #   SHA256SUMS.txt, SHA256SUMS.txt.asc (detached GPG signature) and release-signing-key.asc.
-# Windows is not built yet: the app has no windows/ folder.
+#   solumia-X.Y.Z-windows-x64-setup.exe and solumia-configurador-X.Y.Z-windows-x64-setup.exe
+#   (configurator interface + core built with PyInstaller in nucleo/; installer: infra/windows/setup.iss).
 #
 # Repository secrets:
 #   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
@@ -154,8 +155,76 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          IFS=. read -r major minor patch <<< "$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$((major * 10000 + minor * 100 + patch))" >> "$GITHUB_ENV"
+      - name: Inno Setup
+        run: |
+          if ! command -v iscc >/dev/null && [ ! -f "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" ]; then
+            choco install innosetup -y --no-progress
+          fi
+          echo "/c/Program Files (x86)/Inno Setup 6" >> "$GITHUB_PATH"
+      - run: flutter pub get
+      - name: Build app
+        working-directory: plataforma/app
+        run: |
+          flutter build windows --release --build-name "$VERSION" --build-number "$BUILD_NUMBER" \
+            --dart-define=API_URL="$SOLUMIA_URL" --dart-define=BUILD="$BUILD_NUMBER"
+      - name: Build configurator interface
+        working-directory: configurador/app
+        run: |
+          flutter pub get
+          flutter build windows --release --build-name "$VERSION" --build-number "$BUILD_NUMBER"
+      - name: Build configurator core
+        # One folder next to the interface: core.dart looks for nucleo/solumia-configurador.exe.
+        run: |
+          python -m pip install -q ./configurador/core pyinstaller
+          python -m PyInstaller --noconfirm --clean --onedir --console \
+            --name solumia-configurador --distpath "$RUNNER_TEMP/core" --workpath "$RUNNER_TEMP/pyi" \
+            --collect-submodules uvicorn --collect-submodules keyring --copy-metadata keyring \
+            --collect-submodules solumia_configurador infra/windows/configurator_core.py
+          release=configurador/app/build/windows/x64/runner/Release
+          cp -r "$RUNNER_TEMP/core/solumia-configurador" "$release/nucleo"
+          "$release/nucleo/solumia-configurador.exe" --help > /dev/null
+      - name: Installers
+        working-directory: infra/windows
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          dist="$(cygpath -w "$GITHUB_WORKSPACE/dist")"
+          iscc //Q //DAppId=solumia //DAppName=Solumia //DAppExe=agent.exe //DAppVersion="$VERSION" \
+            //DSourceDir="$(cygpath -w "$GITHUB_WORKSPACE/plataforma/app/build/windows/x64/runner/Release")" \
+            //DOutputDir="$dist" //DOutputBase="solumia-$VERSION-windows-x64-setup" setup.iss
+          iscc //Q //DAppId=solumia-configurador "//DAppName=Solumia Configurador" \
+            //DAppExe=solumia_configurador.exe //DAppVersion="$VERSION" \
+            //DSourceDir="$(cygpath -w "$GITHUB_WORKSPACE/configurador/app/build/windows/x64/runner/Release")" \
+            //DOutputDir="$dist" //DOutputBase="solumia-configurador-$VERSION-windows-x64-setup" setup.iss
+          ls -la "$GITHUB_WORKSPACE/dist"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/
+          if-no-files-found: error
+
   publish:
-    needs: [android, linux]
+    needs: [android, linux, windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

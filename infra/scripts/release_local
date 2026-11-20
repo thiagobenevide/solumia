@@ -4,6 +4,7 @@
 #   - the tag vX.Y.Z must already be on GitHub;
 #   - builds the phone APK, the watch APK (both signed with ~/solumia-release.jks) and the Linux
 #     AppImage, with the server address baked in (SOLUMIA_URL, default below);
+#   - with WINDOWS_DIST=<folder>, adds the Windows installers from infra/windows/build_local.ps1;
 #   - signs SHA256SUMS.txt with the release GPG key and creates the GitHub release.
 # Passwords are typed at a prompt (keystore) or in the gpg window: never in arguments or history.
 set -euo pipefail
@@ -99,6 +100,15 @@ ARCH=x86_64 "$APPIMAGETOOL" --appimage-extract-and-run "$appdir" \
 rm -rf "$(dirname "$appdir")"
 echo "   ok: solumia-$VERSION-linux-x86_64.AppImage"
 
+# Windows installers are built on a Windows machine (infra/windows/build_local.ps1) and copied here.
+if [ -n "${WINDOWS_DIST:-}" ]; then
+    for name in "solumia-$VERSION-windows-x64-setup.exe" "solumia-configurador-$VERSION-windows-x64-setup.exe"; do
+        [ -f "$WINDOWS_DIST/$name" ] || fail "$name não está em $WINDOWS_DIST"
+        cp "$WINDOWS_DIST/$name" "$OUT/"
+        echo "   ok: $name"
+    done
+fi
+
 step "5/5 SHA256SUMS assinado e release no GitHub"
 cd "$OUT"
 rm -f SHA256SUMS.txt SHA256SUMS.txt.asc release-signing-key.asc
@@ -110,6 +120,6 @@ gpg --status-fd 1 --verify SHA256SUMS.txt.asc SHA256SUMS.txt 2>/dev/null | grep 
     || fail "a assinatura não confere"
 sed 's/^/   /' SHA256SUMS.txt
 gh release create "v$VERSION" -R "$REPO" --verify-tag --title "Solumia $VERSION" \
-    --notes "Phone, watch and Linux apps for $URL." \
+    --notes "Phone, watch, Linux and Windows apps for $URL." \
     solumia-* SHA256SUMS.txt SHA256SUMS.txt.asc release-signing-key.asc
 echo "   ok: https://github.com/$REPO/releases/tag/v$VERSION"
